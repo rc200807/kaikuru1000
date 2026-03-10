@@ -30,6 +30,8 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  // Prisma をバンドルせず Node.js ネイティブで解決（Vercel ビルド対応）
+  serverExternalPackages: ['@prisma/client', 'prisma'],
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }]
   },

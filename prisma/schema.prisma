@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ライセンスキー（本部が事前登録）
+model LicenseKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  isUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User?
+}
+
+// 顧客ユーザー
+model User {
+  id             String    @id @default(cuid())
+  name           String
+  furigana       String
+  email          String    @unique
+  phone          String
+  address        String
+  password       String
+  licenseKeyId   String    @unique
+  licenseKey     LicenseKey @relation(fields: [licenseKeyId], references: [id])
+  idDocumentPath String?   @db.Text  // 身分証明書ファイルURL（Vercel Blob）
+  storeId        String?   // 担当店舗ID（本部が割り当て）
+  store          Store?    @relation(fields: [storeId], references: [id])
+  visitSchedules VisitSchedule[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// 店舗
+model Store {
+  id         String   @id @default(cuid())
+  name       String   // 店舗名
+  code       String   @unique // 店舗コード
+  phone      String?
+  address    String?
+  prefecture String?  // 都道府県
+  email      String?
+  password   String
+  avatar     String?  @db.Text  // プロフィール画像URL（Vercel Blob）
+  sheetRowId String?  // Googleスプレッドシートの行ID（同期用）
+  isActive   Boolean  @default(true)
+  customers  User[]
+  visitSchedules VisitSchedule[]
+  members    StoreMember[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// 店舗メンバー（店舗のサブアカウント）
+model StoreMember {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  name      String
+  email     String   @unique
+  password  String
+  avatar    String?  @db.Text  // プロフィール画像URL（Vercel Blob）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 訪問スケジュール
+model VisitSchedule {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  visitDate DateTime
+  status    String   @default("scheduled") // scheduled, completed, cancelled
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 管理者
+model Admin {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("admin") // admin, superadmin
+  avatar    String?  @db.Text  // プロフィール画像URL（Vercel Blob）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Googleスプレッドシート同期ログ
+model SyncLog {
+  id       String   @id @default(cuid())
+  type     String   // stores, licenses
+  status   String   // success, error
+  message  String?  @db.Text
+  syncedAt DateTime @default(now())
+}
+
+// メール送信設定（SMTP）
+model EmailConfig {
+  id          String   @id @default(cuid())
+  smtpHost    String   @default("")
+  smtpPort    Int      @default(587)
+  smtpUser    String   @default("")
+  smtpPass    String   @default("") @db.Text  // AES-256-GCM 暗号化済み
+  fromAddress String   @default("")
+  fromName    String   @default("買いクル 本部")
+  enabled     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Google Sheets 連携設定（OAuth2トークン + スプレッドシート設定）
+model GoogleSheetsConfig {
+  id            String    @id @default(cuid())
+  googleEmail   String?
+  accessToken   String?   @db.Text  // AES-256-GCM 暗号化済み（長いため Text 型）
+  refreshToken  String?   @db.Text  // AES-256-GCM 暗号化済み
+  tokenExpiry   DateTime?
+  spreadsheetId String?
+  sheetName     String    @default("ライセンスキー")
+  keyColumn     String    @default("A")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ログイン試行回数制限（DB実装: サーバーレス対応）
+model LoginAttempt {
+  id           String    @id @default(cuid())
+  key          String    @unique  // "role:email"
+  failCount    Int       @default(0)
+  firstFailAt  DateTime  @default(now())
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@index([key])
+}

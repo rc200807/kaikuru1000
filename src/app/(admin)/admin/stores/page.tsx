@@ -32,6 +32,20 @@ export default function AdminStoresPage() {
   const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 新規店舗追加モーダル
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    code: '', name: '', email: '', phone: '', prefecture: '', address: '',
+  })
+  const [creating, setCreating] = useState(false)
+
+  // パスワード表示モーダル
+  const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // パスワード再発行中の店舗ID
+  const [resettingId, setResettingId] = useState<string | null>(null)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -52,6 +66,10 @@ export default function AdminStoresPage() {
     }
   }, [status, session])
 
+  function refreshStores() {
+    fetch('/api/stores').then(r => r.json()).then(d => setStores(Array.isArray(d) ? d : []))
+  }
+
   async function handleSync() {
     setSyncing(true)
     setMessage(null)
@@ -60,12 +78,65 @@ export default function AdminStoresPage() {
     setSyncing(false)
     if (data.success) {
       setMessage({ type: 'success', text: `${data.message}` })
-      // 店舗一覧を再読み込み
-      fetch('/api/stores').then(r => r.json()).then(d => setStores(Array.isArray(d) ? d : []))
+      refreshStores()
       fetch('/api/sync-stores').then(r => r.json()).then(d => setSyncLogs(Array.isArray(d) ? d : []))
     } else {
       setMessage({ type: 'error', text: `同期に失敗しました: ${data.message}` })
     }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    setCreating(true)
+    const res = await fetch('/api/admin/stores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code:       createForm.code.trim(),
+        name:       createForm.name.trim(),
+        email:      createForm.email.trim() || undefined,
+        phone:      createForm.phone.trim() || undefined,
+        prefecture: createForm.prefecture.trim() || undefined,
+        address:    createForm.address.trim() || undefined,
+      }),
+    })
+    const data = await res.json()
+    setCreating(false)
+
+    if (res.ok) {
+      setShowCreateModal(false)
+      setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', address: '' })
+      setPasswordModal({ storeName: createForm.name.trim(), password: data.password })
+      refreshStores()
+    } else {
+      setMessage({ type: 'error', text: data.error || '店舗の作成に失敗しました' })
+      setShowCreateModal(false)
+    }
+  }
+
+  async function handleResetPassword(store: Store) {
+    if (!confirm(`「${store.name}」のパスワードを再発行しますか？\n現在のパスワードは無効になります。`)) return
+    setResettingId(store.id)
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetPassword: true }),
+    })
+    const data = await res.json()
+    setResettingId(null)
+
+    if (res.ok) {
+      setPasswordModal({ storeName: store.name, password: data.password })
+    } else {
+      setMessage({ type: 'error', text: data.error || 'パスワードの再発行に失敗しました' })
+    }
+  }
+
+  function handleCopyPassword() {
+    if (!passwordModal) return
+    navigator.clipboard.writeText(passwordModal.password)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   if (status === 'loading' || loading) {
@@ -78,6 +149,7 @@ export default function AdminStoresPage() {
 
   return (
     <div className="min-h-screen bg-[#FFFBFE]">
+      {/* ─── ヘッダー ─── */}
       <header className="bg-gray-800 text-white sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/admin/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
@@ -112,16 +184,27 @@ export default function AdminStoresPage() {
               {stores.length}店舗
             </span>
           </h2>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="bg-green-700 text-white px-5 py-2.5 rounded-full text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {syncing ? 'スプレッドシートと同期中...' : 'スプレッドシートと同期'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setMessage(null); setShowCreateModal(true) }}
+              className="bg-gray-800 text-white px-5 py-2.5 rounded-full text-sm font-medium hover:bg-gray-900 transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              新規店舗追加
+            </button>
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="bg-green-700 text-white px-5 py-2.5 rounded-full text-sm font-medium hover:bg-green-800 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {syncing ? '同期中...' : 'スプレッドシートと同期'}
+            </button>
+          </div>
         </div>
 
         {message && (
@@ -161,6 +244,7 @@ export default function AdminStoresPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">電話番号</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">メール</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">担当顧客数</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -176,6 +260,15 @@ export default function AdminStoresPage() {
                   <td className="px-6 py-4">
                     <span className="text-sm font-semibold text-gray-900">{store._count.customers}</span>
                     <span className="text-sm text-gray-400 ml-1">名</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => handleResetPassword(store)}
+                      disabled={resettingId === store.id}
+                      className="text-xs text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {resettingId === store.id ? '処理中...' : 'PW再発行'}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -221,6 +314,176 @@ export default function AdminStoresPage() {
           </div>
         )}
       </div>
+
+      {/* ─── 新規店舗追加モーダル ─── */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-semibold text-gray-900">新規店舗追加</h3>
+                <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      店舗コード <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={createForm.code}
+                      onChange={e => setCreateForm({ ...createForm, code: e.target.value })}
+                      required
+                      placeholder="TOKYO01"
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">都道府県</label>
+                    <input
+                      type="text"
+                      value={createForm.prefecture}
+                      onChange={e => setCreateForm({ ...createForm, prefecture: e.target.value })}
+                      placeholder="東京都"
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    店舗名 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={createForm.name}
+                    onChange={e => setCreateForm({ ...createForm, name: e.target.value })}
+                    required
+                    placeholder="買いクル 東京店"
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">メールアドレス</label>
+                  <input
+                    type="email"
+                    value={createForm.email}
+                    onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
+                    placeholder="tokyo@kaikuru.jp"
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">電話番号</label>
+                  <input
+                    type="tel"
+                    value={createForm.phone}
+                    onChange={e => setCreateForm({ ...createForm, phone: e.target.value })}
+                    placeholder="03-1234-5678"
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">住所</label>
+                  <input
+                    type="text"
+                    value={createForm.address}
+                    onChange={e => setCreateForm({ ...createForm, address: e.target.value })}
+                    placeholder="東京都渋谷区..."
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-700"
+                  />
+                </div>
+
+                <p className="text-xs text-gray-400">
+                  ※ 初期パスワードは自動生成されます。作成後に一度だけ表示されますので必ず控えてください。
+                </p>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="flex-1 bg-gray-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-50"
+                  >
+                    {creating ? '作成中...' : '店舗を追加'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── パスワード表示モーダル ─── */}
+      {passwordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">パスワードを発行しました</h3>
+                  <p className="text-sm text-gray-500">{passwordModal.storeName}</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+                <p className="text-xs text-gray-400 mb-2">ログインパスワード</p>
+                <div className="flex items-center gap-3">
+                  <code className="text-xl font-bold text-gray-900 tracking-widest flex-1 break-all">
+                    {passwordModal.password}
+                  </code>
+                  <button
+                    onClick={handleCopyPassword}
+                    className="text-gray-400 hover:text-gray-700 transition-colors p-1 flex-shrink-0"
+                    title="コピー"
+                  >
+                    {copied ? (
+                      <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-5 text-xs text-amber-700">
+                ⚠️ このパスワードは一度しか表示されません。必ず控えてから閉じてください。
+              </div>
+
+              <button
+                onClick={() => { setPasswordModal(null); setCopied(false) }}
+                className="w-full bg-gray-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-gray-900 transition-colors"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

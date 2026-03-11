@@ -14,18 +14,6 @@ export default function Home() {
           >
             顧客マイページ
           </Link>
-          <Link
-            href="/store/login"
-            className="w-full bg-white text-gray-800 border border-gray-200 py-3.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
-          >
-            店舗ポータル
-          </Link>
-          <Link
-            href="/admin/login"
-            className="w-full bg-white text-gray-500 border border-gray-200 py-3.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
-          >
-            本部管理者
-          </Link>
         </div>
       </div>
     </div>

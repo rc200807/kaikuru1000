@@ -1,11 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import AppBar from '@/components/AppBar'
+import Button from '@/components/Button'
+import Card from '@/components/Card'
+import Modal from '@/components/Modal'
+import TextField from '@/components/TextField'
+import MessageBanner from '@/components/MessageBanner'
+import LoadingSpinner from '@/components/LoadingSpinner'
+import StatusBadge from '@/components/StatusBadge'
+import type { Status } from '@/components/StatusBadge'
+import EmptyState from '@/components/EmptyState'
 
 type Schedule = {
   id: string
@@ -32,19 +41,6 @@ const STATUS_OPTIONS = [
   { value: 'absent',      label: '不在' },
   { value: 'cancelled',   label: 'キャンセル' },
 ]
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; className: string }> = {
-    scheduled:   { label: '予定',       className: 'bg-blue-50 text-blue-700' },
-    pending:     { label: '未対応',     className: 'bg-amber-50 text-amber-700' },
-    completed:   { label: '対応完了',   className: 'bg-green-50 text-green-700' },
-    rescheduled: { label: 'リスケ',     className: 'bg-indigo-50 text-indigo-700' },
-    absent:      { label: '不在',       className: 'bg-red-50 text-red-700' },
-    cancelled:   { label: 'キャンセル', className: 'bg-gray-100 text-gray-500' },
-  }
-  const s = map[status] ?? { label: status, className: 'bg-gray-100 text-gray-500' }
-  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${s.className}`}>{s.label}</span>
-}
 
 function fmt(n: number | null | undefined) {
   if (n == null) return '—'
@@ -191,11 +187,7 @@ export default function StoreSchedulePage() {
   }
 
   if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FFFBFE]">
-        <div className="w-10 h-10 border-4 border-blue-800 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
+    return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
   }
 
   const today = new Date()
@@ -210,364 +202,281 @@ export default function StoreSchedulePage() {
     .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE]">
-      <header className="bg-blue-800 text-white sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/store/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            {(session?.user as any)?.avatar ? (
-              <img src={(session?.user as any)?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-blue-600" alt="" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-blue-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm font-semibold">{(session?.user as any)?.name?.[0] ?? '?'}</span>
-              </div>
-            )}
-            <div>
-              <p className="text-blue-300 text-xs font-medium tracking-widest uppercase">買いクル 店舗ポータル</p>
-              <h1 className="text-base font-semibold mt-0.5">{(session?.user as any)?.name}</h1>
-            </div>
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/store/customers" className="text-sm text-blue-200 hover:text-white transition-colors">
-              担当顧客
-            </Link>
-            <Link href="/store/schedule" className="text-sm font-medium text-white border-b border-white pb-0.5">
-              訪問スケジュール
-            </Link>
-            <Link href="/store/members" className="text-sm text-blue-200 hover:text-white transition-colors">
-              メンバー
-            </Link>
-            <Link href="/store/mystore" className="text-sm text-blue-200 hover:text-white transition-colors">
-              店舗情報
-            </Link>
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="text-sm text-blue-300 hover:text-white transition-colors ml-2"
-            >
-              ログアウト
-            </button>
-          </nav>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-3 mb-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs text-blue-500">ログイン中の店舗</p>
-            <p className="text-sm font-semibold text-blue-900">{(session?.user as any)?.name}</p>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">訪問スケジュール</h2>
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-800 text-white px-5 py-2.5 rounded-full text-sm font-medium hover:bg-blue-900 transition-colors"
-          >
+    <>
+      <AppBar
+        title="訪問スケジュール"
+        subtitle={(session?.user as any)?.name}
+        actions={
+          <Button onClick={() => setShowForm(true)} size="sm">
             スケジュール追加
-          </button>
-        </div>
+          </Button>
+        }
+      />
 
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {message && (
-          <div className={`mb-6 px-4 py-3 rounded-xl text-sm ${
-            message.type === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'
-          }`}>
+          <MessageBanner
+            severity={message.type}
+            dismissible
+            onDismiss={() => setMessage(null)}
+            className="mb-6"
+          >
             {message.text}
-          </div>
+          </MessageBanner>
         )}
 
         {/* 今後の予定 */}
-        <div className="mb-8">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">今後の訪問予定</h3>
+        <section className="mb-8">
+          <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4">
+            今後の訪問予定
+          </h3>
           {upcoming.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center text-sm text-gray-400 border border-gray-100">
-              スケジュールがありません
-            </div>
+            <Card variant="outlined" padding="none">
+              <EmptyState
+                title="スケジュールがありません"
+                description="「スケジュール追加」から新しい訪問を登録できます"
+              />
+            </Card>
           ) : (
             <div className="space-y-3">
               {upcoming.map(schedule => (
-                <div key={schedule.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-start gap-4">
-                  <div className="bg-blue-50 text-blue-800 rounded-xl p-3 text-center min-w-16 flex-shrink-0">
-                    <div className="text-xs font-medium">{format(new Date(schedule.visitDate), 'M月', { locale: ja })}</div>
-                    <div className="text-2xl font-bold leading-none">{format(new Date(schedule.visitDate), 'd', { locale: ja })}</div>
-                    <div className="text-xs">{format(new Date(schedule.visitDate), '（E）', { locale: ja })}</div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">{schedule.user.name} 様</p>
-                    <p className="text-sm text-gray-500 mt-0.5">{schedule.user.address}</p>
-                    <p className="text-sm text-gray-500">{schedule.user.phone}</p>
-                    {schedule.note && <p className="text-xs text-blue-600 mt-1">{schedule.note}</p>}
-                    <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                      <StatusBadge status={schedule.status} />
-                      <select
-                        value={schedule.status}
-                        onChange={e => handleStatusChange(schedule.id, e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-600"
-                      >
-                        {STATUS_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
+                <Card key={schedule.id} variant="elevated" padding="none">
+                  <div className="flex items-start gap-4 p-4">
+                    <div className="bg-[var(--status-scheduled-bg)] text-[var(--portal-primary)] rounded-[var(--md-sys-shape-medium)] p-3 text-center min-w-16 flex-shrink-0">
+                      <div className="text-xs font-medium">{format(new Date(schedule.visitDate), 'M月', { locale: ja })}</div>
+                      <div className="text-2xl font-bold leading-none">{format(new Date(schedule.visitDate), 'd', { locale: ja })}</div>
+                      <div className="text-xs">{format(new Date(schedule.visitDate), '（E）', { locale: ja })}</div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 過去の訪問 */}
-        {past.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">過去の訪問</h3>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">訪問日</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">顧客名</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">住所</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">ステータス</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">買取金額</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">請求金額</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">メモ</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {past.map(schedule => (
-                    <tr key={schedule.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                        {format(new Date(schedule.visitDate), 'yyyy/M/d（E）', { locale: ja })}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{schedule.user.name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 max-w-40 truncate">{schedule.user.address}</td>
-                      <td className="px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{schedule.user.address}</p>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{schedule.user.phone}</p>
+                      {schedule.note && (
+                        <p className="text-xs text-[var(--portal-primary)] mt-1">{schedule.note}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                        <StatusBadge status={schedule.status as Status} />
                         <select
                           value={schedule.status}
                           onChange={e => handleStatusChange(schedule.id, e.target.value)}
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-600"
+                          className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)]"
                         >
                           {STATUS_OPTIONS.map(opt => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap">{fmt(schedule.purchaseAmount)}</td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap">{fmt(schedule.billingAmount)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-400 max-w-32 truncate">{schedule.note || '—'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => setEditModal({
-                            schedule,
-                            note: schedule.note || '',
-                            purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
-                            billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
-                          })}
-                          className="text-xs text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
-                        >
-                          編集
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
-          </div>
+          )}
+        </section>
+
+        {/* 過去の訪問 */}
+        {past.length > 0 && (
+          <section>
+            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4">
+              過去の訪問
+            </h3>
+            <Card variant="outlined" padding="none">
+              <div className="overflow-x-auto thin-scrollbar">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">訪問日</th>
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">顧客名</th>
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden md:table-cell">住所</th>
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">ステータス</th>
+                      <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">買取金額</th>
+                      <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">請求金額</th>
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden lg:table-cell">メモ</th>
+                      <th className="px-3 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {past.map(schedule => (
+                      <tr key={schedule.id} className="border-b border-[var(--md-sys-color-surface-container-high)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors">
+                        <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
+                          {format(new Date(schedule.visitDate), 'yyyy/M/d（E）', { locale: ja })}
+                        </td>
+                        <td className="px-3 py-3 font-medium text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{schedule.user.name}</td>
+                        <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-40 truncate hidden md:table-cell">{schedule.user.address}</td>
+                        <td className="px-3 py-3">
+                          <select
+                            value={schedule.status}
+                            onChange={e => handleStatusChange(schedule.id, e.target.value)}
+                            className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)]"
+                          >
+                            {STATUS_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.purchaseAmount)}</td>
+                        <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.billingAmount)}</td>
+                        <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-32 truncate hidden lg:table-cell">{schedule.note || '—'}</td>
+                        <td className="px-3 py-3 text-right">
+                          <Button
+                            variant="text"
+                            size="sm"
+                            onClick={() => setEditModal({
+                              schedule,
+                              note: schedule.note || '',
+                              purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
+                              billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
+                            })}
+                          >
+                            編集
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </section>
         )}
       </div>
 
       {/* スケジュール追加モーダル */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="text-base font-semibold text-gray-900">訪問スケジュール追加</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-300 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            <form onSubmit={handleAddSchedule} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  顧客 <span className="text-red-600">*</span>
-                </label>
-                <select
-                  value={formData.userId}
-                  onChange={e => setFormData({ ...formData, userId: e.target.value })}
-                  required
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                >
-                  <option value="">顧客を選択...</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}（{c.furigana}）</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  訪問日 <span className="text-red-600">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.visitDate}
-                  onChange={e => setFormData({ ...formData, visitDate: e.target.value })}
-                  required
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">メモ（任意）</label>
-                <input
-                  type="text"
-                  value={formData.note}
-                  onChange={e => setFormData({ ...formData, note: e.target.value })}
-                  placeholder="初回訪問、など"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors">
-                  キャンセル
-                </button>
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-blue-900 transition-colors disabled:opacity-50">
-                  {saving ? '登録中...' : '登録する'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title="訪問スケジュール追加"
+        size="sm"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setShowForm(false)}>キャンセル</Button>
+            <Button type="submit" loading={saving} onClick={() => {
+              const form = document.getElementById('add-schedule-form') as HTMLFormElement
+              form?.requestSubmit()
+            }}>
+              {saving ? '登録中...' : '登録する'}
+            </Button>
+          </>
+        }
+      >
+        <form id="add-schedule-form" onSubmit={handleAddSchedule} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
+              顧客 <span className="text-[var(--md-sys-color-error)]">*</span>
+            </label>
+            <select
+              value={formData.userId}
+              onChange={e => setFormData({ ...formData, userId: e.target.value })}
+              required
+              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary)] focus:border-2"
+            >
+              <option value="">顧客を選択...</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name}（{c.furigana}）</option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
+          <TextField
+            label="訪問日"
+            type="date"
+            value={formData.visitDate}
+            onChange={v => setFormData({ ...formData, visitDate: v })}
+            required
+          />
+          <TextField
+            label="メモ（任意）"
+            value={formData.note}
+            onChange={v => setFormData({ ...formData, note: v })}
+            placeholder="初回訪問、など"
+          />
+        </form>
+      </Modal>
 
       {/* 対応完了モーダル（買取金額・請求金額入力） */}
-      {completionModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <div className="flex justify-between items-center mb-1">
-              <h3 className="text-base font-semibold text-gray-900">対応完了 — 金額を記録</h3>
-              <button
-                onClick={() => setCompletionModal(null)}
-                className="text-gray-300 hover:text-gray-600 text-2xl leading-none"
-              >&times;</button>
-            </div>
-            <p className="text-xs text-gray-400 mb-5">入力しない場合は空欄のまま登録できます</p>
-            <form onSubmit={handleCompletionSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">買取金額（円）</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={completionModal.purchaseAmount}
-                  onChange={e => setCompletionModal({ ...completionModal, purchaseAmount: e.target.value })}
-                  placeholder="例: 15000"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">請求金額（円）</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={completionModal.billingAmount}
-                  onChange={e => setCompletionModal({ ...completionModal, billingAmount: e.target.value })}
-                  placeholder="例: 3000"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCompletionModal(null)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="submit"
-                  disabled={completing}
-                  className="flex-1 bg-green-600 text-white py-2.5 rounded-full text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
-                  {completing ? '登録中...' : '対応完了にする'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!completionModal}
+        onClose={() => setCompletionModal(null)}
+        title="対応完了 — 金額を記録"
+        size="sm"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setCompletionModal(null)}>キャンセル</Button>
+            <Button type="submit" loading={completing} onClick={() => {
+              const form = document.getElementById('completion-form') as HTMLFormElement
+              form?.requestSubmit()
+            }}>
+              {completing ? '登録中...' : '対応完了にする'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">入力しない場合は空欄のまま登録できます</p>
+        <form id="completion-form" onSubmit={handleCompletionSubmit} className="space-y-4">
+          <TextField
+            label="買取金額（円）"
+            type="number"
+            value={completionModal?.purchaseAmount ?? ''}
+            onChange={v => completionModal && setCompletionModal({ ...completionModal, purchaseAmount: v })}
+            placeholder="例: 15000"
+          />
+          <TextField
+            label="請求金額（円）"
+            type="number"
+            value={completionModal?.billingAmount ?? ''}
+            onChange={v => completionModal && setCompletionModal({ ...completionModal, billingAmount: v })}
+            placeholder="例: 3000"
+          />
+        </form>
+      </Modal>
 
       {/* 金額・メモ編集モーダル */}
-      {editModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <div className="flex justify-between items-center mb-5">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900">訪問記録を編集</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{editModal.schedule.user.name} 様 — {format(new Date(editModal.schedule.visitDate), 'yyyy/M/d', { locale: ja })}</p>
-              </div>
-              <button
-                onClick={() => setEditModal(null)}
-                className="text-gray-300 hover:text-gray-600 text-2xl leading-none"
-              >&times;</button>
-            </div>
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">買取金額（円）</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editModal.purchaseAmount}
-                  onChange={e => setEditModal({ ...editModal, purchaseAmount: e.target.value })}
-                  placeholder="例: 15000"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">請求金額（円）</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editModal.billingAmount}
-                  onChange={e => setEditModal({ ...editModal, billingAmount: e.target.value })}
-                  placeholder="例: 3000"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">メモ</label>
-                <input
-                  type="text"
-                  value={editModal.note}
-                  onChange={e => setEditModal({ ...editModal, note: e.target.value })}
-                  placeholder="メモを入力..."
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditModal(null)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="submit"
-                  disabled={editing}
-                  className="flex-1 bg-blue-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-blue-900 transition-colors disabled:opacity-50"
-                >
-                  {editing ? '保存中...' : '保存する'}
-                </button>
-              </div>
+      <Modal
+        open={!!editModal}
+        onClose={() => setEditModal(null)}
+        title="訪問記録を編集"
+        size="sm"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setEditModal(null)}>キャンセル</Button>
+            <Button type="submit" loading={editing} onClick={() => {
+              const form = document.getElementById('edit-form') as HTMLFormElement
+              form?.requestSubmit()
+            }}>
+              {editing ? '保存中...' : '保存する'}
+            </Button>
+          </>
+        }
+      >
+        {editModal && (
+          <>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+              {editModal.schedule.user.name} 様 — {format(new Date(editModal.schedule.visitDate), 'yyyy/M/d', { locale: ja })}
+            </p>
+            <form id="edit-form" onSubmit={handleEditSubmit} className="space-y-4">
+              <TextField
+                label="買取金額（円）"
+                type="number"
+                value={editModal.purchaseAmount}
+                onChange={v => setEditModal({ ...editModal, purchaseAmount: v })}
+                placeholder="例: 15000"
+              />
+              <TextField
+                label="請求金額（円）"
+                type="number"
+                value={editModal.billingAmount}
+                onChange={v => setEditModal({ ...editModal, billingAmount: v })}
+                placeholder="例: 3000"
+              />
+              <TextField
+                label="メモ"
+                value={editModal.note}
+                onChange={v => setEditModal({ ...editModal, note: v })}
+                placeholder="メモを入力..."
+              />
             </form>
-          </div>
-        </div>
-      )}
-    </div>
+          </>
+        )}
+      </Modal>
+    </>
   )
 }

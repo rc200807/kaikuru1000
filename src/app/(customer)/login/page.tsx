@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Button from '@/components/Button'
+import TextField from '@/components/TextField'
+import Card from '@/components/Card'
+import MessageBanner from '@/components/MessageBanner'
 
 export default function CustomerLoginPage() {
   const router = useRouter()
@@ -32,68 +36,78 @@ export default function CustomerLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {/* Brand header */}
         <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold text-red-700 tracking-tight">買いクル</Link>
-          <p className="text-sm text-gray-500 mt-2">顧客マイページ ログイン</p>
+          <Link
+            href="/"
+            className="text-3xl font-bold text-[var(--portal-primary,#B91C1C)] tracking-tight"
+          >
+            買いクル
+          </Link>
+          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
+            顧客マイページ ログイン
+          </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        {/* Login card */}
+        <Card variant="elevated" padding="lg">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">
-              {error}
+            <div className="mb-6">
+              <MessageBanner severity="error">{error}</MessageBanner>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                メールアドレス
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700 focus:border-transparent"
-                placeholder="example@email.com"
-              />
-            </div>
+            <TextField
+              label="メールアドレス"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              required
+              placeholder="example@email.com"
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                パスワード
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-700 focus:border-transparent"
-                placeholder="パスワードを入力"
-              />
-            </div>
+            <TextField
+              label="パスワード"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              required
+              placeholder="パスワードを入力"
+            />
 
-            <button
+            <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-red-700 text-white py-3 rounded-full text-sm font-medium hover:bg-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={loading}
+              fullWidth
+              size="lg"
             >
               {loading ? 'ログイン中...' : 'ログイン'}
-            </button>
+            </Button>
           </form>
 
-          <p className="text-center mt-6 text-sm text-gray-500">
+          <p className="text-center mt-6 text-sm text-[var(--md-sys-color-on-surface-variant)]">
             アカウントをお持ちでない方は{' '}
-            <Link href="/register" className="text-red-700 font-medium hover:underline">
+            <Link
+              href="/register"
+              className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
+            >
               新規登録
             </Link>
           </p>
-        </div>
+        </Card>
 
-        <p className="text-center mt-5 text-sm text-gray-400">
-          <Link href="/" className="hover:text-gray-600 transition-colors">← トップページへ</Link>
+        {/* Back link */}
+        <p className="text-center mt-5 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+          <Link
+            href="/"
+            className="hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          >
+            &#8592; トップページへ
+          </Link>
         </p>
       </div>
     </div>

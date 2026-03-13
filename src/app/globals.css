@@ -1,20 +1,143 @@
 @import "tailwindcss";
 
-:root {
-  /* MD3 Color Tokens */
-  --md-sys-color-surface: #FFFBFE;
-  --md-sys-color-surface-variant: #F3F4F6;
-  --md-sys-color-on-surface: #1C1B1F;
-  --md-sys-color-on-surface-variant: #49454F;
-  --md-sys-color-outline: #79747E;
-  --md-sys-color-outline-variant: #CAC4D0;
+/* ============================================================
+   買いクル Design System — Material Design 3
+   ============================================================ */
 
-  /* MD3 Elevation */
+:root {
+  /* ── Shared Neutral ─────────────────────────────────── */
+  --md-sys-color-surface:                  #FFFBFE;
+  --md-sys-color-surface-dim:              #DED8E1;
+  --md-sys-color-surface-bright:           #FFFBFE;
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low:    #F7F2FA;
+  --md-sys-color-surface-container:        #F3EDF7;
+  --md-sys-color-surface-container-high:   #ECE6F0;
+  --md-sys-color-surface-container-highest:#E6E0E9;
+  --md-sys-color-on-surface:               #1C1B1F;
+  --md-sys-color-on-surface-variant:       #49454F;
+  --md-sys-color-outline:                  #79747E;
+  --md-sys-color-outline-variant:          #CAC4D0;
+  --md-sys-color-scrim:                    #000000;
+
+  /* ── Customer Portal (Red seed) ─────────────────────── */
+  --customer-primary:               #B91C1C;
+  --customer-on-primary:            #FFFFFF;
+  --customer-primary-container:     #FFDAD6;
+  --customer-on-primary-container:  #410002;
+  --customer-secondary:             #775653;
+  --customer-secondary-container:   #FFDAD6;
+  --customer-tertiary:              #755B2E;
+  --customer-tertiary-container:    #FFDEA6;
+
+  /* ── Store Portal (Blue seed) ───────────────────────── */
+  --store-primary:                  #1E3A5F;
+  --store-on-primary:               #FFFFFF;
+  --store-primary-container:        #D3E4FF;
+  --store-on-primary-container:     #001C3A;
+  --store-secondary:                #535F70;
+  --store-secondary-container:      #D7E3F7;
+  --store-tertiary:                 #6B5778;
+  --store-tertiary-container:       #F2DAFF;
+
+  /* ── Admin Portal (Dark seed) ───────────────────────── */
+  --admin-primary:                  #374151;
+  --admin-on-primary:               #FFFFFF;
+  --admin-primary-container:        #D5E3FF;
+  --admin-on-primary-container:     #001B3D;
+  --admin-secondary:                #565E71;
+  --admin-secondary-container:      #DAE2F9;
+  --admin-tertiary:                 #6E5676;
+  --admin-tertiary-container:       #F8D8FF;
+
+  /* ── Shared Error ───────────────────────────────────── */
+  --md-sys-color-error:             #BA1A1A;
+  --md-sys-color-on-error:          #FFFFFF;
+  --md-sys-color-error-container:   #FFDAD6;
+  --md-sys-color-on-error-container:#410002;
+
+  /* ── Semantic Status Colors ─────────────────────────── */
+  --status-scheduled-bg:    #E3F2FD;
+  --status-scheduled-text:  #1565C0;
+  --status-pending-bg:      #FFF8E1;
+  --status-pending-text:    #F57F17;
+  --status-completed-bg:    #E8F5E9;
+  --status-completed-text:  #2E7D32;
+  --status-rescheduled-bg:  #EDE7F6;
+  --status-rescheduled-text:#4527A0;
+  --status-absent-bg:       #FFEBEE;
+  --status-absent-text:     #C62828;
+  --status-cancelled-bg:    #F5F5F5;
+  --status-cancelled-text:  #757575;
+
+  /* ── Elevation ──────────────────────────────────────── */
+  --md-sys-elevation-0: none;
   --md-sys-elevation-1: 0 1px 2px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08);
   --md-sys-elevation-2: 0 2px 6px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
+  --md-sys-elevation-3: 0 4px 8px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
+  --md-sys-elevation-4: 0 6px 10px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.10);
+  --md-sys-elevation-5: 0 8px 12px rgba(0,0,0,0.16), 0 4px 8px rgba(0,0,0,0.10);
+
+  /* ── Shape ──────────────────────────────────────────── */
+  --md-sys-shape-none:         0px;
+  --md-sys-shape-extra-small:  4px;
+  --md-sys-shape-small:        8px;
+  --md-sys-shape-medium:       12px;
+  --md-sys-shape-large:        16px;
+  --md-sys-shape-extra-large:  28px;
+  --md-sys-shape-full:         9999px;
 }
 
 body {
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
 }
+
+/* ── Portal Theming via data attribute ────────────────── */
+[data-portal="customer"] {
+  --portal-primary:               var(--customer-primary);
+  --portal-on-primary:            var(--customer-on-primary);
+  --portal-primary-container:     var(--customer-primary-container);
+  --portal-on-primary-container:  var(--customer-on-primary-container);
+}
+[data-portal="store"] {
+  --portal-primary:               var(--store-primary);
+  --portal-on-primary:            var(--store-on-primary);
+  --portal-primary-container:     var(--store-primary-container);
+  --portal-on-primary-container:  var(--store-on-primary-container);
+}
+[data-portal="admin"] {
+  --portal-primary:               var(--admin-primary);
+  --portal-on-primary:            var(--admin-on-primary);
+  --portal-primary-container:     var(--admin-primary-container);
+  --portal-on-primary-container:  var(--admin-on-primary-container);
+}
+
+/* ── Utility classes ──────────────────────────────────── */
+.elevation-0 { box-shadow: var(--md-sys-elevation-0); }
+.elevation-1 { box-shadow: var(--md-sys-elevation-1); }
+.elevation-2 { box-shadow: var(--md-sys-elevation-2); }
+.elevation-3 { box-shadow: var(--md-sys-elevation-3); }
+.elevation-4 { box-shadow: var(--md-sys-elevation-4); }
+.elevation-5 { box-shadow: var(--md-sys-elevation-5); }
+
+/* ── Scrollbar (thin) ─────────────────────────────────── */
+.thin-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.thin-scrollbar::-webkit-scrollbar-thumb { background: var(--md-sys-color-outline-variant); border-radius: 3px; }
+
+/* ── Transition defaults ──────────────────────────────── */
+.transition-md3 { transition: all 200ms cubic-bezier(0.2, 0, 0, 1); }
+
+/* ── Animations ──────────────────────────────────────── */
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ── Safe area (mobile bottom nav) ───────────────────── */
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }

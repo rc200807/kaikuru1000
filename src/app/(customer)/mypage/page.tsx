@@ -5,6 +5,16 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import AppBar from '@/components/AppBar'
+import Tabs from '@/components/Tabs'
+import Card from '@/components/Card'
+import Button from '@/components/Button'
+import TextField from '@/components/TextField'
+import MessageBanner from '@/components/MessageBanner'
+import LoadingSpinner from '@/components/LoadingSpinner'
+import StatusBadge from '@/components/StatusBadge'
+import type { Status } from '@/components/StatusBadge'
+import EmptyState from '@/components/EmptyState'
 
 type UserData = {
   id: string
@@ -25,12 +35,6 @@ type VisitRecord = {
   status: string
   note: string | null
   store: { id: string; name: string }
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'completed') return <span className="text-xs font-medium bg-green-50 text-green-700 px-2 py-0.5 rounded-full">完了</span>
-  if (status === 'cancelled') return <span className="text-xs font-medium bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">キャンセル</span>
-  return <span className="text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">予定</span>
 }
 
 export default function MyPage() {
@@ -149,14 +153,7 @@ export default function MyPage() {
   }
 
   if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FFFBFE]">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-red-700 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-sm text-gray-400">読み込み中...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner fullPage size="lg" label="読み込み中..." />
   }
 
   if (!user) return null
@@ -164,17 +161,17 @@ export default function MyPage() {
   const nextVisit = user.visitSchedules?.[0]
 
   const tabs = [
-    { id: 'dashboard', label: 'ダッシュボード' },
-    { id: 'profile', label: 'プロフィール' },
-    { id: 'password', label: 'パスワード' },
-    { id: 'id-document', label: '身分証明書' },
-    { id: 'history', label: '訪問履歴' },
+    { key: 'dashboard', label: 'ダッシュボード' },
+    { key: 'profile', label: 'プロフィール' },
+    { key: 'password', label: 'パスワード' },
+    { key: 'id-document', label: '身分証明書' },
+    { key: 'history', label: '訪問履歴' },
   ]
 
-  function handleTabChange(tabId: string) {
-    setActiveTab(tabId)
+  function handleTabChange(tabKey: string) {
+    setActiveTab(tabKey)
     setMessage(null)
-    if (tabId === 'history' && !visitsLoaded) {
+    if (tabKey === 'history' && !visitsLoaded) {
       setVisitsLoading(true)
       fetch('/api/visit-schedules')
         .then(r => r.json())
@@ -191,365 +188,389 @@ export default function MyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE]">
-      {/* Top App Bar */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-base font-semibold text-red-700 tracking-tight">買いクル マイページ</h1>
+    <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)]">
+      {/* App Bar */}
+      <AppBar
+        title="買いクル マイページ"
+        actions={
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">{user.name} 様</span>
-            <button
+            <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+              {user.name} 様
+            </span>
+            <Button
+              variant="text"
+              size="sm"
               onClick={() => signOut({ callbackUrl: '/' })}
-              className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
             >
               ログアウト
-            </button>
+            </Button>
           </div>
-        </div>
-      </header>
+        }
+      />
 
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        {/* メッセージ */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        {/* Message banner */}
         {message && (
-          <div className={`mb-6 px-4 py-3 rounded-xl text-sm ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-700'
-              : 'bg-red-50 border border-red-200 text-red-700'
-          }`}>
-            {message.text}
+          <div className="pt-6">
+            <MessageBanner
+              severity={message.type}
+              dismissible
+              onDismiss={() => setMessage(null)}
+            >
+              {message.text}
+            </MessageBanner>
           </div>
         )}
 
-        {/* タブナビゲーション */}
-        <nav className="flex gap-1 bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100 mb-8 overflow-x-auto">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`flex-1 min-w-max px-4 py-2 rounded-xl text-sm font-medium transition-colors
-                ${activeTab === tab.id
-                  ? 'bg-red-700 text-white shadow-sm'
-                  : 'text-gray-500 hover:bg-gray-50'}`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        {/* Tabs */}
+        <div className="mt-4">
+          <Tabs
+            tabs={tabs}
+            activeKey={activeTab}
+            onChange={handleTabChange}
+          />
+        </div>
 
-        {/* ダッシュボード */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* 次回訪問日カード */}
-            <div className={`rounded-2xl p-6 text-white ${nextVisit ? 'bg-red-700' : 'bg-gray-400'}`}>
-              <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">次回訪問予定日</p>
-              {nextVisit ? (
-                <>
-                  <p className="text-4xl font-bold mb-1">
-                    {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
+        <div className="py-6">
+          {/* Dashboard tab */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Next visit card */}
+              <div
+                className={`
+                  rounded-[var(--md-sys-shape-medium)] p-6 text-white
+                  ${nextVisit ? 'bg-[var(--portal-primary,#B91C1C)]' : 'bg-[var(--md-sys-color-outline)]'}
+                `}
+              >
+                <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">
+                  次回訪問予定日
+                </p>
+                {nextVisit ? (
+                  <>
+                    <p className="text-4xl font-bold mb-1">
+                      {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
+                    </p>
+                    {nextVisit.note && (
+                      <p className="text-sm opacity-75 mt-1">{nextVisit.note}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xl font-semibold">訪問日が未定です</p>
+                )}
+              </div>
+
+              {/* Info summary grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card variant="outlined" padding="md">
+                  <h3 className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-3 tracking-wide uppercase">
+                    基本情報
+                  </h3>
+                  <dl className="space-y-2.5">
+                    <div className="flex justify-between">
+                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)]">氏名</dt>
+                      <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{user.name}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)]">電話番号</dt>
+                      <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{user.phone}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)]">住所</dt>
+                      <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)] text-right max-w-48">{user.address}</dd>
+                    </div>
+                  </dl>
+                </Card>
+
+                <Card variant="outlined" padding="md">
+                  <h3 className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-3 tracking-wide uppercase">
+                    契約情報
+                  </h3>
+                  <dl className="space-y-2.5">
+                    <div className="flex justify-between">
+                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)]">ライセンスキー</dt>
+                      <dd className="text-xs font-mono font-medium text-[var(--md-sys-color-on-surface)]">{user.licenseKey.key}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)]">担当店舗</dt>
+                      <dd className="text-sm font-medium">
+                        {user.store ? (
+                          <span className="text-[var(--md-sys-color-on-surface)]">{user.store.name}</span>
+                        ) : (
+                          <span className="text-[var(--status-pending-text)]">割り当て待ち</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)]">身分証</dt>
+                      <dd className={`text-sm font-medium ${user.idDocumentPath ? 'text-[var(--status-completed-text)]' : 'text-[var(--status-pending-text)]'}`}>
+                        {user.idDocumentPath ? '提出済み' : '未提出'}
+                      </dd>
+                    </div>
+                  </dl>
+                </Card>
+              </div>
+
+              {/* Warning banner for missing ID document */}
+              {!user.idDocumentPath && (
+                <MessageBanner severity="warning">
+                  <p className="font-medium">身分証明書が未提出です</p>
+                  <p className="text-xs mt-0.5 opacity-80">
+                    サービス開始前に「身分証明書」タブからアップロードをお願いします。
                   </p>
-                  {nextVisit.note && <p className="text-sm opacity-75 mt-1">{nextVisit.note}</p>}
-                </>
-              ) : (
-                <p className="text-xl font-semibold">訪問日が未定です</p>
+                </MessageBanner>
               )}
             </div>
+          )}
 
-            {/* 情報サマリー */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <h3 className="text-xs font-medium text-gray-400 mb-3 tracking-wide uppercase">基本情報</h3>
-                <dl className="space-y-2.5">
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">氏名</dt>
-                    <dd className="text-sm font-medium text-gray-900">{user.name}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">電話番号</dt>
-                    <dd className="text-sm font-medium text-gray-900">{user.phone}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">住所</dt>
-                    <dd className="text-sm font-medium text-gray-900 text-right max-w-48">{user.address}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <h3 className="text-xs font-medium text-gray-400 mb-3 tracking-wide uppercase">契約情報</h3>
-                <dl className="space-y-2.5">
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">ライセンスキー</dt>
-                    <dd className="text-xs font-mono font-medium text-gray-700">{user.licenseKey.key}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">担当店舗</dt>
-                    <dd className="text-sm font-medium">
-                      {user.store ? user.store.name : <span className="text-amber-600">割り当て待ち</span>}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-500">身分証</dt>
-                    <dd className={`text-sm font-medium ${user.idDocumentPath ? 'text-green-600' : 'text-amber-600'}`}>
-                      {user.idDocumentPath ? '提出済み' : '未提出'}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            {/* 注意事項 */}
-            {!user.idDocumentPath && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                <p className="text-sm text-amber-800 font-medium mb-0.5">身分証明書が未提出です</p>
-                <p className="text-xs text-amber-700">
-                  サービス開始前に「身分証明書」タブからアップロードをお願いします。
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* プロフィール編集 */}
-        {activeTab === 'profile' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-6">プロフィール編集</h2>
-            <form onSubmit={handleSaveProfile} className="space-y-5 max-w-lg">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">氏名</label>
-                  <input
-                    type="text" value={editForm.name}
-                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+          {/* Profile tab */}
+          {activeTab === 'profile' && (
+            <Card variant="elevated" padding="md">
+              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
+                プロフィール編集
+              </h2>
+              <form onSubmit={handleSaveProfile} className="space-y-5 max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <TextField
+                    label="氏名"
+                    value={editForm.name}
+                    onChange={(val) => setEditForm({ ...editForm, name: val })}
                     required
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
+                  />
+                  <TextField
+                    label="ふりがな"
+                    value={editForm.furigana}
+                    onChange={(val) => setEditForm({ ...editForm, furigana: val })}
+                    required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">ふりがな</label>
-                  <input
-                    type="text" value={editForm.furigana}
-                    onChange={e => setEditForm({ ...editForm, furigana: e.target.value })}
-                    required
-                    className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">メールアドレス</label>
-                <input
-                  type="email" value={user.email} disabled
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 text-gray-400"
+                <TextField
+                  label="メールアドレス"
+                  type="email"
+                  value={user.email}
+                  onChange={() => {}}
+                  disabled
+                  helper="メールアドレスは変更できません"
                 />
-                <p className="text-xs text-gray-400 mt-1">メールアドレスは変更できません</p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">電話番号</label>
-                <input
-                  type="tel" value={editForm.phone}
-                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                <TextField
+                  label="電話番号"
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(val) => setEditForm({ ...editForm, phone: val })}
                   required
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">訪問先住所</label>
-                <input
-                  type="text" value={editForm.address}
-                  onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+                <TextField
+                  label="訪問先住所"
+                  value={editForm.address}
+                  onChange={(val) => setEditForm({ ...editForm, address: val })}
                   required
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                 />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">ライセンスキー</label>
-                <input
-                  type="text" value={user.licenseKey.key} disabled
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 text-gray-400 font-mono"
+                <TextField
+                  label="ライセンスキー"
+                  value={user.licenseKey.key}
+                  onChange={() => {}}
+                  disabled
                 />
-              </div>
 
-              <button
-                type="submit" disabled={saving}
-                className="bg-red-700 text-white px-8 py-2.5 rounded-full text-sm font-medium hover:bg-red-800 transition-colors disabled:opacity-50"
-              >
-                {saving ? '保存中...' : '保存する'}
-              </button>
-            </form>
-          </div>
-        )}
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  loading={saving}
+                  size="lg"
+                >
+                  {saving ? '保存中...' : '保存する'}
+                </Button>
+              </form>
+            </Card>
+          )}
 
-        {/* パスワード変更 */}
-        {activeTab === 'password' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-6">パスワード変更</h2>
-            <form onSubmit={handleChangePassword} className="space-y-5 max-w-md">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">現在のパスワード</label>
-                <input
-                  type="password" value={pwForm.current}
-                  onChange={e => setPwForm({ ...pwForm, current: e.target.value })}
+          {/* Password tab */}
+          {activeTab === 'password' && (
+            <Card variant="elevated" padding="md">
+              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
+                パスワード変更
+              </h2>
+              <form onSubmit={handleChangePassword} className="space-y-5 max-w-md">
+                <TextField
+                  label="現在のパスワード"
+                  type="password"
+                  value={pwForm.current}
+                  onChange={(val) => setPwForm({ ...pwForm, current: val })}
                   required
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">新しいパスワード</label>
-                <input
-                  type="password" value={pwForm.next}
-                  onChange={e => setPwForm({ ...pwForm, next: e.target.value })}
-                  required minLength={8}
+                <TextField
+                  label="新しいパスワード"
+                  type="password"
+                  value={pwForm.next}
+                  onChange={(val) => setPwForm({ ...pwForm, next: val })}
+                  required
                   placeholder="8文字以上"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">新しいパスワード（確認）</label>
-                <input
-                  type="password" value={pwForm.confirm}
-                  onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })}
+                <TextField
+                  label="新しいパスワード（確認）"
+                  type="password"
+                  value={pwForm.confirm}
+                  onChange={(val) => setPwForm({ ...pwForm, confirm: val })}
                   required
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-700"
+                />
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  loading={saving}
+                  size="lg"
+                >
+                  {saving ? '変更中...' : 'パスワードを変更'}
+                </Button>
+              </form>
+            </Card>
+          )}
+
+          {/* ID Document tab */}
+          {activeTab === 'id-document' && (
+            <Card variant="elevated" padding="md">
+              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-2">
+                身分証明書のアップロード
+              </h2>
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-6 leading-relaxed">
+                運転免許証、マイナンバーカード、パスポートなどをアップロードしてください。<br />
+                対応形式：JPEG、PNG、WebP、PDF（最大10MB）
+              </p>
+
+              {/* Upload area */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="
+                  border-2 border-dashed border-[var(--md-sys-color-outline-variant)]
+                  rounded-[var(--md-sys-shape-medium)] p-12 text-center cursor-pointer
+                  hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)]
+                  transition-colors mb-6
+                "
+              >
+                <div className="w-16 h-16 bg-[var(--md-sys-color-surface-container-high)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                  クリックしてファイルを選択
+                </p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                  またはドラッグ＆ドロップ
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleUploadIdDocument}
+                  className="hidden"
                 />
               </div>
-              <button
-                type="submit" disabled={saving}
-                className="bg-red-700 text-white px-8 py-2.5 rounded-full text-sm font-medium hover:bg-red-800 transition-colors disabled:opacity-50"
-              >
-                {saving ? '変更中...' : 'パスワードを変更'}
-              </button>
-            </form>
-          </div>
-        )}
 
-        {/* 身分証明書 */}
-        {activeTab === 'id-document' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-2">身分証明書のアップロード</h2>
-            <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-              運転免許証、マイナンバーカード、パスポートなどをアップロードしてください。<br />
-              対応形式：JPEG、PNG、WebP、PDF（最大10MB）
-            </p>
+              {/* Status display */}
+              {user.idDocumentPath ? (
+                <MessageBanner severity="success">
+                  <p className="font-medium">身分証明書が提出されています</p>
+                  <p className="text-xs mt-0.5 opacity-80">新しいファイルをアップロードすると更新されます</p>
+                </MessageBanner>
+              ) : (
+                <MessageBanner severity="warning">
+                  <p className="font-medium">身分証明書が未提出です</p>
+                  <p className="text-xs mt-0.5 opacity-80">サービス開始前に提出が必要です</p>
+                </MessageBanner>
+              )}
+            </Card>
+          )}
 
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center cursor-pointer hover:border-red-400 hover:bg-red-50 transition-colors mb-6"
-            >
-              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-gray-600">クリックしてファイルを選択</p>
-              <p className="text-xs text-gray-400 mt-1">またはドラッグ＆ドロップ</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                onChange={handleUploadIdDocument}
-                className="hidden"
-              />
-            </div>
+          {/* Visit History tab */}
+          {activeTab === 'history' && (
+            <Card variant="elevated" padding="md">
+              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
+                訪問履歴
+              </h2>
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-6">
+                担当店舗による訪問のスケジュール履歴です
+              </p>
 
-            {user.idDocumentPath ? (
-              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+              {visitsLoading ? (
+                <div className="py-12">
+                  <LoadingSpinner size="md" label="読み込み中..." className="justify-center" />
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-green-700">身分証明書が提出されています</p>
-                  <p className="text-xs text-green-600 mt-0.5">新しいファイルをアップロードすると更新されます</p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
-                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-amber-800">身分証明書が未提出です</p>
-                  <p className="text-xs text-amber-700 mt-0.5">サービス開始前に提出が必要です</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+              ) : visits.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  }
+                  title="訪問履歴がありません"
+                  description="訪問スケジュールが登録されると表示されます"
+                />
+              ) : (
+                <div className="space-y-0">
+                  {visits.map((visit, i) => (
+                    <div
+                      key={visit.id}
+                      className={`
+                        flex items-start gap-4 py-4
+                        ${i < visits.length - 1 ? 'border-b border-[var(--md-sys-color-outline-variant)]' : ''}
+                      `}
+                    >
+                      {/* Timeline icon */}
+                      <div className="flex flex-col items-center flex-shrink-0">
+                        <div
+                          className={`
+                            w-9 h-9 rounded-[var(--md-sys-shape-small)] flex items-center justify-center
+                            ${visit.status === 'completed'
+                              ? 'bg-[var(--status-completed-bg)]'
+                              : visit.status === 'cancelled'
+                                ? 'bg-[var(--md-sys-color-surface-container-high)]'
+                                : 'bg-[var(--status-scheduled-bg)]'
+                            }
+                          `}
+                        >
+                          {visit.status === 'completed' ? (
+                            <svg className="w-4 h-4 text-[var(--status-completed-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : visit.status === 'cancelled' ? (
+                            <svg className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-[var(--status-scheduled-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
 
-        {/* 訪問履歴 */}
-        {activeTab === 'history' && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-900 mb-1">訪問履歴</h2>
-            <p className="text-sm text-gray-400 mb-6">担当店舗による訪問のスケジュール履歴です</p>
-
-            {visitsLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-4 border-red-700 border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            ) : visits.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-7 h-7 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-sm text-gray-400">訪問履歴がありません</p>
-                <p className="text-xs text-gray-300 mt-1">訪問スケジュールが登録されると表示されます</p>
-              </div>
-            ) : (
-              <div className="space-y-0">
-                {visits.map((visit, i) => (
-                  <div
-                    key={visit.id}
-                    className={`flex items-start gap-4 py-4 ${i < visits.length - 1 ? 'border-b border-gray-50' : ''}`}
-                  >
-                    {/* タイムラインドット */}
-                    <div className="flex flex-col items-center flex-shrink-0">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                        visit.status === 'completed' ? 'bg-green-50' :
-                        visit.status === 'cancelled' ? 'bg-gray-50' : 'bg-red-50'
-                      }`}>
-                        {visit.status === 'completed' ? (
-                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : visit.status === 'cancelled' ? (
-                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        ) : (
-                          <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                            {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}
+                          </span>
+                          <StatusBadge status={visit.status as Status} />
+                        </div>
+                        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                          {visit.store.name}
+                        </p>
+                        {visit.note && (
+                          <p className="text-xs text-[var(--md-sys-color-outline)] mt-0.5">
+                            {visit.note}
+                          </p>
                         )}
                       </div>
                     </div>
-
-                    {/* 内容 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-900">
-                          {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}
-                        </span>
-                        <StatusBadge status={visit.status} />
-                      </div>
-                      <p className="text-sm text-gray-500 mt-0.5">{visit.store.name}</p>
-                      {visit.note && (
-                        <p className="text-xs text-gray-400 mt-0.5">{visit.note}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,11 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import AppBar from '@/components/AppBar'
+import Button from '@/components/Button'
+import Card from '@/components/Card'
+import Modal from '@/components/Modal'
+import TextField from '@/components/TextField'
+import Tabs from '@/components/Tabs'
+import SearchFilterBar from '@/components/SearchFilterBar'
+import DataTable from '@/components/DataTable'
+import type { Column } from '@/components/DataTable'
+import LoadingSpinner from '@/components/LoadingSpinner'
+import StatusBadge from '@/components/StatusBadge'
+import type { Status } from '@/components/StatusBadge'
+import MessageBanner from '@/components/MessageBanner'
+import EmptyState from '@/components/EmptyState'
 
 type Customer = {
   id: string
@@ -36,19 +49,6 @@ const STATUS_OPTIONS = [
   { value: 'absent',      label: '不在' },
   { value: 'cancelled',   label: 'キャンセル' },
 ]
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; className: string }> = {
-    scheduled:   { label: '予定',       className: 'bg-blue-50 text-blue-700' },
-    pending:     { label: '未対応',     className: 'bg-amber-50 text-amber-700' },
-    completed:   { label: '対応完了',   className: 'bg-green-50 text-green-700' },
-    rescheduled: { label: 'リスケ',     className: 'bg-indigo-50 text-indigo-700' },
-    absent:      { label: '不在',       className: 'bg-red-50 text-red-700' },
-    cancelled:   { label: 'キャンセル', className: 'bg-gray-100 text-gray-500' },
-  }
-  const s = map[status] ?? { label: status, className: 'bg-gray-100 text-gray-500' }
-  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${s.className}`}>{s.label}</span>
-}
 
 type ModalTab = 'info' | 'add' | 'history'
 
@@ -167,315 +167,238 @@ export default function StoreCustomersPage() {
   )
 
   if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FFFBFE]">
-        <div className="w-10 h-10 border-4 border-blue-800 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
+    return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
   }
 
-  return (
-    <div className="min-h-screen bg-[#FFFBFE]">
-      <header className="bg-blue-800 text-white sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/store/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            {(session?.user as any)?.avatar ? (
-              <img src={(session?.user as any)?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-blue-600" alt="" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-blue-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm font-semibold">{(session?.user as any)?.name?.[0] ?? '?'}</span>
-              </div>
-            )}
-            <div>
-              <p className="text-blue-300 text-xs font-medium tracking-widest uppercase">買いクル 店舗ポータル</p>
-              <h1 className="text-base font-semibold mt-0.5">{(session?.user as any)?.name}</h1>
-            </div>
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/store/customers" className="text-sm font-medium text-white border-b border-white pb-0.5">
-              担当顧客
-            </Link>
-            <Link href="/store/schedule" className="text-sm text-blue-200 hover:text-white transition-colors">
-              訪問スケジュール
-            </Link>
-            <Link href="/store/members" className="text-sm text-blue-200 hover:text-white transition-colors">
-              メンバー
-            </Link>
-            <Link href="/store/mystore" className="text-sm text-blue-200 hover:text-white transition-colors">
-              店舗情報
-            </Link>
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="text-sm text-blue-300 hover:text-white transition-colors ml-2"
-            >
-              ログアウト
-            </button>
-          </nav>
+  const customerColumns: Column<Customer>[] = [
+    {
+      key: 'name',
+      header: '氏名',
+      render: (c) => (
+        <div>
+          <div className="font-medium text-[var(--md-sys-color-on-surface)]">{c.name}</div>
+          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{c.furigana}</div>
         </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-3 mb-6 flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-xs text-blue-500">ログイン中の店舗</p>
-            <p className="text-sm font-semibold text-blue-900">{(session?.user as any)?.name}</p>
-          </div>
+      ),
+      sortable: true,
+      sortValue: (c) => c.furigana,
+    },
+    {
+      key: 'contact',
+      header: '連絡先',
+      hideOnMobile: true,
+      render: (c) => (
+        <div>
+          <div className="text-[var(--md-sys-color-on-surface)]">{c.phone}</div>
+          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{c.email}</div>
         </div>
-
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">
-            担当顧客一覧
-            <span className="ml-3 text-sm font-normal text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-              {customers.length}名
-            </span>
-          </h2>
-          <input
-            type="text" value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="氏名・メール・電話で検索..."
-            className="border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 w-64 bg-white"
-          />
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center text-sm text-gray-400 border border-gray-100">
-            {customers.length === 0 ? '担当顧客がいません' : '検索結果がありません'}
-          </div>
+      ),
+    },
+    {
+      key: 'address',
+      header: '住所',
+      hideOnMobile: true,
+      render: (c) => (
+        <div className="text-[var(--md-sys-color-on-surface-variant)] max-w-48 truncate">{c.address}</div>
+      ),
+    },
+    {
+      key: 'nextVisit',
+      header: '次回訪問',
+      render: (c) => {
+        const nextVisit = c.visitSchedules?.[0]
+        return nextVisit ? (
+          <span className="font-medium text-[var(--portal-primary)]">
+            {format(new Date(nextVisit.visitDate), 'M/d（E）', { locale: ja })}
+          </span>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">氏名</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">連絡先</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">住所</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">次回訪問</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">身分証</th>
-                  <th className="px-6 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map(customer => {
-                  const nextVisit = customer.visitSchedules?.[0]
-                  return (
-                    <tr key={customer.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{customer.name}</div>
-                        <div className="text-xs text-gray-400">{customer.furigana}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-700">{customer.phone}</div>
-                        <div className="text-xs text-gray-400">{customer.email}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-600 max-w-48 truncate">{customer.address}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {nextVisit ? (
-                          <span className="text-sm font-medium text-blue-700">
-                            {format(new Date(nextVisit.visitDate), 'M/d（E）', { locale: ja })}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400">未定</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {customer.idDocumentPath ? (
-                          <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">提出済</span>
-                        ) : (
-                          <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">未提出</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => setSelected(customer)}
-                          className="text-sm font-medium text-blue-700 hover:text-blue-900 transition-colors"
-                        >
-                          詳細
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+          <span className="text-[var(--md-sys-color-on-surface-variant)]">未定</span>
+        )
+      },
+    },
+    {
+      key: 'idDoc',
+      header: '身分証',
+      hideOnMobile: true,
+      render: (c) => c.idDocumentPath ? (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]">提出済</span>
+      ) : (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]">未提出</span>
+      ),
+    },
+    {
+      key: 'action',
+      header: '',
+      render: (c) => (
+        <Button variant="text" size="sm" onClick={() => setSelected(c)}>
+          詳細
+        </Button>
+      ),
+    },
+  ]
+
+  const modalTabs = [
+    { key: 'info', label: '基本情報' },
+    { key: 'add', label: 'スケジュール追加' },
+    { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
+  ]
+
+  return (
+    <>
+      <AppBar
+        title="担当顧客"
+        subtitle={`${customers.length}名`}
+      />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        <SearchFilterBar
+          filters={[
+            { key: 'search', label: '検索', type: 'text', placeholder: '氏名・メール・電話で検索...' },
+          ]}
+          values={{ search }}
+          onChange={(_, v) => setSearch(v)}
+          onClear={() => setSearch('')}
+          className="mb-6"
+        />
+
+        <Card variant="outlined" padding="none">
+          <DataTable
+            columns={customerColumns}
+            data={filtered}
+            rowKey={(c) => c.id}
+            emptyTitle={customers.length === 0 ? '担当顧客がいません' : '検索結果がありません'}
+          />
+        </Card>
       </div>
 
       {/* 顧客詳細モーダル */}
-      {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-xl shadow-xl flex flex-col max-h-[85vh]">
+      <Modal
+        open={!!selected}
+        onClose={closeModal}
+        title={selected ? `${selected.name} 様` : ''}
+        size="md"
+        footer={
+          <Button variant="tonal" onClick={closeModal}>閉じる</Button>
+        }
+      >
+        {selected && (
+          <>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">{selected.furigana}</p>
 
-            {/* ヘッダー */}
-            <div className="flex justify-between items-start px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900">{selected.name} 様</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{selected.furigana}</p>
-              </div>
-              <button onClick={closeModal} className="text-gray-300 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
+            <Tabs
+              tabs={modalTabs}
+              activeKey={modalTab}
+              onChange={(key) => { setModalTab(key as ModalTab); setScheduleMsg(null) }}
+              className="mb-4"
+            />
 
-            {/* タブ */}
-            <div className="flex gap-1 px-6 py-3 border-b border-gray-50 flex-shrink-0">
-              {([
-                { id: 'info' as ModalTab, label: '基本情報' },
-                { id: 'add' as ModalTab, label: 'スケジュール追加' },
-                { id: 'history' as ModalTab, label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
-              ]).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => { setModalTab(tab.id); setScheduleMsg(null) }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    modalTab === tab.id
-                      ? 'bg-blue-800 text-white'
-                      : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* コンテンツ（スクロール可） */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-
-              {/* 基本情報 */}
-              {modalTab === 'info' && (
-                <dl className="space-y-3">
-                  {[
-                    { label: 'メール', value: selected.email },
-                    { label: '電話番号', value: selected.phone },
-                    { label: '訪問先住所', value: selected.address },
-                    { label: '登録日', value: format(new Date(selected.createdAt), 'yyyy年M月d日', { locale: ja }) },
-                  ].map(item => (
-                    <div key={item.label} className="flex gap-4">
-                      <dt className="w-28 text-sm text-gray-400 flex-shrink-0">{item.label}</dt>
-                      <dd className="text-sm text-gray-900">{item.value}</dd>
-                    </div>
-                  ))}
-                  <div className="flex gap-4">
-                    <dt className="w-28 text-sm text-gray-400 flex-shrink-0">身分証</dt>
-                    <dd className="text-sm">
-                      {selected.idDocumentPath
-                        ? <a href={selected.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">確認する</a>
-                        : <span className="text-amber-600">未提出</span>
-                      }
-                    </dd>
+            {/* 基本情報 */}
+            {modalTab === 'info' && (
+              <dl className="space-y-3">
+                {[
+                  { label: 'メール', value: selected.email },
+                  { label: '電話番号', value: selected.phone },
+                  { label: '訪問先住所', value: selected.address },
+                  { label: '登録日', value: format(new Date(selected.createdAt), 'yyyy年M月d日', { locale: ja }) },
+                ].map(item => (
+                  <div key={item.label} className="flex gap-4">
+                    <dt className="w-28 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                    <dd className="text-sm text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
                   </div>
-                </dl>
-              )}
-
-              {/* スケジュール追加 */}
-              {modalTab === 'add' && (
-                <form onSubmit={handleAddSchedule} className="space-y-4">
-                  {scheduleMsg && (
-                    <div className={`px-3 py-2.5 rounded-xl text-sm ${
-                      scheduleMsg.type === 'success'
-                        ? 'bg-green-50 text-green-700 border border-green-100'
-                        : 'bg-red-50 text-red-700 border border-red-100'
-                    }`}>
-                      {scheduleMsg.text}
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      訪問日 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={addForm.visitDate}
-                      onChange={e => setAddForm({ ...addForm, visitDate: e.target.value })}
-                      required
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">メモ（任意）</label>
-                    <textarea
-                      value={addForm.note}
-                      onChange={e => setAddForm({ ...addForm, note: e.target.value })}
-                      placeholder="訪問に関するメモを入力..."
-                      rows={3}
-                      className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 resize-none"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={submitting || !addForm.visitDate}
-                    className="w-full bg-blue-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-blue-900 transition-colors disabled:opacity-50"
-                  >
-                    {submitting ? '追加中...' : 'スケジュールを追加'}
-                  </button>
-                </form>
-              )}
-
-              {/* 訪問履歴 */}
-              {modalTab === 'history' && (
-                <div>
-                  {schedulesLoading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="w-8 h-8 border-4 border-blue-800 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  ) : sortedSchedules.length === 0 ? (
-                    <div className="text-center py-10">
-                      <p className="text-sm text-gray-400">訪問スケジュールがありません</p>
-                      <p className="text-xs text-gray-300 mt-1">「スケジュール追加」タブから登録できます</p>
-                    </div>
-                  ) : (
-                    <div>
-                      {sortedSchedules.map(vs => (
-                        <div key={vs.id} className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-                          <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-medium text-gray-900">
-                                {format(new Date(vs.visitDate), 'yyyy年M月d日（E）', { locale: ja })}
-                              </span>
-                              <StatusBadge status={vs.status} />
-                              <select
-                                value={vs.status}
-                                onChange={e => handleStatusChange(vs.id, e.target.value)}
-                                className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-gray-600"
-                              >
-                                {STATUS_OPTIONS.map(opt => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                            {vs.note && <p className="text-xs text-gray-500 mt-0.5 truncate">{vs.note}</p>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                ))}
+                <div className="flex gap-4">
+                  <dt className="w-28 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
+                  <dd className="text-sm">
+                    {selected.idDocumentPath
+                      ? <a href={selected.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-[var(--portal-primary)] underline">確認する</a>
+                      : <span className="text-[var(--status-pending-text)]">未提出</span>
+                    }
+                  </dd>
                 </div>
-              )}
-            </div>
+              </dl>
+            )}
 
-            {/* フッター */}
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end flex-shrink-0">
-              <button
-                onClick={closeModal}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-full text-sm font-medium hover:bg-gray-200 transition-colors"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+            {/* スケジュール追加 */}
+            {modalTab === 'add' && (
+              <form onSubmit={handleAddSchedule} className="space-y-4">
+                {scheduleMsg && (
+                  <MessageBanner severity={scheduleMsg.type} dismissible onDismiss={() => setScheduleMsg(null)}>
+                    {scheduleMsg.text}
+                  </MessageBanner>
+                )}
+                <TextField
+                  label="訪問日"
+                  type="date"
+                  value={addForm.visitDate}
+                  onChange={v => setAddForm({ ...addForm, visitDate: v })}
+                  required
+                />
+                <TextField
+                  label="メモ（任意）"
+                  value={addForm.note}
+                  onChange={v => setAddForm({ ...addForm, note: v })}
+                  placeholder="訪問に関するメモを入力..."
+                  rows={3}
+                />
+                <Button
+                  type="submit"
+                  disabled={submitting || !addForm.visitDate}
+                  loading={submitting}
+                  fullWidth
+                >
+                  {submitting ? '追加中...' : 'スケジュールを追加'}
+                </Button>
+              </form>
+            )}
+
+            {/* 訪問履歴 */}
+            {modalTab === 'history' && (
+              <div>
+                {schedulesLoading ? (
+                  <div className="flex justify-center py-8">
+                    <LoadingSpinner size="md" />
+                  </div>
+                ) : sortedSchedules.length === 0 ? (
+                  <EmptyState
+                    title="訪問スケジュールがありません"
+                    description="「スケジュール追加」タブから登録できます"
+                  />
+                ) : (
+                  <div>
+                    {sortedSchedules.map(vs => (
+                      <div key={vs.id} className="flex items-start gap-3 py-3 border-b border-[var(--md-sys-color-surface-container-high)] last:border-0">
+                        <div className="w-9 h-9 bg-[var(--status-scheduled-bg)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-[var(--portal-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                              {format(new Date(vs.visitDate), 'yyyy年M月d日（E）', { locale: ja })}
+                            </span>
+                            <StatusBadge status={vs.status as Status} />
+                            <select
+                              value={vs.status}
+                              onChange={e => handleStatusChange(vs.id, e.target.value)}
+                              className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)]"
+                            >
+                              {STATUS_OPTIONS.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {vs.note && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 truncate">{vs.note}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+    </>
   )
 }

@@ -1,11 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import AppBar from '@/components/AppBar'
+import Card from '@/components/Card'
+import SummaryCard from '@/components/SummaryCard'
+import LoadingSpinner from '@/components/LoadingSpinner'
+import EmptyState from '@/components/EmptyState'
 
 type StoreInfo = {
   id: string
@@ -45,85 +49,56 @@ export default function MyStorePage() {
   }, [status, session])
 
   if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FFFBFE]">
-        <div className="w-10 h-10 border-4 border-blue-800 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
+    return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE]">
-      <header className="bg-blue-800 text-white sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/store/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            {(session?.user as any)?.avatar ? (
-              <img src={(session?.user as any)?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-blue-600" alt="" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-blue-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm font-semibold">{(session?.user as any)?.name?.[0] ?? '?'}</span>
-              </div>
-            )}
-            <div>
-              <p className="text-blue-300 text-xs font-medium tracking-widest uppercase">買いクル 店舗ポータル</p>
-              <h1 className="text-base font-semibold mt-0.5">{(session?.user as any)?.name}</h1>
-            </div>
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/store/customers" className="text-sm text-blue-200 hover:text-white transition-colors">
-              担当顧客
-            </Link>
-            <Link href="/store/schedule" className="text-sm text-blue-200 hover:text-white transition-colors">
-              訪問スケジュール
-            </Link>
-            <Link href="/store/members" className="text-sm text-blue-200 hover:text-white transition-colors">
-              メンバー
-            </Link>
-            <Link href="/store/mystore" className="text-sm font-medium text-white border-b border-white pb-0.5">
-              店舗情報
-            </Link>
-            <button
-              onClick={() => signOut({ callbackUrl: '/' })}
-              className="text-sm text-blue-300 hover:text-white transition-colors ml-2"
-            >
-              ログアウト
-            </button>
-          </nav>
-        </div>
-      </header>
+    <>
+      <AppBar title="店舗情報" />
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">店舗情報</h2>
-
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         {store ? (
           <div className="space-y-6">
             {/* ステータスバナー */}
-            <div className={`rounded-2xl px-5 py-4 flex items-center gap-3 ${store.isActive ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${store.isActive ? 'bg-green-100' : 'bg-red-100'}`}>
-                {store.isActive ? (
-                  <svg className="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                  </svg>
-                )}
+            <Card
+              variant={store.isActive ? 'filled' : 'outlined'}
+              padding="md"
+              className={store.isActive
+                ? 'bg-[var(--status-completed-bg)] border border-[var(--status-completed-text)]/20'
+                : 'bg-[var(--status-absent-bg)] border border-[var(--status-absent-text)]/20'
+              }
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  store.isActive ? 'bg-[var(--status-completed-text)]/15' : 'bg-[var(--status-absent-text)]/15'
+                }`}>
+                  {store.isActive ? (
+                    <svg className="w-5 h-5 text-[var(--status-completed-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-[var(--status-absent-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${store.isActive ? 'text-[var(--status-completed-text)]' : 'text-[var(--status-absent-text)]'}`}>
+                    {store.name}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${store.isActive ? 'text-[var(--status-completed-text)]' : 'text-[var(--status-absent-text)]'}`}>
+                    {store.isActive ? '営業中' : '停止中'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className={`text-sm font-semibold ${store.isActive ? 'text-green-800' : 'text-red-800'}`}>{store.name}</p>
-                <p className={`text-xs mt-0.5 ${store.isActive ? 'text-green-600' : 'text-red-600'}`}>
-                  {store.isActive ? '営業中' : '停止中'}
-                </p>
-              </div>
-            </div>
+            </Card>
 
             {/* 基本情報 */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <h3 className="text-sm font-semibold text-gray-700">基本情報</h3>
+            <Card variant="elevated" padding="none">
+              <div className="px-6 py-4 border-b border-[var(--md-sys-color-outline-variant)]">
+                <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">基本情報</h3>
               </div>
-              <dl className="divide-y divide-gray-50">
+              <dl className="divide-y divide-[var(--md-sys-color-surface-container-high)]">
                 {[
                   { label: '店舗名', value: store.name, mono: false },
                   { label: '店舗コード', value: store.code, mono: true },
@@ -134,31 +109,43 @@ export default function MyStorePage() {
                   { label: '登録日', value: store.createdAt ? format(new Date(store.createdAt), 'yyyy年M月d日', { locale: ja }) : '—', mono: false },
                 ].map(item => (
                   <div key={item.label} className="px-6 py-3.5 flex gap-4">
-                    <dt className="w-32 text-sm text-gray-400 flex-shrink-0">{item.label}</dt>
-                    <dd className={`text-sm text-gray-900 ${item.mono ? 'font-mono' : ''}`}>{item.value}</dd>
+                    <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                    <dd className={`text-sm text-[var(--md-sys-color-on-surface)] ${item.mono ? 'font-mono' : ''}`}>{item.value}</dd>
                   </div>
                 ))}
               </dl>
-            </div>
+            </Card>
 
             {/* 統計 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-                <p className="text-4xl font-bold text-blue-800">{store._count?.customers ?? 0}</p>
-                <p className="text-sm text-gray-500 mt-1">担当顧客数</p>
-              </div>
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-                <p className="text-4xl font-bold text-blue-800">{store._count?.visitSchedules ?? 0}</p>
-                <p className="text-sm text-gray-500 mt-1">総訪問スケジュール数</p>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <SummaryCard
+                label="担当顧客数"
+                value={store._count?.customers ?? 0}
+                unit="名"
+                icon={
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                  </svg>
+                }
+              />
+              <SummaryCard
+                label="総訪問スケジュール数"
+                value={store._count?.visitSchedules ?? 0}
+                unit="件"
+                icon={
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                  </svg>
+                }
+              />
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl p-12 text-center text-sm text-gray-400 border border-gray-100">
-            店舗情報を取得できませんでした
-          </div>
+          <Card variant="outlined" padding="none">
+            <EmptyState title="店舗情報を取得できませんでした" />
+          </Card>
         )}
       </div>
-    </div>
+    </>
   )
 }

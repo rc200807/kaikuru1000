@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
+import AppBar from '@/components/AppBar'
+import SummaryCard from '@/components/SummaryCard'
+import Card from '@/components/Card'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 type DashboardData = {
   summary: {
@@ -32,54 +35,6 @@ function fmtYen(n: number) {
   return `¥${n.toLocaleString()}`
 }
 
-function AdminNav({ active }: { active: string }) {
-  const { data: session } = useSession()
-  const navItems = [
-    { href: '/admin/dashboard', label: 'ダッシュボード' },
-    { href: '/admin/customers', label: '顧客管理' },
-    { href: '/admin/stores', label: '店舗管理' },
-    { href: '/admin/visits', label: '訪問記録' },
-    { href: '/admin/licenses', label: 'ライセンスキー' },
-    { href: '/admin/members', label: 'メンバー' },
-    { href: '/admin/settings', label: '設定' },
-  ]
-  return (
-    <header className="bg-gray-800 text-white sticky top-0 z-10">
-      <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-        <Link href="/admin/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          {(session?.user as any)?.avatar ? (
-            <img src={(session?.user as any)?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-gray-600" alt="" />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-gray-600 border-2 border-gray-500 flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-sm font-semibold">{(session?.user as any)?.name?.[0] ?? '?'}</span>
-            </div>
-          )}
-          <div>
-            <p className="text-gray-400 text-xs font-medium tracking-widest uppercase">買いクル 管理ポータル</p>
-            <h1 className="text-base font-semibold mt-0.5">{(session?.user as any)?.name}</h1>
-          </div>
-        </Link>
-        <nav className="flex items-center gap-6">
-          {navItems.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`text-sm transition-colors ${active === item.label
-                ? 'font-medium text-white border-b border-white pb-0.5'
-                : 'text-gray-300 hover:text-white'}`}
-            >
-              {item.label}
-            </Link>
-          ))}
-          <button onClick={() => signOut({ callbackUrl: '/' })} className="text-sm text-gray-400 hover:text-white transition-colors ml-2">
-            ログアウト
-          </button>
-        </nav>
-      </div>
-    </header>
-  )
-}
-
 // 金額のY軸フォーマッター
 function yenAxisFormatter(value: number) {
   if (value >= 1_000_000) return `${(value / 10_000).toFixed(0)}万`
@@ -91,8 +46,8 @@ function yenAxisFormatter(value: number) {
 function AmountTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-md px-3 py-2 text-sm">
-      <p className="font-medium text-gray-700 mb-1">{label}</p>
+    <div className="bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] shadow-[var(--md-sys-elevation-2)] px-3 py-2 text-sm">
+      <p className="font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">{label}</p>
       <p className="text-emerald-700 font-semibold">¥{payload[0].value.toLocaleString()}</p>
     </div>
   )
@@ -119,14 +74,7 @@ export default function AdminDashboardPage() {
   }, [status, session, router])
 
   if (loading || !data) {
-    return (
-      <div className="min-h-screen bg-[#FFFBFE]">
-        <AdminNav active="ダッシュボード" />
-        <div className="flex items-center justify-center h-96">
-          <div className="w-8 h-8 border-4 border-red-700 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    )
+    return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
   }
 
   const {
@@ -146,32 +94,31 @@ export default function AdminDashboardPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#FFFBFE]">
-      <AdminNav active="ダッシュボード" />
+    <>
+      <AppBar title="ダッシュボード" />
 
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* サマリーカード */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {summaryCards.map(card => (
-            <div key={card.label} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-3">
-              <div className={`w-2 self-stretch rounded-full flex-shrink-0 ${card.color}`} />
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500 font-medium truncate">{card.label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1 leading-tight">
-                  {card.value}
-                  {card.unit && <span className="text-sm font-normal text-gray-500 ml-1">{card.unit}</span>}
-                </p>
-              </div>
-            </div>
+            <SummaryCard
+              key={card.label}
+              label={card.label}
+              value={card.value}
+              unit={card.unit}
+              accentColor={card.color}
+            />
           ))}
         </div>
 
         {/* 買取金額推移グラフ */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">買取金額の推移（月次・直近12ヶ月）</h2>
+        <Card variant="elevated" padding="md">
+          <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-4">
+            買取金額の推移（月次・直近12ヶ月）
+          </h2>
           {monthlyPurchaseAmount.every(d => d.amount === 0) ? (
-            <p className="text-sm text-gray-400 text-center py-12">買取実績がありません</p>
+            <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-12">買取実績がありません</p>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={monthlyPurchaseAmount} margin={{ top: 4, right: 8, left: 10, bottom: 0 }}>
@@ -183,72 +130,78 @@ export default function AdminDashboardPage() {
               </BarChart>
             </ResponsiveContainer>
           )}
-        </div>
+        </Card>
 
         {/* 店舗別買取金額ランキング ＋ 店舗別顧客数ランキング */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* 店舗別買取金額ランキング */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">店舗別買取金額ランキング（全期間 TOP10）</h2>
+          <Card variant="elevated" padding="md">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-4">
+              店舗別買取金額ランキング（全期間 TOP10）
+            </h2>
             {storePurchaseRanking.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">買取実績がありません</p>
+              <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-8">買取実績がありません</p>
             ) : (
               <div className="space-y-3">
                 {storePurchaseRanking.map((store, i) => (
                   <div key={store.storeId} className="flex items-center gap-3">
-                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-purple-600' : 'text-gray-400'}`}>
+                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-purple-600' : 'text-[var(--md-sys-color-outline)]'}`}>
                       {i + 1}
                     </span>
-                    <span className="text-sm text-gray-700 w-28 truncate flex-shrink-0">{store.name}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-2">
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)] w-28 truncate flex-shrink-0">{store.name}</span>
+                    <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-2">
                       <div
                         className="bg-purple-600 h-2 rounded-full transition-all"
                         style={{ width: `${(store.amount / maxPurchaseAmount) * 100}%` }}
                       />
                     </div>
-                    <span className="text-sm font-semibold text-gray-800 w-20 text-right flex-shrink-0">
+                    <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] w-20 text-right flex-shrink-0">
                       {fmtYen(store.amount)}
                     </span>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* 店舗別当月顧客数ランキング */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">店舗別顧客数ランキング（当月 TOP10）</h2>
+          <Card variant="elevated" padding="md">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-4">
+              店舗別顧客数ランキング（当月 TOP10）
+            </h2>
             {storeRanking.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">当月のデータがありません</p>
+              <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-8">当月のデータがありません</p>
             ) : (
               <div className="space-y-3">
                 {storeRanking.map((store, i) => (
                   <div key={store.storeId} className="flex items-center gap-3">
-                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-red-600' : 'text-gray-400'}`}>
+                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-red-600' : 'text-[var(--md-sys-color-outline)]'}`}>
                       {i + 1}
                     </span>
-                    <span className="text-sm text-gray-700 w-28 truncate flex-shrink-0">{store.name}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-2">
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)] w-28 truncate flex-shrink-0">{store.name}</span>
+                    <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-2">
                       <div
                         className="bg-red-600 h-2 rounded-full transition-all"
                         style={{ width: `${(store.count / maxStoreCount) * 100}%` }}
                       />
                     </div>
-                    <span className="text-sm font-semibold text-gray-800 w-8 text-right flex-shrink-0">{store.count}</span>
+                    <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] w-8 text-right flex-shrink-0">{store.count}</span>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
 
         {/* 月次新規顧客数 ＋ 月次訪問数 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* 月次新規顧客数 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">新規顧客獲得数の推移（月次）</h2>
+          <Card variant="elevated" padding="md">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-4">
+              新規顧客獲得数の推移（月次）
+            </h2>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyNewCustomers} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -258,11 +211,13 @@ export default function AdminDashboardPage() {
                 <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </Card>
 
           {/* 月次訪問数推移 */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">訪問件数の推移（月次）</h2>
+          <Card variant="elevated" padding="md">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-4">
+              訪問件数の推移（月次）
+            </h2>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={monthlyVisits} margin={{ top: 0, right: 16, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -279,12 +234,14 @@ export default function AdminDashboardPage() {
                 />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </Card>
         </div>
 
         {/* 日次訪問数 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">訪問件数の推移（直近30日）</h2>
+        <Card variant="elevated" padding="md">
+          <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-4">
+            訪問件数の推移（直近30日）
+          </h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyVisits} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -298,9 +255,9 @@ export default function AdminDashboardPage() {
               <Bar dataKey="count" fill="#1d4ed8" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </Card>
 
       </div>
-    </div>
+    </>
   )
 }

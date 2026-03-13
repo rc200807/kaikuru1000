@@ -1,11 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import AppBar from '@/components/AppBar'
+import Card from '@/components/Card'
+import SummaryCard from '@/components/SummaryCard'
+import DataTable, { type Column } from '@/components/DataTable'
+import Button from '@/components/Button'
+import StatusBadge from '@/components/StatusBadge'
+import LoadingSpinner from '@/components/LoadingSpinner'
+import EmptyState from '@/components/EmptyState'
 
 type VisitRecord = {
   id: string
@@ -30,21 +37,8 @@ const STATUS_OPTIONS = [
   { value: 'cancelled',   label: 'キャンセル' },
 ]
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; className: string }> = {
-    scheduled:   { label: '予定',       className: 'bg-blue-50 text-blue-700' },
-    pending:     { label: '未対応',     className: 'bg-amber-50 text-amber-700' },
-    completed:   { label: '対応完了',   className: 'bg-green-50 text-green-700' },
-    rescheduled: { label: 'リスケ',     className: 'bg-indigo-50 text-indigo-700' },
-    absent:      { label: '不在',       className: 'bg-red-50 text-red-700' },
-    cancelled:   { label: 'キャンセル', className: 'bg-gray-100 text-gray-500' },
-  }
-  const s = map[status] ?? { label: status, className: 'bg-gray-100 text-gray-500' }
-  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${s.className}`}>{s.label}</span>
-}
-
 function fmt(n: number | null | undefined) {
-  if (n == null) return <span className="text-gray-300">—</span>
+  if (n == null) return <span className="text-[var(--md-sys-color-outline)]">{'\u2014'}</span>
   return <span>¥{n.toLocaleString()}</span>
 }
 
@@ -125,72 +119,124 @@ export default function AdminVisitsPage() {
   const completedCount = records.filter(r => r.status === 'completed').length
 
   if (status === 'loading') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-10 h-10 border-4 border-gray-800 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
+    return <LoadingSpinner size="lg" fullPage />
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ナビゲーション */}
-      <header className="bg-gray-800 text-white sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/admin/profile" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            {(session?.user as any)?.avatar ? (
-              <img src={(session?.user as any)?.avatar} className="w-9 h-9 rounded-full object-cover border-2 border-gray-600" alt="" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-gray-600 border-2 border-gray-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm font-semibold">{(session?.user as any)?.name?.[0] ?? '?'}</span>
-              </div>
-            )}
-            <div>
-              <p className="text-gray-400 text-xs font-medium tracking-widest uppercase">買いクル 管理ポータル</p>
-              <h1 className="text-base font-semibold mt-0.5">{(session?.user as any)?.name}</h1>
-            </div>
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/admin/dashboard" className="text-sm text-gray-300 hover:text-white transition-colors">ダッシュボード</Link>
-            <Link href="/admin/customers" className="text-sm text-gray-300 hover:text-white transition-colors">顧客管理</Link>
-            <Link href="/admin/stores" className="text-sm text-gray-300 hover:text-white transition-colors">店舗管理</Link>
-            <Link href="/admin/visits" className="text-sm font-medium text-white border-b border-white pb-0.5">訪問記録</Link>
-            <Link href="/admin/licenses" className="text-sm text-gray-300 hover:text-white transition-colors">ライセンスキー</Link>
-            <Link href="/admin/members" className="text-sm text-gray-300 hover:text-white transition-colors">メンバー</Link>
-            <Link href="/admin/settings" className="text-sm text-gray-300 hover:text-white transition-colors">設定</Link>
-            <button onClick={() => signOut({ callbackUrl: '/' })} className="text-sm text-gray-400 hover:text-white transition-colors ml-2">
-              ログアウト
-            </button>
-          </nav>
+  const visitColumns: Column<VisitRecord>[] = [
+    {
+      key: 'visitDate',
+      header: '訪問日',
+      render: (record) => (
+        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
+          {format(new Date(record.visitDate), 'yyyy/M/d（E）', { locale: ja })}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (record) => record.visitDate,
+    },
+    {
+      key: 'name',
+      header: '顧客名',
+      render: (record) => (
+        <div>
+          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{record.user.name}</p>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{record.user.furigana}</p>
         </div>
-      </header>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'メールアドレス',
+      hideOnMobile: true,
+      render: (record) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{record.user.email}</span>,
+    },
+    {
+      key: 'phone',
+      header: '電話番号',
+      hideOnMobile: true,
+      render: (record) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{record.user.phone}</span>,
+    },
+    {
+      key: 'store',
+      header: '担当店舗',
+      render: (record) => (
+        <div>
+          <p className="text-sm text-[var(--md-sys-color-on-surface)]">{record.store.name}</p>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{record.store.code}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'ステータス',
+      render: (record) => <StatusBadge status={record.status as any} />,
+    },
+    {
+      key: 'purchaseAmount',
+      header: '買取金額',
+      hideOnMobile: true,
+      render: (record) => (
+        <span className="text-sm text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap font-medium">
+          {fmt(record.purchaseAmount)}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (record) => record.purchaseAmount ?? 0,
+    },
+    {
+      key: 'billingAmount',
+      header: '請求金額',
+      hideOnMobile: true,
+      render: (record) => (
+        <span className="text-sm text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap font-medium">
+          {fmt(record.billingAmount)}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (record) => record.billingAmount ?? 0,
+    },
+    {
+      key: 'note',
+      header: 'メモ',
+      hideOnMobile: true,
+      render: (record) => (
+        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)] max-w-48 truncate block">
+          {record.note || <span className="text-[var(--md-sys-color-outline)]">{'\u2014'}</span>}
+        </span>
+      ),
+    },
+  ]
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">訪問記録</h2>
-            <p className="text-sm text-gray-400 mt-0.5">全店舗の訪問履歴を検索・閲覧できます</p>
-          </div>
-        </div>
+  return (
+    <>
+      <AppBar
+        title="訪問記録"
+        subtitle="全店舗の訪問履歴を検索・閲覧できます"
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
 
         {/* 検索・フィルターパネル */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+        <Card variant="elevated" padding="md" className="mb-6">
           <form onSubmit={handleSearch}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {/* フリーワード */}
               <div className="lg:col-span-2">
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">キーワード（顧客名・フリガナ・メール・電話）</label>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">キーワード（顧客名・フリガナ・メール・電話）</label>
                 <div className="relative">
                   <input
                     type="text"
                     value={inputQ}
                     onChange={e => setInputQ(e.target.value)}
                     placeholder="例: 山田 / yamada@"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 pr-10"
+                    className="w-full h-10 pl-9 pr-10 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                   />
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--md-sys-color-outline)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
                   {inputQ && (
                     <button type="button" onClick={() => { setInputQ(''); setQ('') }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface)]">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -201,11 +247,11 @@ export default function AdminVisitsPage() {
 
               {/* 店舗 */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">店舗</label>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">店舗</label>
                 <select
                   value={storeId}
                   onChange={e => setStoreId(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white"
+                  className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                 >
                   <option value="">すべての店舗</option>
                   {stores.map(s => (
@@ -216,11 +262,11 @@ export default function AdminVisitsPage() {
 
               {/* ステータス */}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">ステータス</label>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">ステータス</label>
                 <select
                   value={filterStatus}
                   onChange={e => setFilterStatus(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white"
+                  className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                 >
                   {STATUS_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -232,131 +278,79 @@ export default function AdminVisitsPage() {
             {/* 日付範囲 */}
             <div className="flex flex-wrap items-end gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">訪問日（開始）</label>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">訪問日（開始）</label>
                 <input
                   type="date"
                   value={from}
                   onChange={e => setFrom(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
+                  className="h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">訪問日（終了）</label>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">訪問日（終了）</label>
                 <input
                   type="date"
                   value={to}
                   onChange={e => setTo(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-800"
+                  className="h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                 />
               </div>
               <div className="flex gap-2 pb-0.5">
-                <button
-                  type="submit"
-                  className="bg-gray-800 text-white px-5 py-2.5 rounded-full text-sm font-medium hover:bg-gray-900 transition-colors"
-                >
+                <Button type="submit" size="sm">
                   検索
-                </button>
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="border border-gray-200 text-gray-500 px-4 py-2.5 rounded-full text-sm hover:bg-gray-50 transition-colors"
-                >
+                </Button>
+                <Button type="button" variant="text" size="sm" onClick={clearFilters}>
                   クリア
-                </button>
+                </Button>
               </div>
             </div>
           </form>
-        </div>
+        </Card>
 
         {/* サマリーカード */}
         {!loading && records.length > 0 && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">該当件数</p>
-              <p className="text-2xl font-bold text-gray-900">{total.toLocaleString()} <span className="text-sm font-normal text-gray-400">件</span></p>
-              {total > records.length && (
-                <p className="text-xs text-amber-500 mt-1">表示中: {records.length}件</p>
-              )}
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">買取金額合計（表示分）</p>
-              <p className="text-2xl font-bold text-gray-900">¥{totalPurchase.toLocaleString()}</p>
-              <p className="text-xs text-gray-400 mt-1">対応完了 {completedCount}件</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs text-gray-400 mb-1">請求金額合計（表示分）</p>
-              <p className="text-2xl font-bold text-gray-900">¥{totalBilling.toLocaleString()}</p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <SummaryCard
+              label="該当件数"
+              value={total.toLocaleString()}
+              unit="件"
+              accentColor="bg-blue-600"
+            />
+            <SummaryCard
+              label={`買取金額合計（対応完了 ${completedCount}件）`}
+              value={`¥${totalPurchase.toLocaleString()}`}
+              accentColor="bg-emerald-600"
+            />
+            <SummaryCard
+              label="請求金額合計（表示分）"
+              value={`¥${totalBilling.toLocaleString()}`}
+              accentColor="bg-purple-600"
+            />
           </div>
         )}
 
         {/* テーブル */}
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-8 h-8 border-4 border-gray-800 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+          <LoadingSpinner size="lg" fullPage />
         ) : records.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-            <p className="text-gray-400 text-sm">該当する訪問記録がありません</p>
-          </div>
+          <Card variant="elevated" padding="none">
+            <EmptyState title="該当する訪問記録がありません" />
+          </Card>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 whitespace-nowrap">訪問日</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">顧客名</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">メールアドレス</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">電話番号</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">担当店舗</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">ステータス</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 whitespace-nowrap">買取金額</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-400 whitespace-nowrap">請求金額</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">メモ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {records.map(record => (
-                    <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                        {format(new Date(record.visitDate), 'yyyy/M/d（E）', { locale: ja })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-gray-900">{record.user.name}</p>
-                        <p className="text-xs text-gray-400">{record.user.furigana}</p>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{record.user.email}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{record.user.phone}</td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm text-gray-700">{record.store.name}</p>
-                        <p className="text-xs text-gray-400">{record.store.code}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={record.status} />
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap font-medium">
-                        {fmt(record.purchaseAmount)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap font-medium">
-                        {fmt(record.billingAmount)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-400 max-w-48 truncate">
-                        {record.note || <span className="text-gray-200">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="bg-[var(--md-sys-color-surface-container-lowest,#fff)] rounded-[var(--md-sys-shape-medium)] shadow-[var(--md-sys-elevation-1)] overflow-hidden">
+            <DataTable<VisitRecord>
+              columns={visitColumns}
+              data={records}
+              rowKey={(record) => record.id}
+            />
             {total > records.length && (
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 text-center">
+              <div className="px-4 py-3 bg-[var(--md-sys-color-surface-container-low)] border-t border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)] text-center">
                 {total.toLocaleString()}件中 {records.length}件を表示しています
               </div>
             )}
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

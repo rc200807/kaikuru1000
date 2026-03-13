@@ -32,6 +32,17 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Prisma をバンドルせず Node.js ネイティブで解決（Vercel ビルド対応）
   serverExternalPackages: ['@prisma/client', 'prisma'],
+  async redirects() {
+    return [
+      // kaikuru1000.vercel.app へのアクセスは本番ドメインにリダイレクト
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'kaikuru1000.vercel.app' }],
+        destination: 'https://system.rcinc.jp/:path*',
+        permanent: true,
+      },
+    ]
+  },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }]
   },

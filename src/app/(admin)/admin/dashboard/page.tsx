@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip formatter={(v: number) => [`${v}名`, '新規顧客']} />
+                <Tooltip formatter={(v: any) => [`${v}名`, '新規顧客']} />
                 <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -184,7 +184,7 @@ export default function AdminDashboardPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip formatter={(v: number) => [`${v}件`, '訪問数']} />
+              <Tooltip formatter={(v: any) => [`${v}件`, '訪問数']} />
               <Line
                 type="monotone"
                 dataKey="count"
@@ -209,7 +209,7 @@ export default function AdminDashboardPage() {
                 interval={4}
               />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip formatter={(v: number) => [`${v}件`, '訪問数']} />
+              <Tooltip formatter={(v: any) => [`${v}件`, '訪問数']} />
               <Bar dataKey="count" fill="#1d4ed8" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

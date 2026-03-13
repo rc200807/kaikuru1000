@@ -21,6 +21,11 @@ export async function GET(request: NextRequest) {
   const limit   = Math.min(200, parseInt(searchParams.get('limit') || '100'))
 
   const where: any = {}
+  const includeTestData = searchParams.get('includeTestData') === 'true'
+
+  if (!includeTestData) {
+    where.user = { isTestData: false }
+  }
 
   if (storeId) {
     where.storeId = storeId
@@ -39,6 +44,7 @@ export async function GET(request: NextRequest) {
   }
   if (q) {
     where.user = {
+      ...(where.user || {}),
       OR: [
         { name:     { contains: q, mode: 'insensitive' } },
         { furigana: { contains: q, mode: 'insensitive' } },

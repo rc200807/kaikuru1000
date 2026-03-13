@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "node prisma/seed.js",
+    "seed:test": "node prisma/seed-test-data.js",
     "postinstall": "prisma generate"
   },
   "prisma": {

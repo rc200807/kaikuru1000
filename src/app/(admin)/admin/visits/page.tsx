@@ -50,6 +50,7 @@ export default function AdminVisitsPage() {
   const [stores, setStores] = useState<Store[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [showTestData, setShowTestData] = useState(false)
 
   // 検索フィルター
   const [q, setQ] = useState('')
@@ -82,6 +83,7 @@ export default function AdminVisitsPage() {
     if (filterStatus) params.set('status', filterStatus)
     if (from)         params.set('from', from)
     if (to)           params.set('to', to)
+    if (showTestData) params.set('includeTestData', 'true')
     params.set('limit', '200')
 
     const res = await fetch(`/api/admin/visits?${params}`)
@@ -91,7 +93,7 @@ export default function AdminVisitsPage() {
       setTotal(data.total || 0)
     }
     setLoading(false)
-  }, [q, storeId, filterStatus, from, to])
+  }, [q, storeId, filterStatus, from, to, showTestData])
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -215,6 +217,25 @@ export default function AdminVisitsPage() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+        {/* テストデータ表示トグル */}
+        <div className="flex items-center gap-2 px-4 sm:px-6">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setShowTestData(prev => !prev)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${
+                showTestData ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
+              }`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                showTestData ? 'translate-x-4' : 'translate-x-0.5'
+              }`} />
+            </div>
+            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              テストデータを表示
+            </span>
+          </label>
+        </div>
 
         {/* 検索・フィルターパネル */}
         <Card variant="elevated" padding="md" className="mb-6">

@@ -527,6 +527,9 @@ function AdminSettingsContent() {
 
         {/* ─── 同期ログ ─── */}
         <SyncLogSection />
+
+        {/* ─── テストデータ管理 ─── */}
+        <TestDataManagement />
       </div>
     </>
   )
@@ -539,6 +542,85 @@ export default function AdminSettingsPage() {
     >
       <AdminSettingsContent />
     </Suspense>
+  )
+}
+
+function TestDataManagement() {
+  const [stats, setStats] = useState<{ userCount: number; visitCount: number; licenseKeyCount: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/admin/test-data')
+      .then(r => r.json())
+      .then(data => { setStats(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  async function handleDelete() {
+    if (!confirm('テストデータ（ユーザー・訪問記録・ライセンスキー）をすべて削除しますか？\nこの操作は取り消せません。')) return
+    setDeleting(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/test-data', { method: 'DELETE' })
+      if (res.ok) {
+        const data = await res.json()
+        setMessage({ type: 'success', text: `テストデータを削除しました（ユーザー: ${data.deletedUsers}件, 訪問: ${data.deletedVisits}件, ライセンスキー: ${data.deletedLicenseKeys}件）` })
+        setStats({ userCount: 0, visitCount: 0, licenseKeyCount: 0 })
+      } else {
+        setMessage({ type: 'error', text: 'テストデータの削除に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'テストデータの削除に失敗しました' })
+    }
+    setDeleting(false)
+  }
+
+  if (loading) return null
+
+  return (
+    <Card variant="elevated" padding="md">
+      <div className="flex items-center gap-3 mb-1">
+        <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+        </svg>
+        <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">テストデータ管理</h3>
+      </div>
+      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-4 ml-8">
+        シード投入されたテストデータの確認・一括削除ができます。
+      </p>
+
+      {message && <MessageBanner severity={message.type} className="mb-4">{message.text}</MessageBanner>}
+
+      <div className="ml-8 space-y-4">
+        {stats && stats.userCount > 0 ? (
+          <>
+            <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-medium)] p-4 border border-[var(--md-sys-color-outline-variant)]">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">{stats.userCount}</p>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">テスト顧客</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">{stats.visitCount}</p>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">訪問記録</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">{stats.licenseKeyCount}</p>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">ライセンスキー</p>
+                </div>
+              </div>
+            </div>
+            <Button variant="filled" danger loading={deleting} onClick={handleDelete}>
+              テストデータを一括削除
+            </Button>
+          </>
+        ) : (
+          <p className="text-sm text-[var(--md-sys-color-outline)]">テストデータはありません</p>
+        )}
+      </div>
+    </Card>
   )
 }
 

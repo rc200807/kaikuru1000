@@ -33,6 +33,7 @@ model User {
   idDocumentPath String?   @db.Text  // 身分証明書ファイルURL（Vercel Blob）
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
+  isTestData     Boolean   @default(false)
   visitSchedules VisitSchedule[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

@@ -15,22 +15,24 @@ export async function GET() {
   const twelveMonthsAgo = startOfMonth(subMonths(now, 11))
   const thirtyDaysAgo = startOfDay(subDays(now, 29))
 
-  // --- 全顧客 ---
+  // --- 全顧客（テストデータ除外） ---
   const allUsers = await prisma.user.findMany({
+    where: { isTestData: false },
     select: { storeId: true, createdAt: true, store: { select: { name: true } } },
   })
 
-  // --- 全訪問スケジュール (直近12ヶ月) ---
+  // --- 全訪問スケジュール (直近12ヶ月、テストデータ除外) ---
   const allVisits = await prisma.visitSchedule.findMany({
-    where: { visitDate: { gte: twelveMonthsAgo } },
+    where: { visitDate: { gte: twelveMonthsAgo }, user: { isTestData: false } },
     select: { visitDate: true },
   })
 
-  // --- 買取実績 (completed, 直近12ヶ月 - 推移グラフ用) ---
+  // --- 買取実績 (completed, 直近12ヶ月 - 推移グラフ用、テストデータ除外) ---
   const completedVisitsRecent = await prisma.visitSchedule.findMany({
     where: {
       status: 'completed',
       visitDate: { gte: twelveMonthsAgo },
+      user: { isTestData: false },
     },
     select: {
       visitDate: true,
@@ -40,9 +42,9 @@ export async function GET() {
     },
   })
 
-  // --- 店舗別買取金額ランキング用 (全期間) ---
+  // --- 店舗別買取金額ランキング用 (全期間、テストデータ除外) ---
   const allCompletedVisits = await prisma.visitSchedule.findMany({
-    where: { status: 'completed' },
+    where: { status: 'completed', user: { isTestData: false } },
     select: {
       purchaseAmount: true,
       storeId: true,
@@ -54,9 +56,11 @@ export async function GET() {
   // 1. サマリー
   const totalCustomers = allUsers.length
   const currentMonthCustomers = allUsers.filter(u => u.createdAt >= currentMonthStart).length
-  const totalVisitsCount = await prisma.visitSchedule.count()
+  const totalVisitsCount = await prisma.visitSchedule.count({
+    where: { user: { isTestData: false } },
+  })
   const currentMonthVisits = await prisma.visitSchedule.count({
-    where: { visitDate: { gte: currentMonthStart } },
+    where: { visitDate: { gte: currentMonthStart }, user: { isTestData: false } },
   })
 
   // 総買取金額 / 当月買取金額

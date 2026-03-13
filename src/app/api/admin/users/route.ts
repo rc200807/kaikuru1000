@@ -10,7 +10,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { searchParams } = new URL(request.url)
+  const includeTestData = searchParams.get('includeTestData') === 'true'
+
+  const where: any = {}
+  if (!includeTestData) {
+    where.isTestData = false
+  }
+
   const users = await prisma.user.findMany({
+    where,
     include: {
       store: { select: { id: true, name: true, code: true } },
       licenseKey: { select: { key: true } },

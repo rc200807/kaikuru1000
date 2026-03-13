@@ -29,6 +29,7 @@ type User = {
   licenseKey: { key: string }
   store: { id: string; name: string; code: string } | null
   visitSchedules: Array<{ visitDate: string; status: string }>
+  isTestData?: boolean
 }
 
 type Store = {
@@ -67,6 +68,7 @@ export default function AdminCustomersPage() {
   const [search, setSearch] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showTestData, setShowTestData] = useState(false)
 
   // 店舗割り当てモーダル
   const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null)
@@ -93,8 +95,9 @@ export default function AdminCustomersPage() {
         return
       }
 
+      const usersUrl = showTestData ? '/api/admin/users?includeTestData=true' : '/api/admin/users'
       Promise.all([
-        fetch('/api/admin/users').then(r => r.json()),
+        fetch(usersUrl).then(r => r.json()),
         fetch('/api/stores').then(r => r.json()),
       ]).then(([usersData, storesData]) => {
         setUsers(Array.isArray(usersData) ? usersData : [])
@@ -102,7 +105,7 @@ export default function AdminCustomersPage() {
         setLoading(false)
       }).catch(() => setLoading(false))
     }
-  }, [status, session])
+  }, [status, session, showTestData])
 
   // 顧客詳細モーダルを開いたときにスケジュール取得
   useEffect(() => {
@@ -219,7 +222,14 @@ export default function AdminCustomersPage() {
       header: '顧客名',
       render: (user) => (
         <div>
-          <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{user.name}</div>
+          <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+            {user.name}
+            {user.isTestData && (
+              <span className="ml-1.5 text-[10px] font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
+                テスト
+              </span>
+            )}
+          </div>
           <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{user.furigana}</div>
         </div>
       ),
@@ -325,6 +335,24 @@ export default function AdminCustomersPage() {
         )}
 
         <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)] mb-4">顧客一覧</h2>
+
+        <div className="flex items-center gap-2 px-4 sm:px-6">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setShowTestData(prev => !prev)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${
+                showTestData ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
+              }`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                showTestData ? 'translate-x-4' : 'translate-x-0.5'
+              }`} />
+            </div>
+            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              テストデータを表示
+            </span>
+          </label>
+        </div>
 
         <SearchFilterBar
           filters={[

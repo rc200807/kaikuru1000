@@ -60,6 +60,9 @@ export default function AdminStoresPage() {
   const [fetchingHeaders, setFetchingHeaders] = useState(false)
   const [headerError, setHeaderError] = useState('')
 
+  // スプレッドシート設定セクションの開閉
+  const [sheetSectionOpen, setSheetSectionOpen] = useState(false)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -270,13 +273,33 @@ export default function AdminStoresPage() {
         )}
 
         {/* Google Sheetsスプレッドシート設定 */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm px-6 py-5 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <svg className="w-4 h-4 text-green-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7" />
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm mb-6 overflow-hidden">
+          {/* アコーディオンヘッダー */}
+          <button
+            type="button"
+            onClick={() => setSheetSectionOpen(v => !v)}
+            className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-green-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7" />
+              </svg>
+              <h3 className="text-sm font-semibold text-gray-800">同期するGoogleスプレッドシート</h3>
+              {storeSheetUrl && !sheetSectionOpen && (
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">設定済み</span>
+              )}
+            </div>
+            <svg
+              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${sheetSectionOpen ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-            <h3 className="text-sm font-semibold text-gray-800">同期するGoogleスプレッドシート</h3>
-          </div>
+          </button>
+
+          {/* アコーディオンコンテンツ */}
+          {sheetSectionOpen && (
+          <div className="px-6 pb-5 border-t border-gray-100 pt-4">
 
           {/* URL・シート名 */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_auto] mb-3">
@@ -378,6 +401,8 @@ export default function AdminStoresPage() {
           <p className="text-xs text-gray-400 mt-3">
             2行目以降がデータ行として読み込まれます（1行目はヘッダー）
           </p>
+          </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
+import { decrypt } from '@/lib/encrypt'
 
 /** DBからメール設定を読み込んでトランスポーターを生成する */
 async function createTransporter() {
@@ -15,7 +16,7 @@ async function createTransporter() {
       secure: config.smtpPort === 465, // 465はSSL、それ以外はTLS/STARTTLS
       auth: {
         user: config.smtpUser,
-        pass: config.smtpPass,
+        pass: decrypt(config.smtpPass ?? ''), // AES-256-GCM暗号化済みを復号
       },
     }),
     from: `"${config.fromName}" <${config.fromAddress || config.smtpUser}>`,

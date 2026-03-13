@@ -48,8 +48,10 @@ export default function AdminStoresPage() {
   const [creating, setCreating] = useState(false)
 
   // パスワード表示モーダル
-  const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string } | null>(null)
+  const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string; storeId: string; storeEmail: string | null } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailSentDone, setEmailSentDone] = useState(false)
 
   // パスワード再発行中の店舗ID
   const [resettingId, setResettingId] = useState<string | null>(null)
@@ -138,7 +140,7 @@ export default function AdminStoresPage() {
     if (res.ok) {
       setShowCreateModal(false)
       setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', address: '' })
-      setPasswordModal({ storeName: createForm.name.trim(), password: data.password })
+      setPasswordModal({ storeName: createForm.name.trim(), password: data.password, storeId: data.store.id, storeEmail: data.store.email ?? null })
       refreshStores()
     } else {
       setMessage({ type: 'error', text: data.error || '店舗の作成に失敗しました' })
@@ -158,7 +160,7 @@ export default function AdminStoresPage() {
     setResettingId(null)
 
     if (res.ok) {
-      setPasswordModal({ storeName: store.name, password: data.password })
+      setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null })
     } else {
       setMessage({ type: 'error', text: data.error || 'パスワードの再発行に失敗しました' })
     }
@@ -204,6 +206,30 @@ export default function AdminStoresPage() {
     navigator.clipboard.writeText(passwordModal.password)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleSendPasswordEmail() {
+    if (!passwordModal) return
+    setSendingEmail(true)
+    const res = await fetch(`/api/admin/stores/${passwordModal.storeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sendPasswordEmail: true, password: passwordModal.password }),
+    })
+    setSendingEmail(false)
+    if (res.ok) {
+      setEmailSentDone(true)
+    } else {
+      const data = await res.json()
+      setMessage({ type: 'error', text: data.error || 'メールの送信に失敗しました' })
+    }
+  }
+
+  function handleClosePasswordModal() {
+    setPasswordModal(null)
+    setCopied(false)
+    setSendingEmail(false)
+    setEmailSentDone(false)
   }
 
   if (status === 'loading' || loading) {
@@ -619,7 +645,7 @@ export default function AdminStoresPage() {
       {/* ─── パスワード表示モーダル ─── */}
       <Modal
         open={!!passwordModal}
-        onClose={() => { setPasswordModal(null); setCopied(false) }}
+        onClose={handleClosePasswordModal}
         title="パスワードを発行しました"
         size="sm"
       >
@@ -655,7 +681,29 @@ export default function AdminStoresPage() {
               このパスワードは一度しか表示されません。必ず控えてから閉じてください。
             </MessageBanner>
 
-            <Button fullWidth onClick={() => { setPasswordModal(null); setCopied(false) }}>
+            {passwordModal.storeEmail && (
+              <Button
+                fullWidth
+                variant="tonal"
+                disabled={sendingEmail || emailSentDone}
+                loading={sendingEmail}
+                onClick={handleSendPasswordEmail}
+                className="mb-3"
+                icon={emailSentDone ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                )}
+              >
+                {emailSentDone ? '送信しました' : sendingEmail ? '送信中...' : '通知メールを送信'}
+              </Button>
+            )}
+
+            <Button fullWidth variant="outlined" onClick={handleClosePasswordModal}>
               閉じる
             </Button>
           </>

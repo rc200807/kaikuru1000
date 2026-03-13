@@ -34,19 +34,24 @@ export async function PATCH(
       where: { id },
       data: { password: hashedPassword },
     })
+    return NextResponse.json({ password: plainPassword, hasEmail: !!store.email })
+  }
 
-    // メールアドレスが設定されていれば通知メールを送信（失敗しても再発行自体は成功扱い）
-    if (store.email) {
-      const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login`
-      sendStorePasswordResetNotification({
-        storeEmail: store.email,
-        storeName: store.name,
-        newPassword: plainPassword,
-        loginUrl,
-      }).catch(() => {}) // メール送信失敗はサイレントに無視
+  if (body.sendPasswordEmail) {
+    if (!store.email) {
+      return NextResponse.json({ error: 'メールアドレスが設定されていません' }, { status: 400 })
     }
-
-    return NextResponse.json({ password: plainPassword, emailSent: !!store.email })
+    if (!body.password || typeof body.password !== 'string') {
+      return NextResponse.json({ error: 'パスワードが指定されていません' }, { status: 400 })
+    }
+    const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login`
+    await sendStorePasswordResetNotification({
+      storeEmail: store.email,
+      storeName: store.name,
+      newPassword: body.password,
+      loginUrl,
+    })
+    return NextResponse.json({ sent: true })
   }
 
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })

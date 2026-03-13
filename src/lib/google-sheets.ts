@@ -3,7 +3,6 @@ import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 
-const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
 const SHEET_NAME = '店舗マスター'
 
 function getAuth() {
@@ -14,6 +13,12 @@ function getAuth() {
     },
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   })
+}
+
+// スプレッドシートURLからIDを抽出
+function extractSpreadsheetId(input: string): string {
+  const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+  return match ? match[1] : input
 }
 
 interface StoreRow {
@@ -31,8 +36,14 @@ export async function syncStoresFromGoogleSheets(): Promise<{
   message: string
   synced: number
 }> {
+  // DBからスプレッドシートIDを取得
+  const config = await prisma.googleSheetsConfig.findFirst()
+  const rawId = config?.storeSpreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+  const SPREADSHEET_ID = rawId ? extractSpreadsheetId(rawId) : null
+  const sheetName = config?.storeSheetName || SHEET_NAME
+
   if (!SPREADSHEET_ID || !process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
-    return { success: false, message: 'Google Sheets API credentials not configured', synced: 0 }
+    return { success: false, message: 'スプレッドシートIDが設定されていません。店舗管理画面から設定してください。', synced: 0 }
   }
 
   try {
@@ -41,7 +52,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A2:F1000`, // ヘッダー行をスキップ
+      range: `${sheetName}!A2:F1000`, // ヘッダー行をスキップ
     })
 
     const rows = response.data.values

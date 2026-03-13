@@ -22,6 +22,8 @@ export async function GET(request: NextRequest) {
     sheetName: config.sheetName,
     keyColumn: config.keyColumn,
     tokenExpiry: config.tokenExpiry,
+    storeSpreadsheetId: config.storeSpreadsheetId,
+    storeSheetName: config.storeSheetName,
   })
 }
 
@@ -33,21 +35,29 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { spreadsheetId, sheetName, keyColumn } = await request.json()
+  const { spreadsheetId, sheetName, keyColumn, storeSpreadsheetId, storeSheetName } = await request.json()
 
   const existing = await prisma.googleSheetsConfig.findFirst()
   if (existing) {
     await prisma.googleSheetsConfig.update({
       where: { id: existing.id },
       data: {
-        spreadsheetId: spreadsheetId ?? existing.spreadsheetId,
-        sheetName: sheetName ?? existing.sheetName,
-        keyColumn: keyColumn ?? existing.keyColumn,
+        ...(spreadsheetId !== undefined && { spreadsheetId }),
+        ...(sheetName !== undefined && { sheetName }),
+        ...(keyColumn !== undefined && { keyColumn }),
+        ...(storeSpreadsheetId !== undefined && { storeSpreadsheetId }),
+        ...(storeSheetName !== undefined && { storeSheetName }),
       },
     })
   } else {
     await prisma.googleSheetsConfig.create({
-      data: { spreadsheetId, sheetName: sheetName || 'ライセンスキー', keyColumn: keyColumn || 'A' },
+      data: {
+        spreadsheetId,
+        sheetName: sheetName || 'ライセンスキー',
+        keyColumn: keyColumn || 'A',
+        storeSpreadsheetId,
+        storeSheetName: storeSheetName || '店舗マスター',
+      },
     })
   }
 

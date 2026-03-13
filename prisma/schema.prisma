@@ -122,16 +122,18 @@ model EmailConfig {
 
 // Google Sheets 連携設定（OAuth2トークン + スプレッドシート設定）
 model GoogleSheetsConfig {
-  id            String    @id @default(cuid())
-  googleEmail   String?
-  accessToken   String?   @db.Text  // AES-256-GCM 暗号化済み（長いため Text 型）
-  refreshToken  String?   @db.Text  // AES-256-GCM 暗号化済み
-  tokenExpiry   DateTime?
-  spreadsheetId String?
-  sheetName     String    @default("ライセンスキー")
-  keyColumn     String    @default("A")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  googleEmail         String?
+  accessToken         String?   @db.Text  // AES-256-GCM 暗号化済み（長いため Text 型）
+  refreshToken        String?   @db.Text  // AES-256-GCM 暗号化済み
+  tokenExpiry         DateTime?
+  spreadsheetId       String?             // ライセンスキー用スプレッドシートID
+  sheetName           String    @default("ライセンスキー")
+  keyColumn           String    @default("A")
+  storeSpreadsheetId  String?             // 店舗マスター用スプレッドシートID
+  storeSheetName      String    @default("店舗マスター")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）

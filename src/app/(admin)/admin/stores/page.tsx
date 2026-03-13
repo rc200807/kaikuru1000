@@ -46,6 +46,12 @@ export default function AdminStoresPage() {
   // パスワード再発行中の店舗ID
   const [resettingId, setResettingId] = useState<string | null>(null)
 
+  // スプレッドシートURL設定
+  const [storeSheetUrl, setStoreSheetUrl] = useState('')
+  const [storeSheetName, setStoreSheetName] = useState('店舗マスター')
+  const [savingSheet, setSavingSheet] = useState(false)
+  const [sheetSaved, setSheetSaved] = useState(false)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -58,9 +64,12 @@ export default function AdminStoresPage() {
       Promise.all([
         fetch('/api/stores').then(r => r.json()),
         fetch('/api/sync-stores').then(r => r.json()),
-      ]).then(([storesData, logsData]) => {
+        fetch('/api/admin/google-config').then(r => r.json()),
+      ]).then(([storesData, logsData, sheetConfig]) => {
         setStores(Array.isArray(storesData) ? storesData : [])
         setSyncLogs(Array.isArray(logsData) ? logsData : [])
+        if (sheetConfig?.storeSpreadsheetId) setStoreSheetUrl(sheetConfig.storeSpreadsheetId)
+        if (sheetConfig?.storeSheetName) setStoreSheetName(sheetConfig.storeSheetName)
         setLoading(false)
       }).catch(() => setLoading(false))
     }
@@ -130,6 +139,18 @@ export default function AdminStoresPage() {
     } else {
       setMessage({ type: 'error', text: data.error || 'パスワードの再発行に失敗しました' })
     }
+  }
+
+  async function handleSaveSheetUrl() {
+    setSavingSheet(true)
+    await fetch('/api/admin/google-config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storeSpreadsheetId: storeSheetUrl.trim(), storeSheetName: storeSheetName.trim() || '店舗マスター' }),
+    })
+    setSavingSheet(false)
+    setSheetSaved(true)
+    setTimeout(() => setSheetSaved(false), 3000)
   }
 
   function handleCopyPassword() {
@@ -216,22 +237,56 @@ export default function AdminStoresPage() {
           </div>
         )}
 
-        {/* Google Sheets設定案内 */}
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-5 py-4 mb-6">
-          <div className="flex items-center gap-2 mb-1.5">
-            <svg className="w-4 h-4 text-blue-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Google Sheetsスプレッドシート設定 */}
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm px-6 py-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-4 h-4 text-green-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7" />
             </svg>
-            <h3 className="text-sm font-semibold text-blue-800">Googleスプレッドシート連携</h3>
+            <h3 className="text-sm font-semibold text-gray-800">同期するGoogleスプレッドシート</h3>
           </div>
-          <p className="text-sm text-blue-700">
-            店舗マスターデータをGoogleスプレッドシートと同期します。
-            環境変数に <code className="bg-blue-100 px-1 rounded text-xs">GOOGLE_SHEETS_CLIENT_EMAIL</code>、
-            <code className="bg-blue-100 px-1 rounded text-xs">GOOGLE_SHEETS_PRIVATE_KEY</code>、
-            <code className="bg-blue-100 px-1 rounded text-xs">GOOGLE_SHEETS_SPREADSHEET_ID</code> を設定してください。
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            スプレッドシートの形式: A列=店舗コード, B列=店舗名, C列=都道府県, D列=住所, E列=電話番号, F列=メールアドレス
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_auto]">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">スプレッドシートURL または ID</label>
+              <input
+                type="text"
+                value={storeSheetUrl}
+                onChange={e => setStoreSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">シート名</label>
+              <input
+                type="text"
+                value={storeSheetName}
+                onChange={e => setStoreSheetName(e.target.value)}
+                placeholder="店舗マスター"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleSaveSheetUrl}
+                disabled={savingSheet || !storeSheetUrl.trim()}
+                className="w-full sm:w-auto bg-gray-800 text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-40 flex items-center gap-2 justify-center"
+              >
+                {savingSheet ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : sheetSaved ? (
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : null}
+                {sheetSaved ? '保存しました' : '保存'}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            シート形式: A列=店舗コード, B列=店舗名, C列=都道府県, D列=住所, E列=電話番号, F列=メールアドレス（2行目以降がデータ）
           </p>
         </div>
 

@@ -12,6 +12,8 @@ type Schedule = {
   visitDate: string
   status: string
   note: string | null
+  purchaseAmount: number | null
+  billingAmount: number | null
   user: { id: string; name: string; address: string; phone: string }
   store: { id: string; name: string }
 }
@@ -44,6 +46,11 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${s.className}`}>{s.label}</span>
 }
 
+function fmt(n: number | null | undefined) {
+  if (n == null) return '—'
+  return `¥${n.toLocaleString()}`
+}
+
 export default function StoreSchedulePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -54,6 +61,23 @@ export default function StoreSchedulePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [formData, setFormData] = useState({ userId: '', visitDate: '', note: '' })
   const [saving, setSaving] = useState(false)
+
+  // 対応完了モーダル（金額入力）
+  const [completionModal, setCompletionModal] = useState<{
+    scheduleId: string
+    purchaseAmount: string
+    billingAmount: string
+  } | null>(null)
+  const [completing, setCompleting] = useState(false)
+
+  // 金額編集モーダル
+  const [editModal, setEditModal] = useState<{
+    schedule: Schedule
+    note: string
+    purchaseAmount: string
+    billingAmount: string
+  } | null>(null)
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -74,6 +98,11 @@ export default function StoreSchedulePage() {
   }, [status, session])
 
   async function handleStatusChange(scheduleId: string, newStatus: string) {
+    // 「対応完了」のときは金額入力モーダルを開く
+    if (newStatus === 'completed') {
+      setCompletionModal({ scheduleId, purchaseAmount: '', billingAmount: '' })
+      return
+    }
     const res = await fetch(`/api/visit-schedules/${scheduleId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -81,6 +110,56 @@ export default function StoreSchedulePage() {
     })
     if (res.ok) {
       setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: newStatus } : s))
+    }
+  }
+
+  async function handleCompletionSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!completionModal) return
+    setCompleting(true)
+    const res = await fetch(`/api/visit-schedules/${completionModal.scheduleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'completed',
+        purchaseAmount: completionModal.purchaseAmount !== '' ? parseInt(completionModal.purchaseAmount) : null,
+        billingAmount: completionModal.billingAmount !== '' ? parseInt(completionModal.billingAmount) : null,
+      }),
+    })
+    setCompleting(false)
+    if (res.ok) {
+      const updated = await res.json()
+      setSchedules(prev => prev.map(s =>
+        s.id === completionModal.scheduleId
+          ? { ...s, status: 'completed', purchaseAmount: updated.purchaseAmount, billingAmount: updated.billingAmount }
+          : s
+      ))
+      setCompletionModal(null)
+    }
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editModal) return
+    setEditing(true)
+    const res = await fetch(`/api/visit-schedules/${editModal.schedule.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        note: editModal.note || null,
+        purchaseAmount: editModal.purchaseAmount !== '' ? parseInt(editModal.purchaseAmount) : null,
+        billingAmount: editModal.billingAmount !== '' ? parseInt(editModal.billingAmount) : null,
+      }),
+    })
+    setEditing(false)
+    if (res.ok) {
+      const updated = await res.json()
+      setSchedules(prev => prev.map(s =>
+        s.id === editModal.schedule.id
+          ? { ...s, note: updated.note, purchaseAmount: updated.purchaseAmount, billingAmount: updated.billingAmount }
+          : s
+      ))
+      setEditModal(null)
     }
   }
 
@@ -249,22 +328,25 @@ export default function StoreSchedulePage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">訪問日</th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">顧客名</th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">住所</th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">対応ステータス</th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">メモ</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">訪問日</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">顧客名</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">住所</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">ステータス</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">買取金額</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-400">請求金額</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-400">メモ</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {past.map(schedule => (
                     <tr key={schedule.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-3 text-sm text-gray-600">
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                         {format(new Date(schedule.visitDate), 'yyyy/M/d（E）', { locale: ja })}
                       </td>
-                      <td className="px-6 py-3 text-sm font-medium text-gray-900">{schedule.user.name}</td>
-                      <td className="px-6 py-3 text-sm text-gray-500 max-w-48 truncate">{schedule.user.address}</td>
-                      <td className="px-6 py-3">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{schedule.user.name}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 max-w-40 truncate">{schedule.user.address}</td>
+                      <td className="px-4 py-3">
                         <select
                           value={schedule.status}
                           onChange={e => handleStatusChange(schedule.id, e.target.value)}
@@ -275,7 +357,22 @@ export default function StoreSchedulePage() {
                           ))}
                         </select>
                       </td>
-                      <td className="px-6 py-3 text-sm text-gray-400">{schedule.note || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap">{fmt(schedule.purchaseAmount)}</td>
+                      <td className="px-4 py-3 text-sm text-right text-gray-700 whitespace-nowrap">{fmt(schedule.billingAmount)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-400 max-w-32 truncate">{schedule.note || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => setEditModal({
+                            schedule,
+                            note: schedule.note || '',
+                            purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
+                            billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
+                          })}
+                          className="text-xs text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
+                        >
+                          編集
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -341,6 +438,130 @@ export default function StoreSchedulePage() {
                 <button type="submit" disabled={saving}
                   className="flex-1 bg-blue-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-blue-900 transition-colors disabled:opacity-50">
                   {saving ? '登録中...' : '登録する'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 対応完了モーダル（買取金額・請求金額入力） */}
+      {completionModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <div className="flex justify-between items-center mb-1">
+              <h3 className="text-base font-semibold text-gray-900">対応完了 — 金額を記録</h3>
+              <button
+                onClick={() => setCompletionModal(null)}
+                className="text-gray-300 hover:text-gray-600 text-2xl leading-none"
+              >&times;</button>
+            </div>
+            <p className="text-xs text-gray-400 mb-5">入力しない場合は空欄のまま登録できます</p>
+            <form onSubmit={handleCompletionSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">買取金額（円）</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={completionModal.purchaseAmount}
+                  onChange={e => setCompletionModal({ ...completionModal, purchaseAmount: e.target.value })}
+                  placeholder="例: 15000"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">請求金額（円）</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={completionModal.billingAmount}
+                  onChange={e => setCompletionModal({ ...completionModal, billingAmount: e.target.value })}
+                  placeholder="例: 3000"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCompletionModal(null)}
+                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  disabled={completing}
+                  className="flex-1 bg-green-600 text-white py-2.5 rounded-full text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {completing ? '登録中...' : '対応完了にする'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 金額・メモ編集モーダル */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <div className="flex justify-between items-center mb-5">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">訪問記録を編集</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{editModal.schedule.user.name} 様 — {format(new Date(editModal.schedule.visitDate), 'yyyy/M/d', { locale: ja })}</p>
+              </div>
+              <button
+                onClick={() => setEditModal(null)}
+                className="text-gray-300 hover:text-gray-600 text-2xl leading-none"
+              >&times;</button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">買取金額（円）</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editModal.purchaseAmount}
+                  onChange={e => setEditModal({ ...editModal, purchaseAmount: e.target.value })}
+                  placeholder="例: 15000"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">請求金額（円）</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editModal.billingAmount}
+                  onChange={e => setEditModal({ ...editModal, billingAmount: e.target.value })}
+                  placeholder="例: 3000"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">メモ</label>
+                <input
+                  type="text"
+                  value={editModal.note}
+                  onChange={e => setEditModal({ ...editModal, note: e.target.value })}
+                  placeholder="メモを入力..."
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditModal(null)}
+                  className="flex-1 border border-gray-300 text-gray-700 py-2.5 rounded-full text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  disabled={editing}
+                  className="flex-1 bg-blue-800 text-white py-2.5 rounded-full text-sm font-medium hover:bg-blue-900 transition-colors disabled:opacity-50"
+                >
+                  {editing ? '保存中...' : '保存する'}
                 </button>
               </div>
             </form>

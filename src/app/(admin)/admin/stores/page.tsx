@@ -63,6 +63,9 @@ export default function AdminStoresPage() {
   // スプレッドシート設定セクションの開閉
   const [sheetSectionOpen, setSheetSectionOpen] = useState(false)
 
+  // 検索
+  const [searchQ, setSearchQ] = useState('')
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -225,6 +228,7 @@ export default function AdminStoresPage() {
             <Link href="/admin/dashboard" className="text-sm text-gray-300 hover:text-white transition-colors">ダッシュボード</Link>
             <Link href="/admin/customers" className="text-sm text-gray-300 hover:text-white transition-colors">顧客管理</Link>
             <Link href="/admin/stores" className="text-sm font-medium text-white border-b border-white pb-0.5">店舗管理</Link>
+            <Link href="/admin/visits" className="text-sm text-gray-300 hover:text-white transition-colors">訪問記録</Link>
             <Link href="/admin/licenses" className="text-sm text-gray-300 hover:text-white transition-colors">ライセンスキー</Link>
             <Link href="/admin/members" className="text-sm text-gray-300 hover:text-white transition-colors">メンバー</Link>
             <Link href="/admin/settings" className="text-sm text-gray-300 hover:text-white transition-colors">設定</Link>
@@ -235,12 +239,14 @@ export default function AdminStoresPage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">
-            店舗一覧
-            <span className="ml-3 text-sm font-normal text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
-              {stores.length}店舗
-            </span>
-          </h2>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              店舗一覧
+              <span className="ml-3 text-sm font-normal text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+                {stores.length}店舗
+              </span>
+            </h2>
+          </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setMessage(null); setShowCreateModal(true) }}
@@ -405,50 +411,99 @@ export default function AdminStoresPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">店舗コード</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">店舗名</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">都道府県</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">電話番号</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">メール</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">担当顧客数</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {stores.map(store => (
-                <tr key={store.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <code className="text-xs bg-gray-100 px-2 py-0.5 rounded-md">{store.code}</code>
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{store.name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{store.prefecture || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{store.phone || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{store.email || '—'}</td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-semibold text-gray-900">{store._count.customers}</span>
-                    <span className="text-sm text-gray-400 ml-1">名</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => handleResetPassword(store)}
-                      disabled={resettingId === store.id}
-                      className="text-xs text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 whitespace-nowrap"
-                    >
-                      {resettingId === store.id ? '処理中...' : 'PW再発行'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {stores.length === 0 && (
-            <div className="p-12 text-center text-sm text-gray-400">店舗データがありません</div>
-          )}
+        {/* 検索バー */}
+        <div className="mb-4">
+          <div className="relative max-w-sm">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 0 5 11a6 6 0 0 0 12 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              placeholder="店舗名・コード・都道府県・メールで検索"
+              className="w-full pl-10 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 bg-white"
+            />
+            {searchQ && (
+              <button
+                onClick={() => setSearchQ('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
+
+        {(() => {
+          const q = searchQ.trim().toLowerCase()
+          const filtered = q
+            ? stores.filter(s =>
+                s.name.toLowerCase().includes(q) ||
+                s.code.toLowerCase().includes(q) ||
+                (s.prefecture || '').toLowerCase().includes(q) ||
+                (s.email || '').toLowerCase().includes(q) ||
+                (s.phone || '').includes(q) ||
+                (s.address || '').toLowerCase().includes(q)
+              )
+            : stores
+
+          return (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">店舗コード</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">店舗名</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">都道府県</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">電話番号</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">メール</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">担当顧客数</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-400">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filtered.map(store => (
+                    <tr key={store.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <code className="text-xs bg-gray-100 px-2 py-0.5 rounded-md">{store.code}</code>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{store.name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{store.prefecture || '—'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{store.phone || '—'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{store.email || '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-semibold text-gray-900">{store._count.customers}</span>
+                        <span className="text-sm text-gray-400 ml-1">名</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleResetPassword(store)}
+                          disabled={resettingId === store.id}
+                          className="text-xs text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {resettingId === store.id ? '処理中...' : 'PW再発行'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filtered.length === 0 && (
+                <div className="p-12 text-center text-sm text-gray-400">
+                  {searchQ ? `「${searchQ}」に一致する店舗がありません` : '店舗データがありません'}
+                </div>
+              )}
+              {searchQ && filtered.length > 0 && filtered.length < stores.length && (
+                <div className="px-6 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
+                  {stores.length}店舗中 {filtered.length}件を表示
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* 同期ログ */}
         {syncLogs.length > 0 && (

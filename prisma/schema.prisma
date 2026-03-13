@@ -73,16 +73,18 @@ model StoreMember {
 
 // 訪問スケジュール
 model VisitSchedule {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  storeId   String
-  store     Store    @relation(fields: [storeId], references: [id])
-  visitDate DateTime
-  status    String   @default("scheduled") // scheduled, completed, cancelled
-  note      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  storeId        String
+  store          Store    @relation(fields: [storeId], references: [id])
+  visitDate      DateTime
+  status         String   @default("scheduled") // scheduled, completed, cancelled
+  note           String?
+  purchaseAmount Int?     // 買取金額（円）
+  billingAmount  Int?     // 請求金額（円）
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // 管理者

@@ -28,6 +28,7 @@ function AdminNav({ active }: { active: string }) {
     { href: '/admin/dashboard', label: 'ダッシュボード' },
     { href: '/admin/customers', label: '顧客管理' },
     { href: '/admin/stores', label: '店舗管理' },
+    { href: '/admin/visits', label: '訪問記録' },
     { href: '/admin/licenses', label: 'ライセンスキー' },
     { href: '/admin/members', label: 'メンバー' },
     { href: '/admin/settings', label: '設定' },

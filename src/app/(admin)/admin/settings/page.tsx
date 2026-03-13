@@ -243,6 +243,7 @@ function AdminSettingsContent() {
             <Link href="/admin/dashboard" className="text-sm text-gray-300 hover:text-white transition-colors">ダッシュボード</Link>
             <Link href="/admin/customers" className="text-sm text-gray-300 hover:text-white transition-colors">顧客管理</Link>
             <Link href="/admin/stores" className="text-sm text-gray-300 hover:text-white transition-colors">店舗管理</Link>
+            <Link href="/admin/visits" className="text-sm text-gray-300 hover:text-white transition-colors">訪問記録</Link>
             <Link href="/admin/licenses" className="text-sm text-gray-300 hover:text-white transition-colors">ライセンスキー</Link>
             <Link href="/admin/members" className="text-sm text-gray-300 hover:text-white transition-colors">メンバー</Link>
             <Link href="/admin/settings" className="text-sm font-medium text-white border-b border-white pb-0.5">設定</Link>

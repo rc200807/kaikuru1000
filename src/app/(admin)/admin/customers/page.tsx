@@ -247,6 +247,9 @@ export default function AdminCustomersPage() {
             <Link href="/admin/stores" className="text-sm text-gray-300 hover:text-white transition-colors">
               店舗管理
             </Link>
+            <Link href="/admin/visits" className="text-sm text-gray-300 hover:text-white transition-colors">
+              訪問記録
+            </Link>
             <Link href="/admin/licenses" className="text-sm text-gray-300 hover:text-white transition-colors">
               ライセンスキー
             </Link>

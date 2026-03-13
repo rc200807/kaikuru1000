@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
+import { sendStorePasswordResetNotification } from '@/lib/mailer'
 
 function generatePassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -33,7 +34,19 @@ export async function PATCH(
       where: { id },
       data: { password: hashedPassword },
     })
-    return NextResponse.json({ password: plainPassword })
+
+    // メールアドレスが設定されていれば通知メールを送信（失敗しても再発行自体は成功扱い）
+    if (store.email) {
+      const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login`
+      sendStorePasswordResetNotification({
+        storeEmail: store.email,
+        storeName: store.name,
+        newPassword: plainPassword,
+        loginUrl,
+      }).catch(() => {}) // メール送信失敗はサイレントに無視
+    }
+
+    return NextResponse.json({ password: plainPassword, emailSent: !!store.email })
   }
 
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })

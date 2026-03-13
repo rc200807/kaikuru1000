@@ -549,6 +549,7 @@ function TestDataManagement() {
   const [stats, setStats] = useState<{ userCount: number; visitCount: number; licenseKeyCount: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
@@ -577,6 +578,25 @@ function TestDataManagement() {
     setDeleting(false)
   }
 
+  async function handleSeed() {
+    if (!confirm('テストデータ（100顧客 + 各10訪問 = 1000件）を投入しますか？\n処理に数分かかる場合があります。')) return
+    setSeeding(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/admin/test-data', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: `テストデータを投入しました（顧客: ${data.createdUsers}件, 訪問: ${data.createdVisits}件, ライセンスキー: ${data.createdLicenseKeys}件）` })
+        setStats({ userCount: data.createdUsers, visitCount: data.createdVisits, licenseKeyCount: data.createdLicenseKeys })
+      } else {
+        setMessage({ type: 'error', text: data.error || 'テストデータの投入に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'テストデータの投入に失敗しました' })
+    }
+    setSeeding(false)
+  }
+
   if (loading) return null
 
   return (
@@ -588,7 +608,7 @@ function TestDataManagement() {
         <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">テストデータ管理</h3>
       </div>
       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-4 ml-8">
-        シード投入されたテストデータの確認・一括削除ができます。
+        テストデータの投入・確認・一括削除ができます。
       </p>
 
       {message && <MessageBanner severity={message.type} className="mb-4">{message.text}</MessageBanner>}
@@ -617,7 +637,12 @@ function TestDataManagement() {
             </Button>
           </>
         ) : (
-          <p className="text-sm text-[var(--md-sys-color-outline)]">テストデータはありません</p>
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--md-sys-color-outline)]">テストデータはありません</p>
+            <Button variant="filled" loading={seeding} onClick={handleSeed}>
+              {seeding ? 'テストデータ投入中...' : 'テストデータを投入（100顧客 + 1000訪問）'}
+            </Button>
+          </div>
         )}
       </div>
     </Card>

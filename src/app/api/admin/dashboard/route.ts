@@ -1,38 +1,45 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { startOfMonth, subMonths, subDays, startOfDay, format } from 'date-fns'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const user = session.user as any
   if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { searchParams } = new URL(request.url)
+  const includeTestData = searchParams.get('includeTestData') === 'true'
 
   const now = new Date()
   const currentMonthStart = startOfMonth(now)
   const twelveMonthsAgo = startOfMonth(subMonths(now, 11))
   const thirtyDaysAgo = startOfDay(subDays(now, 29))
 
-  // --- 全顧客（テストデータ除外） ---
+  // テストデータフィルター（includeTestData=trueなら全データ、falseならテスト除外）
+  const userWhere = includeTestData ? {} : { isTestData: false as const }
+  const visitUserWhere = includeTestData ? {} : { user: { isTestData: false as const } }
+
+  // --- 全顧客 ---
   const allUsers = await prisma.user.findMany({
-    where: { isTestData: false },
+    where: userWhere,
     select: { storeId: true, createdAt: true, store: { select: { name: true } } },
   })
 
-  // --- 全訪問スケジュール (直近12ヶ月、テストデータ除外) ---
+  // --- 全訪問スケジュール (直近12ヶ月) ---
   const allVisits = await prisma.visitSchedule.findMany({
-    where: { visitDate: { gte: twelveMonthsAgo }, user: { isTestData: false } },
+    where: { visitDate: { gte: twelveMonthsAgo }, ...visitUserWhere },
     select: { visitDate: true },
   })
 
-  // --- 買取実績 (completed, 直近12ヶ月 - 推移グラフ用、テストデータ除外) ---
+  // --- 買取実績 (completed, 直近12ヶ月 - 推移グラフ用) ---
   const completedVisitsRecent = await prisma.visitSchedule.findMany({
     where: {
       status: 'completed',
       visitDate: { gte: twelveMonthsAgo },
-      user: { isTestData: false },
+      ...visitUserWhere,
     },
     select: {
       visitDate: true,
@@ -42,9 +49,9 @@ export async function GET() {
     },
   })
 
-  // --- 店舗別買取金額ランキング用 (全期間、テストデータ除外) ---
+  // --- 店舗別買取金額ランキング用 (全期間) ---
   const allCompletedVisits = await prisma.visitSchedule.findMany({
-    where: { status: 'completed', user: { isTestData: false } },
+    where: { status: 'completed', ...visitUserWhere },
     select: {
       purchaseAmount: true,
       storeId: true,
@@ -57,10 +64,10 @@ export async function GET() {
   const totalCustomers = allUsers.length
   const currentMonthCustomers = allUsers.filter(u => u.createdAt >= currentMonthStart).length
   const totalVisitsCount = await prisma.visitSchedule.count({
-    where: { user: { isTestData: false } },
+    where: visitUserWhere,
   })
   const currentMonthVisits = await prisma.visitSchedule.count({
-    where: { visitDate: { gte: currentMonthStart }, user: { isTestData: false } },
+    where: { visitDate: { gte: currentMonthStart }, ...visitUserWhere },
   })
 
   // 総買取金額 / 当月買取金額

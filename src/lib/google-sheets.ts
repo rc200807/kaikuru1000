@@ -36,11 +36,26 @@ export async function syncStoresFromGoogleSheets(): Promise<{
   message: string
   synced: number
 }> {
-  // DBからスプレッドシートIDを取得
+  // DBからスプレッドシートIDとカラムマッピングを取得
   const config = await prisma.googleSheetsConfig.findFirst()
   const rawId = config?.storeSpreadsheetId || process.env.GOOGLE_SHEETS_SPREADSHEET_ID
   const SPREADSHEET_ID = rawId ? extractSpreadsheetId(rawId) : null
   const sheetName = config?.storeSheetName || SHEET_NAME
+
+  // カラムマッピング（デフォルト: A=コード, B=名前, C=都道府県, D=住所, E=電話, F=メール）
+  const colMap = config?.storeColumnMapping
+    ? JSON.parse(config.storeColumnMapping)
+    : { code: 'A', name: 'B', prefecture: 'C', address: 'D', phone: 'E', email: 'F' }
+
+  // 列文字をインデックスに変換（A→0, B→1, ...）
+  function colIdx(letter: string): number {
+    return letter.toUpperCase().charCodeAt(0) - 65
+  }
+
+  // 必要な列の最大インデックスを求めて取得範囲を決める
+  const indices = Object.values(colMap).map((l: any) => colIdx(l))
+  const maxCol = Math.max(...indices)
+  const endCol = String.fromCharCode(65 + maxCol)
 
   if (!SPREADSHEET_ID || !process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
     return { success: false, message: 'スプレッドシートIDが設定されていません。店舗管理画面から設定してください。', synced: 0 }
@@ -52,7 +67,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A2:F1000`, // ヘッダー行をスキップ
+      range: `${sheetName}!A2:${endCol}1000`, // ヘッダー行をスキップ
     })
 
     const rows = response.data.values
@@ -60,15 +75,14 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       return { success: true, message: 'No data found in spreadsheet', synced: 0 }
     }
 
-    // カラム: A=店舗コード, B=店舗名, C=都道府県, D=住所, E=電話番号, F=メールアドレス
     const storeRows: StoreRow[] = rows.map((row, index) => ({
       rowId: `row_${index + 2}`,
-      code: row[0] || '',
-      name: row[1] || '',
-      prefecture: row[2] || '',
-      address: row[3] || '',
-      phone: row[4] || '',
-      email: row[5] || '',
+      code:        row[colIdx(colMap.code        || 'A')] || '',
+      name:        row[colIdx(colMap.name        || 'B')] || '',
+      prefecture:  row[colIdx(colMap.prefecture  || 'C')] || '',
+      address:     row[colIdx(colMap.address     || 'D')] || '',
+      phone:       row[colIdx(colMap.phone       || 'E')] || '',
+      email:       row[colIdx(colMap.email       || 'F')] || '',
     })).filter(row => row.code && row.name)
 
     let synced = 0

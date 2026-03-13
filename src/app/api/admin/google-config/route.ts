@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     tokenExpiry: config.tokenExpiry,
     storeSpreadsheetId: config.storeSpreadsheetId,
     storeSheetName: config.storeSheetName,
+    storeColumnMapping: config.storeColumnMapping ? JSON.parse(config.storeColumnMapping) : null,
   })
 }
 
@@ -35,7 +36,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { spreadsheetId, sheetName, keyColumn, storeSpreadsheetId, storeSheetName } = await request.json()
+  const { spreadsheetId, sheetName, keyColumn, storeSpreadsheetId, storeSheetName, storeColumnMapping } = await request.json()
 
   const existing = await prisma.googleSheetsConfig.findFirst()
   if (existing) {
@@ -47,6 +48,7 @@ export async function PATCH(request: NextRequest) {
         ...(keyColumn !== undefined && { keyColumn }),
         ...(storeSpreadsheetId !== undefined && { storeSpreadsheetId }),
         ...(storeSheetName !== undefined && { storeSheetName }),
+        ...(storeColumnMapping !== undefined && { storeColumnMapping: JSON.stringify(storeColumnMapping) }),
       },
     })
   } else {
@@ -57,6 +59,7 @@ export async function PATCH(request: NextRequest) {
         keyColumn: keyColumn || 'A',
         storeSpreadsheetId,
         storeSheetName: storeSheetName || '店舗マスター',
+        ...(storeColumnMapping && { storeColumnMapping: JSON.stringify(storeColumnMapping) }),
       },
     })
   }

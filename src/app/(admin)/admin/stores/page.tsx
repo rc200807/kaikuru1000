@@ -52,6 +52,14 @@ export default function AdminStoresPage() {
   const [savingSheet, setSavingSheet] = useState(false)
   const [sheetSaved, setSheetSaved] = useState(false)
 
+  // カラムマッピング
+  type ColMap = { code: string; name: string; prefecture: string; address: string; phone: string; email: string }
+  const defaultColMap: ColMap = { code: 'A', name: 'B', prefecture: 'C', address: 'D', phone: 'E', email: 'F' }
+  const [colMap, setColMap] = useState<ColMap>(defaultColMap)
+  const [sheetHeaders, setSheetHeaders] = useState<{ letter: string; header: string }[]>([])
+  const [fetchingHeaders, setFetchingHeaders] = useState(false)
+  const [headerError, setHeaderError] = useState('')
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -70,6 +78,7 @@ export default function AdminStoresPage() {
         setSyncLogs(Array.isArray(logsData) ? logsData : [])
         if (sheetConfig?.storeSpreadsheetId) setStoreSheetUrl(sheetConfig.storeSpreadsheetId)
         if (sheetConfig?.storeSheetName) setStoreSheetName(sheetConfig.storeSheetName)
+        if (sheetConfig?.storeColumnMapping) setColMap({ ...defaultColMap, ...sheetConfig.storeColumnMapping })
         setLoading(false)
       }).catch(() => setLoading(false))
     }
@@ -141,12 +150,35 @@ export default function AdminStoresPage() {
     }
   }
 
+  async function handleFetchHeaders() {
+    if (!storeSheetUrl.trim()) return
+    setFetchingHeaders(true)
+    setHeaderError('')
+    setSheetHeaders([])
+    const params = new URLSearchParams({
+      spreadsheetId: storeSheetUrl.trim(),
+      sheetName: storeSheetName.trim() || '店舗マスター',
+    })
+    const res = await fetch(`/api/admin/stores/sheet-headers?${params}`)
+    const data = await res.json()
+    setFetchingHeaders(false)
+    if (!res.ok) {
+      setHeaderError(data.error || '列の取得に失敗しました')
+    } else {
+      setSheetHeaders(data.columns)
+    }
+  }
+
   async function handleSaveSheetUrl() {
     setSavingSheet(true)
     await fetch('/api/admin/google-config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storeSpreadsheetId: storeSheetUrl.trim(), storeSheetName: storeSheetName.trim() || '店舗マスター' }),
+      body: JSON.stringify({
+        storeSpreadsheetId: storeSheetUrl.trim(),
+        storeSheetName: storeSheetName.trim() || '店舗マスター',
+        storeColumnMapping: colMap,
+      }),
     })
     setSavingSheet(false)
     setSheetSaved(true)
@@ -245,48 +277,106 @@ export default function AdminStoresPage() {
             </svg>
             <h3 className="text-sm font-semibold text-gray-800">同期するGoogleスプレッドシート</h3>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_auto]">
+
+          {/* URL・シート名 */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_auto] mb-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">スプレッドシートURL または ID</label>
               <input
                 type="text"
                 value={storeSheetUrl}
-                onChange={e => setStoreSheetUrl(e.target.value)}
+                onChange={e => { setStoreSheetUrl(e.target.value); setSheetHeaders([]) }}
                 placeholder="https://docs.google.com/spreadsheets/d/..."
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">シート名</label>
+              <label className="block text-xs text-gray-500 mb-1">シート名（タブ名）</label>
               <input
                 type="text"
                 value={storeSheetName}
-                onChange={e => setStoreSheetName(e.target.value)}
-                placeholder="店舗マスター"
+                onChange={e => { setStoreSheetName(e.target.value); setSheetHeaders([]) }}
+                placeholder="SHOP"
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
               />
             </div>
             <div className="flex items-end">
               <button
-                onClick={handleSaveSheetUrl}
-                disabled={savingSheet || !storeSheetUrl.trim()}
-                className="w-full sm:w-auto bg-gray-800 text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-40 flex items-center gap-2 justify-center"
+                onClick={handleFetchHeaders}
+                disabled={fetchingHeaders || !storeSheetUrl.trim()}
+                className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-40 flex items-center gap-2 justify-center whitespace-nowrap"
               >
-                {savingSheet ? (
+                {fetchingHeaders && (
                   <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                ) : sheetSaved ? (
-                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : null}
-                {sheetSaved ? '保存しました' : '保存'}
+                )}
+                列を確認
               </button>
             </div>
           </div>
+
+          {headerError && (
+            <p className="text-xs text-red-500 mb-3">{headerError}</p>
+          )}
+
+          {/* カラムマッピング */}
+          {sheetHeaders.length > 0 && (
+            <div className="border border-gray-100 rounded-xl p-4 mb-4 bg-gray-50">
+              <p className="text-xs font-medium text-gray-600 mb-3">各項目に対応する列を選択してください</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {([
+                  { key: 'code',        label: '店舗コード（必須）' },
+                  { key: 'name',        label: '店舗名（必須）' },
+                  { key: 'prefecture',  label: '都道府県' },
+                  { key: 'address',     label: '住所' },
+                  { key: 'phone',       label: '電話番号' },
+                  { key: 'email',       label: 'メールアドレス' },
+                ] as const).map(({ key, label }) => (
+                  <div key={key}>
+                    <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                    <select
+                      value={colMap[key]}
+                      onChange={e => setColMap(prev => ({ ...prev, [key]: e.target.value }))}
+                      className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white"
+                    >
+                      <option value="">未設定</option>
+                      {sheetHeaders.map(col => (
+                        <option key={col.letter} value={col.letter}>
+                          {col.letter}列: {col.header}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 保存ボタン */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSaveSheetUrl}
+              disabled={savingSheet || !storeSheetUrl.trim()}
+              className="bg-gray-800 text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-40 flex items-center gap-2"
+            >
+              {savingSheet ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : sheetSaved ? (
+                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : null}
+              {sheetSaved ? '保存しました' : '設定を保存'}
+            </button>
+            {sheetHeaders.length === 0 && storeSheetUrl && (
+              <p className="text-xs text-gray-400">「列を確認」で列マッピングを設定できます</p>
+            )}
+          </div>
           <p className="text-xs text-gray-400 mt-3">
-            シート形式: A列=店舗コード, B列=店舗名, C列=都道府県, D列=住所, E列=電話番号, F列=メールアドレス（2行目以降がデータ）
+            2行目以降がデータ行として読み込まれます（1行目はヘッダー）
           </p>
         </div>
 

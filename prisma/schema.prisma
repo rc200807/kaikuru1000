@@ -132,6 +132,7 @@ model GoogleSheetsConfig {
   keyColumn           String    @default("A")
   storeSpreadsheetId  String?             // 店舗マスター用スプレッドシートID
   storeSheetName      String    @default("店舗マスター")
+  storeColumnMapping  String?   @db.Text  // JSON: {"code":"A","name":"B",...}
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }

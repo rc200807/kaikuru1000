@@ -147,15 +147,15 @@ export async function sendAssignmentNotification(params: {
   })
 }
 
-/** 店舗パスワード再発行通知メールを送信する */
+/** 店舗パスワード再発行通知メールを送信する。送信成功なら true、設定未構成なら false を返す */
 export async function sendStorePasswordResetNotification(params: {
   storeEmail: string
   storeName: string
   newPassword: string
   loginUrl: string
-}) {
+}): Promise<boolean> {
   const result = await createTransporter()
-  if (!result) return // メール設定が未構成の場合はスキップ
+  if (!result) return false // メール設定が未構成
 
   const { transporter, from } = result
 
@@ -262,6 +262,7 @@ export async function sendStorePasswordResetNotification(params: {
       'このメールに心当たりのない場合は、買いクル本部までご連絡ください。',
     ].join('\n'),
   })
+  return true
 }
 
 /** テストメールを送信する */

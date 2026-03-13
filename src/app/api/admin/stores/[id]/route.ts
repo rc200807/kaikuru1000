@@ -44,14 +44,25 @@ export async function PATCH(
     if (!body.password || typeof body.password !== 'string') {
       return NextResponse.json({ error: 'パスワードが指定されていません' }, { status: 400 })
     }
-    const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login`
-    await sendStorePasswordResetNotification({
-      storeEmail: store.email,
-      storeName: store.name,
-      newPassword: body.password,
-      loginUrl,
-    })
-    return NextResponse.json({ sent: true })
+    try {
+      const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login`
+      const sent = await sendStorePasswordResetNotification({
+        storeEmail: store.email,
+        storeName: store.name,
+        newPassword: body.password,
+        loginUrl,
+      })
+      if (!sent) {
+        return NextResponse.json(
+          { error: 'メール送信機能が無効です。設定画面でSMTP設定を確認してください。' },
+          { status: 503 },
+        )
+      }
+      return NextResponse.json({ sent: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'メール送信に失敗しました'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })

@@ -146,10 +146,10 @@ export default function AdminLicensesPage() {
   }
 
   function generateKey() {
-    const year = new Date().getFullYear()
-    const part1 = Math.random().toString(36).slice(2, 6).toUpperCase()
-    const part2 = Math.floor(Math.random() * 9000 + 1000)
-    return `KK-${year}-${part1}-${part2}`
+    // 形式: KA + 大文字1文字 + 数字10桁 (例: KAZ9961583613)
+    const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+    const digits = Math.floor(Math.random() * 10_000_000_000).toString().padStart(10, '0')
+    return `KA${letter}${digits}`
   }
 
   function handleGenerateKeys(count: number) {
@@ -347,7 +347,7 @@ export default function AdminLicensesPage() {
                 <textarea
                   value={newKeys}
                   onChange={e => setNewKeys(e.target.value)}
-                  placeholder={"1行に1つのキーを入力\nKK-2024-XXXX-0000\nKK-2024-YYYY-1111"}
+                  placeholder={"1行に1つのキーを入力\nKAZ9961583613\nKAA1234567890"}
                   rows={6}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-700 resize-none mb-3"
                 />

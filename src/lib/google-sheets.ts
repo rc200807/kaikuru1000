@@ -5,6 +5,7 @@ import crypto from 'crypto'
 
 const SHEET_NAME = '店舗マスター'
 
+// 読み取り専用（店舗マスター同期用）
 function getAuth() {
   return new google.auth.GoogleAuth({
     credentials: {
@@ -13,6 +14,57 @@ function getAuth() {
     },
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   })
+}
+
+// 読み書き（ライセンスキー書き込み用）
+function getWriteAuth() {
+  return new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      private_key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  })
+}
+
+// ライセンスキーをスプレッドシートに追記する
+export async function appendLicenseKeysToSheet(keys: string[]): Promise<{ success: boolean; message: string }> {
+  if (!keys.length) return { success: true, message: '追加するキーなし' }
+
+  const config = await prisma.googleSheetsConfig.findFirst()
+  const rawId = config?.spreadsheetId
+  if (!rawId) return { success: false, message: 'スプレッドシートIDが設定されていません' }
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) return { success: false, message: 'サービスアカウントが設定されていません' }
+
+  const spreadsheetId = extractSpreadsheetId(rawId)
+  const sheetName = config?.sheetName || 'ライセンスキー'
+  const keyColumn = (config?.keyColumn || 'A').toUpperCase()
+  const colIndex = keyColumn.charCodeAt(0) - 65 // A→0, B→1 ...
+
+  try {
+    const auth = getWriteAuth()
+    const sheets = google.sheets({ version: 'v4', auth })
+
+    // 各キーを正しい列位置に配置した行配列を作成
+    const values = keys.map(k => {
+      const row = Array(colIndex + 1).fill('')
+      row[colIndex] = k
+      return row
+    })
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values },
+    })
+
+    return { success: true, message: `${keys.length}件をスプレッドシートに追加しました` }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { success: false, message }
+  }
 }
 
 // スプレッドシートURLからIDを抽出

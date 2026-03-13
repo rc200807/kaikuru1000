@@ -87,6 +87,8 @@ export async function syncStoresFromGoogleSheets(): Promise<{
   success: boolean
   message: string
   synced: number
+  deleted: number
+  deactivated: number
 }> {
   // DBからスプレッドシートIDとカラムマッピングを取得
   const config = await prisma.googleSheetsConfig.findFirst()
@@ -110,7 +112,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
   const endCol = String.fromCharCode(65 + maxCol)
 
   if (!SPREADSHEET_ID || !process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
-    return { success: false, message: 'スプレッドシートIDが設定されていません。店舗管理画面から設定してください。', synced: 0 }
+    return { success: false, message: 'スプレッドシートIDが設定されていません。店舗管理画面から設定してください。', synced: 0, deleted: 0, deactivated: 0 }
   }
 
   try {
@@ -124,7 +126,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
 
     const rows = response.data.values
     if (!rows || rows.length === 0) {
-      return { success: true, message: 'No data found in spreadsheet', synced: 0 }
+      return { success: true, message: 'No data found in spreadsheet', synced: 0, deleted: 0, deactivated: 0 }
     }
 
     const storeRows: StoreRow[] = rows.map((row, index) => ({
@@ -138,6 +140,11 @@ export async function syncStoresFromGoogleSheets(): Promise<{
     })).filter(row => row.code && row.name)
 
     let synced = 0
+    let deleted = 0
+    let deactivated = 0
+
+    // スプレッドシートに存在するコードセット
+    const sheetCodes = new Set(storeRows.map(r => r.code))
 
     for (const storeRow of storeRows) {
       await prisma.store.upsert({
@@ -149,6 +156,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
           phone: storeRow.phone,
           email: storeRow.email || null,
           sheetRowId: storeRow.rowId,
+          isActive: true,
           updatedAt: new Date(),
         },
         create: {
@@ -166,16 +174,67 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       synced++
     }
 
+    // スプレッドシートにない店舗を DB から検索
+    const obsoleteStores = await prisma.store.findMany({
+      where: { code: { notIn: Array.from(sheetCodes) } },
+      select: {
+        id: true,
+        code: true,
+        _count: {
+          select: { visitSchedules: true, customers: true, members: true },
+        },
+      },
+    })
+
+    for (const store of obsoleteStores) {
+      const hasVisits = store._count.visitSchedules > 0
+      const hasCustomers = store._count.customers > 0
+
+      if (!hasVisits && !hasCustomers) {
+        // 依存データなし → StoreMember を削除してから Store を削除
+        await prisma.$transaction([
+          prisma.storeMember.deleteMany({ where: { storeId: store.id } }),
+          prisma.store.delete({ where: { id: store.id } }),
+        ])
+        deleted++
+      } else {
+        // 訪問記録または顧客が存在 → isActive=false に設定して履歴を保持
+        // User.storeId は nullable なので null にして担当店舗の紐付けを解除
+        // StoreMember は削除（店舗ログイン不要になるため）
+        await prisma.$transaction([
+          prisma.user.updateMany({
+            where: { storeId: store.id },
+            data: { storeId: null },
+          }),
+          prisma.storeMember.deleteMany({ where: { storeId: store.id } }),
+          prisma.store.update({
+            where: { id: store.id },
+            data: { isActive: false, updatedAt: new Date() },
+          }),
+        ])
+        deactivated++
+      }
+    }
+
     // 同期ログ記録
+    const logParts = [`${synced}件を同期`]
+    if (deleted > 0) logParts.push(`${deleted}件を削除`)
+    if (deactivated > 0) logParts.push(`${deactivated}件を無効化`)
     await prisma.syncLog.create({
       data: {
         type: 'stores',
         status: 'success',
-        message: `Synced ${synced} stores from Google Sheets`,
+        message: logParts.join(', '),
       },
     })
 
-    return { success: true, message: `Successfully synced ${synced} stores`, synced }
+    return {
+      success: true,
+      message: logParts.join(', '),
+      synced,
+      deleted,
+      deactivated,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
 
@@ -187,6 +246,6 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       },
     })
 
-    return { success: false, message, synced: 0 }
+    return { success: false, message, synced: 0, deleted: 0, deactivated: 0 }
   }
 }

@@ -540,9 +540,9 @@ export default function StoreCustomersPage() {
                   { label: '訪問先住所', value: selected.address },
                   { label: '登録日', value: format(new Date(selected.createdAt), 'yyyy年M月d日', { locale: ja }) },
                 ].map(item => (
-                  <div key={item.label} className="flex gap-4">
-                    <dt className="w-28 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                    <dd className="text-sm text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                  <div key={item.label} className="flex gap-3">
+                    <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                    <dd className="text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
                   </div>
                 ))}
                 <div className="flex gap-4">
@@ -612,9 +612,9 @@ export default function StoreCustomersPage() {
                       { label: '口座番号', value: selected.accountNumber },
                       { label: '口座名義', value: selected.accountHolder },
                     ].filter(item => item.value).map(item => (
-                      <div key={item.label} className="flex gap-4">
-                        <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                        <dd className="text-xs text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                      <div key={item.label} className="flex gap-3">
+                        <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                        <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
                       </div>
                     ))}
                   </dl>
@@ -641,9 +641,9 @@ export default function StoreCustomersPage() {
                       { label: '証明書番号',     value: selected.idLicenseNumber },
                       { label: '有効期限',       value: selected.idExpiryDate },
                     ].filter(item => item.value).map(item => (
-                      <div key={item.label} className="flex gap-4">
-                        <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                        <dd className="text-xs text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                      <div key={item.label} className="flex gap-3">
+                        <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                        <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
                       </div>
                     ))}
                   </dl>
@@ -730,20 +730,20 @@ export default function StoreCustomersPage() {
                             </div>
                             <div>
                               <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1 block">店舗メモ（顧客に表示）</label>
-                              <div className="flex gap-2">
-                                <textarea
-                                  value={edit.storeNote}
-                                  onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
-                                  rows={2}
-                                  placeholder="査定結果や連絡事項など..."
-                                  className="flex-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
-                                />
+                              <textarea
+                                value={edit.storeNote}
+                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
+                                rows={2}
+                                placeholder="査定結果や連絡事項など..."
+                                className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                              />
+                              <div className="flex justify-end mt-1.5">
                                 <button
                                   onClick={() => handleSaveShipment(s.id)}
                                   disabled={savingShipment === s.id}
-                                  className="text-xs px-3 py-1 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50 self-end flex-shrink-0"
+                                  className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
                                 >
-                                  {savingShipment === s.id ? '保存中' : '保存'}
+                                  {savingShipment === s.id ? '保存中...' : '保存する'}
                                 </button>
                               </div>
                             </div>
@@ -828,20 +828,20 @@ export default function StoreCustomersPage() {
                           <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
                             店舗メモ（顧客に表示されます）
                           </p>
-                          <div className="flex gap-2">
-                            <textarea
-                              value={memoStoreNotes[memo.id] ?? ''}
-                              onChange={e => setMemoStoreNotes(prev => ({ ...prev, [memo.id]: e.target.value }))}
-                              rows={2}
-                              placeholder="事前確認のコメントなどを入力..."
-                              className="flex-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
-                            />
+                          <textarea
+                            value={memoStoreNotes[memo.id] ?? ''}
+                            onChange={e => setMemoStoreNotes(prev => ({ ...prev, [memo.id]: e.target.value }))}
+                            rows={2}
+                            placeholder="事前確認のコメントなどを入力..."
+                            className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                          />
+                          <div className="flex justify-end mt-1.5">
                             <button
                               onClick={() => handleSaveMemoNote(memo.id)}
                               disabled={savingMemoNote === memo.id}
-                              className="text-xs px-3 py-1 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50 self-end flex-shrink-0"
+                              className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
                             >
-                              {savingMemoNote === memo.id ? '保存中' : '保存'}
+                              {savingMemoNote === memo.id ? '保存中...' : '保存する'}
                             </button>
                           </div>
                         </div>

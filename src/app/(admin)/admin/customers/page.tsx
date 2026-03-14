@@ -553,13 +553,13 @@ export default function AdminCustomersPage() {
                     { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
                     { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
                   ].map(item => (
-                    <div key={item.label} className="flex gap-4">
-                      <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                      <dd className={`text-sm text-[var(--md-sys-color-on-surface)] ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
+                    <div key={item.label} className="flex gap-3">
+                      <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                      <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
                     </div>
                   ))}
-                  <div className="flex gap-4">
-                    <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
+                  <div className="flex gap-3">
+                    <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
                     <dd className="text-sm">
                       {detailUser.idDocumentPath
                         ? <a href={detailUser.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-[var(--portal-primary,#374151)] underline">確認する</a>
@@ -574,8 +574,8 @@ export default function AdminCustomersPage() {
                   <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
                     <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">顧客タイプ</span>
                   </div>
-                  <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                  <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
+                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
                       {detailUser.customerType === 'delivery' ? '宅配買取' : '訪問買取'}
                     </span>
                     <Button
@@ -608,9 +608,9 @@ export default function AdminCustomersPage() {
                           { label: '口座番号', value: detailUser.accountNumber },
                           { label: '口座名義', value: detailUser.accountHolder },
                         ].filter(item => item.value).map(item => (
-                          <div key={item.label} className="flex gap-4">
-                            <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                            <dd className="text-xs text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                          <div key={item.label} className="flex gap-3">
+                            <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                            <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
                           </div>
                         ))}
                       </dl>

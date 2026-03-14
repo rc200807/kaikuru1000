@@ -1830,73 +1830,183 @@ function MemoCard({
   onDelete: (id: string) => void
 }) {
   const [showImages, setShowImages] = useState(false)
+  // ライトボックス: null=閉じている / number=表示中の画像インデックス
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  const total = memo.imageUrls.length
+
+  // キーボード操作（Esc・←→）
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { setLightboxIndex(null) }
+      if (e.key === 'ArrowRight') { setLightboxIndex(i => i !== null ? Math.min(i + 1, total - 1) : null) }
+      if (e.key === 'ArrowLeft')  { setLightboxIndex(i => i !== null ? Math.max(i - 1, 0) : null) }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [lightboxIndex, total])
+
+  // ライトボックスが開いている間、背景スクロールを無効化
+  useEffect(() => {
+    if (lightboxIndex !== null) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [lightboxIndex])
 
   return (
-    <Card variant="outlined" padding="md">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h4 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
-              {memo.title}
-            </h4>
-            <span
-              className={`text-xs font-medium px-2 py-0.5 rounded-full ${MEMO_STATUS_STYLE[memo.status] ?? ''}`}
-            >
-              {MEMO_STATUS_LABEL[memo.status] ?? memo.status}
-            </span>
-          </div>
-          {memo.description && (
-            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">
-              {memo.description}
-            </p>
-          )}
-          {memo.storeNote && (
-            <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
-              <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">
-                店舗からのメモ
-              </p>
-              <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">
-                {memo.storeNote}
-              </p>
+    <>
+      <Card variant="outlined" padding="md">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                {memo.title}
+              </h4>
+              <span
+                className={`text-xs font-medium px-2 py-0.5 rounded-full ${MEMO_STATUS_STYLE[memo.status] ?? ''}`}
+              >
+                {MEMO_STATUS_LABEL[memo.status] ?? memo.status}
+              </span>
             </div>
+            {memo.description && (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">
+                {memo.description}
+              </p>
+            )}
+            {memo.storeNote && (
+              <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
+                <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">
+                  店舗からのメモ
+                </p>
+                <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">
+                  {memo.storeNote}
+                </p>
+              </div>
+            )}
+            <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
+              {format(new Date(memo.createdAt), 'yyyy年M月d日', { locale: ja })}
+            </p>
+          </div>
+          {memo.status === 'pending' && (
+            <button
+              onClick={() => onDelete(memo.id)}
+              className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error,#B3261E)] flex-shrink-0 px-2 py-1"
+            >
+              削除
+            </button>
           )}
-          <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
-            {format(new Date(memo.createdAt), 'yyyy年M月d日', { locale: ja })}
-          </p>
         </div>
-        {memo.status === 'pending' && (
-          <button
-            onClick={() => onDelete(memo.id)}
-            className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error,#B3261E)] flex-shrink-0 px-2 py-1"
-          >
-            削除
-          </button>
-        )}
-      </div>
 
-      {memo.imageUrls.length > 0 && (
-        <div className="mt-3">
+        {total > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => setShowImages(v => !v)}
+              className="text-xs text-[var(--portal-primary)] hover:underline"
+            >
+              {showImages ? '画像を非表示' : `画像を見る（${total}枚）`}
+            </button>
+            {showImages && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {memo.imageUrls.map((url, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setLightboxIndex(i)}
+                    className="relative w-24 h-24 rounded-[var(--md-sys-shape-small)] overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]"
+                  >
+                    <img
+                      src={url}
+                      alt={`画像 ${i + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {/* 拡大アイコン */}
+                    <span className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
+                      <svg className="w-6 h-6 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0zm-2 0a4 4 0 10-8 0 4 4 0 008 0z" />
+                      </svg>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* ─── ライトボックスモーダル ─── */}
+      {lightboxIndex !== null && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85"
+          onClick={() => setLightboxIndex(null)}
+        >
+          {/* 閉じるボタン */}
           <button
-            onClick={() => setShowImages(v => !v)}
-            className="text-xs text-[var(--portal-primary)] hover:underline"
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors z-10"
+            aria-label="閉じる"
           >
-            {showImages ? '画像を非表示' : `画像を見る（${memo.imageUrls.length}枚）`}
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
-          {showImages && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {memo.imageUrls.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={url}
-                    alt=""
-                    className="w-24 h-24 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity"
-                  />
-                </a>
+
+          {/* 前へ */}
+          {lightboxIndex > 0 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1) }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors z-10"
+              aria-label="前の画像"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
+          {/* 次へ */}
+          {lightboxIndex < total - 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1) }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors z-10"
+              aria-label="次の画像"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+
+          {/* 画像本体 */}
+          <div
+            className="max-w-[90vw] max-h-[85vh] flex items-center justify-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <img
+              src={memo.imageUrls[lightboxIndex]}
+              alt={`画像 ${lightboxIndex + 1}`}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            />
+          </div>
+
+          {/* 枚数カウンター */}
+          {total > 1 && (
+            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {memo.imageUrls.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={e => { e.stopPropagation(); setLightboxIndex(i) }}
+                  className={`w-2 h-2 rounded-full transition-colors ${i === lightboxIndex ? 'bg-white' : 'bg-white/40 hover:bg-white/70'}`}
+                  aria-label={`${i + 1}枚目`}
+                />
               ))}
             </div>
           )}
         </div>
       )}
-    </Card>
+    </>
   )
 }

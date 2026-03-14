@@ -227,7 +227,7 @@ export default function AdminVisitsPage() {
                 showTestData ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
               }`}
             >
-              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+              <div className={`absolute top-0.5 w-4 h-4 bg-[var(--toggle-thumb,#fff)] rounded-full shadow transition-transform ${
                 showTestData ? 'translate-x-4' : 'translate-x-0.5'
               }`} />
             </div>

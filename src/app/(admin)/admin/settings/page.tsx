@@ -417,7 +417,7 @@ function AdminSettingsContent() {
                 onClick={() => setEmailForm(prev => ({ ...prev, enabled: !prev.enabled }))}
                 className={`relative w-10 h-6 rounded-full transition-colors ${emailForm.enabled ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'}`}
               >
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${emailForm.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                <div className={`absolute top-1 w-4 h-4 bg-[var(--toggle-thumb,#fff)] rounded-full shadow transition-transform ${emailForm.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
               </div>
               <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
                 {emailForm.enabled ? '割り当て時にメールを送信する' : 'メール通知は無効'}

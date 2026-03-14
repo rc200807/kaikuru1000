@@ -107,10 +107,69 @@ body {
   --portal-on-primary-container:  var(--store-on-primary-container);
 }
 [data-portal="admin"] {
-  --portal-primary:               var(--admin-primary);
-  --portal-on-primary:            var(--admin-on-primary);
-  --portal-primary-container:     var(--admin-primary-container);
-  --portal-on-primary-container:  var(--admin-on-primary-container);
+  /* ── Portal accent ────────────────────────────────── */
+  --portal-primary:                 #6B7FD4;
+  --portal-on-primary:              #0D1340;
+  --portal-primary-container:       #2A3260;
+  --portal-on-primary-container:    #BFC8F4;
+
+  /* ── Dark surface tokens ──────────────────────────── */
+  --md-sys-color-surface:                  #0F1117;
+  --md-sys-color-surface-dim:              #0A0D14;
+  --md-sys-color-surface-bright:           #2A2E3D;
+  --md-sys-color-surface-container-lowest: #090C13;
+  --md-sys-color-surface-container-low:    #181C27;
+  --md-sys-color-surface-container:        #1E2233;
+  --md-sys-color-surface-container-high:   #252A3D;
+  --md-sys-color-surface-container-highest:#2D3347;
+  --md-sys-color-on-surface:               #E2E6F3;
+  --md-sys-color-on-surface-variant:       #9AA3BF;
+  --md-sys-color-outline:                  #5C6580;
+  --md-sys-color-outline-variant:          #313754;
+
+  /* ── Dark error ───────────────────────────────────── */
+  --md-sys-color-error:             #F28B82;
+  --md-sys-color-on-error:          #370001;
+  --md-sys-color-error-container:   #8C1D18;
+  --md-sys-color-on-error-container:#F9DEDC;
+
+  /* ── Dark status colors ───────────────────────────── */
+  --status-scheduled-bg:    #1A3A5C;
+  --status-scheduled-text:  #82B4E8;
+  --status-pending-bg:      #4A3300;
+  --status-pending-text:    #FFD080;
+  --status-completed-bg:    #1A3A22;
+  --status-completed-text:  #81C784;
+  --status-rescheduled-bg:  #2E1F4A;
+  --status-rescheduled-text:#CE93D8;
+  --status-absent-bg:       #4A1919;
+  --status-absent-text:     #EF9A9A;
+  --status-cancelled-bg:    #252525;
+  --status-cancelled-text:  #9E9E9E;
+
+  /* ── Dark elevation ───────────────────────────────── */
+  --md-sys-elevation-1: 0 1px 2px rgba(0,0,0,0.40), 0 1px 3px rgba(0,0,0,0.30);
+  --md-sys-elevation-2: 0 2px 6px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.30);
+  --md-sys-elevation-3: 0 4px 8px rgba(0,0,0,0.50), 0 2px 4px rgba(0,0,0,0.30);
+
+  /* ── Toggle thumb ─────────────────────────────────── */
+  --toggle-thumb: #E8ECFF;
+
+  /* ── Browser dark mode ────────────────────────────── */
+  color-scheme: dark;
+}
+
+/* Admin: ブラウザフォームコントロールをダークに */
+[data-portal="admin"] select,
+[data-portal="admin"] input[type="date"],
+[data-portal="admin"] input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+/* Admin: AppBar に区切り線＋ダーク背景 */
+[data-portal="admin"] header {
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  background-color: var(--md-sys-color-surface-container-low) !important;
 }
 
 /* ── Utility classes ──────────────────────────────────── */

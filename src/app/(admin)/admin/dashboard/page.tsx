@@ -48,7 +48,7 @@ function AmountTooltip({ active, payload, label }: any) {
   return (
     <div className="bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] shadow-[var(--md-sys-elevation-2)] px-3 py-2 text-sm">
       <p className="font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">{label}</p>
-      <p className="text-emerald-700 font-semibold">¥{payload[0].value.toLocaleString()}</p>
+      <p className="text-[var(--status-completed-text)] font-semibold">¥{payload[0].value.toLocaleString()}</p>
     </div>
   )
 }
@@ -111,7 +111,7 @@ export default function AdminDashboardPage() {
                 showTestData ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
               }`}
             >
-              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+              <div className={`absolute top-0.5 w-4 h-4 bg-[var(--toggle-thumb,#fff)] rounded-full shadow transition-transform ${
                 showTestData ? 'translate-x-4' : 'translate-x-0.5'
               }`} />
             </div>
@@ -144,11 +144,11 @@ export default function AdminDashboardPage() {
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={monthlyPurchaseAmount} margin={{ top: 4, right: 8, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant)" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={yenAxisFormatter} width={58} />
                 <Tooltip content={<AmountTooltip />} />
-                <Bar dataKey="amount" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="amount" fill="#A78BFA" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -168,13 +168,13 @@ export default function AdminDashboardPage() {
               <div className="space-y-3">
                 {storePurchaseRanking.map((store, i) => (
                   <div key={store.storeId} className="flex items-center gap-3">
-                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-purple-600' : 'text-[var(--md-sys-color-outline)]'}`}>
+                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-violet-400' : 'text-[var(--md-sys-color-outline)]'}`}>
                       {i + 1}
                     </span>
                     <span className="text-sm text-[var(--md-sys-color-on-surface)] w-28 truncate flex-shrink-0">{store.name}</span>
                     <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-2">
                       <div
-                        className="bg-purple-600 h-2 rounded-full transition-all"
+                        className="bg-violet-400 h-2 rounded-full transition-all"
                         style={{ width: `${(store.amount / maxPurchaseAmount) * 100}%` }}
                       />
                     </div>
@@ -198,13 +198,13 @@ export default function AdminDashboardPage() {
               <div className="space-y-3">
                 {storeRanking.map((store, i) => (
                   <div key={store.storeId} className="flex items-center gap-3">
-                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-red-600' : 'text-[var(--md-sys-color-outline)]'}`}>
+                    <span className={`text-xs font-bold w-5 text-center flex-shrink-0 ${i < 3 ? 'text-red-400' : 'text-[var(--md-sys-color-outline)]'}`}>
                       {i + 1}
                     </span>
                     <span className="text-sm text-[var(--md-sys-color-on-surface)] w-28 truncate flex-shrink-0">{store.name}</span>
                     <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-2">
                       <div
-                        className="bg-red-600 h-2 rounded-full transition-all"
+                        className="bg-red-400 h-2 rounded-full transition-all"
                         style={{ width: `${(store.count / maxStoreCount) * 100}%` }}
                       />
                     </div>
@@ -226,11 +226,11 @@ export default function AdminDashboardPage() {
             </h2>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyNewCustomers} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant)" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip formatter={(v: any) => [`${v}名`, '新規顧客']} />
-                <Bar dataKey="count" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#F87171" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -242,16 +242,16 @@ export default function AdminDashboardPage() {
             </h2>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={monthlyVisits} margin={{ top: 0, right: 16, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant)" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip formatter={(v: any) => [`${v}件`, '訪問数']} />
                 <Line
                   type="monotone"
                   dataKey="count"
-                  stroke="#dc2626"
+                  stroke="#F87171"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#dc2626' }}
+                  dot={{ r: 3, fill: '#F87171' }}
                   activeDot={{ r: 5 }}
                 />
               </LineChart>
@@ -266,7 +266,7 @@ export default function AdminDashboardPage() {
           </h2>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={dailyVisits} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant)" />
               <XAxis
                 dataKey="date"
                 tick={{ fontSize: 10 }}
@@ -274,7 +274,7 @@ export default function AdminDashboardPage() {
               />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip formatter={(v: any) => [`${v}件`, '訪問数']} />
-              <Bar dataKey="count" fill="#1d4ed8" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="count" fill="#60A5FA" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>

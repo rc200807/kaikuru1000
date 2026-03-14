@@ -101,6 +101,8 @@ export default function MyPage() {
   const [showReportForm, setShowReportForm] = useState(false)
   const [reportText, setReportText] = useState('')
   const [savingReport, setSavingReport] = useState(false)
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(false)
+  const [deletingDoc, setDeletingDoc] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -254,6 +256,36 @@ export default function MyPage() {
       }
     } else {
       setMessage({ type: 'error', text: '再読み取りに失敗しました' })
+    }
+  }
+
+  // 身分証削除
+  async function handleDeleteIdDocument() {
+    if (!user) return
+    setDeletingDoc(true)
+    try {
+      const res = await fetch(`/api/users/${user.id}/id-document`, { method: 'DELETE' })
+      if (res.ok) {
+        setUser(prev => prev ? {
+          ...prev,
+          idDocumentPath:   null,
+          idDocumentType:   null,
+          idName:           null,
+          idBirthDate:      null,
+          idAddress:        null,
+          idLicenseNumber:  null,
+          idExpiryDate:     null,
+          idOcrIssueReport: null,
+        } : prev)
+        setConfirmDeleteDoc(false)
+        setShowReportForm(false)
+        setMessage({ type: 'success', text: '身分証明書を削除しました' })
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error ?? '削除に失敗しました' })
+      }
+    } finally {
+      setDeletingDoc(false)
     }
   }
 
@@ -876,7 +908,7 @@ export default function MyPage() {
                         </span>
                       )}
                     </h3>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={handleReOcr}
                         disabled={reOcrLoading}
@@ -896,8 +928,41 @@ export default function MyPage() {
                       >
                         {showReportForm ? 'キャンセル' : '誤りを報告'}
                       </button>
+                      <button
+                        onClick={() => { setConfirmDeleteDoc(v => !v); setShowReportForm(false) }}
+                        className="text-xs px-3 py-1.5 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error,#B3261E)] text-[var(--md-sys-color-error,#B3261E)] hover:bg-red-50 transition-colors flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        {confirmDeleteDoc ? 'キャンセル' : '削除'}
+                      </button>
                     </div>
                   </div>
+
+                  {/* 削除確認エリア */}
+                  {confirmDeleteDoc && (
+                    <div className="mb-4 p-3 rounded-[var(--md-sys-shape-small)] bg-red-50 border border-red-200">
+                      <p className="text-sm font-medium text-red-800 mb-1">身分証明書を削除しますか？</p>
+                      <p className="text-xs text-red-600 mb-3">ファイルと読み取り情報がすべて削除されます。この操作は取り消せません。</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleDeleteIdDocument}
+                          disabled={deletingDoc}
+                          className="text-xs px-4 py-1.5 bg-red-600 text-white rounded-[var(--md-sys-shape-small)] hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {deletingDoc ? '削除中...' : '削除する'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteDoc(false)}
+                          disabled={deletingDoc}
+                          className="text-xs px-4 py-1.5 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] rounded-[var(--md-sys-shape-small)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* OCRデータ表示 */}
                   {(user.idName || user.idBirthDate || user.idAddress || user.idLicenseNumber || user.idExpiryDate) ? (

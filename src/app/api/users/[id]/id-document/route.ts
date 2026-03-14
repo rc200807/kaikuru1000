@@ -62,6 +62,60 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const sessionUser = session.user as any
+
+  // 顧客は自分の身分証のみ
+  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  // 店舗は担当顧客の身分証のみ
+  if (sessionUser.role === 'store') {
+    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
+    if (target?.storeId !== sessionUser.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+  // admin はすべて操作可
+
+  const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentPath: true } })
+  if (!user?.idDocumentPath) {
+    return NextResponse.json({ error: '身分証明書が未提出です' }, { status: 404 })
+  }
+
+  // Blob ファイルを削除
+  try {
+    await deleteFile(user.idDocumentPath)
+  } catch {
+    // ファイル削除失敗はログのみ（DB側のクリアは続行）
+    console.warn('[DELETE id-document] blob delete failed, continuing DB clear')
+  }
+
+  // 身分証関連フィールドをすべてクリア
+  await prisma.user.update({
+    where: { id },
+    data: {
+      idDocumentPath:   null,
+      idDocumentType:   null,
+      idName:           null,
+      idBirthDate:      null,
+      idAddress:        null,
+      idLicenseNumber:  null,
+      idExpiryDate:     null,
+      idOcrIssueReport: null,
+    },
+  })
+
+  return NextResponse.json({ success: true })
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

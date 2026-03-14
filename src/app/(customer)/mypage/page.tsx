@@ -636,6 +636,35 @@ export default function MyPage() {
           {/* ─── Dashboard tab ─── */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
+              {/* 身分証明書未提出バナー（最上部に表示） */}
+              {!user.idDocumentPath && (
+                <div className="rounded-[var(--md-sys-shape-medium)] border-2 border-amber-400 bg-amber-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-amber-800">身分証明書が未提出です</p>
+                      <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                        サービス開始前に身分証明書のご提出が必要です。<br />
+                        運転免許証・マイナンバーカード・パスポートをご用意ください。
+                      </p>
+                      <button
+                        onClick={() => handleTabChange('id-document')}
+                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        身分証明書を登録する
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Next visit card / Delivery shipment status card */}
               {isDelivery ? (
                 (() => {
@@ -800,15 +829,6 @@ export default function MyPage() {
                 </Card>
               </div>
 
-              {/* Warning banner for missing ID document */}
-              {!user.idDocumentPath && (
-                <MessageBanner severity="warning">
-                  <p className="font-medium">身分証明書が未提出です</p>
-                  <p className="text-xs mt-0.5 opacity-80">
-                    サービス開始前に「身分証明書」タブからアップロードをお願いします。
-                  </p>
-                </MessageBanner>
-              )}
             </div>
           )}
 

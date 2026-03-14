@@ -96,6 +96,7 @@ export default function MyPage() {
   const [submittingMemo, setSubmittingMemo] = useState(false)
 
   // 身分証OCR関連
+  const [uploadingDoc, setUploadingDoc] = useState(false)
   const [reOcrLoading, setReOcrLoading] = useState(false)
   const [showReportForm, setShowReportForm] = useState(false)
   const [reportText, setReportText] = useState('')
@@ -191,10 +192,12 @@ export default function MyPage() {
     formData.append('file', file)
     const userId = (session?.user as any).id
     setMessage(null)
+    setUploadingDoc(true)
     const res = await fetch(`/api/users/${userId}/id-document`, {
       method: 'POST',
       body: formData,
     })
+    setUploadingDoc(false)
     if (res.ok) {
       const data = await res.json()
       setUser(prev => {
@@ -858,6 +861,12 @@ export default function MyPage() {
               {/* OCR読み取り結果セクション（提出済みの場合のみ） */}
               {user.idDocumentPath && (
                 <Card variant="outlined" padding="md">
+
+                  {/* ── スキャン中アニメーション ── */}
+                  {reOcrLoading ? (
+                    <OcrScanningAnimation label="再読み取り中..." />
+                  ) : (
+                  <>
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                     <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
                       自動読み取り結果
@@ -873,16 +882,10 @@ export default function MyPage() {
                         disabled={reOcrLoading}
                         className="text-xs px-3 py-1.5 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors disabled:opacity-50 flex items-center gap-1"
                       >
-                        {reOcrLoading ? (
-                          <><LoadingSpinner size="sm" />再読み取り中...</>
-                        ) : (
-                          <>
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            再読み取り
-                          </>
-                        )}
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        再読み取り
                       </button>
                       <button
                         onClick={() => {
@@ -959,11 +962,18 @@ export default function MyPage() {
                       <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap pl-5">{user.idOcrIssueReport}</p>
                     </div>
                   )}
+                  </>
+                  )}
                 </Card>
               )}
 
               {/* アップロードセクション */}
               <Card variant="elevated" padding="md">
+                {/* アップロード＋OCR処理中アニメーション */}
+                {uploadingDoc ? (
+                  <OcrScanningAnimation label="アップロード・読み取り中..." />
+                ) : (
+                <>
                 <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
                   {user.idDocumentPath ? '身分証明書を再アップロード' : '身分証明書のアップロード'}
                 </h2>
@@ -1011,6 +1021,8 @@ export default function MyPage() {
                     <p className="font-medium">身分証明書が未提出です</p>
                     <p className="text-xs mt-0.5 opacity-80">サービス開始前に提出が必要です</p>
                   </MessageBanner>
+                )}
+                </>
                 )}
               </Card>
             </div>
@@ -1101,6 +1113,138 @@ export default function MyPage() {
             </Card>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── OcrScanningAnimation ───
+
+function OcrScanningAnimation({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 gap-5 select-none">
+      <style>{`
+        @keyframes ocr-scan {
+          0%   { top: 4px; opacity: 0; }
+          8%   { opacity: 1; }
+          92%  { opacity: 1; }
+          100% { top: calc(100% - 4px); opacity: 0; }
+        }
+        @keyframes ocr-glow {
+          0%   { top: 4px; }
+          100% { top: calc(100% - 4px); }
+        }
+        @keyframes ocr-shimmer {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+        @keyframes ocr-dot {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+          40%            { transform: scale(1.2); opacity: 1; }
+        }
+        @keyframes ocr-line-flash {
+          0%, 100% { opacity: 0.25; }
+          50%       { opacity: 0.7; }
+        }
+      `}</style>
+
+      {/* ドキュメントアイコン + スキャンビーム */}
+      <div className="relative" style={{ width: 80, height: 104 }}>
+        {/* 台紙（影） */}
+        <div
+          className="absolute inset-0 rounded-[6px]"
+          style={{ background: 'var(--md-sys-color-surface-container-highest, #E6E1E5)', transform: 'translate(3px, 4px)' }}
+        />
+        {/* 本体 */}
+        <div
+          className="absolute inset-0 rounded-[6px] overflow-hidden"
+          style={{ background: 'var(--md-sys-color-surface, #FFFBFE)', border: '1.5px solid var(--md-sys-color-outline-variant)' }}
+        >
+          {/* 折り返し角 */}
+          <div
+            className="absolute top-0 right-0 w-5 h-5"
+            style={{
+              background: 'var(--md-sys-color-surface-container-high, #ECE6F0)',
+              clipPath: 'polygon(0 0, 100% 100%, 100% 0)',
+            }}
+          />
+
+          {/* テキスト行（シマー付き） */}
+          {[
+            { top: 18, width: '72%' },
+            { top: 30, width: '58%' },
+            { top: 44, width: '80%' },
+            { top: 56, width: '65%' },
+            { top: 68, width: '75%' },
+            { top: 80, width: '50%' },
+          ].map((line, i) => (
+            <div
+              key={i}
+              className="absolute left-3 h-[5px] rounded-full overflow-hidden"
+              style={{
+                top: line.top,
+                width: line.width,
+                background: 'var(--md-sys-color-outline-variant, #CAC4D0)',
+                animation: `ocr-line-flash ${1.4 + i * 0.15}s ease-in-out ${i * 0.1}s infinite`,
+              }}
+            >
+              {/* シマー */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.7) 50%, transparent 100%)',
+                  animation: `ocr-shimmer 1.8s ease-in-out ${i * 0.2}s infinite`,
+                }}
+              />
+            </div>
+          ))}
+
+          {/* スキャンビーム（グロー） */}
+          <div
+            className="absolute left-0 right-0"
+            style={{
+              height: 16,
+              background: 'linear-gradient(to bottom, transparent, color-mix(in srgb, var(--portal-primary, #B91C1C) 20%, transparent), transparent)',
+              animation: 'ocr-glow 1.6s cubic-bezier(0.4,0,0.6,1) infinite alternate',
+              pointerEvents: 'none',
+            }}
+          />
+          {/* スキャンライン本体 */}
+          <div
+            className="absolute left-0 right-0"
+            style={{
+              height: 2,
+              background: 'var(--portal-primary, #B91C1C)',
+              boxShadow: '0 0 6px 2px color-mix(in srgb, var(--portal-primary, #B91C1C) 60%, transparent)',
+              animation: 'ocr-scan 1.6s cubic-bezier(0.4,0,0.6,1) infinite alternate',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ラベル */}
+      <div className="text-center space-y-1">
+        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+          {label}
+        </p>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+          AIが身分証の情報を解析しています
+        </p>
+      </div>
+
+      {/* バウンスドット */}
+      <div className="flex gap-1.5">
+        {[0, 1, 2, 3].map(i => (
+          <div
+            key={i}
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: 'var(--portal-primary, #B91C1C)',
+              animation: `ocr-dot 1.2s ease-in-out ${i * 0.18}s infinite`,
+            }}
+          />
+        ))}
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
+import { extractIdDocumentInfo } from '@/lib/gemini'
 
 /**
  * 身分証明書を認証プロキシ経由で配信
@@ -89,24 +90,44 @@ export async function POST(
     }
 
     const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+
+    // ファイルアップロード
     const fileUrl = await uploadFile(
-      Buffer.from(arrayBuffer),
+      buffer,
       `id-documents/${id}_${Date.now()}.${validation.ext}`,
       file.type, // Magic Number 検証済みの MIME タイプ
     )
 
     // 古いファイルの削除
-    const user = await prisma.user.findUnique({ where: { id } })
-    if (user?.idDocumentPath) {
-      await deleteFile(user.idDocumentPath)
+    const existingUser = await prisma.user.findUnique({ where: { id } })
+    if (existingUser?.idDocumentPath) {
+      await deleteFile(existingUser.idDocumentPath)
     }
+
+    // Gemini Vision OCR で身分証情報を抽出（失敗しても upload は成功扱い）
+    const ocrResult = await extractIdDocumentInfo(buffer, file.type)
 
     await prisma.user.update({
       where: { id },
-      data: { idDocumentPath: fileUrl },
+      data: {
+        idDocumentPath: fileUrl,
+        // OCR成功時のみ更新（null なら既存値を上書きしない）
+        ...(ocrResult && {
+          idDocumentType:  ocrResult.idDocumentType,
+          idName:          ocrResult.idName,
+          idBirthDate:     ocrResult.idBirthDate,
+          idAddress:       ocrResult.idAddress,
+          idLicenseNumber: ocrResult.idLicenseNumber,
+          idExpiryDate:    ocrResult.idExpiryDate,
+        }),
+      },
     })
 
-    return NextResponse.json({ path: fileUrl })
+    return NextResponse.json({
+      path: fileUrl,
+      ocr: ocrResult ?? null,
+    })
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json({ error: 'アップロードに失敗しました' }, { status: 500 })

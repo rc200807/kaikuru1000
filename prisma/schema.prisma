@@ -30,7 +30,14 @@ model User {
   password       String
   licenseKeyId   String    @unique
   licenseKey     LicenseKey @relation(fields: [licenseKeyId], references: [id])
-  idDocumentPath String?   @db.Text  // 身分証明書ファイルURL（Vercel Blob）
+  idDocumentPath  String?   @db.Text  // 身分証明書ファイルURL（Vercel Blob）
+  // 身分証OCR抽出フィールド（Gemini Vision）
+  idDocumentType  String?             // 書類種別（運転免許証/パスポート/マイナンバーカードなど）
+  idName          String?             // 身分証記載氏名
+  idBirthDate     String?             // 生年月日（YYYY-MM-DD または 和暦テキスト）
+  idAddress       String?   @db.Text  // 身分証記載住所
+  idLicenseNumber String?             // 免許番号・旅券番号など
+  idExpiryDate    String?             // 有効期限（YYYY-MM-DD または テキスト）
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
   isTestData     Boolean   @default(false)

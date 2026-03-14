@@ -24,6 +24,9 @@ export async function GET(
       id: true, name: true, furigana: true,
       email: true, phone: true, address: true,
       idDocumentPath: true, createdAt: true,
+      // 身分証OCR抽出フィールド
+      idDocumentType: true, idName: true, idBirthDate: true,
+      idAddress: true, idLicenseNumber: true, idExpiryDate: true,
       visitSchedules: {
         where: { visitDate: { gte: new Date() }, status: 'scheduled' },
         orderBy: { visitDate: 'asc' },
@@ -33,5 +36,11 @@ export async function GET(
     orderBy: { name: 'asc' },
   })
 
-  return NextResponse.json(customers)
+  // idDocumentPath をプロキシ URL に変換（Blob URL をクライアントに露出しない）
+  const result = customers.map(c => ({
+    ...c,
+    idDocumentPath: c.idDocumentPath ? `/api/users/${c.id}/id-document` : null,
+  }))
+
+  return NextResponse.json(result)
 }

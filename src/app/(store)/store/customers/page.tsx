@@ -28,6 +28,13 @@ type Customer = {
   phone: string
   address: string
   idDocumentPath: string | null
+  // 身分証OCR抽出フィールド
+  idDocumentType:  string | null
+  idName:          string | null
+  idBirthDate:     string | null
+  idAddress:       string | null
+  idLicenseNumber: string | null
+  idExpiryDate:    string | null
   createdAt: string
   visitSchedules: Array<{ visitDate: string; status: string }>
 }
@@ -375,6 +382,7 @@ export default function StoreCustomersPage() {
 
             {/* 基本情報 */}
             {modalTab === 'info' && (
+              <>
               <dl className="space-y-3">
                 {[
                   { label: 'メール', value: selected.email },
@@ -397,6 +405,36 @@ export default function StoreCustomersPage() {
                   </dd>
                 </div>
               </dl>
+
+              {/* 身分証OCR抽出情報 */}
+              {selected.idDocumentPath && (selected.idName || selected.idBirthDate || selected.idAddress || selected.idLicenseNumber || selected.idExpiryDate) && (
+                <div className="mt-4 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)] flex items-center gap-2">
+                    <svg className="w-4 h-4 text-[var(--portal-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">
+                      身分証OCR読み取り結果
+                      {selected.idDocumentType && <span className="ml-2 font-normal">（{selected.idDocumentType}）</span>}
+                    </span>
+                  </div>
+                  <dl className="px-4 py-3 space-y-2">
+                    {[
+                      { label: '氏名（証明書）', value: selected.idName },
+                      { label: '生年月日',       value: selected.idBirthDate },
+                      { label: '住所（証明書）', value: selected.idAddress },
+                      { label: '証明書番号',     value: selected.idLicenseNumber },
+                      { label: '有効期限',       value: selected.idExpiryDate },
+                    ].filter(item => item.value).map(item => (
+                      <div key={item.label} className="flex gap-4">
+                        <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                        <dd className="text-xs text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+              </>
             )}
 
             {/* 買取相談メモ */}

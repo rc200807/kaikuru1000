@@ -200,7 +200,7 @@ export default function MyPage() {
             <Button
               variant="text"
               size="sm"
-              onClick={() => signOut({ callbackUrl: '/' })}
+              onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/' }) }}
             >
               ログアウト
             </Button>

@@ -628,6 +628,7 @@ export default function MyPage() {
             tabs={tabs}
             activeKey={activeTab}
             onChange={handleTabChange}
+            mobileVariant="menu"
           />
         </div>
 

@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const includeTestData = searchParams.get('includeTestData') === 'true'
+  const includeInactive = searchParams.get('includeInactive') === 'true'
 
   const where: any = {}
-  if (!includeTestData) {
-    where.isTestData = false
-  }
+  if (!includeTestData) where.isTestData = false
+  if (!includeInactive) where.isActive = true
 
   const users = await prisma.user.findMany({
     where,

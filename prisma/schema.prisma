@@ -34,6 +34,7 @@ model User {
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
   isTestData     Boolean   @default(false)
+  isActive       Boolean   @default(true)
   visitSchedules VisitSchedule[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

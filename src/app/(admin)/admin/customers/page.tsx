@@ -30,6 +30,7 @@ type User = {
   store: { id: string; name: string; code: string } | null
   visitSchedules: Array<{ visitDate: string; status: string }>
   isTestData?: boolean
+  isActive: boolean
 }
 
 type Store = {
@@ -69,6 +70,11 @@ export default function AdminCustomersPage() {
   const [filterStore, setFilterStore] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showTestData, setShowTestData] = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
+
+  // 削除・無効化処理中のユーザーID
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   // 店舗割り当てモーダル
   const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null)
@@ -95,7 +101,10 @@ export default function AdminCustomersPage() {
         return
       }
 
-      const usersUrl = showTestData ? '/api/admin/users?includeTestData=true' : '/api/admin/users'
+      const params = new URLSearchParams()
+      if (showTestData) params.set('includeTestData', 'true')
+      if (showInactive) params.set('includeInactive', 'true')
+      const usersUrl = `/api/admin/users?${params.toString()}`
       Promise.all([
         fetch(usersUrl).then(r => r.json()),
         fetch('/api/stores').then(r => r.json()),
@@ -105,7 +114,7 @@ export default function AdminCustomersPage() {
         setLoading(false)
       }).catch(() => setLoading(false))
     }
-  }, [status, session, showTestData])
+  }, [status, session, showTestData, showInactive])
 
   // 顧客詳細モーダルを開いたときにスケジュール取得
   useEffect(() => {
@@ -201,6 +210,41 @@ export default function AdminCustomersPage() {
     setScheduleMsg(null)
   }
 
+  async function handleToggleActive(user: User) {
+    const nextState = !user.isActive
+    const label = nextState ? '有効化' : '無効化'
+    if (!confirm(`「${user.name}」を${label}しますか？`)) return
+    setTogglingId(user.id)
+    const res = await fetch(`/api/admin/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: nextState }),
+    })
+    setTogglingId(null)
+    if (res.ok) {
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isActive: nextState } : u))
+      if (detailUser?.id === user.id) setDetailUser(prev => prev ? { ...prev, isActive: nextState } : null)
+      setMessage({ type: 'success', text: `${user.name}を${label}しました` })
+    } else {
+      setMessage({ type: 'error', text: `${label}に失敗しました` })
+    }
+  }
+
+  async function handleDeleteUser(user: User) {
+    if (!confirm(`「${user.name}」を完全に削除しますか？\n訪問履歴もすべて削除されます。この操作は取り消せません。`)) return
+    setDeletingId(user.id)
+    const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+    setDeletingId(null)
+    if (res.ok) {
+      setUsers(prev => prev.filter(u => u.id !== user.id))
+      if (detailUser?.id === user.id) closeDetailModal()
+      setMessage({ type: 'success', text: `${user.name}を削除しました` })
+    } else {
+      const data = await res.json()
+      setMessage({ type: 'error', text: data.error || '削除に失敗しました' })
+    }
+  }
+
   const filtered = users.filter(u => {
     const matchSearch = !search || u.name.includes(search) || u.furigana.includes(search) || u.email.includes(search)
     const matchStore = !filterStore || (filterStore === 'unassigned' ? !u.store : u.store?.id === filterStore)
@@ -224,6 +268,11 @@ export default function AdminCustomersPage() {
         <div>
           <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
             {user.name}
+            {!user.isActive && (
+              <span className="ml-1.5 text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 rounded-full">
+                無効
+              </span>
+            )}
             {user.isTestData && (
               <span className="ml-1.5 text-[10px] font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
                 テスト
@@ -336,7 +385,22 @@ export default function AdminCustomersPage() {
 
         <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)] mb-4">顧客一覧</h2>
 
-        <div className="flex items-center gap-2 px-4 sm:px-6">
+        <div className="flex items-center gap-4 px-4 sm:px-6 flex-wrap">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setShowInactive(prev => !prev)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${
+                showInactive ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
+              }`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                showInactive ? 'translate-x-4' : 'translate-x-0.5'
+              }`} />
+            </div>
+            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              無効化済みを表示
+            </span>
+          </label>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <div
               onClick={() => setShowTestData(prev => !prev)}
@@ -391,7 +455,34 @@ export default function AdminCustomersPage() {
         title={detailUser ? `${detailUser.name} 様` : ''}
         size="lg"
         footer={
-          <Button variant="tonal" onClick={closeDetailModal}>閉じる</Button>
+          <div className="flex items-center justify-between w-full gap-2 flex-wrap">
+            <div className="flex gap-2">
+              {detailUser && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outlined"
+                    disabled={togglingId === detailUser.id}
+                    loading={togglingId === detailUser.id}
+                    onClick={() => handleToggleActive(detailUser)}
+                  >
+                    {detailUser.isActive ? '無効化' : '有効化'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outlined"
+                    disabled={deletingId === detailUser.id}
+                    loading={deletingId === detailUser.id}
+                    className="text-[var(--md-sys-color-error)] border-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)]"
+                    onClick={() => handleDeleteUser(detailUser)}
+                  >
+                    削除
+                  </Button>
+                </>
+              )}
+            </div>
+            <Button variant="tonal" onClick={closeDetailModal}>閉じる</Button>
+          </div>
         }
       >
         {detailUser && (

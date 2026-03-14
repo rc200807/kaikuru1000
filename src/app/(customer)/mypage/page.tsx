@@ -24,6 +24,14 @@ type UserData = {
   phone: string
   address: string
   idDocumentPath: string | null
+  // 身分証OCR抽出フィールド
+  idDocumentType:   string | null
+  idName:           string | null
+  idBirthDate:      string | null
+  idAddress:        string | null
+  idLicenseNumber:  string | null
+  idExpiryDate:     string | null
+  idOcrIssueReport: string | null
   licenseKey: { key: string }
   store: { name: string; phone: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
@@ -86,6 +94,12 @@ export default function MyPage() {
   const [memoImages, setMemoImages] = useState<string[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
   const [submittingMemo, setSubmittingMemo] = useState(false)
+
+  // 身分証OCR関連
+  const [reOcrLoading, setReOcrLoading] = useState(false)
+  const [showReportForm, setShowReportForm] = useState(false)
+  const [reportText, setReportText] = useState('')
+  const [savingReport, setSavingReport] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -183,11 +197,81 @@ export default function MyPage() {
     })
     if (res.ok) {
       const data = await res.json()
-      setUser(prev => prev ? { ...prev, idDocumentPath: data.path } : null)
-      setMessage({ type: 'success', text: '身分証明書をアップロードしました' })
+      setUser(prev => {
+        if (!prev) return null
+        return {
+          ...prev,
+          idDocumentPath:   `/api/users/${prev.id}/id-document`,
+          idOcrIssueReport: null,
+          ...(data.ocr && {
+            idDocumentType:  data.ocr.idDocumentType,
+            idName:          data.ocr.idName,
+            idBirthDate:     data.ocr.idBirthDate,
+            idAddress:       data.ocr.idAddress,
+            idLicenseNumber: data.ocr.idLicenseNumber,
+            idExpiryDate:    data.ocr.idExpiryDate,
+          }),
+        }
+      })
+      setShowReportForm(false)
+      setReportText('')
+      const ocrMsg = data.ocr ? '（情報を自動読み取りしました）' : '（自動読み取りに失敗しました。再読み取りをお試しください）'
+      setMessage({ type: 'success', text: `身分証明書をアップロードしました${ocrMsg}` })
     } else {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || 'アップロードに失敗しました' })
+    }
+  }
+
+  // 身分証再OCR
+  async function handleReOcr() {
+    const userId = (session?.user as any).id
+    setReOcrLoading(true)
+    setMessage(null)
+    const res = await fetch(`/api/users/${userId}/id-document/reocr`, { method: 'POST' })
+    setReOcrLoading(false)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.ocr) {
+        setUser(prev => prev ? {
+          ...prev,
+          idOcrIssueReport: null,
+          idDocumentType:  data.ocr.idDocumentType,
+          idName:          data.ocr.idName,
+          idBirthDate:     data.ocr.idBirthDate,
+          idAddress:       data.ocr.idAddress,
+          idLicenseNumber: data.ocr.idLicenseNumber,
+          idExpiryDate:    data.ocr.idExpiryDate,
+        } : null)
+        setShowReportForm(false)
+        setReportText('')
+        setMessage({ type: 'success', text: '再読み取りが完了しました' })
+      } else {
+        setMessage({ type: 'error', text: '読み取りに失敗しました。画像を再アップロードしてください。' })
+      }
+    } else {
+      setMessage({ type: 'error', text: '再読み取りに失敗しました' })
+    }
+  }
+
+  // 身分証OCR誤り報告
+  async function handleSubmitIssueReport(e: React.FormEvent) {
+    e.preventDefault()
+    if (!reportText.trim()) return
+    const userId = (session?.user as any).id
+    setSavingReport(true)
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idOcrIssueReport: reportText.trim() }),
+    })
+    setSavingReport(false)
+    if (res.ok) {
+      setUser(prev => prev ? { ...prev, idOcrIssueReport: reportText.trim() } : null)
+      setShowReportForm(false)
+      setMessage({ type: 'success', text: '誤りを報告しました。スタッフが確認します。' })
+    } else {
+      setMessage({ type: 'error', text: '報告に失敗しました' })
     }
   }
 
@@ -769,56 +853,167 @@ export default function MyPage() {
 
           {/* ─── ID Document tab ─── */}
           {activeTab === 'id-document' && (
-            <Card variant="elevated" padding="md">
-              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-2">
-                身分証明書のアップロード
-              </h2>
-              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-6 leading-relaxed">
-                運転免許証、マイナンバーカード、パスポートなどをアップロードしてください。<br />
-                対応形式：JPEG、PNG、WebP、PDF（最大10MB）
-              </p>
+            <div className="space-y-5">
 
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="
-                  border-2 border-dashed border-[var(--md-sys-color-outline-variant)]
-                  rounded-[var(--md-sys-shape-medium)] p-12 text-center cursor-pointer
-                  hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)]
-                  transition-colors mb-6
-                "
-              >
-                <div className="w-16 h-16 bg-[var(--md-sys-color-surface-container-high)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
-                  クリックしてファイルを選択
-                </p>
-                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
-                  またはドラッグ＆ドロップ
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={handleUploadIdDocument}
-                  className="hidden"
-                />
-              </div>
+              {/* OCR読み取り結果セクション（提出済みの場合のみ） */}
+              {user.idDocumentPath && (
+                <Card variant="outlined" padding="md">
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                      自動読み取り結果
+                      {user.idDocumentType && (
+                        <span className="ml-2 text-xs font-normal text-[var(--md-sys-color-on-surface-variant)]">
+                          （{user.idDocumentType}）
+                        </span>
+                      )}
+                    </h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleReOcr}
+                        disabled={reOcrLoading}
+                        className="text-xs px-3 py-1.5 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {reOcrLoading ? (
+                          <><LoadingSpinner size="sm" />再読み取り中...</>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            再読み取り
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowReportForm(v => !v)
+                          if (!showReportForm) setReportText(user.idOcrIssueReport ?? '')
+                        }}
+                        className="text-xs px-3 py-1.5 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                      >
+                        {showReportForm ? 'キャンセル' : '誤りを報告'}
+                      </button>
+                    </div>
+                  </div>
 
-              {user.idDocumentPath ? (
-                <MessageBanner severity="success">
-                  <p className="font-medium">身分証明書が提出されています</p>
-                  <p className="text-xs mt-0.5 opacity-80">新しいファイルをアップロードすると更新されます</p>
-                </MessageBanner>
-              ) : (
-                <MessageBanner severity="warning">
-                  <p className="font-medium">身分証明書が未提出です</p>
-                  <p className="text-xs mt-0.5 opacity-80">サービス開始前に提出が必要です</p>
-                </MessageBanner>
+                  {/* OCRデータ表示 */}
+                  {(user.idName || user.idBirthDate || user.idAddress || user.idLicenseNumber || user.idExpiryDate) ? (
+                    <dl className="space-y-2.5 mb-4">
+                      {[
+                        { label: '氏名（証明書）', value: user.idName },
+                        { label: '生年月日',       value: user.idBirthDate },
+                        { label: '住所（証明書）', value: user.idAddress },
+                        { label: '証明書番号',     value: user.idLicenseNumber },
+                        { label: '有効期限',       value: user.idExpiryDate },
+                      ].filter(item => item.value).map(item => (
+                        <div key={item.label} className="flex gap-3">
+                          <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 pt-0.5">{item.label}</dt>
+                          <dd className="text-sm text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <div className="flex items-center gap-2 mb-4 py-2 text-[var(--md-sys-color-on-surface-variant)]">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <p className="text-sm">自動読み取りデータがありません。「再読み取り」をお試しください。</p>
+                    </div>
+                  )}
+
+                  {/* 誤り報告フォーム */}
+                  {showReportForm && (
+                    <form onSubmit={handleSubmitIssueReport} className="border-t border-[var(--md-sys-color-outline-variant)] pt-4 mt-2 space-y-3">
+                      <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)]">
+                        読み取り内容の誤りをご報告ください（担当スタッフが確認します）
+                      </p>
+                      <textarea
+                        value={reportText}
+                        onChange={e => setReportText(e.target.value)}
+                        rows={3}
+                        required
+                        placeholder="例：生年月日が間違っています。正しくは1985年3月15日です。"
+                        className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          disabled={savingReport || !reportText.trim()}
+                          className="text-sm px-4 py-2 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
+                        >
+                          {savingReport ? '送信中...' : '報告を送信'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* 既存の報告内容（フォーム非表示時） */}
+                  {user.idOcrIssueReport && !showReportForm && (
+                    <div className="border-t border-[var(--md-sys-color-outline-variant)] pt-3 mt-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <svg className="w-3.5 h-3.5 text-[var(--md-sys-color-error,#B3261E)]" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs font-medium text-[var(--md-sys-color-error,#B3261E)]">誤り報告済み（スタッフ確認待ち）</span>
+                      </div>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap pl-5">{user.idOcrIssueReport}</p>
+                    </div>
+                  )}
+                </Card>
               )}
-            </Card>
+
+              {/* アップロードセクション */}
+              <Card variant="elevated" padding="md">
+                <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
+                  {user.idDocumentPath ? '身分証明書を再アップロード' : '身分証明書のアップロード'}
+                </h2>
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5 leading-relaxed">
+                  運転免許証、マイナンバーカード、パスポートなどをアップロードしてください。<br />
+                  対応形式：JPEG、PNG、WebP、PDF（最大10MB）
+                </p>
+
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="
+                    border-2 border-dashed border-[var(--md-sys-color-outline-variant)]
+                    rounded-[var(--md-sys-shape-medium)] p-10 text-center cursor-pointer
+                    hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)]
+                    transition-colors mb-5
+                  "
+                >
+                  <div className="w-14 h-14 bg-[var(--md-sys-color-surface-container-high)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-7 h-7 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                    クリックしてファイルを選択
+                  </p>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                    アップロードすると自動で情報を読み取ります
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={handleUploadIdDocument}
+                    className="hidden"
+                  />
+                </div>
+
+                {user.idDocumentPath ? (
+                  <MessageBanner severity="success">
+                    <p className="font-medium">身分証明書が提出されています</p>
+                    <p className="text-xs mt-0.5 opacity-80">新しいファイルをアップロードすると更新・再読み取りされます</p>
+                  </MessageBanner>
+                ) : (
+                  <MessageBanner severity="warning">
+                    <p className="font-medium">身分証明書が未提出です</p>
+                    <p className="text-xs mt-0.5 opacity-80">サービス開始前に提出が必要です</p>
+                  </MessageBanner>
+                )}
+              </Card>
+            </div>
           )}
 
           {/* ─── Visit History tab ─── */}

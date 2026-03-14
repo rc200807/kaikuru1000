@@ -8,12 +8,13 @@ import { z } from 'zod'
 const MIN_PASSWORD_LENGTH = 8
 
 const updateUserSchema = z.object({
-  name:            z.string().min(1).max(100).optional(),
-  furigana:        z.string().min(1).max(100).optional(),
-  phone:           z.string().min(1).max(20).optional(),
-  address:         z.string().min(1).max(200).optional(),
-  currentPassword: z.string().optional(),
-  newPassword:     z.string().min(MIN_PASSWORD_LENGTH, `新しいパスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional(),
+  name:             z.string().min(1).max(100).optional(),
+  furigana:         z.string().min(1).max(100).optional(),
+  phone:            z.string().min(1).max(20).optional(),
+  address:          z.string().min(1).max(200).optional(),
+  currentPassword:  z.string().optional(),
+  newPassword:      z.string().min(MIN_PASSWORD_LENGTH, `新しいパスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional(),
+  idOcrIssueReport: z.string().max(1000).nullable().optional(), // 顧客によるOCR誤り報告
 })
 
 export async function GET(
@@ -73,7 +74,7 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, furigana, phone, address, currentPassword, newPassword } = parsed.data
+  const { name, furigana, phone, address, currentPassword, newPassword, idOcrIssueReport } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -83,6 +84,8 @@ export async function PATCH(
   if (furigana) updateData.furigana = furigana
   if (phone) updateData.phone = phone
   if (address) updateData.address = address
+  // OCR誤り報告（null は削除、文字列は更新）
+  if (idOcrIssueReport !== undefined) updateData.idOcrIssueReport = idOcrIssueReport
 
   // パスワード変更
   if (newPassword && currentPassword) {

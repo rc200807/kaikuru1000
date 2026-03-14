@@ -111,7 +111,8 @@ export async function POST(
     await prisma.user.update({
       where: { id },
       data: {
-        idDocumentPath: fileUrl,
+        idDocumentPath:   fileUrl,
+        idOcrIssueReport: null, // 再アップロード時は誤り報告をリセット
         // OCR成功時のみ更新（null なら既存値を上書きしない）
         ...(ocrResult && {
           idDocumentType:  ocrResult.idDocumentType,

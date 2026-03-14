@@ -38,6 +38,7 @@ model User {
   idAddress       String?   @db.Text  // 身分証記載住所
   idLicenseNumber String?             // 免許番号・旅券番号など
   idExpiryDate    String?             // 有効期限（YYYY-MM-DD または テキスト）
+  idOcrIssueReport String?  @db.Text  // 顧客によるOCR誤り報告
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
   isTestData     Boolean   @default(false)

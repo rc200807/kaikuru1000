@@ -27,6 +27,7 @@ export async function GET(
       // 身分証OCR抽出フィールド
       idDocumentType: true, idName: true, idBirthDate: true,
       idAddress: true, idLicenseNumber: true, idExpiryDate: true,
+      idOcrIssueReport: true, // 顧客からの誤り報告
       visitSchedules: {
         where: { visitDate: { gte: new Date() }, status: 'scheduled' },
         orderBy: { visitDate: 'asc' },

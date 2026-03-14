@@ -1750,18 +1750,29 @@ function ShipmentCard({
             </div>
           )}
         </div>
-        {shipment.status === 'registered' && (
-          <Button
-            size="sm"
-            variant="tonal"
+      </div>
+
+      {shipment.status === 'registered' && (
+        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+            段ボールを発送したら、店舗へ報告してください
+          </p>
+          <button
             onClick={() => onMarkShipped(shipment.id)}
             disabled={updating}
-            loading={updating}
+            className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            発送しました
-          </Button>
-        )}
-      </div>
+            {updating ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M10 12v4m4-4v4" />
+              </svg>
+            )}
+            {updating ? '更新中...' : '発送完了を報告する'}
+          </button>
+        </div>
+      )}
 
       {shipment.imageUrls.length > 0 && (
         <div className="mt-3">

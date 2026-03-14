@@ -35,6 +35,14 @@ type UserData = {
   licenseKey: { key: string }
   store: { name: string; phone: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
+  // 顧客タイプ
+  customerType: string  // "visit" | "delivery"
+  // 振込先口座情報
+  bankName:      string | null
+  branchName:    string | null
+  accountType:   string | null
+  accountNumber: string | null
+  accountHolder: string | null
 }
 
 type VisitRecord = {
@@ -62,6 +70,18 @@ type PurchaseMemo = {
   updatedAt: string
 }
 
+type DeliveryShipment = {
+  id: string
+  shipmentNumber: string
+  shipmentMonth: string
+  description: string | null
+  imageUrls: string[]
+  purchaseAmount: number | null
+  status: string  // registered | shipped | received | appraised
+  storeNote: string | null
+  createdAt: string
+}
+
 export default function MyPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -72,9 +92,16 @@ export default function MyPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const memoImageInputRef = useRef<HTMLInputElement>(null)
+  const shipmentImageInputRef = useRef<HTMLInputElement>(null)
 
   const [editForm, setEditForm] = useState({ name: '', furigana: '', phone: '', address: '' })
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+
+  // 振込先口座
+  const [bankForm, setBankForm] = useState({
+    bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '',
+  })
+  const [savingBank, setSavingBank] = useState(false)
 
   // 訪問履歴
   const [visits, setVisits] = useState<VisitRecord[]>([])
@@ -94,6 +121,17 @@ export default function MyPage() {
   const [memoImages, setMemoImages] = useState<string[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
   const [submittingMemo, setSubmittingMemo] = useState(false)
+
+  // 宅配送付履歴
+  const [shipments, setShipments] = useState<DeliveryShipment[]>([])
+  const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
+  const [shipmentsLoading, setShipmentsLoading] = useState(false)
+  const [showShipmentForm, setShowShipmentForm] = useState(false)
+  const [shipmentForm, setShipmentForm] = useState({ description: '' })
+  const [shipmentImages, setShipmentImages] = useState<string[]>([])
+  const [uploadingShipmentImage, setUploadingShipmentImage] = useState(false)
+  const [submittingShipment, setSubmittingShipment] = useState(false)
+  const [updatingShipmentId, setUpdatingShipmentId] = useState<string | null>(null)
 
   // 身分証OCR関連
   const [uploadingDoc, setUploadingDoc] = useState(false)
@@ -123,6 +161,13 @@ export default function MyPage() {
           if (!data || data.error) { setLoading(false); return }
           setUser(data)
           setEditForm({ name: data.name, furigana: data.furigana, phone: data.phone, address: data.address })
+          setBankForm({
+            bankName:      data.bankName      ?? '',
+            branchName:    data.branchName    ?? '',
+            accountType:   data.accountType   ?? '',
+            accountNumber: data.accountNumber ?? '',
+            accountHolder: data.accountHolder ?? '',
+          })
           setLoading(false)
         })
         .catch(() => setLoading(false))
@@ -138,6 +183,16 @@ export default function MyPage() {
         .catch(() => setStatsLoaded(true))
     }
   }, [activeTab, statsLoaded, status])
+
+  // 宅配顧客: ダッシュボード表示時にも送付履歴をロード（今月ステータス表示用）
+  useEffect(() => {
+    if (activeTab === 'dashboard' && !shipmentsLoaded && status === 'authenticated' && user?.customerType === 'delivery') {
+      fetch('/api/delivery-shipments')
+        .then(r => r.json())
+        .then(data => { setShipments(Array.isArray(data) ? data : []); setShipmentsLoaded(true) })
+        .catch(() => setShipmentsLoaded(true))
+    }
+  }, [activeTab, shipmentsLoaded, status, user?.customerType])
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault()
@@ -356,6 +411,95 @@ export default function MyPage() {
     }
   }
 
+  // 口座情報保存
+  async function handleSaveBank(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingBank(true)
+    setMessage(null)
+    const userId = (session?.user as any).id
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bankName:      bankForm.bankName      || null,
+        branchName:    bankForm.branchName    || null,
+        accountType:   bankForm.accountType   || null,
+        accountNumber: bankForm.accountNumber || null,
+        accountHolder: bankForm.accountHolder || null,
+      }),
+    })
+    setSavingBank(false)
+    if (res.ok) {
+      setUser(prev => prev ? { ...prev, ...bankForm } : null)
+      setMessage({ type: 'success', text: '口座情報を保存しました' })
+    } else {
+      setMessage({ type: 'error', text: '口座情報の保存に失敗しました' })
+    }
+  }
+
+  // 宅配送付画像アップロード
+  async function handleShipmentImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingShipmentImage(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: formData })
+    if (res.ok) {
+      const data = await res.json()
+      setShipmentImages(prev => [...prev, data.url])
+    } else {
+      const d = await res.json()
+      setMessage({ type: 'error', text: d.error || '画像のアップロードに失敗しました' })
+    }
+    setUploadingShipmentImage(false)
+    e.target.value = ''
+  }
+
+  // 今月の送付登録
+  async function handleSubmitShipment(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmittingShipment(true)
+    const res = await fetch('/api/delivery-shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: shipmentForm.description || undefined,
+        imageUrls: shipmentImages,
+      }),
+    })
+    setSubmittingShipment(false)
+    if (res.ok) {
+      const created = await res.json()
+      setShipments(prev => [created, ...prev])
+      setShipmentForm({ description: '' })
+      setShipmentImages([])
+      setShowShipmentForm(false)
+      setMessage({ type: 'success', text: `送付を登録しました。宅配買取番号: ${created.shipmentNumber}` })
+    } else {
+      const d = await res.json()
+      setMessage({ type: 'error', text: d.error || '送付登録に失敗しました' })
+    }
+  }
+
+  // 送付「発送しました」
+  async function handleMarkShipped(id: string) {
+    setUpdatingShipmentId(id)
+    const res = await fetch(`/api/delivery-shipments/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'shipped' }),
+    })
+    setUpdatingShipmentId(null)
+    if (res.ok) {
+      const updated = await res.json()
+      setShipments(prev => prev.map(s => s.id === id ? updated : s))
+      setMessage({ type: 'success', text: '発送済みに更新しました' })
+    } else {
+      setMessage({ type: 'error', text: '更新に失敗しました' })
+    }
+  }
+
   // メモ削除
   async function handleDeleteMemo(id: string) {
     if (!confirm('このメモを削除しますか？')) return
@@ -373,14 +517,26 @@ export default function MyPage() {
 
   const nextVisit = user.visitSchedules?.[0]
 
-  const tabs = [
-    { key: 'dashboard', label: 'ダッシュボード' },
-    { key: 'memos', label: '買取相談メモ' },
-    { key: 'history', label: '訪問履歴' },
-    { key: 'profile', label: 'プロフィール' },
-    { key: 'password', label: 'パスワード' },
-    { key: 'id-document', label: '身分証明書' },
-  ]
+  const isDelivery = user.customerType === 'delivery'
+
+  const tabs = isDelivery
+    ? [
+        { key: 'dashboard',   label: 'ダッシュボード' },
+        { key: 'shipments',   label: '送付履歴' },
+        { key: 'profile',     label: 'プロフィール' },
+        { key: 'password',    label: 'パスワード' },
+        { key: 'id-document', label: '身分証明書' },
+        { key: 'bank-account', label: '口座情報' },
+      ]
+    : [
+        { key: 'dashboard',   label: 'ダッシュボード' },
+        { key: 'memos',       label: '買取相談メモ' },
+        { key: 'history',     label: '訪問履歴' },
+        { key: 'profile',     label: 'プロフィール' },
+        { key: 'password',    label: 'パスワード' },
+        { key: 'id-document', label: '身分証明書' },
+        { key: 'bank-account', label: '口座情報' },
+      ]
 
   function handleTabChange(tabKey: string) {
     setActiveTab(tabKey)
@@ -409,6 +565,17 @@ export default function MyPage() {
           setMemosLoading(false)
         })
         .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
+    }
+    if (tabKey === 'shipments' && !shipmentsLoaded) {
+      setShipmentsLoading(true)
+      fetch('/api/delivery-shipments')
+        .then(r => r.json())
+        .then(data => {
+          setShipments(Array.isArray(data) ? data : [])
+          setShipmentsLoaded(true)
+          setShipmentsLoading(false)
+        })
+        .catch(() => { setShipmentsLoaded(true); setShipmentsLoading(false) })
     }
   }
 
@@ -468,29 +635,56 @@ export default function MyPage() {
           {/* ─── Dashboard tab ─── */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Next visit card */}
-              <div
-                className={`
-                  rounded-[var(--md-sys-shape-medium)] p-6 text-white
-                  ${nextVisit ? 'bg-[var(--portal-primary,#B91C1C)]' : 'bg-[var(--md-sys-color-outline)]'}
-                `}
-              >
-                <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">
-                  次回訪問予定日
-                </p>
-                {nextVisit ? (
-                  <>
-                    <p className="text-4xl font-bold mb-1">
-                      {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
-                    </p>
-                    {nextVisit.note && (
-                      <p className="text-sm opacity-75 mt-1">{nextVisit.note}</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-xl font-semibold">訪問日が未定です</p>
-                )}
-              </div>
+              {/* Next visit card / Delivery shipment status card */}
+              {isDelivery ? (
+                (() => {
+                  const now = new Date()
+                  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                  const thisMonthShipment = shipments.find(s => s.shipmentMonth === currentMonth)
+                  const shipStatusLabel: Record<string, string> = {
+                    registered: '登録済み', shipped: '発送済み', received: '受取済み', appraised: '査定完了',
+                  }
+                  return (
+                    <div className={`rounded-[var(--md-sys-shape-medium)] p-6 text-white ${thisMonthShipment ? 'bg-[var(--portal-primary,#B91C1C)]' : 'bg-[var(--md-sys-color-outline)]'}`}>
+                      <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">今月の送付状況</p>
+                      {thisMonthShipment ? (
+                        <>
+                          <p className="text-3xl font-bold mb-1">{shipStatusLabel[thisMonthShipment.status] ?? thisMonthShipment.status}</p>
+                          <p className="text-sm opacity-75">{thisMonthShipment.shipmentNumber}</p>
+                          {thisMonthShipment.purchaseAmount !== null && (
+                            <p className="text-sm opacity-75 mt-1">査定額: ¥{thisMonthShipment.purchaseAmount.toLocaleString()}</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xl font-semibold">今月の送付は未登録です</p>
+                      )}
+                    </div>
+                  )
+                })()
+              ) : (
+                <div
+                  className={`
+                    rounded-[var(--md-sys-shape-medium)] p-6 text-white
+                    ${nextVisit ? 'bg-[var(--portal-primary,#B91C1C)]' : 'bg-[var(--md-sys-color-outline)]'}
+                  `}
+                >
+                  <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">
+                    次回訪問予定日
+                  </p>
+                  {nextVisit ? (
+                    <>
+                      <p className="text-4xl font-bold mb-1">
+                        {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
+                      </p>
+                      {nextVisit.note && (
+                        <p className="text-sm opacity-75 mt-1">{nextVisit.note}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xl font-semibold">訪問日が未定です</p>
+                  )}
+                </div>
+              )}
 
               {/* Stats cards */}
               <div className="grid grid-cols-2 gap-4">
@@ -775,6 +969,122 @@ export default function MyPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── 送付履歴タブ（宅配顧客のみ） ─── */}
+          {activeTab === 'shipments' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">送付履歴</h2>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">月ごとに段ボールを送付してください（月1回）</p>
+                </div>
+                {(() => {
+                  const now = new Date()
+                  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                  const alreadyRegistered = shipments.some(s => s.shipmentMonth === currentMonth)
+                  return !alreadyRegistered && (
+                    <Button size="sm" onClick={() => { setShowShipmentForm(v => !v); setMessage(null) }}>
+                      {showShipmentForm ? 'キャンセル' : '今月の送付を登録'}
+                    </Button>
+                  )
+                })()}
+              </div>
+
+              {/* 送付登録フォーム */}
+              {showShipmentForm && (
+                <Card variant="elevated" padding="md">
+                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">今月の送付を登録</h3>
+                  <form onSubmit={handleSubmitShipment} className="space-y-4">
+                    <TextField
+                      label="内容メモ（任意）"
+                      value={shipmentForm.description}
+                      onChange={v => setShipmentForm({ description: v })}
+                      placeholder="例：ブランドバッグ2点、時計1点など"
+                      rows={3}
+                    />
+                    {/* 画像アップロード */}
+                    <div>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                        写真（JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚）
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {shipmentImages.map((url, i) => (
+                          <div key={i} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                            <button
+                              type="button"
+                              onClick={() => setShipmentImages(prev => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                            >×</button>
+                          </div>
+                        ))}
+                        {shipmentImages.length < 5 && (
+                          <button
+                            type="button"
+                            onClick={() => shipmentImageInputRef.current?.click()}
+                            disabled={uploadingShipmentImage}
+                            className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
+                          >
+                            {uploadingShipmentImage ? <LoadingSpinner size="sm" /> : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span className="text-xs mt-1">追加</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                        <input
+                          ref={shipmentImageInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/heic"
+                          onChange={handleShipmentImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <Button type="submit" disabled={submittingShipment} loading={submittingShipment}>
+                        {submittingShipment ? '登録中...' : '登録する'}
+                      </Button>
+                      <Button type="button" variant="tonal" onClick={() => { setShowShipmentForm(false); setShipmentForm({ description: '' }); setShipmentImages([]) }}>
+                        キャンセル
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+              )}
+
+              {/* 送付一覧 */}
+              {shipmentsLoading ? (
+                <div className="py-8">
+                  <LoadingSpinner size="md" label="読み込み中..." className="justify-center" />
+                </div>
+              ) : shipments.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  }
+                  title="送付履歴がありません"
+                  description="今月の送付を登録してから段ボールをお送りください"
+                />
+              ) : (
+                <div className="space-y-3">
+                  {shipments.map(s => (
+                    <ShipmentCard
+                      key={s.id}
+                      shipment={s}
+                      updating={updatingShipmentId === s.id}
+                      onMarkShipped={handleMarkShipped}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -1093,6 +1403,60 @@ export default function MyPage() {
             </div>
           )}
 
+          {/* ─── 口座情報タブ ─── */}
+          {activeTab === 'bank-account' && (
+            <Card variant="elevated" padding="md">
+              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-2">振込先口座情報</h2>
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-6">
+                買取金額のお振込み先をご登録ください。
+              </p>
+              <form onSubmit={handleSaveBank} className="space-y-5 max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <TextField
+                    label="銀行名"
+                    value={bankForm.bankName}
+                    onChange={v => setBankForm(f => ({ ...f, bankName: v }))}
+                    placeholder="例：〇〇銀行"
+                  />
+                  <TextField
+                    label="支店名"
+                    value={bankForm.branchName}
+                    onChange={v => setBankForm(f => ({ ...f, branchName: v }))}
+                    placeholder="例：〇〇支店"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">口座種別</label>
+                  <select
+                    value={bankForm.accountType}
+                    onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))}
+                    className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2.5 bg-[var(--md-sys-color-surface)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
+                  >
+                    <option value="">選択してください</option>
+                    <option value="普通">普通</option>
+                    <option value="当座">当座</option>
+                  </select>
+                </div>
+                <TextField
+                  label="口座番号"
+                  value={bankForm.accountNumber}
+                  onChange={v => setBankForm(f => ({ ...f, accountNumber: v }))}
+                  placeholder="例：1234567"
+                  type="text"
+                />
+                <TextField
+                  label="口座名義"
+                  value={bankForm.accountHolder}
+                  onChange={v => setBankForm(f => ({ ...f, accountHolder: v }))}
+                  placeholder="例：ヤマダ タロウ"
+                />
+                <Button type="submit" disabled={savingBank} loading={savingBank} size="lg">
+                  {savingBank ? '保存中...' : '保存する'}
+                </Button>
+              </form>
+            </Card>
+          )}
+
           {/* ─── Visit History tab ─── */}
           {activeTab === 'history' && (
             <Card variant="elevated" padding="md">
@@ -1327,6 +1691,103 @@ const MEMO_STATUS_STYLE: Record<string, string> = {
   pending: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
   reviewed: 'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
   completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
+}
+
+const SHIPMENT_STATUS_LABEL: Record<string, string> = {
+  registered: '登録済み',
+  shipped:    '発送済み',
+  received:   '受取済み',
+  appraised:  '査定完了',
+}
+
+const SHIPMENT_STATUS_STYLE: Record<string, string> = {
+  registered: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
+  shipped:    'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
+  received:   'bg-blue-100 text-blue-700',
+  appraised:  'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
+}
+
+function ShipmentCard({
+  shipment,
+  updating,
+  onMarkShipped,
+}: {
+  shipment: DeliveryShipment
+  updating: boolean
+  onMarkShipped: (id: string) => void
+}) {
+  const [showImages, setShowImages] = useState(false)
+
+  return (
+    <Card variant="outlined" padding="md">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">
+              {shipment.shipmentNumber}
+            </span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SHIPMENT_STATUS_STYLE[shipment.status] ?? ''}`}>
+              {SHIPMENT_STATUS_LABEL[shipment.status] ?? shipment.status}
+            </span>
+          </div>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+            {shipment.shipmentMonth.replace('-', '年')}月
+          </p>
+          {shipment.description && (
+            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">
+              {shipment.description}
+            </p>
+          )}
+          {shipment.purchaseAmount !== null && (
+            <p className="text-sm font-semibold text-[var(--portal-primary,#B91C1C)] mt-1">
+              査定額: ¥{shipment.purchaseAmount.toLocaleString()}
+            </p>
+          )}
+          {shipment.storeNote && (
+            <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
+              <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">店舗からのメモ</p>
+              <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{shipment.storeNote}</p>
+            </div>
+          )}
+        </div>
+        {shipment.status === 'registered' && (
+          <Button
+            size="sm"
+            variant="tonal"
+            onClick={() => onMarkShipped(shipment.id)}
+            disabled={updating}
+            loading={updating}
+          >
+            発送しました
+          </Button>
+        )}
+      </div>
+
+      {shipment.imageUrls.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowImages(v => !v)}
+            className="text-xs text-[var(--portal-primary)] hover:underline"
+          >
+            {showImages ? '画像を非表示' : `画像を見る（${shipment.imageUrls.length}枚）`}
+          </button>
+          {showImages && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {shipment.imageUrls.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-24 h-24 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity"
+                  />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
 }
 
 function MemoCard({

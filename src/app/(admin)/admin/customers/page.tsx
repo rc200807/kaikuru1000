@@ -31,6 +31,14 @@ type User = {
   visitSchedules: Array<{ visitDate: string; status: string }>
   isTestData?: boolean
   isActive: boolean
+  // 顧客タイプ
+  customerType: string  // "visit" | "delivery"
+  // 振込先口座情報
+  bankName:      string | null
+  branchName:    string | null
+  accountType:   string | null
+  accountNumber: string | null
+  accountHolder: string | null
 }
 
 type Store = {
@@ -79,6 +87,9 @@ export default function AdminCustomersPage() {
   // 店舗割り当てモーダル
   const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null)
   const [selectedStore, setSelectedStore] = useState('')
+
+  // 顧客タイプ変更
+  const [changingType, setChangingType] = useState<string | null>(null) // userId
 
   // 顧客詳細モーダル
   const [detailUser, setDetailUser] = useState<User | null>(null)
@@ -204,6 +215,23 @@ export default function AdminCustomersPage() {
     }
   }
 
+  async function handleChangeCustomerType(userId: string, newType: string) {
+    setChangingType(userId)
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerType: newType }),
+    })
+    setChangingType(null)
+    if (res.ok) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, customerType: newType } : u))
+      setDetailUser(prev => prev && prev.id === userId ? { ...prev, customerType: newType } : prev)
+      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '宅配買取' : '訪問買取'}」に変更しました` })
+    } else {
+      setMessage({ type: 'error', text: 'タイプ変更に失敗しました' })
+    }
+  }
+
   function closeDetailModal() {
     setDetailUser(null)
     setDetailSchedules([])
@@ -320,10 +348,23 @@ export default function AdminCustomersPage() {
       ),
     },
     {
+      key: 'customerType',
+      header: 'タイプ',
+      hideOnMobile: true,
+      render: (user) => user.customerType === 'delivery' ? (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">宅配</span>
+      ) : (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">訪問</span>
+      ),
+    },
+    {
       key: 'nextVisit',
       header: '次回訪問',
       hideOnMobile: true,
       render: (user) => {
+        if (user.customerType === 'delivery') {
+          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">宅配</span>
+        }
         const nextVisit = user.visitSchedules?.[0]
         return nextVisit ? (
           <span className="text-sm text-[var(--status-scheduled-text)]">
@@ -502,30 +543,83 @@ export default function AdminCustomersPage() {
 
             {/* 基本情報 */}
             {detailTab === 'info' && (
-              <dl className="space-y-3">
-                {[
-                  { label: 'メール', value: detailUser.email },
-                  { label: '電話番号', value: detailUser.phone },
-                  { label: '訪問先住所', value: detailUser.address },
-                  { label: 'ライセンスキー', value: detailUser.licenseKey.key, mono: true },
-                  { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
-                  { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
-                ].map(item => (
-                  <div key={item.label} className="flex gap-4">
-                    <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                    <dd className={`text-sm text-[var(--md-sys-color-on-surface)] ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
+              <div className="space-y-4">
+                <dl className="space-y-3">
+                  {[
+                    { label: 'メール', value: detailUser.email },
+                    { label: '電話番号', value: detailUser.phone },
+                    { label: '訪問先住所', value: detailUser.address },
+                    { label: 'ライセンスキー', value: detailUser.licenseKey.key, mono: true },
+                    { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
+                    { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
+                  ].map(item => (
+                    <div key={item.label} className="flex gap-4">
+                      <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                      <dd className={`text-sm text-[var(--md-sys-color-on-surface)] ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
+                    </div>
+                  ))}
+                  <div className="flex gap-4">
+                    <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
+                    <dd className="text-sm">
+                      {detailUser.idDocumentPath
+                        ? <a href={detailUser.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-[var(--portal-primary,#374151)] underline">確認する</a>
+                        : <span className="text-[var(--status-pending-text)]">未提出</span>
+                      }
+                    </dd>
                   </div>
-                ))}
-                <div className="flex gap-4">
-                  <dt className="w-32 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
-                  <dd className="text-sm">
-                    {detailUser.idDocumentPath
-                      ? <a href={detailUser.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-[var(--portal-primary,#374151)] underline">確認する</a>
-                      : <span className="text-[var(--status-pending-text)]">未提出</span>
-                    }
-                  </dd>
+                </dl>
+
+                {/* 顧客タイプ変更 */}
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">顧客タイプ</span>
+                  </div>
+                  <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                      {detailUser.customerType === 'delivery' ? '宅配買取' : '訪問買取'}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outlined"
+                      disabled={changingType === detailUser.id}
+                      loading={changingType === detailUser.id}
+                      onClick={() => handleChangeCustomerType(
+                        detailUser.id,
+                        detailUser.customerType === 'delivery' ? 'visit' : 'delivery'
+                      )}
+                    >
+                      {detailUser.customerType === 'delivery' ? '訪問買取に変更' : '宅配買取に変更'}
+                    </Button>
+                  </div>
                 </div>
-              </dl>
+
+                {/* 振込先口座情報（読み取り専用） */}
+                {(detailUser.bankName || detailUser.bankName === null) && (
+                  <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                    <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                      <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">振込先口座情報</span>
+                    </div>
+                    {detailUser.bankName ? (
+                      <dl className="px-4 py-3 space-y-2">
+                        {[
+                          { label: '銀行名',   value: detailUser.bankName },
+                          { label: '支店名',   value: detailUser.branchName },
+                          { label: '口座種別', value: detailUser.accountType },
+                          { label: '口座番号', value: detailUser.accountNumber },
+                          { label: '口座名義', value: detailUser.accountHolder },
+                        ].filter(item => item.value).map(item => (
+                          <div key={item.label} className="flex gap-4">
+                            <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                            <dd className="text-xs text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="px-4 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">未登録</p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* スケジュール追加 */}

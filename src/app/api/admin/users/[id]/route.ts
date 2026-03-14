@@ -28,6 +28,14 @@ export async function PATCH(
     return NextResponse.json({ id: updated.id, isActive: updated.isActive })
   }
 
+  if (body.customerType === 'visit' || body.customerType === 'delivery') {
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { customerType: body.customerType },
+    })
+    return NextResponse.json({ id: updated.id, customerType: updated.customerType })
+  }
+
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })
 }
 

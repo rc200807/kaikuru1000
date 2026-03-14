@@ -38,6 +38,26 @@ type Customer = {
   idOcrIssueReport: string | null
   createdAt: string
   visitSchedules: Array<{ visitDate: string; status: string }>
+  // 顧客タイプ
+  customerType: string  // "visit" | "delivery"
+  // 振込先口座情報
+  bankName:      string | null
+  branchName:    string | null
+  accountType:   string | null
+  accountNumber: string | null
+  accountHolder: string | null
+}
+
+type DeliveryShipment = {
+  id: string
+  shipmentNumber: string
+  shipmentMonth: string
+  description: string | null
+  imageUrls: string[]
+  purchaseAmount: number | null
+  status: string
+  storeNote: string | null
+  createdAt: string
 }
 
 type VisitSchedule = {
@@ -80,7 +100,14 @@ const STATUS_OPTIONS = [
   { value: 'cancelled',   label: 'キャンセル' },
 ]
 
-type ModalTab = 'info' | 'add' | 'history' | 'memos'
+const SHIPMENT_STATUS_OPTIONS = [
+  { value: 'registered', label: '登録済み' },
+  { value: 'shipped',    label: '発送済み' },
+  { value: 'received',   label: '受取済み' },
+  { value: 'appraised',  label: '査定完了' },
+]
+
+type ModalTab = 'info' | 'add' | 'history' | 'memos' | 'shipments'
 
 export default function StoreCustomersPage() {
   const { data: session, status } = useSession()
@@ -106,6 +133,13 @@ export default function StoreCustomersPage() {
   const [memosLoaded, setMemosLoaded] = useState(false)
   const [memoStoreNotes, setMemoStoreNotes] = useState<Record<string, string>>({})
   const [savingMemoNote, setSavingMemoNote] = useState<string | null>(null)
+
+  // 宅配送付履歴（店舗側）
+  const [shipmentsList, setShipmentsList] = useState<DeliveryShipment[]>([])
+  const [shipmentsLoading, setShipmentsLoading] = useState(false)
+  const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
+  const [shipmentEdits, setShipmentEdits] = useState<Record<string, { purchaseAmount: string; storeNote: string; status: string }>>({})
+  const [savingShipment, setSavingShipment] = useState<string | null>(null)
 
   // 身分証削除
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(false)
@@ -140,6 +174,9 @@ export default function StoreCustomersPage() {
     setMemosList([])
     setMemosLoaded(false)
     setMemoStoreNotes({})
+    setShipmentsList([])
+    setShipmentsLoaded(false)
+    setShipmentEdits({})
     fetch(`/api/visit-schedules?userId=${selected.id}`)
       .then(r => r.json())
       .then(data => {
@@ -204,6 +241,27 @@ export default function StoreCustomersPage() {
         })
         .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
     }
+    if (key === 'shipments' && !shipmentsLoaded && selected) {
+      setShipmentsLoading(true)
+      fetch(`/api/delivery-shipments?userId=${selected.id}`)
+        .then(r => r.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : []
+          setShipmentsList(list)
+          const edits: Record<string, { purchaseAmount: string; storeNote: string; status: string }> = {}
+          list.forEach((s: DeliveryShipment) => {
+            edits[s.id] = {
+              purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '',
+              storeNote: s.storeNote ?? '',
+              status: s.status,
+            }
+          })
+          setShipmentEdits(edits)
+          setShipmentsLoaded(true)
+          setShipmentsLoading(false)
+        })
+        .catch(() => { setShipmentsLoaded(true); setShipmentsLoading(false) })
+    }
   }
 
   async function handleMemoStatusChange(memoId: string, newStatus: string) {
@@ -238,6 +296,37 @@ export default function StoreCustomersPage() {
     })
     if (res.ok) {
       setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: newStatus } : s))
+    }
+  }
+
+  async function handleSaveShipment(shipmentId: string) {
+    setSavingShipment(shipmentId)
+    const edit = shipmentEdits[shipmentId]
+    const res = await fetch(`/api/delivery-shipments/${shipmentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: edit.status,
+        purchaseAmount: edit.purchaseAmount !== '' ? Number(edit.purchaseAmount) : null,
+        storeNote: edit.storeNote || null,
+      }),
+    })
+    setSavingShipment(null)
+    if (res.ok) {
+      const updated = await res.json()
+      setShipmentsList(prev => prev.map(s => s.id === shipmentId ? updated : s))
+      // editsも更新
+      setShipmentEdits(prev => ({
+        ...prev,
+        [shipmentId]: {
+          purchaseAmount: updated.purchaseAmount !== null ? String(updated.purchaseAmount) : '',
+          storeNote: updated.storeNote ?? '',
+          status: updated.status,
+        },
+      }))
+      setScheduleMsg({ type: 'success', text: '送付情報を更新しました' })
+    } else {
+      setScheduleMsg({ type: 'error', text: '更新に失敗しました' })
     }
   }
 
@@ -278,6 +367,9 @@ export default function StoreCustomersPage() {
     setMemosList([])
     setMemosLoaded(false)
     setMemoStoreNotes({})
+    setShipmentsList([])
+    setShipmentsLoaded(false)
+    setShipmentEdits({})
     setConfirmDeleteDoc(false)
     setDocMsg(null)
   }
@@ -328,9 +420,22 @@ export default function StoreCustomersPage() {
       ),
     },
     {
+      key: 'customerType',
+      header: 'タイプ',
+      hideOnMobile: true,
+      render: (c) => c.customerType === 'delivery' ? (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">宅配</span>
+      ) : (
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">訪問</span>
+      ),
+    },
+    {
       key: 'nextVisit',
       header: '次回訪問',
       render: (c) => {
+        if (c.customerType === 'delivery') {
+          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">宅配</span>
+        }
         const nextVisit = c.visitSchedules?.[0]
         return nextVisit ? (
           <span className="font-medium text-[var(--portal-primary)]">
@@ -362,12 +467,19 @@ export default function StoreCustomersPage() {
     },
   ]
 
-  const modalTabs = [
-    { key: 'info', label: '基本情報' },
-    { key: 'memos', label: memosList.length > 0 ? `買取メモ（${memosList.length}）` : '買取メモ' },
-    { key: 'add', label: 'スケジュール追加' },
-    { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
-  ]
+  const isDeliveryCustomer = selected?.customerType === 'delivery'
+
+  const modalTabs = isDeliveryCustomer
+    ? [
+        { key: 'info',      label: '基本情報' },
+        { key: 'shipments', label: shipmentsList.length > 0 ? `送付履歴（${shipmentsList.length}）` : '送付履歴' },
+      ]
+    : [
+        { key: 'info',    label: '基本情報' },
+        { key: 'memos',   label: memosList.length > 0 ? `買取メモ（${memosList.length}）` : '買取メモ' },
+        { key: 'add',     label: 'スケジュール追加' },
+        { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
+      ]
 
   return (
     <>
@@ -486,6 +598,29 @@ export default function StoreCustomersPage() {
                 </div>
               )}
 
+              {/* 口座情報（読み取り専用） */}
+              {(selected.bankName || selected.branchName || selected.accountNumber) && (
+                <div className="mt-4 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">振込先口座情報</span>
+                  </div>
+                  <dl className="px-4 py-3 space-y-2">
+                    {[
+                      { label: '銀行名',   value: selected.bankName },
+                      { label: '支店名',   value: selected.branchName },
+                      { label: '口座種別', value: selected.accountType },
+                      { label: '口座番号', value: selected.accountNumber },
+                      { label: '口座名義', value: selected.accountHolder },
+                    ].filter(item => item.value).map(item => (
+                      <div key={item.label} className="flex gap-4">
+                        <dt className="w-28 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                        <dd className="text-xs text-[var(--md-sys-color-on-surface)]">{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+
               {/* 身分証OCR抽出情報 */}
               {selected.idDocumentPath && (selected.idName || selected.idBirthDate || selected.idAddress || selected.idLicenseNumber || selected.idExpiryDate) && (
                 <div className="mt-4 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
@@ -527,6 +662,98 @@ export default function StoreCustomersPage() {
                 </div>
               )}
               </>
+            )}
+
+            {/* 送付履歴（宅配顧客のみ） */}
+            {modalTab === 'shipments' && (
+              <div>
+                {scheduleMsg && (
+                  <div className="mb-3">
+                    <MessageBanner severity={scheduleMsg.type} dismissible onDismiss={() => setScheduleMsg(null)}>
+                      {scheduleMsg.text}
+                    </MessageBanner>
+                  </div>
+                )}
+                {shipmentsLoading ? (
+                  <div className="flex justify-center py-8"><LoadingSpinner size="md" /></div>
+                ) : shipmentsList.length === 0 ? (
+                  <EmptyState title="送付履歴がありません" description="顧客が送付を登録すると表示されます" />
+                ) : (
+                  <div className="space-y-4">
+                    {shipmentsList.map(s => {
+                      const edit = shipmentEdits[s.id] ?? { purchaseAmount: '', storeNote: '', status: s.status }
+                      return (
+                        <div key={s.id} className="border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] p-4">
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <span className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">
+                              {s.shipmentNumber}
+                            </span>
+                            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                              {s.shipmentMonth.replace('-', '年')}月
+                            </span>
+                          </div>
+                          {s.description && (
+                            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2 whitespace-pre-wrap">{s.description}</p>
+                          )}
+                          {s.imageUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {s.imageUrls.map((url, i) => (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                  <img src={url} alt="" className="w-16 h-16 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                          {/* 編集フィールド */}
+                          <div className="space-y-2 mt-2">
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-20 flex-shrink-0">ステータス</label>
+                              <select
+                                value={edit.status}
+                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, status: e.target.value } }))}
+                                className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)]"
+                              >
+                                {SHIPMENT_STATUS_OPTIONS.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-20 flex-shrink-0">査定金額（円）</label>
+                              <input
+                                type="number"
+                                value={edit.purchaseAmount}
+                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, purchaseAmount: e.target.value } }))}
+                                placeholder="0"
+                                className="flex-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1 block">店舗メモ（顧客に表示）</label>
+                              <div className="flex gap-2">
+                                <textarea
+                                  value={edit.storeNote}
+                                  onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
+                                  rows={2}
+                                  placeholder="査定結果や連絡事項など..."
+                                  className="flex-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                                />
+                                <button
+                                  onClick={() => handleSaveShipment(s.id)}
+                                  disabled={savingShipment === s.id}
+                                  className="text-xs px-3 py-1 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50 self-end flex-shrink-0"
+                                >
+                                  {savingShipment === s.id ? '保存中' : '保存'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* 買取相談メモ */}

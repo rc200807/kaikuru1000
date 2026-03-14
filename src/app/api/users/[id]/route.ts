@@ -15,6 +15,12 @@ const updateUserSchema = z.object({
   currentPassword:  z.string().optional(),
   newPassword:      z.string().min(MIN_PASSWORD_LENGTH, `新しいパスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional(),
   idOcrIssueReport: z.string().max(1000).nullable().optional(), // 顧客によるOCR誤り報告
+  // 振込先口座情報
+  bankName:      z.string().max(50).nullable().optional(),
+  branchName:    z.string().max(50).nullable().optional(),
+  accountType:   z.enum(['普通', '当座']).nullable().optional(),
+  accountNumber: z.string().max(10).nullable().optional(),
+  accountHolder: z.string().max(100).nullable().optional(),
 })
 
 export async function GET(
@@ -74,7 +80,8 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, furigana, phone, address, currentPassword, newPassword, idOcrIssueReport } = parsed.data
+  const { name, furigana, phone, address, currentPassword, newPassword, idOcrIssueReport,
+          bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -86,6 +93,12 @@ export async function PATCH(
   if (address) updateData.address = address
   // OCR誤り報告（null は削除、文字列は更新）
   if (idOcrIssueReport !== undefined) updateData.idOcrIssueReport = idOcrIssueReport
+  // 振込先口座情報
+  if (bankName      !== undefined) updateData.bankName      = bankName
+  if (branchName    !== undefined) updateData.branchName    = branchName
+  if (accountType   !== undefined) updateData.accountType   = accountType
+  if (accountNumber !== undefined) updateData.accountNumber = accountNumber
+  if (accountHolder !== undefined) updateData.accountHolder = accountHolder
 
   // パスワード変更
   if (newPassword && currentPassword) {

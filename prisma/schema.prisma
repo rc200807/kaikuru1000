@@ -43,8 +43,17 @@ model User {
   store          Store?    @relation(fields: [storeId], references: [id])
   isTestData     Boolean   @default(false)
   isActive       Boolean   @default(true)
-  visitSchedules VisitSchedule[]
-  purchaseMemos  PurchaseMemo[]
+  // 顧客タイプ
+  customerType   String    @default("visit")  // "visit" | "delivery"
+  // 振込先口座情報
+  bankName       String?
+  branchName     String?
+  accountType    String?   // "普通" | "当座"
+  accountNumber  String?
+  accountHolder  String?
+  visitSchedules    VisitSchedule[]
+  purchaseMemos     PurchaseMemo[]
+  deliveryShipments DeliveryShipment[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -162,6 +171,25 @@ model PurchaseMemo {
   storeNote   String?  @db.Text           // 店舗からのコメント
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// 宅配買取送付履歴
+model DeliveryShipment {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shipmentNumber String   @unique  // "HD-YYYYMM-NNNN"
+  shipmentMonth  String            // "YYYY-MM"
+  description    String?  @db.Text
+  imageUrls      String   @default("[]") @db.Text
+  purchaseAmount Int?     // 査定金額（店舗が更新）
+  status         String   @default("registered") // registered|shipped|received|appraised
+  storeNote      String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([shipmentMonth])
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）

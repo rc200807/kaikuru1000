@@ -24,10 +24,15 @@ export async function GET(
       id: true, name: true, furigana: true,
       email: true, phone: true, address: true,
       idDocumentPath: true, createdAt: true,
+      // 顧客タイプ
+      customerType: true,
       // 身分証OCR抽出フィールド
       idDocumentType: true, idName: true, idBirthDate: true,
       idAddress: true, idLicenseNumber: true, idExpiryDate: true,
       idOcrIssueReport: true, // 顧客からの誤り報告
+      // 振込先口座情報
+      bankName: true, branchName: true, accountType: true,
+      accountNumber: true, accountHolder: true,
       visitSchedules: {
         where: { visitDate: { gte: new Date() }, status: 'scheduled' },
         orderBy: { visitDate: 'asc' },

@@ -37,6 +37,23 @@ type VisitRecord = {
   store: { id: string; name: string }
 }
 
+type Stats = {
+  totalPurchaseAmount: number
+  purchaseCount: number
+  monthlyStats: Array<{ year: number; month: number; amount: number }>
+}
+
+type PurchaseMemo = {
+  id: string
+  title: string
+  description: string | null
+  imageUrls: string[]
+  status: string
+  storeNote: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export default function MyPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -46,6 +63,7 @@ export default function MyPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const memoImageInputRef = useRef<HTMLInputElement>(null)
 
   const [editForm, setEditForm] = useState({ name: '', furigana: '', phone: '', address: '' })
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
@@ -54,6 +72,20 @@ export default function MyPage() {
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [visitsLoaded, setVisitsLoaded] = useState(false)
   const [visitsLoading, setVisitsLoading] = useState(false)
+
+  // ダッシュボード統計
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [statsLoaded, setStatsLoaded] = useState(false)
+
+  // 買取相談メモ
+  const [memos, setMemos] = useState<PurchaseMemo[]>([])
+  const [memosLoaded, setMemosLoaded] = useState(false)
+  const [memosLoading, setMemosLoading] = useState(false)
+  const [showMemoForm, setShowMemoForm] = useState(false)
+  const [memoForm, setMemoForm] = useState({ title: '', description: '' })
+  const [memoImages, setMemoImages] = useState<string[]>([])
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [submittingMemo, setSubmittingMemo] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -79,6 +111,16 @@ export default function MyPage() {
         .catch(() => setLoading(false))
     }
   }, [status, session])
+
+  // ダッシュボードタブ表示時に統計をロード
+  useEffect(() => {
+    if (activeTab === 'dashboard' && !statsLoaded && status === 'authenticated') {
+      fetch('/api/customer/stats')
+        .then(r => r.json())
+        .then(data => { setStats(data); setStatsLoaded(true) })
+        .catch(() => setStatsLoaded(true))
+    }
+  }, [activeTab, statsLoaded, status])
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault()
@@ -131,17 +173,14 @@ export default function MyPage() {
   async function handleUploadIdDocument(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
     const formData = new FormData()
     formData.append('file', file)
     const userId = (session?.user as any).id
-
     setMessage(null)
     const res = await fetch(`/api/users/${userId}/id-document`, {
       method: 'POST',
       body: formData,
     })
-
     if (res.ok) {
       const data = await res.json()
       setUser(prev => prev ? { ...prev, idDocumentPath: data.path } : null)
@@ -149,6 +188,61 @@ export default function MyPage() {
     } else {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || 'アップロードに失敗しました' })
+    }
+  }
+
+  // メモ画像アップロード
+  async function handleMemoImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImage(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/purchase-memos/images', { method: 'POST', body: formData })
+    if (res.ok) {
+      const data = await res.json()
+      setMemoImages(prev => [...prev, data.url])
+    } else {
+      const d = await res.json()
+      setMessage({ type: 'error', text: d.error || '画像のアップロードに失敗しました' })
+    }
+    setUploadingImage(false)
+    e.target.value = ''
+  }
+
+  // メモ作成
+  async function handleSubmitMemo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!memoForm.title) return
+    setSubmittingMemo(true)
+    const res = await fetch('/api/purchase-memos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: memoForm.title,
+        description: memoForm.description || undefined,
+        imageUrls: memoImages,
+      }),
+    })
+    setSubmittingMemo(false)
+    if (res.ok) {
+      const created = await res.json()
+      setMemos(prev => [created, ...prev])
+      setMemoForm({ title: '', description: '' })
+      setMemoImages([])
+      setShowMemoForm(false)
+      setMessage({ type: 'success', text: '買取相談メモを登録しました' })
+    } else {
+      setMessage({ type: 'error', text: 'メモの登録に失敗しました' })
+    }
+  }
+
+  // メモ削除
+  async function handleDeleteMemo(id: string) {
+    if (!confirm('このメモを削除しますか？')) return
+    const res = await fetch(`/api/purchase-memos/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setMemos(prev => prev.filter(m => m.id !== id))
     }
   }
 
@@ -162,10 +256,11 @@ export default function MyPage() {
 
   const tabs = [
     { key: 'dashboard', label: 'ダッシュボード' },
+    { key: 'memos', label: '買取相談メモ' },
+    { key: 'history', label: '訪問履歴' },
     { key: 'profile', label: 'プロフィール' },
     { key: 'password', label: 'パスワード' },
     { key: 'id-document', label: '身分証明書' },
-    { key: 'history', label: '訪問履歴' },
   ]
 
   function handleTabChange(tabKey: string) {
@@ -185,7 +280,26 @@ export default function MyPage() {
         })
         .catch(() => { setVisitsLoaded(true); setVisitsLoading(false) })
     }
+    if (tabKey === 'memos' && !memosLoaded) {
+      setMemosLoading(true)
+      fetch('/api/purchase-memos')
+        .then(r => r.json())
+        .then(data => {
+          setMemos(Array.isArray(data) ? data : [])
+          setMemosLoaded(true)
+          setMemosLoading(false)
+        })
+        .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
+    }
   }
+
+  // 月次グラフ最大値
+  const maxMonthlyAmount = stats?.monthlyStats
+    ? Math.max(...stats.monthlyStats.map(m => m.amount), 1)
+    : 1
+
+  const activeMemos = memos.filter(m => m.status !== 'completed')
+  const completedMemos = memos.filter(m => m.status === 'completed')
 
   return (
     <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)]">
@@ -232,7 +346,7 @@ export default function MyPage() {
         </div>
 
         <div className="py-6">
-          {/* Dashboard tab */}
+          {/* ─── Dashboard tab ─── */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               {/* Next visit card */}
@@ -258,6 +372,68 @@ export default function MyPage() {
                   <p className="text-xl font-semibold">訪問日が未定です</p>
                 )}
               </div>
+
+              {/* Stats cards */}
+              <div className="grid grid-cols-2 gap-4">
+                <Card variant="outlined" padding="md">
+                  <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                    累計買取金額
+                  </p>
+                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
+                    {stats
+                      ? `¥${stats.totalPurchaseAmount.toLocaleString()}`
+                      : <span className="text-base text-[var(--md-sys-color-on-surface-variant)]">---</span>
+                    }
+                  </p>
+                </Card>
+                <Card variant="outlined" padding="md">
+                  <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                    買取回数
+                  </p>
+                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
+                    {stats
+                      ? `${stats.purchaseCount}回`
+                      : <span className="text-base text-[var(--md-sys-color-on-surface-variant)]">---</span>
+                    }
+                  </p>
+                </Card>
+              </div>
+
+              {/* Monthly bar chart */}
+              {stats && (
+                <Card variant="outlined" padding="md">
+                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
+                    月次買取金額推移
+                  </h3>
+                  {stats.totalPurchaseAmount === 0 ? (
+                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-4">
+                      まだ買取履歴がありません
+                    </p>
+                  ) : (
+                    <div className="flex items-end gap-1 h-32">
+                      {stats.monthlyStats.map((m, i) => {
+                        const pct = maxMonthlyAmount > 0 ? (m.amount / maxMonthlyAmount) * 100 : 0
+                        return (
+                          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                            <div
+                              className="w-full rounded-t-sm"
+                              style={{
+                                height: `${Math.max(pct, m.amount > 0 ? 4 : 0)}%`,
+                                backgroundColor: 'var(--portal-primary, #B91C1C)',
+                                opacity: m.amount > 0 ? 1 : 0.15,
+                                minHeight: m.amount > 0 ? '4px' : undefined,
+                              }}
+                            />
+                            <span className="text-[9px] text-[var(--md-sys-color-on-surface-variant)]">
+                              {m.month}月
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </Card>
+              )}
 
               {/* Info summary grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -322,7 +498,170 @@ export default function MyPage() {
             </div>
           )}
 
-          {/* Profile tab */}
+          {/* ─── 買取相談メモタブ ─── */}
+          {activeTab === 'memos' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">
+                    買取相談メモ
+                  </h2>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                    買取を検討しているものをメモしておきましょう
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => { setShowMemoForm(v => !v); setMessage(null) }}
+                >
+                  {showMemoForm ? 'キャンセル' : '+ メモを追加'}
+                </Button>
+              </div>
+
+              {/* メモ作成フォーム */}
+              {showMemoForm && (
+                <Card variant="elevated" padding="md">
+                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
+                    新しい買取相談メモ
+                  </h3>
+                  <form onSubmit={handleSubmitMemo} className="space-y-4">
+                    <TextField
+                      label="タイトル"
+                      value={memoForm.title}
+                      onChange={v => setMemoForm({ ...memoForm, title: v })}
+                      required
+                      placeholder="例：ブランドバッグ、古い時計など"
+                    />
+                    <TextField
+                      label="詳細メモ（任意）"
+                      value={memoForm.description}
+                      onChange={v => setMemoForm({ ...memoForm, description: v })}
+                      placeholder="状態、年代、ブランド名など詳細をメモ..."
+                      rows={3}
+                    />
+
+                    {/* 画像アップロード */}
+                    <div>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                        写真（JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚）
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {memoImages.map((url, i) => (
+                          <div key={i} className="relative w-20 h-20">
+                            <img
+                              src={url}
+                              alt=""
+                              className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setMemoImages(prev => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        {memoImages.length < 5 && (
+                          <button
+                            type="button"
+                            onClick={() => memoImageInputRef.current?.click()}
+                            disabled={uploadingImage}
+                            className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
+                          >
+                            {uploadingImage ? (
+                              <LoadingSpinner size="sm" />
+                            ) : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span className="text-xs mt-1">追加</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                        <input
+                          ref={memoImageInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/heic"
+                          onChange={handleMemoImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <Button
+                        type="submit"
+                        disabled={submittingMemo || !memoForm.title}
+                        loading={submittingMemo}
+                      >
+                        {submittingMemo ? '登録中...' : '登録する'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="tonal"
+                        onClick={() => {
+                          setShowMemoForm(false)
+                          setMemoForm({ title: '', description: '' })
+                          setMemoImages([])
+                        }}
+                      >
+                        キャンセル
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+              )}
+
+              {/* メモ一覧 */}
+              {memosLoading ? (
+                <div className="py-8">
+                  <LoadingSpinner size="md" label="読み込み中..." className="justify-center" />
+                </div>
+              ) : memos.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  }
+                  title="買取相談メモがありません"
+                  description="「メモを追加」から買取を検討しているものを登録しましょう"
+                />
+              ) : (
+                <div className="space-y-6">
+                  {activeMemos.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-3 uppercase tracking-wide">
+                        対応中 ({activeMemos.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {activeMemos.map(memo => (
+                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {completedMemos.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-3 uppercase tracking-wide">
+                        対応完了 ({completedMemos.length})
+                      </h3>
+                      <div className="space-y-3 opacity-70">
+                        {completedMemos.map(memo => (
+                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── Profile tab ─── */}
           {activeTab === 'profile' && (
             <Card variant="elevated" padding="md">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
@@ -387,7 +726,7 @@ export default function MyPage() {
             </Card>
           )}
 
-          {/* Password tab */}
+          {/* ─── Password tab ─── */}
           {activeTab === 'password' && (
             <Card variant="elevated" padding="md">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
@@ -428,7 +767,7 @@ export default function MyPage() {
             </Card>
           )}
 
-          {/* ID Document tab */}
+          {/* ─── ID Document tab ─── */}
           {activeTab === 'id-document' && (
             <Card variant="elevated" padding="md">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-2">
@@ -439,7 +778,6 @@ export default function MyPage() {
                 対応形式：JPEG、PNG、WebP、PDF（最大10MB）
               </p>
 
-              {/* Upload area */}
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className="
@@ -469,7 +807,6 @@ export default function MyPage() {
                 />
               </div>
 
-              {/* Status display */}
               {user.idDocumentPath ? (
                 <MessageBanner severity="success">
                   <p className="font-medium">身分証明書が提出されています</p>
@@ -484,7 +821,7 @@ export default function MyPage() {
             </Card>
           )}
 
-          {/* Visit History tab */}
+          {/* ─── Visit History tab ─── */}
           {activeTab === 'history' && (
             <Card variant="elevated" padding="md">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
@@ -518,7 +855,6 @@ export default function MyPage() {
                         ${i < visits.length - 1 ? 'border-b border-[var(--md-sys-color-outline-variant)]' : ''}
                       `}
                     >
-                      {/* Timeline icon */}
                       <div className="flex flex-col items-center flex-shrink-0">
                         <div
                           className={`
@@ -547,7 +883,6 @@ export default function MyPage() {
                         </div>
                       </div>
 
-                      {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
@@ -573,5 +908,98 @@ export default function MyPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── MemoCard サブコンポーネント ───
+
+const MEMO_STATUS_LABEL: Record<string, string> = {
+  pending: '未確認',
+  reviewed: '確認済み',
+  completed: '対応完了',
+}
+
+const MEMO_STATUS_STYLE: Record<string, string> = {
+  pending: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
+  reviewed: 'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
+  completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
+}
+
+function MemoCard({
+  memo,
+  onDelete,
+}: {
+  memo: PurchaseMemo
+  onDelete: (id: string) => void
+}) {
+  const [showImages, setShowImages] = useState(false)
+
+  return (
+    <Card variant="outlined" padding="md">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+              {memo.title}
+            </h4>
+            <span
+              className={`text-xs font-medium px-2 py-0.5 rounded-full ${MEMO_STATUS_STYLE[memo.status] ?? ''}`}
+            >
+              {MEMO_STATUS_LABEL[memo.status] ?? memo.status}
+            </span>
+          </div>
+          {memo.description && (
+            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">
+              {memo.description}
+            </p>
+          )}
+          {memo.storeNote && (
+            <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
+              <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">
+                店舗からのメモ
+              </p>
+              <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">
+                {memo.storeNote}
+              </p>
+            </div>
+          )}
+          <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
+            {format(new Date(memo.createdAt), 'yyyy年M月d日', { locale: ja })}
+          </p>
+        </div>
+        {memo.status === 'pending' && (
+          <button
+            onClick={() => onDelete(memo.id)}
+            className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error,#B3261E)] flex-shrink-0 px-2 py-1"
+          >
+            削除
+          </button>
+        )}
+      </div>
+
+      {memo.imageUrls.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowImages(v => !v)}
+            className="text-xs text-[var(--portal-primary)] hover:underline"
+          >
+            {showImages ? '画像を非表示' : `画像を見る（${memo.imageUrls.length}枚）`}
+          </button>
+          {showImages && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {memo.imageUrls.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-24 h-24 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity"
+                  />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   )
 }

@@ -41,6 +41,28 @@ type VisitSchedule = {
   user: { id: string; name: string }
 }
 
+type PurchaseMemo = {
+  id: string
+  title: string
+  description: string | null
+  imageUrls: string[]
+  status: string
+  storeNote: string | null
+  createdAt: string
+}
+
+const MEMO_STATUS_OPTIONS = [
+  { value: 'pending',   label: '未確認' },
+  { value: 'reviewed',  label: '確認済み' },
+  { value: 'completed', label: '対応完了' },
+]
+
+const MEMO_STATUS_STYLE: Record<string, string> = {
+  pending:   'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
+  reviewed:  'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
+  completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
+}
+
 const STATUS_OPTIONS = [
   { value: 'scheduled',   label: '予定' },
   { value: 'pending',     label: '未対応' },
@@ -50,7 +72,7 @@ const STATUS_OPTIONS = [
   { value: 'cancelled',   label: 'キャンセル' },
 ]
 
-type ModalTab = 'info' | 'add' | 'history'
+type ModalTab = 'info' | 'add' | 'history' | 'memos'
 
 export default function StoreCustomersPage() {
   const { data: session, status } = useSession()
@@ -69,6 +91,13 @@ export default function StoreCustomersPage() {
   const [addForm, setAddForm] = useState({ visitDate: '', note: '' })
   const [submitting, setSubmitting] = useState(false)
   const [scheduleMsg, setScheduleMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // 買取相談メモ
+  const [memosList, setMemosList] = useState<PurchaseMemo[]>([])
+  const [memosLoading, setMemosLoading] = useState(false)
+  const [memosLoaded, setMemosLoaded] = useState(false)
+  const [memoStoreNotes, setMemoStoreNotes] = useState<Record<string, string>>({})
+  const [savingMemoNote, setSavingMemoNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -95,6 +124,9 @@ export default function StoreCustomersPage() {
     setAddForm({ visitDate: '', note: '' })
     setSchedulesLoading(true)
     setSchedules([])
+    setMemosList([])
+    setMemosLoaded(false)
+    setMemoStoreNotes({})
     fetch(`/api/visit-schedules?userId=${selected.id}`)
       .then(r => r.json())
       .then(data => {
@@ -140,6 +172,51 @@ export default function StoreCustomersPage() {
     }
   }
 
+  // メモタブ切り替え時に読み込み
+  function handleModalTabChange(key: string) {
+    setModalTab(key as ModalTab)
+    setScheduleMsg(null)
+    if (key === 'memos' && !memosLoaded && selected) {
+      setMemosLoading(true)
+      fetch(`/api/purchase-memos?userId=${selected.id}`)
+        .then(r => r.json())
+        .then(data => {
+          const list = Array.isArray(data) ? data : []
+          setMemosList(list)
+          const notes: Record<string, string> = {}
+          list.forEach((m: PurchaseMemo) => { notes[m.id] = m.storeNote ?? '' })
+          setMemoStoreNotes(notes)
+          setMemosLoaded(true)
+          setMemosLoading(false)
+        })
+        .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
+    }
+  }
+
+  async function handleMemoStatusChange(memoId: string, newStatus: string) {
+    const res = await fetch(`/api/purchase-memos/${memoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (res.ok) {
+      setMemosList(prev => prev.map(m => m.id === memoId ? { ...m, status: newStatus } : m))
+    }
+  }
+
+  async function handleSaveMemoNote(memoId: string) {
+    setSavingMemoNote(memoId)
+    const res = await fetch(`/api/purchase-memos/${memoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storeNote: memoStoreNotes[memoId] ?? '' }),
+    })
+    setSavingMemoNote(null)
+    if (res.ok) {
+      setMemosList(prev => prev.map(m => m.id === memoId ? { ...m, storeNote: memoStoreNotes[memoId] ?? '' } : m))
+    }
+  }
+
   async function handleStatusChange(scheduleId: string, newStatus: string) {
     const res = await fetch(`/api/visit-schedules/${scheduleId}`, {
       method: 'PATCH',
@@ -155,6 +232,9 @@ export default function StoreCustomersPage() {
     setSelected(null)
     setSchedules([])
     setScheduleMsg(null)
+    setMemosList([])
+    setMemosLoaded(false)
+    setMemoStoreNotes({})
   }
 
   const filtered = customers.filter(c =>
@@ -239,6 +319,7 @@ export default function StoreCustomersPage() {
 
   const modalTabs = [
     { key: 'info', label: '基本情報' },
+    { key: 'memos', label: memosList.length > 0 ? `買取メモ（${memosList.length}）` : '買取メモ' },
     { key: 'add', label: 'スケジュール追加' },
     { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
   ]
@@ -288,7 +369,7 @@ export default function StoreCustomersPage() {
             <Tabs
               tabs={modalTabs}
               activeKey={modalTab}
-              onChange={(key) => { setModalTab(key as ModalTab); setScheduleMsg(null) }}
+              onChange={handleModalTabChange}
               className="mb-4"
             />
 
@@ -316,6 +397,102 @@ export default function StoreCustomersPage() {
                   </dd>
                 </div>
               </dl>
+            )}
+
+            {/* 買取相談メモ */}
+            {modalTab === 'memos' && (
+              <div>
+                {memosLoading ? (
+                  <div className="flex justify-center py-8">
+                    <LoadingSpinner size="md" />
+                  </div>
+                ) : memosList.length === 0 ? (
+                  <EmptyState
+                    title="買取相談メモがありません"
+                    description="顧客がメモを登録すると表示されます"
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    {memosList.map(memo => (
+                      <div
+                        key={memo.id}
+                        className="border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] p-4"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                                {memo.title}
+                              </span>
+                              <span
+                                className={`text-xs font-medium px-2 py-0.5 rounded-full ${MEMO_STATUS_STYLE[memo.status] ?? ''}`}
+                              >
+                                {MEMO_STATUS_OPTIONS.find(o => o.value === memo.status)?.label ?? memo.status}
+                              </span>
+                            </div>
+                            {memo.description && (
+                              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">
+                                {memo.description}
+                              </p>
+                            )}
+                            <p className="text-xs text-[var(--md-sys-color-outline)] mt-1">
+                              {format(new Date(memo.createdAt), 'yyyy年M月d日', { locale: ja })}
+                            </p>
+                          </div>
+                          {/* ステータス変更 */}
+                          <select
+                            value={memo.status}
+                            onChange={e => handleMemoStatusChange(memo.id, e.target.value)}
+                            className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0"
+                          >
+                            {MEMO_STATUS_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* 画像サムネイル */}
+                        {memo.imageUrls.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {memo.imageUrls.map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                <img
+                                  src={url}
+                                  alt=""
+                                  className="w-16 h-16 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* 店舗メモ入力 */}
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                            店舗メモ（顧客に表示されます）
+                          </p>
+                          <div className="flex gap-2">
+                            <textarea
+                              value={memoStoreNotes[memo.id] ?? ''}
+                              onChange={e => setMemoStoreNotes(prev => ({ ...prev, [memo.id]: e.target.value }))}
+                              rows={2}
+                              placeholder="事前確認のコメントなどを入力..."
+                              className="flex-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                            />
+                            <button
+                              onClick={() => handleSaveMemoNote(memo.id)}
+                              disabled={savingMemoNote === memo.id}
+                              className="text-xs px-3 py-1 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50 self-end flex-shrink-0"
+                            >
+                              {savingMemoNote === memo.id ? '保存中' : '保存'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* スケジュール追加 */}

@@ -36,6 +36,7 @@ model User {
   isTestData     Boolean   @default(false)
   isActive       Boolean   @default(true)
   visitSchedules VisitSchedule[]
+  purchaseMemos  PurchaseMemo[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -139,6 +140,20 @@ model GoogleSheetsConfig {
   storeColumnMapping  String?   @db.Text  // JSON: {"code":"A","name":"B",...}
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+}
+
+// 買取相談メモ（顧客が買取希望品を事前に登録）
+model PurchaseMemo {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String                      // 品名・タイトル
+  description String?  @db.Text           // 詳細説明
+  imageUrls   String   @default("[]") @db.Text  // JSON配列: 画像URL[]
+  status      String   @default("pending") // pending, reviewed, completed
+  storeNote   String?  @db.Text           // 店舗からのコメント
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）

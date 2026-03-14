@@ -45,9 +45,12 @@ export async function GET(
 
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  // パスワードは除外
+  // パスワードは除外 / 身分証 Blob URL をプロキシ URL に変換（URL 露出防止）
   const { password: _, ...userWithoutPassword } = user
-  return NextResponse.json(userWithoutPassword)
+  return NextResponse.json({
+    ...userWithoutPassword,
+    idDocumentPath: user.idDocumentPath ? `/api/users/${id}/id-document` : null,
+  })
 }
 
 export async function PATCH(

@@ -3,6 +3,20 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+/**
+ * DB の imageUrls（JSON文字列の Blob URL 配列）を
+ * 認証プロキシ URL に変換してクライアントに返す
+ * → Blob URL がブラウザに露出しない
+ */
+function toClientMemo(memo: any) {
+  let blobUrls: string[] = []
+  try { blobUrls = JSON.parse(memo.imageUrls || '[]') } catch { /* ignore */ }
+  return {
+    ...memo,
+    imageUrls: blobUrls.map((_: string, i: number) => `/api/purchase-memos/${memo.id}/images/${i}`),
+  }
+}
+
 /** 買取相談メモ一覧取得 */
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -18,7 +32,7 @@ export async function GET(request: NextRequest) {
       where: { userId: sessionUser.id },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(memos)
+    return NextResponse.json(memos.map(toClientMemo))
   }
 
   if (sessionUser.role === 'store') {
@@ -33,7 +47,7 @@ export async function GET(request: NextRequest) {
       include: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(memos)
+    return NextResponse.json(memos.map(toClientMemo))
   }
 
   if (sessionUser.role === 'admin') {
@@ -44,7 +58,7 @@ export async function GET(request: NextRequest) {
       include: { user: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(memos)
+    return NextResponse.json(memos.map(toClientMemo))
   }
 
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -75,5 +89,6 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  return NextResponse.json(memo, { status: 201 })
+  // 作成後のレスポンスも Blob URL → プロキシ URL に変換
+  return NextResponse.json(toClientMemo(memo), { status: 201 })
 }

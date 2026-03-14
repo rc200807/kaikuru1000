@@ -5,6 +5,16 @@ import { prisma } from '@/lib/prisma'
 
 const VALID_STATUSES = ['pending', 'reviewed', 'completed']
 
+/** DB の imageUrls（JSON文字列の Blob URL）をプロキシ URL に変換 */
+function toClientMemo(memo: any) {
+  let blobUrls: string[] = []
+  try { blobUrls = JSON.parse(memo.imageUrls || '[]') } catch { /* ignore */ }
+  return {
+    ...memo,
+    imageUrls: blobUrls.map((_: string, i: number) => `/api/purchase-memos/${memo.id}/images/${i}`),
+  }
+}
+
 /** 買取相談メモ更新 */
 export async function PATCH(
   request: NextRequest,
@@ -56,7 +66,8 @@ export async function PATCH(
   }
 
   const updated = await prisma.purchaseMemo.update({ where: { id }, data: updateData })
-  return NextResponse.json(updated)
+  // Blob URL → プロキシ URL に変換してから返す
+  return NextResponse.json(toClientMemo(updated))
 }
 
 /** 買取相談メモ削除 */

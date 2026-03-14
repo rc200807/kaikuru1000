@@ -5,6 +5,62 @@ import { prisma } from '@/lib/prisma'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
 
+/**
+ * 身分証明書を認証プロキシ経由で配信
+ * Blob URL をクライアントに露出させず、認証・認可チェック後にコンテンツを返す
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const sessionUser = session.user as any
+
+  // 顧客は自分の身分証のみ
+  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  // 店舗は担当顧客の身分証のみ
+  if (sessionUser.role === 'store') {
+    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
+    if (target?.storeId !== sessionUser.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+  // admin はすべて閲覧可
+
+  const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentPath: true } })
+  if (!user?.idDocumentPath) {
+    return NextResponse.json({ error: '身分証明書が未提出です' }, { status: 404 })
+  }
+
+  const blobUrl = user.idDocumentPath
+
+  // ローカル開発（/uploads/...）: 静的ファイルにリダイレクト
+  if (!blobUrl.startsWith('https://')) {
+    return NextResponse.redirect(new URL(blobUrl, request.url))
+  }
+
+  // 本番: プロキシ配信（Blob URL をクライアントに露出しない）
+  try {
+    const res = await fetch(blobUrl)
+    if (!res.ok) return NextResponse.json({ error: 'ファイルが見つかりません' }, { status: 404 })
+    const contentType = res.headers.get('content-type') || 'application/octet-stream'
+    return new NextResponse(res.body, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'private, max-age=3600',
+        'Content-Disposition': 'inline',
+      },
+    })
+  } catch {
+    return NextResponse.json({ error: 'ファイルの取得に失敗しました' }, { status: 500 })
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

@@ -90,7 +90,7 @@ export default function NavigationRail() {
 
       {/* Logout */}
       <button
-        onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/' }) }}
+        onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/store/login' }) }}
         className="p-2 rounded-full text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
         aria-label="ログアウト"
       >

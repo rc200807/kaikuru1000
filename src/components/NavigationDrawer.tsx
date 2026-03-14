@@ -130,7 +130,7 @@ export default function NavigationDrawer() {
       {/* Logout */}
       <div className="px-3 py-4">
         <button
-          onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/' }) }}
+          onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/admin/login' }) }}
           className="flex items-center gap-3 px-3 py-2.5 w-full rounded-[var(--md-sys-shape-full)] text-sm text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">

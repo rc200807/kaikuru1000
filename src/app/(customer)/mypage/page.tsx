@@ -600,7 +600,7 @@ export default function MyPage() {
             <Button
               variant="text"
               size="sm"
-              onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/' }) }}
+              onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/login' }) }}
             >
               ログアウト
             </Button>

@@ -710,6 +710,132 @@ export default function MyPage() {
                 </div>
               )}
 
+              {/* ─── はじめにやるべきタスク ─── */}
+              {(() => {
+                const tasks = [
+                  {
+                    key: 'id-document',
+                    label: '身分証明書を登録',
+                    sub: '写真を撮るだけ10秒',
+                    done: !!user.idDocumentPath,
+                    action: () => handleTabChange('id-document'),
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15A2.25 2.25 0 002.25 6.75v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    key: 'bank',
+                    label: '口座情報を登録',
+                    sub: '買取金額の振込先を設定',
+                    done: !!(user.bankName && user.accountNumber),
+                    action: () => handleTabChange('profile'),
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    key: 'memo',
+                    label: '買取メモを登録してAI査定',
+                    sub: '売りたい品物をメモしてAIで概算査定',
+                    done: memos.length > 0,
+                    action: () => handleTabChange('memos'),
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    ),
+                  },
+                  ...(user.customerType !== 'delivery' ? [{
+                    key: 'visit',
+                    label: '出張査定の予約',
+                    sub: 'お近くの店舗が出張査定に伺います',
+                    done: user.visitSchedules.length > 0,
+                    action: () => handleTabChange('dashboard'),
+                    icon: (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                      </svg>
+                    ),
+                  }] : []),
+                ]
+                const completedCount = tasks.filter(t => t.done).length
+                const allDone = completedCount === tasks.length
+
+                if (allDone) return null
+
+                return (
+                  <Card variant="outlined" padding="md">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">
+                          はじめにやること
+                        </h3>
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                          {completedCount}/{tasks.length} 完了
+                        </p>
+                      </div>
+                      {/* プログレスバー */}
+                      <div className="w-24 h-2 bg-[var(--md-sys-color-surface-container-highest)] rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 rounded-full transition-all duration-500"
+                          style={{ width: `${(completedCount / tasks.length) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {tasks.map(task => (
+                        <button
+                          key={task.key}
+                          onClick={task.done ? undefined : task.action}
+                          disabled={task.done}
+                          className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
+                            task.done
+                              ? 'bg-green-50 dark:bg-green-950/20 opacity-60 cursor-default'
+                              : 'bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer'
+                          }`}
+                        >
+                          {/* チェックアイコン or 番号 */}
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            task.done
+                              ? 'bg-green-500 text-white'
+                              : 'bg-[var(--portal-primary,#B91C1C)] text-white'
+                          }`}>
+                            {task.done ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <span className="text-white">{task.icon}</span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium ${
+                              task.done
+                                ? 'text-green-700 dark:text-green-400 line-through'
+                                : 'text-[var(--md-sys-color-on-surface)]'
+                            }`}>
+                              {task.label}
+                            </p>
+                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                              {task.sub}
+                            </p>
+                          </div>
+                          {!task.done && (
+                            <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
+                )
+              })()}
+
               {/* Next visit card / Delivery shipment status card */}
               {isDelivery ? (
                 (() => {

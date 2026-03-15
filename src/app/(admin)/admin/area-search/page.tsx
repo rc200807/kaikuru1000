@@ -1,10 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+
+const PREFECTURES = [
+  '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県',
+  '茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県',
+  '新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県',
+  '三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県',
+  '鳥取県','島根県','岡山県','広島県','山口県',
+  '徳島県','香川県','愛媛県','高知県',
+  '福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県',
+]
+
+type CityData = { city: string; city_kana: string }
 
 type StoreResult = {
   id: string
@@ -27,7 +39,18 @@ type SearchResponse = {
 export default function AdminAreaSearchPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [address, setAddress] = useState('')
+
+  // 住所入力
+  const [prefecture, setPrefecture] = useState('')
+  const [cityInput, setCityInput] = useState('')
+  const [detail, setDetail] = useState('')
+  const [cities, setCities] = useState<CityData[]>([])
+  const [loadingCities, setLoadingCities] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestRef = useRef<HTMLDivElement>(null)
+  const cityInputRef = useRef<HTMLInputElement>(null)
+
+  // 検索
   const [searching, setSearching] = useState(false)
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -35,15 +58,79 @@ export default function AdminAreaSearchPage() {
   if (status === 'loading') return <LoadingSpinner size="lg" fullPage />
   if (status === 'unauthenticated') { router.push('/admin/login'); return null }
 
+  const fullAddress = `${prefecture}${cityInput}${detail}`.trim()
+
+  // 都道府県選択時に市区町村を取得
+  async function fetchCities(pref: string) {
+    if (!pref) { setCities([]); return }
+    setLoadingCities(true)
+    try {
+      const res = await fetch(`https://geoapi.heartrails.com/api/json?method=getCities&prefecture=${encodeURIComponent(pref)}`)
+      const data = await res.json()
+      if (data.response?.location) {
+        const unique = new Map<string, CityData>()
+        for (const loc of data.response.location) {
+          if (!unique.has(loc.city)) {
+            unique.set(loc.city, { city: loc.city, city_kana: loc.city_kana || '' })
+          }
+        }
+        setCities(Array.from(unique.values()))
+      } else {
+        setCities([])
+      }
+    } catch {
+      setCities([])
+    } finally {
+      setLoadingCities(false)
+    }
+  }
+
+  function handlePrefChange(pref: string) {
+    setPrefecture(pref)
+    setCityInput('')
+    setDetail('')
+    setResult(null)
+    fetchCities(pref)
+  }
+
+  // サジェストフィルタリング
+  const filteredCities = cityInput
+    ? cities.filter(c =>
+        c.city.includes(cityInput) ||
+        c.city_kana.includes(cityInput)
+      )
+    : cities
+
+  function handleCitySelect(city: string) {
+    setCityInput(city)
+    setShowSuggestions(false)
+    // フォーカスを詳細入力に移す
+    setTimeout(() => {
+      const detailInput = document.getElementById('detail-input')
+      detailInput?.focus()
+    }, 50)
+  }
+
+  // クリック外でサジェストを閉じる
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
-    if (!address.trim()) return
+    if (!fullAddress) return
     setSearching(true)
     setError(null)
     setResult(null)
 
     try {
-      const res = await fetch(`/api/stores/search?address=${encodeURIComponent(address.trim())}&limit=5`)
+      const res = await fetch(`/api/stores/search?address=${encodeURIComponent(fullAddress)}&limit=5`)
       if (!res.ok) {
         const data = await res.json()
         setError(data.error || '検索に失敗しました')
@@ -58,11 +145,29 @@ export default function AdminAreaSearchPage() {
     }
   }
 
+  function handleQuickAddress(addr: string) {
+    // "東京都渋谷区" → prefecture="東京都", city="渋谷区"
+    const prefMatch = addr.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
+    if (prefMatch) {
+      const pref = prefMatch[1]
+      const rest = addr.slice(pref.length)
+      setPrefecture(pref)
+      setCityInput(rest)
+      setDetail('')
+      fetchCities(pref)
+    } else {
+      setPrefecture('')
+      setCityInput(addr)
+    }
+  }
+
   function getScoreBadge(score: number, reason: string) {
     if (score >= 20) return { color: 'from-emerald-500 to-green-500', text: reason, icon: '◎' }
     if (score >= 10) return { color: 'from-blue-500 to-cyan-500', text: reason, icon: '○' }
     return { color: 'from-amber-500 to-orange-500', text: reason, icon: '△' }
   }
+
+  const inputCls = "h-11 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-xl text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:ring-2 focus:ring-[var(--portal-primary,#374151)]/20 transition-all"
 
   return (
     <>
@@ -77,20 +182,85 @@ export default function AdminAreaSearchPage() {
                 住所を入力
               </label>
               <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
-                都道府県から入力すると、より正確な結果が得られます
+                都道府県を選択し、市区町村をサジェストから選んでください
               </p>
-              <div className="flex gap-3">
+
+              {/* 3段入力: 都道府県 → 市区町村 → 番地等 */}
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr_1fr] gap-2 mb-3">
+                {/* 都道府県 */}
+                <select
+                  value={prefecture}
+                  onChange={e => handlePrefChange(e.target.value)}
+                  className={`${inputCls} w-full`}
+                >
+                  <option value="">都道府県</option>
+                  {PREFECTURES.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+
+                {/* 市区町村（サジェスト付き） */}
+                <div className="relative" ref={suggestRef}>
+                  <input
+                    ref={cityInputRef}
+                    type="text"
+                    value={cityInput}
+                    onChange={e => { setCityInput(e.target.value); setShowSuggestions(true) }}
+                    onFocus={() => { if (cities.length > 0) setShowSuggestions(true) }}
+                    placeholder={loadingCities ? '読み込み中...' : prefecture ? '市区町村を入力' : '先に都道府県を選択'}
+                    disabled={!prefecture}
+                    className={`${inputCls} w-full`}
+                  />
+                  {/* サジェストドロップダウン */}
+                  {showSuggestions && filteredCities.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-xl shadow-lg">
+                      {filteredCities.map(c => (
+                        <button
+                          key={c.city}
+                          type="button"
+                          onClick={() => handleCitySelect(c.city)}
+                          className="w-full text-left px-3 py-2.5 text-sm text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center justify-between"
+                        >
+                          <span>{c.city}</span>
+                          {c.city_kana && (
+                            <span className="text-xs text-[var(--md-sys-color-outline)] ml-2">{c.city_kana}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showSuggestions && cityInput && filteredCities.length === 0 && cities.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-xl shadow-lg px-3 py-3 text-xs text-[var(--md-sys-color-outline)]">
+                      候補が見つかりません
+                    </div>
+                  )}
+                </div>
+
+                {/* 番地等（任意） */}
                 <input
+                  id="detail-input"
                   type="text"
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  placeholder="例: 東京都渋谷区渋谷1-1-1"
-                  className="flex-1 h-12 px-4 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-xl text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:ring-2 focus:ring-[var(--portal-primary,#374151)]/20 transition-all"
+                  value={detail}
+                  onChange={e => setDetail(e.target.value)}
+                  placeholder="番地・建物名（任意）"
+                  className={`${inputCls} w-full`}
                 />
+              </div>
+
+              {/* 組み立てた住所プレビュー + 検索ボタン */}
+              <div className="flex gap-3 items-center">
+                <div className="flex-1 min-w-0">
+                  {fullAddress && (
+                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] truncate">
+                      <span className="font-medium text-[var(--md-sys-color-on-surface)]">検索住所:</span>{' '}
+                      {fullAddress}
+                    </p>
+                  )}
+                </div>
                 <button
                   type="submit"
-                  disabled={searching || !address.trim()}
-                  className="h-12 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
+                  disabled={searching || !prefecture}
+                  className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
                 >
                   {searching ? (
                     <>
@@ -125,7 +295,7 @@ export default function AdminAreaSearchPage() {
                 <button
                   key={q}
                   type="button"
-                  onClick={() => { setAddress(q); }}
+                  onClick={() => handleQuickAddress(q)}
                   className="text-xs px-3 py-1.5 rounded-full border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)] transition-all"
                 >
                   {q}

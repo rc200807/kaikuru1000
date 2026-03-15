@@ -2131,58 +2131,65 @@ function MemoCard({
 
         {/* AI査定結果表示 */}
         {memo.aiAppraisal && showAppraisal && (
-          <div className="mt-3 p-3 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-[var(--md-sys-shape-medium)] border border-purple-200/50 dark:border-purple-800/30">
-            <div className="flex items-center gap-1.5 mb-3">
-              <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-300">AI査定結果</h5>
+          <div className="mt-3 rounded-xl overflow-hidden border border-purple-300/40 dark:border-purple-700/40">
+            {/* ヘッダー */}
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <span className="text-sm font-bold text-white">AI査定結果</span>
+              </div>
               {memo.aiAppraisalAt && (
-                <span className="text-xs text-[var(--md-sys-color-outline)] ml-auto">
+                <span className="text-xs text-white/70">
                   {format(new Date(memo.aiAppraisalAt), 'yyyy/M/d HH:mm', { locale: ja })}
                 </span>
               )}
             </div>
 
-            {/* 買取提示額（大きく表示） */}
-            <div className="mb-3 p-3 bg-white/70 dark:bg-white/5 rounded-[var(--md-sys-shape-small)] text-center">
-              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">買取提示額</p>
-              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-                {memo.aiAppraisal.offerPrice}
-              </p>
-              <p className="text-xs text-[var(--md-sys-color-outline)] mt-1">
-                {memo.aiAppraisal.offerReason}
+            <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 p-4 space-y-4">
+              {/* 買取提示額（メイン） */}
+              <div className="bg-white dark:bg-white/10 rounded-lg p-4 text-center shadow-sm">
+                <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">買取提示額（税込）</p>
+                <p className="text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  {memo.aiAppraisal.offerPrice}
+                </p>
+              </div>
+
+              {/* 商品詳細 */}
+              <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3">
+                <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">商品詳細</p>
+                <p className="text-sm text-[var(--md-sys-color-on-surface)] leading-relaxed">{memo.aiAppraisal.productDetail}</p>
+              </div>
+
+              {/* 市場相場 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3 text-center">
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">市場上限（美品）</p>
+                  <p className="text-lg font-bold text-[var(--md-sys-color-on-surface)]">{memo.aiAppraisal.marketPriceHigh}</p>
+                </div>
+                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3 text-center">
+                  <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-1">市場下限（並品）</p>
+                  <p className="text-lg font-bold text-[var(--md-sys-color-on-surface)]">{memo.aiAppraisal.marketPriceLow}</p>
+                </div>
+              </div>
+
+              {/* プラットフォーム・補足 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">参考プラットフォーム</p>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface)]">{memo.aiAppraisal.platforms}</p>
+                </div>
+                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">補足情報</p>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-[var(--md-sys-color-outline)] text-center pt-1">
+                ※ AIによる概算です。実際の買取金額は査定時に確定します。
               </p>
             </div>
-
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">商品詳細</span>
-                <p className="text-[var(--md-sys-color-on-surface)] mt-0.5">{memo.aiAppraisal.productDetail}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">市場上限</span>
-                  <p className="text-[var(--md-sys-color-on-surface)] font-medium">{memo.aiAppraisal.marketPriceHigh}</p>
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">市場下限</span>
-                  <p className="text-[var(--md-sys-color-on-surface)] font-medium">{memo.aiAppraisal.marketPriceLow}</p>
-                </div>
-              </div>
-              <div>
-                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">取引プラットフォーム</span>
-                <p className="text-[var(--md-sys-color-on-surface)] mt-0.5">{memo.aiAppraisal.platforms}</p>
-              </div>
-              <div>
-                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">補足情報</span>
-                <p className="text-[var(--md-sys-color-on-surface)] mt-0.5 whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-[var(--md-sys-color-outline)] mt-3 text-center">
-              ※ AIによる概算です。実際の買取金額は査定時に確定します。
-            </p>
           </div>
         )}
       </Card>

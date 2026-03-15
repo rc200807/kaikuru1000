@@ -52,10 +52,22 @@ export async function GET(request: NextRequest) {
 
     const row = response.data.values?.[0] ?? []
 
+    // インデックスを列文字に変換（0→A, 25→Z, 26→AA, 38→AM）
+    function idxToCol(idx: number): string {
+      let col = ''
+      let n = idx + 1
+      while (n > 0) {
+        n--
+        col = String.fromCharCode(65 + (n % 26)) + col
+        n = Math.floor(n / 26)
+      }
+      return col
+    }
+
     // カラム情報を返す: [{index: 0, letter: "A", header: "店舗コード"}, ...]
     const columns = row.map((header: string, i: number) => ({
       index: i,
-      letter: String.fromCharCode(65 + i), // A, B, C...
+      letter: idxToCol(i), // A, B, ..., Z, AA, AB, ..., AM, ...
       header: header || `列${i + 1}`,
     }))
 

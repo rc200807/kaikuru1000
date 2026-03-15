@@ -103,15 +103,32 @@ export async function syncStoresFromGoogleSheets(): Promise<{
 
   console.log('[StoreSync] カラムマッピング:', JSON.stringify(colMap))
 
-  // 列文字をインデックスに変換（A→0, B→1, ...）
+  // 列文字をインデックスに変換（A→0, B→1, ..., Z→25, AA→26, AB→27, ..., AM→38）
   function colIdx(letter: string): number {
-    return letter.toUpperCase().charCodeAt(0) - 65
+    const s = letter.toUpperCase()
+    let idx = 0
+    for (let i = 0; i < s.length; i++) {
+      idx = idx * 26 + (s.charCodeAt(i) - 64)
+    }
+    return idx - 1 // 0-based
+  }
+
+  // インデックスを列文字に変換（0→A, 25→Z, 26→AA, 38→AM）
+  function idxToCol(idx: number): string {
+    let col = ''
+    let n = idx + 1 // 1-based
+    while (n > 0) {
+      n--
+      col = String.fromCharCode(65 + (n % 26)) + col
+      n = Math.floor(n / 26)
+    }
+    return col
   }
 
   // 必要な列の最大インデックスを求めて取得範囲を決める
   const indices = Object.values(colMap).map((l: any) => colIdx(l))
   const maxCol = Math.max(...indices)
-  const endCol = String.fromCharCode(65 + maxCol)
+  const endCol = idxToCol(maxCol)
 
   if (!SPREADSHEET_ID || !process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
     return { success: false, message: 'スプレッドシートIDが設定されていません。店舗管理画面から設定してください。', synced: 0, deleted: 0, deactivated: 0 }

@@ -101,6 +101,8 @@ export async function syncStoresFromGoogleSheets(): Promise<{
     ? JSON.parse(config.storeColumnMapping)
     : { code: 'A', name: 'B', prefecture: 'C', address: 'D', phone: 'E', email: 'F' }
 
+  console.log('[StoreSync] カラムマッピング:', JSON.stringify(colMap))
+
   // 列文字をインデックスに変換（A→0, B→1, ...）
   function colIdx(letter: string): number {
     return letter.toUpperCase().charCodeAt(0) - 65
@@ -148,6 +150,10 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       phone:       cleanField(row[colIdx(colMap.phone       || 'E')]),
       email:       cleanField(row[colIdx(colMap.email       || 'F')]),
     })).filter(row => row.code && row.name)
+
+    // デバッグ: 最初の3件のデータをログ出力
+    console.log('[StoreSync] 取得範囲:', `${sheetName}!A2:${endCol}1000`)
+    console.log('[StoreSync] 最初の3件:', storeRows.slice(0, 3).map(r => ({ code: r.code, name: r.name, address: r.address || '(空)' })))
 
     let synced = 0
     let deleted = 0
@@ -240,7 +246,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
 
     return {
       success: true,
-      message: logParts.join(', '),
+      message: `${logParts.join(', ')}（マッピング: 住所=${colMap.address || 'D'}列）`,
       synced,
       deleted,
       deactivated,

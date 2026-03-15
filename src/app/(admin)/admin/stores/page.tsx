@@ -274,6 +274,16 @@ export default function AdminStoresPage() {
       render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.prefecture || '\u2014'}</span>,
     },
     {
+      key: 'address',
+      header: '住所',
+      hideOnMobile: true,
+      render: (store) => (
+        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)] max-w-[200px] truncate block" title={store.address || ''}>
+          {store.address || '\u2014'}
+        </span>
+      ),
+    },
+    {
       key: 'phone',
       header: '電話番号',
       hideOnMobile: true,

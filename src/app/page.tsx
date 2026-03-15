@@ -5,8 +5,9 @@ export default function Home() {
     <div className="min-h-screen bg-[var(--md-sys-color-surface-container-lowest,#FFFBFE)] flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm text-center">
         {/* Brand */}
-        <h1 className="text-4xl font-bold text-[#B91C1C] tracking-tight mb-1">
-          買いクル
+        <h1 className="mb-1">
+          <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto dark:hidden" />
+          <img src="/logo-white.svg" alt="買いクル" className="h-10 mx-auto hidden dark:block" />
         </h1>
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant,#49454F)] mb-10">
           出張買取サービス

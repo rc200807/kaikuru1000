@@ -106,11 +106,9 @@ export default function RegisterRegularPage() {
       <div className="w-full max-w-lg">
         {/* Brand header */}
         <div className="text-center mb-8">
-          <Link
-            href="/"
-            className="text-3xl font-bold text-[var(--portal-primary,#B91C1C)] tracking-tight"
-          >
-            買いクル
+          <Link href="/" className="inline-block">
+            <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
+            <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
           </Link>
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
             通常会員 新規登録

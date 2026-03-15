@@ -39,8 +39,9 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="text-3xl font-bold text-[var(--md-sys-color-on-surface)] tracking-tight">
-            買いクル
+          <Link href="/" className="inline-block">
+            <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
+            <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
           </Link>
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">本部管理者ログイン</p>
         </div>

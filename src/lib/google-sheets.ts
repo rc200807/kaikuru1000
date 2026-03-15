@@ -129,14 +129,22 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       return { success: true, message: 'No data found in spreadsheet', synced: 0, deleted: 0, deactivated: 0 }
     }
 
+    // スプレッドシートのセルに入っている無意味な値（ダッシュ記号のみ等）を空文字に正規化
+    function cleanField(val: string | undefined): string {
+      const v = (val || '').trim()
+      // 「—」「-」「−」「ー」「―」「–」や空白のみ → 住所等として無効
+      if (/^[\s\-\u2014\u2013\u2015\u2212\u30FC\uFF0D]*$/.test(v)) return ''
+      return v
+    }
+
     const storeRows: StoreRow[] = rows.map((row, index) => ({
       rowId: `row_${index + 2}`,
-      code:        row[colIdx(colMap.code        || 'A')] || '',
-      name:        row[colIdx(colMap.name        || 'B')] || '',
-      prefecture:  row[colIdx(colMap.prefecture  || 'C')] || '',
-      address:     row[colIdx(colMap.address     || 'D')] || '',
-      phone:       row[colIdx(colMap.phone       || 'E')] || '',
-      email:       row[colIdx(colMap.email       || 'F')] || '',
+      code:        (row[colIdx(colMap.code        || 'A')] || '').trim(),
+      name:        (row[colIdx(colMap.name        || 'B')] || '').trim(),
+      prefecture:  cleanField(row[colIdx(colMap.prefecture  || 'C')]),
+      address:     cleanField(row[colIdx(colMap.address     || 'D')]),
+      phone:       cleanField(row[colIdx(colMap.phone       || 'E')]),
+      email:       cleanField(row[colIdx(colMap.email       || 'F')]),
     })).filter(row => row.code && row.name)
 
     let synced = 0
@@ -151,9 +159,9 @@ export async function syncStoresFromGoogleSheets(): Promise<{
         where: { code: storeRow.code },
         update: {
           name: storeRow.name,
-          prefecture: storeRow.prefecture,
-          address: storeRow.address,
-          phone: storeRow.phone,
+          prefecture: storeRow.prefecture || null,
+          address: storeRow.address || null,
+          phone: storeRow.phone || null,
           email: storeRow.email || null,
           sheetRowId: storeRow.rowId,
           isActive: true,
@@ -162,9 +170,9 @@ export async function syncStoresFromGoogleSheets(): Promise<{
         create: {
           code: storeRow.code,
           name: storeRow.name,
-          prefecture: storeRow.prefecture,
-          address: storeRow.address,
-          phone: storeRow.phone,
+          prefecture: storeRow.prefecture || null,
+          address: storeRow.address || null,
+          phone: storeRow.phone || null,
           email: storeRow.email || null,
           sheetRowId: storeRow.rowId,
           // 新規店舗ごとにランダムな初期パスワードを生成（共通デフォルトパスワードを廃止）

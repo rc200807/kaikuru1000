@@ -132,6 +132,8 @@ export async function syncStoresFromGoogleSheets(): Promise<{
     // スプレッドシートのセルに入っている無意味な値（ダッシュ記号のみ等）を空文字に正規化
     function cleanField(val: string | undefined): string {
       const v = (val || '').trim()
+      // リテラル文字列 "\u2014" 等のUnicodeエスケープ表記もクリーン
+      if (/^(\\u[0-9a-fA-F]{4})+$/.test(v)) return ''
       // 「—」「-」「−」「ー」「―」「–」や空白のみ → 住所等として無効
       if (/^[\s\-\u2014\u2013\u2015\u2212\u30FC\uFF0D]*$/.test(v)) return ''
       return v

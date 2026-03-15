@@ -39,7 +39,7 @@ type Customer = {
   createdAt: string
   visitSchedules: Array<{ visitDate: string; status: string }>
   // 顧客タイプ
-  customerType: string  // "visit" | "delivery"
+  customerType: string  // "visit" | "delivery" | "regular"
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -423,11 +423,15 @@ export default function StoreCustomersPage() {
       key: 'customerType',
       header: 'タイプ',
       hideOnMobile: true,
-      render: (c) => c.customerType === 'delivery' ? (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">宅配</span>
-      ) : (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">訪問</span>
-      ),
+      render: (c) => {
+        const typeMap: Record<string, {label:string, cls:string}> = {
+          delivery: { label: '宅配', cls: 'bg-blue-100 text-blue-700' },
+          regular:  { label: '通常', cls: 'bg-purple-100 text-purple-700' },
+          visit:    { label: '訪問', cls: 'bg-green-100 text-green-700' },
+        }
+        const t = typeMap[c.customerType] ?? typeMap.visit
+        return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
+      },
     },
     {
       key: 'nextVisit',
@@ -923,6 +927,15 @@ export default function StoreCustomersPage() {
                             </select>
                           </div>
                           {vs.note && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 truncate">{vs.note}</p>}
+                          <div className="mt-1.5">
+                            <Button
+                              variant="text"
+                              size="sm"
+                              onClick={() => { closeModal(); router.push(`/store/schedule/${vs.id}`) }}
+                            >
+                              詳細
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}

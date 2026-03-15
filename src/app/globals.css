@@ -197,6 +197,16 @@ body {
   from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
 }
+@keyframes scan {
+  0%   { top: 0%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.animate-scan {
+  animation: scan 2s ease-in-out infinite;
+  position: absolute;
+}
 
 /* ── Safe area (mobile bottom nav) ───────────────────── */
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }

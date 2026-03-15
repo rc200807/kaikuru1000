@@ -103,7 +103,7 @@ export async function DELETE() {
   }
 
   const userIds = testUsers.map(u => u.id)
-  const licenseKeyIds = testUsers.map(u => u.licenseKeyId)
+  const licenseKeyIds = testUsers.map(u => u.licenseKeyId).filter((id): id is string => id !== null)
 
   // FK制約に従い順番に削除（トランザクション）
   const [deletedVisits, deletedUsers, deletedLicenseKeys] = await prisma.$transaction([

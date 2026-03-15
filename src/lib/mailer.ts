@@ -266,6 +266,123 @@ export async function sendStorePasswordResetNotification(params: {
   return true
 }
 
+/** 売買契約書PDFを顧客にメール送信する。送信成功なら true、設定未構成なら false を返す */
+export async function sendContractEmail(params: {
+  customerEmail: string
+  customerName: string
+  storeName: string
+  visitDate: Date
+  pdfBase64: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+
+  const { transporter, from } = result
+
+  const visitDateStr = params.visitDate.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  const pdfBuffer = Buffer.from(params.pdfBase64, 'base64')
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>売買契約書のご送付</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+          <!-- ヘッダー -->
+          <tr>
+            <td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル 出張買取</p>
+              <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">売買契約書のご送付</h1>
+            </td>
+          </tr>
+
+          <!-- 本文 -->
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;">
+              <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+                ${params.customerName} 様<br><br>
+                このたびは${params.storeName}の出張買取サービスをご利用いただき、誠にありがとうございます。<br>
+                ${visitDateStr}の訪問にかかる売買契約書を添付ファイルにてお送りいたします。
+              </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:10px;border:1px solid #fca5a5;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 6px;color:#991b1b;font-size:13px;font-weight:600;">クーリングオフについて</p>
+                    <p style="margin:0;color:#7f1d1d;font-size:12px;line-height:1.7;">
+                      本契約書面の受領日から<strong>8日以内</strong>であれば、書面によるクーリングオフ（契約解除）が可能です。<br>
+                      ご不明点は消費生活センター（局番なし <strong>188</strong>）にご相談ください。
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
+                添付のPDFファイルを大切に保管してください。<br>
+                ご不明な点がございましたら、${params.storeName}までお問い合わせください。
+              </p>
+            </td>
+          </tr>
+
+          <!-- フッター -->
+          <tr>
+            <td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;">
+              <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
+                このメールは買いクル管理システムから自動送信されています
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`
+
+  await transporter.sendMail({
+    from,
+    to: params.customerEmail,
+    subject: `【買いクル】売買契約書（${visitDateStr}）`,
+    html,
+    text: [
+      `${params.customerName} 様`,
+      '',
+      `${params.storeName}の出張買取サービスをご利用いただき、ありがとうございます。`,
+      `${visitDateStr}の訪問にかかる売買契約書を添付ファイルにてお送りいたします。`,
+      '',
+      '■ クーリングオフについて',
+      '本契約書面の受領日から8日以内であれば、書面によるクーリングオフが可能です。',
+      'ご不明点は消費生活センター（局番なし 188）にご相談ください。',
+      '',
+      '添付のPDFファイルを大切に保管してください。',
+    ].join('\n'),
+    attachments: [
+      {
+        filename: `売買契約書_${visitDateStr}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  })
+
+  return true
+}
+
 /** テストメールを送信する */
 export async function sendTestEmail(toEmail: string) {
   const result = await createTransporter()

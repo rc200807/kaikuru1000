@@ -25,6 +25,7 @@ type Schedule = {
   billingAmount: number | null
   user: { id: string; name: string; address: string; phone: string }
   store: { id: string; name: string }
+  salesContract: { id: string } | null
 }
 
 type Customer = {
@@ -265,6 +266,32 @@ export default function StoreSchedulePage() {
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          onClick={() => window.open(
+                            `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(schedule.user.address)}&travelmode=driving`,
+                            '_blank'
+                          )}
+                        >
+                          ルートを検索
+                        </Button>
+                        <Button
+                          variant="filled"
+                          size="sm"
+                          onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                        >
+                          編集
+                        </Button>
+                        {schedule.salesContract && (
+                          <Button
+                            variant="outlined"
+                            size="sm"
+                            onClick={() => router.push(`/store/schedule/${schedule.id}/agreement`)}
+                          >
+                            契約書
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -292,6 +319,7 @@ export default function StoreSchedulePage() {
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">買取金額</th>
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">請求金額</th>
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden lg:table-cell">メモ</th>
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">契約書</th>
                       <th className="px-3 py-3"></th>
                     </tr>
                   </thead>
@@ -317,19 +345,47 @@ export default function StoreSchedulePage() {
                         <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.purchaseAmount)}</td>
                         <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.billingAmount)}</td>
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-32 truncate hidden lg:table-cell">{schedule.note || '—'}</td>
+                        <td className="px-3 py-3">
+                          {schedule.salesContract ? (
+                            <Button variant="text" size="sm" onClick={() => router.push(`/store/schedule/${schedule.id}/agreement`)}>
+                              確認
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-[var(--md-sys-color-outline)]">—</span>
+                          )}
+                        </td>
                         <td className="px-3 py-3 text-right">
-                          <Button
-                            variant="text"
-                            size="sm"
-                            onClick={() => setEditModal({
-                              schedule,
-                              note: schedule.note || '',
-                              purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
-                              billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
-                            })}
-                          >
-                            編集
-                          </Button>
+                          <div className="flex gap-2 justify-end flex-wrap">
+                            <Button
+                              variant="outlined"
+                              size="sm"
+                              onClick={() => window.open(
+                                `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(schedule.user.address)}&travelmode=driving`,
+                                '_blank'
+                              )}
+                            >
+                              ルートを検索
+                            </Button>
+                            <Button
+                              variant="tonal"
+                              size="sm"
+                              onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                            >
+                              編集
+                            </Button>
+                            <Button
+                              variant="text"
+                              size="sm"
+                              onClick={() => setEditModal({
+                                schedule,
+                                note: schedule.note || '',
+                                purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
+                                billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
+                              })}
+                            >
+                              金額編集
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}

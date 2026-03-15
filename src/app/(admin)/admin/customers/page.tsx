@@ -26,13 +26,13 @@ type User = {
   address: string
   idDocumentPath: string | null
   createdAt: string
-  licenseKey: { key: string }
+  licenseKey: { key: string } | null
   store: { id: string; name: string; code: string } | null
   visitSchedules: Array<{ visitDate: string; status: string }>
   isTestData?: boolean
   isActive: boolean
   // 顧客タイプ
-  customerType: string  // "visit" | "delivery"
+  customerType: string  // "visit" | "delivery" | "regular"
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -226,7 +226,7 @@ export default function AdminCustomersPage() {
     if (res.ok) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, customerType: newType } : u))
       setDetailUser(prev => prev && prev.id === userId ? { ...prev, customerType: newType } : prev)
-      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '宅配買取' : '訪問買取'}」に変更しました` })
+      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '宅配買取' : newType === 'regular' ? '通常' : '訪問買取'}」に変更しました` })
     } else {
       setMessage({ type: 'error', text: 'タイプ変更に失敗しました' })
     }
@@ -330,7 +330,7 @@ export default function AdminCustomersPage() {
       hideOnMobile: true,
       render: (user) => (
         <code className="text-xs bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded-[var(--md-sys-shape-extra-small)]">
-          {user.licenseKey.key}
+          {user.licenseKey?.key || '—'}
         </code>
       ),
     },
@@ -351,11 +351,15 @@ export default function AdminCustomersPage() {
       key: 'customerType',
       header: 'タイプ',
       hideOnMobile: true,
-      render: (user) => user.customerType === 'delivery' ? (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">宅配</span>
-      ) : (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">訪問</span>
-      ),
+      render: (user) => {
+        const typeMap: Record<string, {label:string, cls:string}> = {
+          delivery: { label: '宅配', cls: 'bg-blue-100 text-blue-700' },
+          regular:  { label: '通常', cls: 'bg-purple-100 text-purple-700' },
+          visit:    { label: '訪問', cls: 'bg-green-100 text-green-700' },
+        }
+        const t = typeMap[user.customerType] ?? typeMap.visit
+        return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
+      },
     },
     {
       key: 'nextVisit',
@@ -549,7 +553,7 @@ export default function AdminCustomersPage() {
                     { label: 'メール', value: detailUser.email },
                     { label: '電話番号', value: detailUser.phone },
                     { label: '訪問先住所', value: detailUser.address },
-                    { label: 'ライセンスキー', value: detailUser.licenseKey.key, mono: true },
+                    { label: 'ライセンスキー', value: detailUser.licenseKey?.key || '—', mono: true },
                     { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
                     { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
                   ].map(item => (
@@ -575,21 +579,19 @@ export default function AdminCustomersPage() {
                     <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">顧客タイプ</span>
                   </div>
                   <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
-                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                      {detailUser.customerType === 'delivery' ? '宅配買取' : '訪問買取'}
+                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : detailUser.customerType === 'regular' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                      {detailUser.customerType === 'delivery' ? '宅配買取' : detailUser.customerType === 'regular' ? '通常' : '訪問買取'}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="outlined"
+                    <select
+                      className="text-xs px-2 py-1 rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
+                      value={detailUser.customerType}
                       disabled={changingType === detailUser.id}
-                      loading={changingType === detailUser.id}
-                      onClick={() => handleChangeCustomerType(
-                        detailUser.id,
-                        detailUser.customerType === 'delivery' ? 'visit' : 'delivery'
-                      )}
+                      onChange={(e) => handleChangeCustomerType(detailUser.id, e.target.value)}
                     >
-                      {detailUser.customerType === 'delivery' ? '訪問買取に変更' : '宅配買取に変更'}
-                    </Button>
+                      <option value="visit">訪問買取</option>
+                      <option value="delivery">宅配買取</option>
+                      <option value="regular">通常</option>
+                    </select>
                   </div>
                 </div>
 
@@ -712,6 +714,15 @@ export default function AdminCustomersPage() {
                           </div>
                           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{vs.store.name}</p>
                           {vs.note && <p className="text-xs text-[var(--md-sys-color-outline)] mt-0.5 truncate">{vs.note}</p>}
+                          <div className="mt-1.5">
+                            <Button
+                              variant="text"
+                              size="sm"
+                              onClick={() => { closeDetailModal(); router.push(`/admin/visits/${vs.id}`) }}
+                            >
+                              詳細
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}

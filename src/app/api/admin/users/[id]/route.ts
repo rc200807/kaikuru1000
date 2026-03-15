@@ -3,7 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-/** 顧客の有効化・無効化 */
+const VALID_CUSTOMER_TYPES = ['visit', 'delivery', 'regular']
+
+/** 顧客の有効化・無効化・タイプ変更 */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -28,7 +30,7 @@ export async function PATCH(
     return NextResponse.json({ id: updated.id, isActive: updated.isActive })
   }
 
-  if (body.customerType === 'visit' || body.customerType === 'delivery') {
+  if (VALID_CUSTOMER_TYPES.includes(body.customerType)) {
     const updated = await prisma.user.update({
       where: { id },
       data: { customerType: body.customerType },
@@ -39,7 +41,7 @@ export async function PATCH(
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })
 }
 
-/** 顧客を物理削除（訪問履歴も含めて削除し、ライセンスキーを解放） */
+/** 顧客を物理削除（訪問履歴も含めて削除し、ライセンスキーがあれば解放） */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -58,17 +60,25 @@ export async function DELETE(
   })
   if (!user) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
 
-  await prisma.$transaction([
-    // 訪問スケジュールを先に削除（FK制約）
+  // トランザクションで関連データを削除
+  const operations: any[] = [
+    // 訪問スケジュール関連の品目は onDelete: Cascade で自動削除される
     prisma.visitSchedule.deleteMany({ where: { userId: id } }),
-    // ライセンスキーを未使用に戻す
-    prisma.licenseKey.update({
-      where: { id: user.licenseKeyId },
-      data: { isUsed: false },
-    }),
-    // 顧客を削除
-    prisma.user.delete({ where: { id } }),
-  ])
+  ]
+
+  // ライセンスキーがある場合のみ解放
+  if (user.licenseKeyId) {
+    operations.push(
+      prisma.licenseKey.update({
+        where: { id: user.licenseKeyId },
+        data: { isUsed: false },
+      })
+    )
+  }
+
+  operations.push(prisma.user.delete({ where: { id } }))
+
+  await prisma.$transaction(operations)
 
   return NextResponse.json({ deleted: true })
 }

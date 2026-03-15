@@ -89,15 +89,26 @@ export default function CustomerLoginPage() {
             </Button>
           </form>
 
-          <p className="text-center mt-6 text-sm text-[var(--md-sys-color-on-surface-variant)]">
-            アカウントをお持ちでない方は{' '}
-            <Link
-              href="/register"
-              className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
-            >
-              新規登録
-            </Link>
-          </p>
+          <div className="text-center mt-6 space-y-2">
+            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+              アカウントをお持ちでない方は{' '}
+              <Link
+                href="/register"
+                className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
+              >
+                新規登録
+              </Link>
+            </p>
+            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+              ライセンスキーをお持ちでない方は{' '}
+              <Link
+                href="/register-regular"
+                className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
+              >
+                通常会員登録
+              </Link>
+            </p>
+          </div>
         </Card>
 
         {/* Back link */}

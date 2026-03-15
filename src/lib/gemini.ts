@@ -87,3 +87,119 @@ export async function extractIdDocumentInfo(
     return null
   }
 }
+
+/* ─── 中古市場 AI 調査 ─── */
+
+export type MarketResearchResult = {
+  productDetail: string    // 商品名や型番などの詳細
+  estimatedCondition: string // 想定コンディション
+  maxPrice: string         // 中古市場での最高値
+  minPrice: string         // 中古市場での最安値
+  platforms: string        // 主な取引プラットフォーム
+  supplement: string       // 補足情報
+}
+
+export type ImageData = {
+  buffer: Buffer
+  mimeType: string
+}
+
+const MARKET_RESEARCH_PROMPT = `あなたは中古品の買取査定の専門家です。以下の商品について、日本の中古市場における取引相場を調査し、JSON形式で回答してください。
+
+【重要】画像が添付されている場合は、画像を注意深く分析してください。
+画像から以下を読み取ってください:
+- メーカー名・ブランド名（ロゴ、刻印、ラベルなど）
+- 型番・モデル名（本体やラベルに記載されている英数字）
+- 製造年・年式（ラベル、シリアルナンバーなどから推測）
+- 商品の状態・コンディション（傷、汚れ、使用感の程度）
+- 色、サイズ、素材などの特徴
+
+画像から特定できた情報をもとに、できるだけ具体的な商品を特定し、正確な市場相場を回答してください。
+
+回答する項目（すべて文字列で返してください）:
+- productDetail: 商品の詳細情報（メーカー名、正式な商品名、型番、発売年、色、サイズなど。画像から読み取れた情報をすべて含める）
+- estimatedCondition: 画像から判断した商品のコンディション（S/A/B/C/Dランクで判定し、具体的な状態の説明も付ける）
+- maxPrice: 中古市場での最高値の目安（良品〜美品の場合。"¥XX,XXX〜¥XX,XXX" の形式で）
+- minPrice: 中古市場での最安値の目安（難あり・ジャンク品の場合。"¥XX,XXX〜¥XX,XXX" の形式で）
+- platforms: 主な取引プラットフォーム（カンマ区切りの文字列で。例: "メルカリ、ヤフオク、楽天ラクマ"）
+- supplement: 補足情報（査定時の注意点、付属品の有無による価格差、市場トレンドなど）
+
+必ずJSONのみ返してください。説明文は不要です。
+すべての値は文字列型で返してください（配列やオブジェクトは使わないでください）。
+価格は日本円で、現在の市場相場に基づいて現実的な金額を記載してください。`
+
+/**
+ * 中古市場のAI調査を行う（画像解析対応）
+ *
+ * @param itemName   品名（例: "ルイヴィトン ネヴァーフル MM"）
+ * @param category   カテゴリー（例: "バッグ"）
+ * @param images     商品画像データ（最大3枚）
+ * @returns 調査結果。APIキー未設定またはエラー時は null
+ */
+export async function researchMarketPrice(
+  itemName: string,
+  category: string,
+  images: ImageData[] = [],
+): Promise<MarketResearchResult | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    console.warn('[gemini] GEMINI_API_KEY が未設定のためAI調査をスキップします')
+    return null
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+    const userPrompt = images.length > 0
+      ? `商品名: ${itemName}\nカテゴリー: ${category}\n\n添付の${images.length}枚の画像を分析し、商品を正確に特定してください。ロゴ、型番、ラベル、シリアルナンバーなどを注意深く読み取ってください。`
+      : `商品名: ${itemName}\nカテゴリー: ${category}\n\n（画像なし。商品名とカテゴリーから推測してください）`
+
+    // プロンプト + 画像データを組み立て
+    const contents: (string | { inlineData: { mimeType: string; data: string } })[] = [
+      MARKET_RESEARCH_PROMPT,
+      userPrompt,
+    ]
+
+    for (const img of images) {
+      contents.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.buffer.toString('base64'),
+        },
+      })
+    }
+
+    const result = await model.generateContent(contents)
+
+    const text = result.response.text().trim()
+    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(jsonStr)
+
+    // 値がオブジェクトや配列の場合は文字列に変換
+    const stringify = (v: unknown): string => {
+      if (v == null) return '不明'
+      if (typeof v === 'string') return v
+      if (Array.isArray(v)) return v.join('、')
+      if (typeof v === 'object') {
+        return Object.entries(v as Record<string, unknown>)
+          .filter(([, val]) => val && val !== '（不明）' && val !== '不明')
+          .map(([, val]) => String(val))
+          .join(' / ') || '不明'
+      }
+      return String(v)
+    }
+
+    return {
+      productDetail:      stringify(parsed.productDetail),
+      estimatedCondition: stringify(parsed.estimatedCondition),
+      maxPrice:           stringify(parsed.maxPrice),
+      minPrice:           stringify(parsed.minPrice),
+      platforms:          stringify(parsed.platforms),
+      supplement:         stringify(parsed.supplement),
+    }
+  } catch (err) {
+    console.error('[gemini] 市場調査失敗:', err)
+    return null
+  }
+}

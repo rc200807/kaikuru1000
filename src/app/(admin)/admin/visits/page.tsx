@@ -207,6 +207,19 @@ export default function AdminVisitsPage() {
         </span>
       ),
     },
+    {
+      key: 'detail',
+      header: '',
+      render: (record) => (
+        <Button
+          size="sm"
+          variant="text"
+          onClick={() => router.push(`/admin/visits/${record.id}`)}
+        >
+          詳細
+        </Button>
+      ),
+    },
   ]
 
   return (

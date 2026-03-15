@@ -101,11 +101,27 @@ async function main() {
     console.log('✓ Sample user 2: tanaka@example.com / user1234')
   }
 
+  // 通常顧客（ライセンスキーなし）
+  const existingRegular = await prisma.user.findUnique({ where: { email: 'regular@example.com' } })
+  if (!existingRegular) {
+    await prisma.user.create({
+      data: {
+        name: '通常太郎', furigana: 'つうじょうたろう',
+        email: 'regular@example.com', phone: '090-3333-4444',
+        address: '東京都港区赤坂1-1-1', password: userPassword,
+        customerType: 'regular',
+        storeId: tokyoStore?.id,
+      },
+    })
+    console.log('✓ Regular customer: regular@example.com / user1234')
+  }
+
   console.log('\nSeeding complete!')
   console.log('\n=== ログイン情報 ===')
   console.log('管理者: admin@kaikuru.jp / admin1234')
   console.log('店舗:   tokyo@kaikuru.jp / store1234')
   console.log('顧客:   yamada@example.com / user1234')
+  console.log('通常:   regular@example.com / user1234')
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())

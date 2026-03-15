@@ -28,8 +28,8 @@ model User {
   phone          String
   address        String
   password       String
-  licenseKeyId   String    @unique
-  licenseKey     LicenseKey @relation(fields: [licenseKeyId], references: [id])
+  licenseKeyId   String?   @unique
+  licenseKey     LicenseKey? @relation(fields: [licenseKeyId], references: [id])
   idDocumentPath  String?   @db.Text  // 身分証明書ファイルURL（Vercel Blob）
   // 身分証OCR抽出フィールド（Gemini Vision）
   idDocumentType  String?             // 書類種別（運転免許証/パスポート/マイナンバーカードなど）
@@ -44,14 +44,14 @@ model User {
   isTestData     Boolean   @default(false)
   isActive       Boolean   @default(true)
   // 顧客タイプ
-  customerType   String    @default("visit")  // "visit" | "delivery"
+  customerType   String    @default("visit")  // "visit" | "delivery" | "regular"
   // 振込先口座情報
   bankName       String?
   branchName     String?
   accountType    String?   // "普通" | "当座"
   accountNumber  String?
   accountHolder  String?
-  visitSchedules    VisitSchedule[]
+  visitSchedules VisitSchedule[]
   purchaseMemos     PurchaseMemo[]
   deliveryShipments DeliveryShipment[]
   createdAt      DateTime  @default(now())
@@ -101,10 +101,45 @@ model VisitSchedule {
   visitDate      DateTime
   status         String   @default("scheduled") // scheduled, completed, cancelled
   note           String?
-  purchaseAmount Int?     // 買取金額（円）
-  billingAmount  Int?     // 請求金額（円）
+  purchaseAmount Int?     // 買取金額（円）— 品目合計から自動計算
+  billingAmount  Int?     // 請求金額（円）— 作業品目合計から自動計算
+  purchaseItems  PurchaseItem[]
+  workItems      WorkItem[]
+  salesContract  SalesContract?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// 買取品目（訪問ごとに記録する買取商品）
+model PurchaseItem {
+  id              String        @id @default(cuid())
+  visitScheduleId String
+  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  itemName        String                      // 品名
+  category        String                      // カテゴリー
+  imageUrls       String   @default("[]")   // JSON配列: 画像URL[] (最大3枚)
+  quantity        Int      @default(1)        // 数量
+  purchasePrice   Int      @default(0)        // 買取金額（円）
+  aiResearch      String?                     // AI市場調査結果 (JSON文字列)
+  aiResearchedAt  DateTime?                   // AI調査実行日時
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([visitScheduleId])
+}
+
+// 作業品目（訪問ごとの請求作業）
+model WorkItem {
+  id              String        @id @default(cuid())
+  visitScheduleId String
+  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  workName        String                      // 作業名
+  unitPrice       Int      @default(0)        // 単価（円）
+  quantity        Int      @default(1)        // 数量
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([visitScheduleId])
 }
 
 // 管理者
@@ -124,7 +159,7 @@ model SyncLog {
   id       String   @id @default(cuid())
   type     String   // stores, licenses
   status   String   // success, error
-  message  String?  @db.Text
+  message  String?  
   syncedAt DateTime @default(now())
 }
 
@@ -134,7 +169,7 @@ model EmailConfig {
   smtpHost    String   @default("")
   smtpPort    Int      @default(587)
   smtpUser    String   @default("")
-  smtpPass    String   @default("") @db.Text  // AES-256-GCM 暗号化済み
+  smtpPass    String   @default("")   // AES-256-GCM 暗号化済み
   fromAddress String   @default("")
   fromName    String   @default("買いクル 本部")
   enabled     Boolean  @default(false)
@@ -146,15 +181,15 @@ model EmailConfig {
 model GoogleSheetsConfig {
   id                  String    @id @default(cuid())
   googleEmail         String?
-  accessToken         String?   @db.Text  // AES-256-GCM 暗号化済み（長いため Text 型）
-  refreshToken        String?   @db.Text  // AES-256-GCM 暗号化済み
+  accessToken         String?     // AES-256-GCM 暗号化済み（長いため Text 型）
+  refreshToken        String?     // AES-256-GCM 暗号化済み
   tokenExpiry         DateTime?
   spreadsheetId       String?             // ライセンスキー用スプレッドシートID
   sheetName           String    @default("ライセンスキー")
   keyColumn           String    @default("A")
   storeSpreadsheetId  String?             // 店舗マスター用スプレッドシートID
   storeSheetName      String    @default("店舗マスター")
-  storeColumnMapping  String?   @db.Text  // JSON: {"code":"A","name":"B",...}
+  storeColumnMapping  String?     // JSON: {"code":"A","name":"B",...}
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -165,10 +200,10 @@ model PurchaseMemo {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title       String                      // 品名・タイトル
-  description String?  @db.Text           // 詳細説明
-  imageUrls   String   @default("[]") @db.Text  // JSON配列: 画像URL[]
+  description String?             // 詳細説明
+  imageUrls   String   @default("[]")   // JSON配列: 画像URL[]
   status      String   @default("pending") // pending, reviewed, completed
-  storeNote   String?  @db.Text           // 店舗からのコメント
+  storeNote   String?             // 店舗からのコメント
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -180,16 +215,30 @@ model DeliveryShipment {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   shipmentNumber String   @unique  // "HD-YYYYMM-NNNN"
   shipmentMonth  String            // "YYYY-MM"
-  description    String?  @db.Text
-  imageUrls      String   @default("[]") @db.Text
+  description    String?  
+  imageUrls      String   @default("[]") 
   purchaseAmount Int?     // 査定金額（店舗が更新）
   status         String   @default("registered") // registered|shipped|received|appraised
-  storeNote      String?  @db.Text
+  storeNote      String?  
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([userId])
   @@index([shipmentMonth])
+}
+
+// 売買契約書（署名・PDF保存）
+model SalesContract {
+  id              String        @id @default(cuid())
+  visitScheduleId String        @unique
+  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  signatureData   String        // base64 PNG data URL（顧客署名）
+  pdfBase64       String?       // base64 PDF データ
+  customerEmail   String?       // 送信先メールアドレス（記録用）
+  emailSentAt     DateTime?     // メール送信日時
+  agreedAt        DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）
@@ -202,4 +251,22 @@ model LoginAttempt {
   updatedAt    DateTime  @updatedAt
 
   @@index([key])
+}
+
+// iPhone中古相場価格（Gemini AIによる月次取得）
+model PhoneMarketPrice {
+  id        String   @id @default(cuid())
+  model     String   // "iPhone 15 Pro"
+  series    String   // "iPhone 15"
+  storage   String   // "128GB"
+  gradeA    Int?     // A評価（美品）の相場（円）
+  gradeB    Int?     // B評価（並品）の相場（円）
+  gradeC    Int?     // C評価（難あり）の相場（円）
+  source    String   @default("gemini")
+  fetchedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([model, storage])
+  @@index([series])
 }

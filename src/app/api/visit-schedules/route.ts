@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     include: {
       user: { select: { id: true, name: true, address: true, phone: true } },
       store: { select: { id: true, name: true } },
+      salesContract: { select: { id: true } },
     },
     orderBy: { visitDate: 'asc' },
   })

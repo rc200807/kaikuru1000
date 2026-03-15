@@ -6,16 +6,17 @@ import { z } from 'zod'
 const MIN_PASSWORD_LENGTH = 8
 
 const registerSchema = z.object({
-  name:       z.string().min(1, '氏名は必須です').max(100),
-  furigana:   z.string().min(1, 'ふりがなは必須です').max(100),
-  email:      z.string().email('有効なメールアドレスを入力してください'),
-  phone:      z.string().min(1, '電話番号は必須です').max(20),
-  address:    z.string().min(1, '住所は必須です').max(200),
-  password:   z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`),
-  licenseKey: z.string().min(1, 'ライセンスキーは必須です'),
+  name:         z.string().min(1, '氏名は必須です').max(100),
+  furigana:     z.string().min(1, 'ふりがなは必須です').max(100),
+  email:        z.string().email('有効なメールアドレスを入力してください'),
+  phone:        z.string().min(1, '電話番号は必須です').max(20),
+  address:      z.string().min(1, '住所は必須です').max(200),
+  password:     z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`),
+  licenseKey:   z.string().optional(),
+  customerType: z.enum(['visit', 'regular']).optional(),
 })
 
-// 顧客登録（ライセンスキー必須）
+// 顧客登録（ライセンスキー必須 or 通常顧客はキー不要）
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -27,18 +28,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 })
     }
 
-    const { name, furigana, email, phone, address, password, licenseKey } = parsed.data
+    const { name, furigana, email, phone, address, password, licenseKey, customerType } = parsed.data
 
-    // ライセンスキー確認
-    const licenseKeyRecord = await prisma.licenseKey.findUnique({
-      where: { key: licenseKey },
-    })
+    // 通常顧客（ライセンスキー不要）
+    const isRegular = customerType === 'regular'
 
-    if (!licenseKeyRecord) {
-      return NextResponse.json({ error: '無効なライセンスキーです' }, { status: 400 })
-    }
-    if (licenseKeyRecord.isUsed) {
-      return NextResponse.json({ error: 'このライセンスキーは既に使用済みです' }, { status: 400 })
+    if (!isRegular && !licenseKey) {
+      return NextResponse.json({ error: 'ライセンスキーは必須です' }, { status: 400 })
     }
 
     // メールアドレス重複確認
@@ -48,6 +44,34 @@ export async function POST(request: NextRequest) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
+
+    if (isRegular) {
+      // 通常顧客: ライセンスキーなしで作成
+      const user = await prisma.user.create({
+        data: {
+          name, furigana, email, phone, address,
+          password: hashedPassword,
+          customerType: 'regular',
+        },
+      })
+      return NextResponse.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      }, { status: 201 })
+    }
+
+    // 訪問/宅配顧客: ライセンスキー必須
+    const licenseKeyRecord = await prisma.licenseKey.findUnique({
+      where: { key: licenseKey! },
+    })
+
+    if (!licenseKeyRecord) {
+      return NextResponse.json({ error: '無効なライセンスキーです' }, { status: 400 })
+    }
+    if (licenseKeyRecord.isUsed) {
+      return NextResponse.json({ error: 'このライセンスキーは既に使用済みです' }, { status: 400 })
+    }
 
     // トランザクションでユーザー作成とキー使用済み更新
     const user = await prisma.$transaction(async (tx) => {

@@ -36,7 +36,7 @@ type UserData = {
   store: { name: string; phone: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
   // 顧客タイプ
-  customerType: string  // "visit" | "delivery"
+  customerType: string  // "visit" | "delivery" | "regular"
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null

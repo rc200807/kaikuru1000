@@ -76,6 +76,9 @@ export default function AdminStoresPage() {
   // 検索
   const [searchQ, setSearchQ] = useState('')
 
+  // 店舗詳細サイドバー
+  const [detailStore, setDetailStore] = useState<Store | null>(null)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -251,7 +254,7 @@ export default function AdminStoresPage() {
   const storeColumns: Column<Store>[] = [
     {
       key: 'code',
-      header: '店舗コード',
+      header: 'コード',
       render: (store) => (
         <code className="text-xs bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded-[var(--md-sys-shape-extra-small)]">
           {store.code}
@@ -269,35 +272,13 @@ export default function AdminStoresPage() {
     },
     {
       key: 'prefecture',
-      header: '都道府県',
+      header: 'エリア',
       hideOnMobile: true,
       render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.prefecture || '\u2014'}</span>,
     },
     {
-      key: 'address',
-      header: '住所',
-      hideOnMobile: true,
-      render: (store) => (
-        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)] max-w-[200px] truncate block" title={store.address || ''}>
-          {store.address || '\u2014'}
-        </span>
-      ),
-    },
-    {
-      key: 'phone',
-      header: '電話番号',
-      hideOnMobile: true,
-      render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.phone || '\u2014'}</span>,
-    },
-    {
-      key: 'email',
-      header: 'メール',
-      hideOnMobile: true,
-      render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.email || '\u2014'}</span>,
-    },
-    {
       key: 'customers',
-      header: '担当顧客数',
+      header: '顧客数',
       render: (store) => (
         <span>
           <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{store._count.customers}</span>
@@ -309,16 +290,14 @@ export default function AdminStoresPage() {
     },
     {
       key: 'actions',
-      header: '操作',
+      header: '',
       render: (store) => (
         <Button
           size="sm"
-          variant="outlined"
-          disabled={resettingId === store.id}
-          loading={resettingId === store.id}
-          onClick={() => handleResetPassword(store)}
+          variant="text"
+          onClick={() => setDetailStore(store)}
         >
-          {resettingId === store.id ? '処理中...' : 'PW再発行'}
+          詳細
         </Button>
       ),
     },
@@ -719,6 +698,102 @@ export default function AdminStoresPage() {
           </>
         )}
       </Modal>
+
+      {/* ─── 店舗詳細サイドバー ─── */}
+      {/* オーバーレイ */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${detailStore ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setDetailStore(null)}
+      />
+
+      {/* サイドパネル */}
+      <div
+        className={`fixed top-0 right-0 z-50 h-full w-full max-w-md bg-[var(--md-sys-color-surface-container-lowest,#fff)] shadow-2xl transform transition-transform duration-300 ease-out overflow-y-auto ${
+          detailStore ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {detailStore && (
+          <div className="flex flex-col h-full">
+            {/* ヘッダー */}
+            <div className="sticky top-0 z-10 bg-[var(--md-sys-color-surface-container)] border-b border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">{detailStore.name}</h2>
+                <code className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{detailStore.code}</code>
+              </div>
+              <button
+                onClick={() => setDetailStore(null)}
+                className="w-9 h-9 rounded-full hover:bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center transition-colors"
+              >
+                <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="flex-1 px-6 py-5 space-y-5">
+              {/* 基本情報 */}
+              <section>
+                <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">基本情報</h3>
+                <dl className="space-y-3">
+                  {[
+                    { label: '店舗名', value: detailStore.name },
+                    { label: '店舗コード', value: detailStore.code, mono: true },
+                    { label: '都道府県', value: detailStore.prefecture },
+                    { label: '住所', value: detailStore.address },
+                    { label: '電話番号', value: detailStore.phone },
+                    { label: 'メール', value: detailStore.email },
+                    { label: '担当顧客数', value: `${detailStore._count.customers} 名` },
+                  ].map(item => (
+                    <div key={item.label} className="flex gap-3">
+                      <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 pt-0.5">{item.label}</dt>
+                      <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>
+                        {item.value || <span className="text-[var(--md-sys-color-outline)]">\u2014</span>}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              {/* 住所をGoogle Mapsで表示 */}
+              {detailStore.address && (
+                <section>
+                  <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">地図</h3>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailStore.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors text-sm text-[var(--md-sys-color-on-surface)]"
+                  >
+                    <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Google Maps で開く
+                    <svg className="w-4 h-4 ml-auto text-[var(--md-sys-color-outline)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </section>
+              )}
+            </div>
+
+            {/* フッターアクション */}
+            <div className="sticky bottom-0 bg-[var(--md-sys-color-surface-container)] border-t border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex gap-3">
+              <Button
+                size="sm"
+                variant="outlined"
+                disabled={resettingId === detailStore.id}
+                loading={resettingId === detailStore.id}
+                onClick={() => { handleResetPassword(detailStore); setDetailStore(null) }}
+                fullWidth
+              >
+                {resettingId === detailStore.id ? '処理中...' : 'パスワード再発行'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   )
 }

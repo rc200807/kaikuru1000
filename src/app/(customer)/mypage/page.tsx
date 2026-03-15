@@ -59,6 +59,16 @@ type Stats = {
   monthlyStats: Array<{ year: number; month: number; amount: number }>
 }
 
+type AiAppraisalResult = {
+  productDetail: string
+  marketPriceHigh: string
+  marketPriceLow: string
+  offerPrice: string
+  offerReason: string
+  platforms: string
+  supplement: string
+}
+
 type PurchaseMemo = {
   id: string
   title: string
@@ -66,6 +76,8 @@ type PurchaseMemo = {
   imageUrls: string[]
   status: string
   storeNote: string | null
+  aiAppraisal: AiAppraisalResult | null
+  aiAppraisalAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -121,6 +133,8 @@ export default function MyPage() {
   const [memoImages, setMemoImages] = useState<string[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
   const [submittingMemo, setSubmittingMemo] = useState(false)
+  const [aiAppraisalRemaining, setAiAppraisalRemaining] = useState<number | null>(null)
+  const [apprasingMemoId, setApprasingMemoId] = useState<string | null>(null)
 
   // 宅配送付履歴
   const [shipments, setShipments] = useState<DeliveryShipment[]>([])
@@ -509,6 +523,32 @@ export default function MyPage() {
     }
   }
 
+  // AI査定
+  async function handleAiAppraisal(id: string) {
+    if (apprasingMemoId) return
+    setApprasingMemoId(id)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/purchase-memos/${id}/ai-appraisal`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setMemos(prev => prev.map(m =>
+          m.id === id
+            ? { ...m, aiAppraisal: data.appraisal, aiAppraisalAt: data.aiAppraisalAt }
+            : m
+        ))
+        setAiAppraisalRemaining(data.remaining)
+        setMessage({ type: 'success', text: 'AI査定が完了しました' })
+      } else {
+        setMessage({ type: 'error', text: data.error || 'AI査定に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'AI査定に失敗しました' })
+    } finally {
+      setApprasingMemoId(null)
+    }
+  }
+
   if (status === 'loading' || loading) {
     return <LoadingSpinner fullPage size="lg" label="読み込み中..." />
   }
@@ -565,6 +605,11 @@ export default function MyPage() {
           setMemosLoading(false)
         })
         .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
+      // AI査定の残り回数を取得（任意のメモIDでGETする — idは無視される）
+      fetch('/api/purchase-memos/_/ai-appraisal')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data) setAiAppraisalRemaining(data.remaining) })
+        .catch(() => {})
     }
     if (tabKey === 'shipments' && !shipmentsLoaded) {
       setShipmentsLoading(true)
@@ -843,6 +888,11 @@ export default function MyPage() {
                   <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
                     買取を検討しているものをメモしておきましょう
                   </p>
+                  {aiAppraisalRemaining !== null && (
+                    <p className="text-xs text-[var(--md-sys-color-outline)] mt-0.5">
+                      AI査定: 今月あと{aiAppraisalRemaining}回利用可能
+                    </p>
+                  )}
                 </div>
                 <div className="flex-shrink-0">
                   <Button
@@ -975,7 +1025,7 @@ export default function MyPage() {
                       </h3>
                       <div className="space-y-3">
                         {activeMemos.map(memo => (
-                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} />
+                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} onAiAppraisal={handleAiAppraisal} isAppraising={apprasingMemoId === memo.id} appraisalDisabled={apprasingMemoId !== null || (aiAppraisalRemaining !== null && aiAppraisalRemaining <= 0)} />
                         ))}
                       </div>
                     </div>
@@ -987,7 +1037,7 @@ export default function MyPage() {
                       </h3>
                       <div className="space-y-3 opacity-70">
                         {completedMemos.map(memo => (
-                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} />
+                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} onAiAppraisal={handleAiAppraisal} isAppraising={apprasingMemoId === memo.id} appraisalDisabled={apprasingMemoId !== null || (aiAppraisalRemaining !== null && aiAppraisalRemaining <= 0)} />
                         ))}
                       </div>
                     </div>
@@ -1912,11 +1962,18 @@ function ShipmentCard({
 function MemoCard({
   memo,
   onDelete,
+  onAiAppraisal,
+  isAppraising,
+  appraisalDisabled,
 }: {
   memo: PurchaseMemo
   onDelete: (id: string) => void
+  onAiAppraisal: (id: string) => void
+  isAppraising: boolean
+  appraisalDisabled: boolean
 }) {
   const [showImages, setShowImages] = useState(false)
+  const [showAppraisal, setShowAppraisal] = useState(!!memo.aiAppraisal)
   // ライトボックス: null=閉じている / number=表示中の画像インデックス
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
@@ -2020,6 +2077,112 @@ function MemoCard({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─── AI査定セクション ─── */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {memo.aiAppraisal ? (
+            <button
+              onClick={() => setShowAppraisal(v => !v)}
+              className="text-xs font-medium text-[var(--portal-primary)] hover:underline flex items-center gap-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              {showAppraisal ? 'AI査定結果を閉じる' : 'AI査定結果を見る'}
+            </button>
+          ) : (
+            <button
+              onClick={() => onAiAppraisal(memo.id)}
+              disabled={isAppraising || appraisalDisabled}
+              className="text-xs font-medium bg-gradient-to-r from-purple-500 to-blue-500 text-white px-3 py-1.5 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {isAppraising ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  AI査定中...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  AI査定する
+                </>
+              )}
+            </button>
+          )}
+          {memo.aiAppraisal && !showAppraisal && memo.aiAppraisalAt && (
+            <span className="text-xs text-[var(--md-sys-color-outline)]">
+              ({format(new Date(memo.aiAppraisalAt), 'M/d実施', { locale: ja })})
+            </span>
+          )}
+          {memo.aiAppraisal && (
+            <button
+              onClick={() => onAiAppraisal(memo.id)}
+              disabled={isAppraising || appraisalDisabled}
+              className="text-xs text-[var(--md-sys-color-outline)] hover:text-[var(--portal-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAppraising ? '査定中...' : '再査定'}
+            </button>
+          )}
+        </div>
+
+        {/* AI査定結果表示 */}
+        {memo.aiAppraisal && showAppraisal && (
+          <div className="mt-3 p-3 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-[var(--md-sys-shape-medium)] border border-purple-200/50 dark:border-purple-800/30">
+            <div className="flex items-center gap-1.5 mb-3">
+              <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-300">AI査定結果</h5>
+              {memo.aiAppraisalAt && (
+                <span className="text-xs text-[var(--md-sys-color-outline)] ml-auto">
+                  {format(new Date(memo.aiAppraisalAt), 'yyyy/M/d HH:mm', { locale: ja })}
+                </span>
+              )}
+            </div>
+
+            {/* 買取提示額（大きく表示） */}
+            <div className="mb-3 p-3 bg-white/70 dark:bg-white/5 rounded-[var(--md-sys-shape-small)] text-center">
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">買取提示額</p>
+              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
+                {memo.aiAppraisal.offerPrice}
+              </p>
+              <p className="text-xs text-[var(--md-sys-color-outline)] mt-1">
+                {memo.aiAppraisal.offerReason}
+              </p>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">商品詳細</span>
+                <p className="text-[var(--md-sys-color-on-surface)] mt-0.5">{memo.aiAppraisal.productDetail}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">市場上限</span>
+                  <p className="text-[var(--md-sys-color-on-surface)] font-medium">{memo.aiAppraisal.marketPriceHigh}</p>
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">市場下限</span>
+                  <p className="text-[var(--md-sys-color-on-surface)] font-medium">{memo.aiAppraisal.marketPriceLow}</p>
+                </div>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">取引プラットフォーム</span>
+                <p className="text-[var(--md-sys-color-on-surface)] mt-0.5">{memo.aiAppraisal.platforms}</p>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">補足情報</span>
+                <p className="text-[var(--md-sys-color-on-surface)] mt-0.5 whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--md-sys-color-outline)] mt-3 text-center">
+              ※ AIによる概算です。実際の買取金額は査定時に確定します。
+            </p>
           </div>
         )}
       </Card>

@@ -204,6 +204,8 @@ model PurchaseMemo {
   imageUrls   String   @default("[]")   // JSON配列: 画像URL[]
   status      String   @default("pending") // pending, reviewed, completed
   storeNote   String?             // 店舗からのコメント
+  aiAppraisal   String?  @db.Text  // AI査定結果(JSON)
+  aiAppraisalAt DateTime?           // AI査定実行日時
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

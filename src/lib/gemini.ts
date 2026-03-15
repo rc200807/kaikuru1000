@@ -203,3 +203,124 @@ export async function researchMarketPrice(
     return null
   }
 }
+
+/* ─── 買取相談メモ AI 査定 ─── */
+
+export type PurchaseAppraisalResult = {
+  productDetail: string     // 商品の詳細情報
+  marketPriceHigh: string   // 中古市場の上限価格
+  marketPriceLow: string    // 中古市場の下限価格
+  offerPrice: string        // 買取提示額（上限の40%）
+  offerReason: string       // 提示額の根拠
+  platforms: string         // 主な取引プラットフォーム
+  supplement: string        // 補足情報
+}
+
+const PURCHASE_APPRAISAL_PROMPT = `あなたは中古品の買取査定の専門家です。以下の商品について、日本の中古市場における取引相場を調査し、買取提示額を算出してください。
+
+【査定ルール】
+1. まず中古市場での販売相場（上限・下限）を調査する
+2. 販売相場の上限価格の40%を買取提示額として算出する
+3. 提示額の根拠を分かりやすく説明する
+
+【重要】画像が添付されている場合は、画像を注意深く分析してください。
+画像から以下を読み取ってください:
+- メーカー名・ブランド名（ロゴ、刻印、ラベルなど）
+- 型番・モデル名（本体やラベルに記載されている英数字）
+- 製造年・年式（ラベル、シリアルナンバーなどから推測）
+- 商品の状態・コンディション（傷、汚れ、使用感の程度）
+- 色、サイズ、素材などの特徴
+
+回答する項目（すべて文字列で返してください）:
+- productDetail: 商品の詳細情報（メーカー名、正式な商品名、型番、発売年、色、サイズなど。画像から読み取れた情報をすべて含める）
+- marketPriceHigh: 中古市場での販売相場の上限（良品〜美品。"¥XX,XXX" の形式で単一の金額）
+- marketPriceLow: 中古市場での販売相場の下限（難あり〜並品。"¥XX,XXX" の形式で単一の金額）
+- offerPrice: 買取提示額（marketPriceHighの40%の金額。"¥XX,XXX" の形式で単一の金額）
+- offerReason: 提示額の根拠（「中古市場の上限価格 ¥XX,XXX の40%で算出」のように、計算の根拠を明記）
+- platforms: 主な取引プラットフォーム（カンマ区切りの文字列で。例: "メルカリ、ヤフオク、楽天ラクマ"）
+- supplement: 補足情報（査定時の注意点、付属品の有無による価格差、コンディションによる変動幅など）
+
+必ずJSONのみ返してください。説明文は不要です。
+すべての値は文字列型で返してください（配列やオブジェクトは使わないでください）。
+価格は日本円で、現在の市場相場に基づいて現実的な金額を記載してください。`
+
+/**
+ * 買取相談メモのAI査定を行う（画像解析対応）
+ *
+ * @param title       品名タイトル
+ * @param description 詳細説明（任意）
+ * @param images      商品画像データ（任意）
+ * @returns 査定結果。APIキー未設定またはエラー時は null
+ */
+export async function appraiseForPurchase(
+  title: string,
+  description: string | null,
+  images: ImageData[] = [],
+): Promise<PurchaseAppraisalResult | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    console.warn('[gemini] GEMINI_API_KEY が未設定のためAI査定をスキップします')
+    return null
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+    let userPrompt = `品名: ${title}`
+    if (description) userPrompt += `\n詳細説明: ${description}`
+
+    if (images.length > 0) {
+      userPrompt += `\n\n添付の${images.length}枚の画像を分析し、商品を正確に特定してください。ロゴ、型番、ラベル、シリアルナンバーなどを注意深く読み取ってください。`
+    } else {
+      userPrompt += `\n\n（画像なし。品名と説明から推測してください）`
+    }
+
+    const contents: (string | { inlineData: { mimeType: string; data: string } })[] = [
+      PURCHASE_APPRAISAL_PROMPT,
+      userPrompt,
+    ]
+
+    for (const img of images) {
+      contents.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.buffer.toString('base64'),
+        },
+      })
+    }
+
+    const result = await model.generateContent(contents)
+
+    const text = result.response.text().trim()
+    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(jsonStr)
+
+    // 値がオブジェクトや配列の場合は文字列に変換
+    const stringify = (v: unknown): string => {
+      if (v == null) return '不明'
+      if (typeof v === 'string') return v
+      if (Array.isArray(v)) return v.join('、')
+      if (typeof v === 'object') {
+        return Object.entries(v as Record<string, unknown>)
+          .filter(([, val]) => val && val !== '（不明）' && val !== '不明')
+          .map(([, val]) => String(val))
+          .join(' / ') || '不明'
+      }
+      return String(v)
+    }
+
+    return {
+      productDetail:   stringify(parsed.productDetail),
+      marketPriceHigh: stringify(parsed.marketPriceHigh),
+      marketPriceLow:  stringify(parsed.marketPriceLow),
+      offerPrice:      stringify(parsed.offerPrice),
+      offerReason:     stringify(parsed.offerReason),
+      platforms:       stringify(parsed.platforms),
+      supplement:      stringify(parsed.supplement),
+    }
+  } catch (err) {
+    console.error('[gemini] AI査定失敗:', err)
+    return null
+  }
+}

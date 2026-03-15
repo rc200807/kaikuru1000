@@ -11,9 +11,17 @@ import { prisma } from '@/lib/prisma'
 function toClientMemo(memo: any) {
   let blobUrls: string[] = []
   try { blobUrls = JSON.parse(memo.imageUrls || '[]') } catch { /* ignore */ }
+
+  // aiAppraisal はJSON文字列→パース済みオブジェクトで返す
+  let aiAppraisal = null
+  if (memo.aiAppraisal) {
+    try { aiAppraisal = JSON.parse(memo.aiAppraisal) } catch { /* ignore */ }
+  }
+
   return {
     ...memo,
     imageUrls: blobUrls.map((_: string, i: number) => `/api/purchase-memos/${memo.id}/images/${i}`),
+    aiAppraisal,
   }
 }
 

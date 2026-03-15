@@ -55,13 +55,8 @@ export default function AdminAreaSearchPage() {
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (status === 'loading') return <LoadingSpinner size="lg" fullPage />
-  if (status === 'unauthenticated') { router.push('/admin/login'); return null }
-
-  const fullAddress = `${prefecture}${cityInput}${detail}`.trim()
-
   // 都道府県選択時に市区町村を取得
-  async function fetchCities(pref: string) {
+  const fetchCities = useCallback(async (pref: string) => {
     if (!pref) { setCities([]); return }
     setLoadingCities(true)
     try {
@@ -83,7 +78,23 @@ export default function AdminAreaSearchPage() {
     } finally {
       setLoadingCities(false)
     }
-  }
+  }, [])
+
+  // クリック外でサジェストを閉じる
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  if (status === 'loading') return <LoadingSpinner size="lg" fullPage />
+  if (status === 'unauthenticated') { router.push('/admin/login'); return null }
+
+  const fullAddress = `${prefecture}${cityInput}${detail}`.trim()
 
   function handlePrefChange(pref: string) {
     setPrefecture(pref)
@@ -104,23 +115,11 @@ export default function AdminAreaSearchPage() {
   function handleCitySelect(city: string) {
     setCityInput(city)
     setShowSuggestions(false)
-    // フォーカスを詳細入力に移す
     setTimeout(() => {
       const detailInput = document.getElementById('detail-input')
       detailInput?.focus()
     }, 50)
   }
-
-  // クリック外でサジェストを閉じる
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -146,7 +145,6 @@ export default function AdminAreaSearchPage() {
   }
 
   function handleQuickAddress(addr: string) {
-    // "東京都渋谷区" → prefecture="東京都", city="渋谷区"
     const prefMatch = addr.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
     if (prefMatch) {
       const pref = prefMatch[1]

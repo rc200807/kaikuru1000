@@ -31,7 +31,7 @@ export default function StoreLoginPage() {
     if (result?.error) {
       setError('メールアドレスまたはパスワードが間違っています')
     } else {
-      router.push('/store/customers')
+      router.push('/store/dashboard')
     }
   }
 

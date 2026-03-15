@@ -31,7 +31,7 @@ export default function AdminLoginPage() {
     if (result?.error) {
       setError('メールアドレスまたはパスワードが間違っています')
     } else {
-      router.push('/admin/customers')
+      router.push('/admin/dashboard')
     }
   }
 

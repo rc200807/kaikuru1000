@@ -2147,46 +2147,46 @@ function MemoCard({
               )}
             </div>
 
-            <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 p-4 space-y-4">
+            <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-[#1a1025] dark:to-[#0f1a2e] p-4 space-y-4">
               {/* 買取提示額（メイン） */}
-              <div className="bg-white dark:bg-white/10 rounded-lg p-4 text-center shadow-sm">
-                <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-1">買取提示額（税込）</p>
-                <p className="text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              <div className="bg-white dark:bg-[#2a1f3d] rounded-lg p-4 text-center shadow-sm">
+                <p className="text-xs font-medium text-purple-600 dark:text-purple-300 mb-1">買取提示額（税込）</p>
+                <p className="text-3xl font-extrabold text-purple-600 dark:text-purple-300">
                   {memo.aiAppraisal.offerPrice}
                 </p>
               </div>
 
               {/* 商品詳細 */}
-              <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3">
+              <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
                 <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">商品詳細</p>
-                <p className="text-sm text-[var(--md-sys-color-on-surface)] leading-relaxed">{memo.aiAppraisal.productDetail}</p>
+                <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{memo.aiAppraisal.productDetail}</p>
               </div>
 
               {/* 市場相場 */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3 text-center">
+                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3 text-center">
                   <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">市場上限（美品）</p>
-                  <p className="text-lg font-bold text-[var(--md-sys-color-on-surface)]">{memo.aiAppraisal.marketPriceHigh}</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{memo.aiAppraisal.marketPriceHigh}</p>
                 </div>
-                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3 text-center">
+                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3 text-center">
                   <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-1">市場下限（並品）</p>
-                  <p className="text-lg font-bold text-[var(--md-sys-color-on-surface)]">{memo.aiAppraisal.marketPriceLow}</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{memo.aiAppraisal.marketPriceLow}</p>
                 </div>
               </div>
 
               {/* プラットフォーム・補足 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3">
+                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
                   <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">参考プラットフォーム</p>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface)]">{memo.aiAppraisal.platforms}</p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200">{memo.aiAppraisal.platforms}</p>
                 </div>
-                <div className="bg-white/60 dark:bg-white/5 rounded-lg p-3">
+                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
                   <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">補足情報</p>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
                 </div>
               </div>
 
-              <p className="text-xs text-[var(--md-sys-color-outline)] text-center pt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
                 ※ AIによる概算です。実際の買取金額は査定時に確定します。
               </p>
             </div>

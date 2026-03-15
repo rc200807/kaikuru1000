@@ -135,6 +135,34 @@ export default function AdminAreaSearchPage() {
           </form>
         </div>
 
+        {/* マッチ度の凡例 */}
+        <div className="bg-[var(--md-sys-color-surface-container)] rounded-2xl p-5 border border-[var(--md-sys-color-outline-variant)]">
+          <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-3 uppercase tracking-wider">マッチ度の見方</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">◎</div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同一区内</p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">入力住所と同じ市区町村にある店舗</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">○</div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同一都道府県</p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">同じ都道府県内にある店舗</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">△</div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">隣接都道府県</p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">隣り合う都道府県にある店舗</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* エラー */}
         {error && (
           <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-700 dark:text-red-300">

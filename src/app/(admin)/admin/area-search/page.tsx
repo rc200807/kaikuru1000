@@ -60,19 +60,9 @@ export default function AdminAreaSearchPage() {
     if (!pref) { setCities([]); return }
     setLoadingCities(true)
     try {
-      const res = await fetch(`https://geoapi.heartrails.com/api/json?method=getCities&prefecture=${encodeURIComponent(pref)}`)
+      const res = await fetch(`/api/geo/cities?prefecture=${encodeURIComponent(pref)}`)
       const data = await res.json()
-      if (data.response?.location) {
-        const unique = new Map<string, CityData>()
-        for (const loc of data.response.location) {
-          if (!unique.has(loc.city)) {
-            unique.set(loc.city, { city: loc.city, city_kana: loc.city_kana || '' })
-          }
-        }
-        setCities(Array.from(unique.values()))
-      } else {
-        setCities([])
-      }
+      setCities(Array.isArray(data.cities) ? data.cities : [])
     } catch {
       setCities([])
     } finally {

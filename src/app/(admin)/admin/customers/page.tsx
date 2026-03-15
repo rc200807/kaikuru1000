@@ -46,6 +46,7 @@ type Store = {
   name: string
   code: string
   prefecture: string | null
+  address: string | null
 }
 
 type VisitSchedule = {
@@ -85,7 +86,7 @@ export default function AdminCustomersPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   // 店舗割り当てモーダル
-  const [assigning, setAssigning] = useState<{ userId: string; name: string } | null>(null)
+  const [assigning, setAssigning] = useState<{ userId: string; name: string; address: string } | null>(null)
   const [selectedStore, setSelectedStore] = useState('')
 
   // 顧客タイプ変更
@@ -273,6 +274,110 @@ export default function AdminCustomersPage() {
     }
   }
 
+  // 住所から都道府県・市区町村を抽出するヘルパー
+  function extractAddressParts(address: string): { prefecture: string; city: string } {
+    const prefMatch = address.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
+    const prefecture = prefMatch?.[1] || ''
+    const rest = prefecture ? address.slice(prefecture.length) : address
+    const cityMatch = rest.match(/^(.+?[市区町村郡])/)
+    const city = cityMatch?.[1] || ''
+    return { prefecture, city }
+  }
+
+  // 顧客住所に近い店舗をスコアリングして上位5件を取得
+  function getRecommendedStoreIds(customerAddress: string): string[] {
+    const customer = extractAddressParts(customerAddress)
+    if (!customer.prefecture) return []
+
+    // 隣接都道府県マップ（主要な隣接関係）
+    const neighbors: Record<string, string[]> = {
+      '北海道': ['青森県'],
+      '青森県': ['北海道', '岩手県', '秋田県'],
+      '岩手県': ['青森県', '宮城県', '秋田県'],
+      '宮城県': ['岩手県', '秋田県', '山形県', '福島県'],
+      '秋田県': ['青森県', '岩手県', '宮城県', '山形県'],
+      '山形県': ['秋田県', '宮城県', '福島県', '新潟県'],
+      '福島県': ['宮城県', '山形県', '茨城県', '栃木県', '群馬県', '新潟県'],
+      '茨城県': ['福島県', '栃木県', '埼玉県', '千葉県'],
+      '栃木県': ['福島県', '茨城県', '群馬県', '埼玉県'],
+      '群馬県': ['福島県', '栃木県', '埼玉県', '新潟県', '長野県'],
+      '埼玉県': ['茨城県', '栃木県', '群馬県', '千葉県', '東京都', '山梨県', '長野県'],
+      '千葉県': ['茨城県', '埼玉県', '東京都'],
+      '東京都': ['埼玉県', '千葉県', '神奈川県', '山梨県'],
+      '神奈川県': ['東京都', '山梨県', '静岡県'],
+      '新潟県': ['山形県', '福島県', '群馬県', '長野県', '富山県'],
+      '富山県': ['新潟県', '石川県', '長野県', '岐阜県'],
+      '石川県': ['富山県', '福井県', '岐阜県'],
+      '福井県': ['石川県', '岐阜県', '滋賀県', '京都府'],
+      '山梨県': ['埼玉県', '東京都', '神奈川県', '長野県', '静岡県'],
+      '長野県': ['群馬県', '埼玉県', '山梨県', '静岡県', '新潟県', '富山県', '岐阜県', '愛知県'],
+      '岐阜県': ['富山県', '石川県', '福井県', '長野県', '愛知県', '三重県', '滋賀県'],
+      '静岡県': ['神奈川県', '山梨県', '長野県', '愛知県'],
+      '愛知県': ['長野県', '岐阜県', '静岡県', '三重県'],
+      '三重県': ['岐阜県', '愛知県', '滋賀県', '京都府', '奈良県', '和歌山県'],
+      '滋賀県': ['福井県', '岐阜県', '三重県', '京都府'],
+      '京都府': ['福井県', '滋賀県', '三重県', '大阪府', '奈良県', '兵庫県'],
+      '大阪府': ['京都府', '奈良県', '和歌山県', '兵庫県'],
+      '兵庫県': ['京都府', '大阪府', '鳥取県', '岡山県'],
+      '奈良県': ['京都府', '大阪府', '三重県', '和歌山県'],
+      '和歌山県': ['三重県', '大阪府', '奈良県'],
+      '鳥取県': ['兵庫県', '島根県', '岡山県', '広島県'],
+      '島根県': ['鳥取県', '広島県', '山口県'],
+      '岡山県': ['兵庫県', '鳥取県', '広島県', '香川県'],
+      '広島県': ['鳥取県', '島根県', '岡山県', '山口県', '愛媛県'],
+      '山口県': ['島根県', '広島県', '福岡県', '大分県'],
+      '徳島県': ['香川県', '愛媛県', '高知県'],
+      '香川県': ['岡山県', '徳島県', '愛媛県'],
+      '愛媛県': ['広島県', '香川県', '徳島県', '高知県'],
+      '高知県': ['徳島県', '愛媛県'],
+      '福岡県': ['山口県', '大分県', '熊本県', '佐賀県'],
+      '佐賀県': ['福岡県', '長崎県'],
+      '長崎県': ['佐賀県'],
+      '熊本県': ['福岡県', '大分県', '宮崎県', '鹿児島県'],
+      '大分県': ['山口県', '福岡県', '熊本県', '宮崎県'],
+      '宮崎県': ['大分県', '熊本県', '鹿児島県'],
+      '鹿児島県': ['熊本県', '宮崎県'],
+      '沖縄県': [],
+    }
+
+    const scored = stores.map(store => {
+      let score = 0
+      const storePref = store.prefecture || ''
+      const storeAddr = store.address || ''
+      const storeParts = extractAddressParts(storeAddr || storePref)
+
+      // 同一都道府県 & 同一市区町村
+      if (customer.prefecture === (storeParts.prefecture || storePref)) {
+        score += 10
+        if (customer.city && storeParts.city && customer.city === storeParts.city) {
+          score += 10
+        }
+        // 住所文字列の部分一致（区レベル）
+        if (storeAddr && customer.city) {
+          const customerWard = customer.city.match(/(.+?区)/)?.[1]
+          if (customerWard && storeAddr.includes(customerWard)) {
+            score += 5
+          }
+        }
+      }
+      // 隣接都道府県
+      else if (neighbors[customer.prefecture]?.includes(storeParts.prefecture || storePref)) {
+        score += 3
+      }
+
+      return { id: store.id, score }
+    })
+
+    return scored
+      .filter(s => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(s => s.id)
+  }
+
+  // おすすめ店舗IDリスト（assigningが変わるたびに再計算）
+  const recommendedStoreIds = assigning ? getRecommendedStoreIds(assigning.address) : []
+
   const filtered = users.filter(u => {
     const matchSearch = !search || u.name.includes(search) || u.furigana.includes(search) || u.email.includes(search)
     const matchStore = !filterStore || (filterStore === 'unassigned' ? !u.store : u.store?.id === filterStore)
@@ -400,7 +505,7 @@ export default function AdminCustomersPage() {
           <Button
             size="sm"
             variant="outlined"
-            onClick={() => { setAssigning({ userId: user.id, name: user.name }); setSelectedStore(user.store?.id || '') }}
+            onClick={() => { setAssigning({ userId: user.id, name: user.name, address: user.address }); setSelectedStore(user.store?.id || '') }}
           >
             店舗割り当て
           </Button>
@@ -751,25 +856,81 @@ export default function AdminCustomersPage() {
           </>
         }
       >
-        {assigning && (
-          <>
-            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-4">
-              <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{assigning.name}</span> の担当店舗を設定します
-            </p>
-            <select
-              value={selectedStore}
-              onChange={e => setSelectedStore(e.target.value)}
-              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-            >
-              <option value="">店舗を選択...</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.id}>
-                  [{s.code}] {s.name} {s.prefecture ? `（${s.prefecture}）` : ''}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
+        {assigning && (() => {
+          const recommended = stores.filter(s => recommendedStoreIds.includes(s.id))
+          const others = stores.filter(s => !recommendedStoreIds.includes(s.id))
+          return (
+            <>
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{assigning.name}</span> の担当店舗を設定します
+              </p>
+              <p className="text-xs text-[var(--md-sys-color-outline)] mb-4 truncate">
+                📍 {assigning.address}
+              </p>
+
+              {/* おすすめ店舗（住所が近い） */}
+              {recommended.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-2 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                    </svg>
+                    住所が近い店舗（おすすめ）
+                  </p>
+                  <div className="space-y-1.5">
+                    {recommended.map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSelectedStore(s.id)}
+                        className={`w-full text-left px-3 py-2.5 rounded-[var(--md-sys-shape-small)] border transition-all text-sm ${
+                          selectedStore === s.id
+                            ? 'border-green-500 bg-green-50 dark:bg-green-950/30 ring-1 ring-green-500'
+                            : 'border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] hover:bg-[var(--md-sys-color-surface-container)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-[var(--md-sys-color-on-surface)]">
+                            [{s.code}] {s.name}
+                          </span>
+                          {selectedStore === s.id && (
+                            <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                          {s.address || s.prefecture || '住所未設定'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 区切り + すべての店舗 */}
+              {recommended.length > 0 && (
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+                  <span className="text-xs text-[var(--md-sys-color-outline)]">その他の店舗</span>
+                  <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+                </div>
+              )}
+              <select
+                value={recommendedStoreIds.includes(selectedStore) ? '' : selectedStore}
+                onChange={e => setSelectedStore(e.target.value)}
+                className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+              >
+                <option value="">{recommended.length > 0 ? 'その他の店舗から選択...' : '店舗を選択...'}</option>
+                {others.map(s => (
+                  <option key={s.id} value={s.id}>
+                    [{s.code}] {s.name} {s.prefecture ? `（${s.prefecture}）` : ''}
+                  </option>
+                ))}
+              </select>
+            </>
+          )
+        })()}
       </Modal>
     </>
   )

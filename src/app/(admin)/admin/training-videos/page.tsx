@@ -568,6 +568,180 @@ export default function AdminTrainingVideosPage() {
         </div>
       )}
 
+      {/* ===== AI要約中オーバーレイ ===== */}
+      {summarizingId && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          {/* 背景 */}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+          {/* メインコンテンツ */}
+          <div className="relative z-10 flex flex-col items-center gap-8 px-6 max-w-md text-center">
+
+            {/* 回転グラデーションリング */}
+            <div className="relative w-40 h-40">
+              {/* 外側リング（回転） */}
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'conic-gradient(from 0deg, #7c3aed, #3b82f6, #06b6d4, #8b5cf6, #ec4899, #7c3aed)',
+                  animation: 'ai-spin 2s linear infinite',
+                }}
+              />
+              {/* 内側切り抜き */}
+              <div className="absolute inset-[4px] rounded-full bg-black/80" />
+
+              {/* 中間リング（逆回転） */}
+              <div
+                className="absolute inset-[12px] rounded-full"
+                style={{
+                  background: 'conic-gradient(from 180deg, transparent 0%, #8b5cf6 25%, transparent 50%, #3b82f6 75%, transparent 100%)',
+                  animation: 'ai-spin-reverse 3s linear infinite',
+                  opacity: 0.7,
+                }}
+              />
+              <div className="absolute inset-[16px] rounded-full bg-black/80" />
+
+              {/* 内側パルス */}
+              <div
+                className="absolute inset-[24px] rounded-full"
+                style={{
+                  background: 'radial-gradient(circle, rgba(139,92,246,0.3) 0%, rgba(59,130,246,0.1) 50%, transparent 70%)',
+                  animation: 'ai-pulse-glow 1.5s ease-in-out infinite',
+                }}
+              />
+
+              {/* 中央AIアイコン */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg
+                  className="w-12 h-12 text-white"
+                  style={{ animation: 'ai-icon-breathe 2s ease-in-out infinite' }}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            {/* スキャンライン */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div
+                className="w-full h-[2px]"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.6), rgba(59,130,246,0.8), rgba(139,92,246,0.6), transparent)',
+                  animation: 'ai-scanline 2.5s ease-in-out infinite',
+                }}
+              />
+            </div>
+
+            {/* フローティングパーティクル */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-1 h-1 rounded-full"
+                  style={{
+                    background: i % 3 === 0 ? '#8b5cf6' : i % 3 === 1 ? '#3b82f6' : '#06b6d4',
+                    left: `${10 + (i * 7) % 80}%`,
+                    top: `${15 + (i * 11) % 70}%`,
+                    animation: `ai-particle ${2 + (i % 3)}s ease-in-out ${i * 0.3}s infinite`,
+                    boxShadow: `0 0 6px ${i % 3 === 0 ? '#8b5cf6' : i % 3 === 1 ? '#3b82f6' : '#06b6d4'}`,
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* テキスト */}
+            <div className="space-y-3">
+              <h2
+                className="text-xl font-bold text-white"
+                style={{
+                  background: 'linear-gradient(90deg, #c4b5fd, #93c5fd, #67e8f9, #c4b5fd)',
+                  backgroundSize: '200% auto',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  animation: 'ai-text-shimmer 2s linear infinite',
+                }}
+              >
+                AIが動画を解析中...
+              </h2>
+              <p className="text-sm text-gray-400">
+                動画の内容を分析し、要約と重要ポイントを抽出しています
+              </p>
+
+              {/* プログレスバー */}
+              <div className="w-64 h-1.5 rounded-full bg-white/10 overflow-hidden mx-auto mt-4">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    background: 'linear-gradient(90deg, #7c3aed, #3b82f6, #06b6d4, #8b5cf6)',
+                    backgroundSize: '200% auto',
+                    animation: 'ai-progress 1.5s ease-in-out infinite',
+                  }}
+                />
+              </div>
+
+              {/* ステップ表示 */}
+              <div className="flex items-center justify-center gap-3 mt-4">
+                {['字幕取得', 'AI解析', '要約生成'].map((step, i) => (
+                  <div key={step} className="flex items-center gap-1.5">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        background: '#8b5cf6',
+                        animation: `ai-step-dot 1.8s ease-in-out ${i * 0.6}s infinite`,
+                      }}
+                    />
+                    <span className="text-xs text-gray-400">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* CSS Animations */}
+          <style>{`
+            @keyframes ai-spin {
+              to { transform: rotate(360deg); }
+            }
+            @keyframes ai-spin-reverse {
+              to { transform: rotate(-360deg); }
+            }
+            @keyframes ai-pulse-glow {
+              0%, 100% { opacity: 0.3; transform: scale(1); }
+              50% { opacity: 0.8; transform: scale(1.1); }
+            }
+            @keyframes ai-icon-breathe {
+              0%, 100% { transform: scale(1); opacity: 0.9; }
+              50% { transform: scale(1.15); opacity: 1; }
+            }
+            @keyframes ai-scanline {
+              0% { transform: translateY(-100px); opacity: 0; }
+              20% { opacity: 1; }
+              80% { opacity: 1; }
+              100% { transform: translateY(calc(100vh + 100px)); opacity: 0; }
+            }
+            @keyframes ai-particle {
+              0%, 100% { transform: translateY(0) scale(1); opacity: 0.4; }
+              50% { transform: translateY(-20px) scale(1.8); opacity: 1; }
+            }
+            @keyframes ai-text-shimmer {
+              to { background-position: 200% center; }
+            }
+            @keyframes ai-progress {
+              0% { width: 5%; background-position: 0% center; }
+              50% { width: 70%; background-position: 100% center; }
+              100% { width: 30%; background-position: 200% center; }
+            }
+            @keyframes ai-step-dot {
+              0%, 100% { opacity: 0.3; transform: scale(0.8); box-shadow: none; }
+              50% { opacity: 1; transform: scale(1.4); box-shadow: 0 0 8px #8b5cf6; }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* ===== 動画詳細モーダル ===== */}
       <Modal
         open={!!detailVideo}

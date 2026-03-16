@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import { getYoutubeEmbedUrl, getYoutubeThumbnail } from '@/lib/youtube-utils'
 
 type Video = {
   id: string
@@ -18,38 +19,6 @@ type CategoryWithVideos = {
   id: string
   name: string
   videos: Video[]
-}
-
-/** YouTubeのURLからembedURLに変換 */
-function getYoutubeEmbedUrl(url: string): string | null {
-  try {
-    const u = new URL(url)
-    let videoId = ''
-    if (u.hostname.includes('youtu.be')) {
-      videoId = u.pathname.slice(1)
-    } else {
-      videoId = u.searchParams.get('v') || ''
-    }
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : null
-  } catch {
-    return null
-  }
-}
-
-/** YouTubeのURLからサムネイルURLを取得 */
-function getYoutubeThumbnail(url: string): string | null {
-  try {
-    const u = new URL(url)
-    let videoId = ''
-    if (u.hostname.includes('youtu.be')) {
-      videoId = u.pathname.slice(1)
-    } else {
-      videoId = u.searchParams.get('v') || ''
-    }
-    return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
-  } catch {
-    return null
-  }
 }
 
 export default function StoreTrainingVideosPage() {

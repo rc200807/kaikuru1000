@@ -10,6 +10,7 @@ import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import { getYoutubeEmbedUrl, getYoutubeThumbnail } from '@/lib/youtube-utils'
 
 type VideoCategory = {
   id: string
@@ -30,38 +31,6 @@ type TrainingVideo = {
   sortOrder: number
   admin: { name: string }
   createdAt: string
-}
-
-/** YouTubeのURLからembedURLに変換 */
-function getYoutubeEmbedUrl(url: string): string | null {
-  try {
-    const u = new URL(url)
-    let videoId = ''
-    if (u.hostname.includes('youtu.be')) {
-      videoId = u.pathname.slice(1)
-    } else {
-      videoId = u.searchParams.get('v') || ''
-    }
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : null
-  } catch {
-    return null
-  }
-}
-
-/** YouTubeのURLからサムネイルURLを取得 */
-function getYoutubeThumbnail(url: string): string | null {
-  try {
-    const u = new URL(url)
-    let videoId = ''
-    if (u.hostname.includes('youtu.be')) {
-      videoId = u.pathname.slice(1)
-    } else {
-      videoId = u.searchParams.get('v') || ''
-    }
-    return videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
-  } catch {
-    return null
-  }
 }
 
 export default function AdminTrainingVideosPage() {

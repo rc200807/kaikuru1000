@@ -74,6 +74,9 @@ model Store {
   customers  User[]
   visitSchedules VisitSchedule[]
   members    StoreMember[]
+  communityThreads   CommunityThread[]
+  communityReplies   CommunityReply[]
+  communityReactions CommunityReaction[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -321,4 +324,50 @@ model TrainingVideo {
   @@index([categoryId])
   @@index([isPublished])
   @@index([adminId])
+}
+
+// コミュニティスレッド
+model CommunityThread {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  isPinned  Boolean  @default(false)
+  replies   CommunityReply[]
+  reactions CommunityReaction[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([createdAt])
+}
+
+// スレッド返信
+model CommunityReply {
+  id        String          @id @default(cuid())
+  threadId  String
+  thread    CommunityThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  content   String          @db.Text
+  storeId   String
+  store     Store           @relation(fields: [storeId], references: [id])
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([threadId])
+  @@index([storeId])
+}
+
+// リアクション（スレッドに対する絵文字リアクション）
+model CommunityReaction {
+  id        String          @id @default(cuid())
+  threadId  String
+  thread    CommunityThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  emoji     String
+  storeId   String
+  store     Store           @relation(fields: [storeId], references: [id])
+  createdAt DateTime        @default(now())
+
+  @@unique([threadId, storeId, emoji])
+  @@index([threadId])
 }

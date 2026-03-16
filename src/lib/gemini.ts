@@ -330,9 +330,6 @@ export async function appraiseForPurchase(
 export type VideoSummaryResult = {
   summary: string        // 動画の要約（500〜1000文字程度）
   keyPoints: string[]    // 重要ポイント（5〜10項目）
-  targetAudience: string // 対象者
-  duration: string       // おおよその所要時間
-  difficulty: string     // 難易度（初級/中級/上級）
 }
 
 const VIDEO_SUMMARY_PROMPT = `あなたは企業研修の専門家です。以下のYouTube動画の内容を分析し、研修資料として活用できるよう要約してください。
@@ -341,11 +338,9 @@ const VIDEO_SUMMARY_PROMPT = `あなたは企業研修の専門家です。以�
 
 - summary: 動画の内容を500〜1000文字程度で要約。研修を受ける人が事前に読んで概要を把握できる内容にしてください。段落分けして読みやすくしてください。
 - keyPoints: 動画の重要ポイントを5〜10項目の配列で。各項目は1〜2文の簡潔な説明。
-- targetAudience: この動画の対象者（例: "新人スタッフ", "全スタッフ", "リーダー以上"）
-- duration: 動画のおおよその長さ（例: "約15分"）
-- difficulty: 内容の難易度（"初級" "中級" "上級" のいずれか）
 
 必ずJSONのみ返してください。説明文は不要です。
+「対象」「難易度」「所要時間」などのメタ情報は含めないでください。
 日本語で回答してください。`
 
 /**
@@ -389,9 +384,6 @@ export async function summarizeVideo(
     return {
       summary:        typeof parsed.summary === 'string' ? parsed.summary : '要約を取得できませんでした',
       keyPoints:      Array.isArray(parsed.keyPoints) ? parsed.keyPoints.map(String) : [],
-      targetAudience: typeof parsed.targetAudience === 'string' ? parsed.targetAudience : '全スタッフ',
-      duration:       typeof parsed.duration === 'string' ? parsed.duration : '不明',
-      difficulty:     typeof parsed.difficulty === 'string' ? parsed.difficulty : '初級',
     }
   } catch (err) {
     console.error('[gemini] 動画要約失敗:', err)

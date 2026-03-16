@@ -32,17 +32,12 @@ export async function POST(
       summary: result.summary,
       keyPoints: JSON.stringify(result.keyPoints),
       summaryAt: new Date(),
-      // descriptionが空の場合、targetAudience/difficulty/durationを補足情報として追記
-      description: video.description || `対象: ${result.targetAudience} | 難易度: ${result.difficulty} | ${result.duration}`,
     },
   })
 
   return NextResponse.json({
     summary: updated.summary,
     keyPoints: result.keyPoints,
-    targetAudience: result.targetAudience,
-    duration: result.duration,
-    difficulty: result.difficulty,
     summaryAt: updated.summaryAt,
   })
 }

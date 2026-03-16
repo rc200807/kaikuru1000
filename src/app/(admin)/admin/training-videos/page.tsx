@@ -488,11 +488,6 @@ export default function AdminTrainingVideosPage() {
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)]">
                           {v.category.name}
                         </span>
-                        {v.isPublished ? (
-                          <span className="text-xs text-green-600 dark:text-green-400 font-medium">公開中</span>
-                        ) : (
-                          <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">下書き</span>
-                        )}
                       </div>
                       <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] line-clamp-2">
                         {v.title}
@@ -505,27 +500,52 @@ export default function AdminTrainingVideosPage() {
                       <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
                         {format(new Date(v.createdAt), 'M/d', { locale: ja })} · {v.admin.name}
                       </p>
-                      <div className="flex gap-2 mt-3 flex-wrap">
-                        <button onClick={() => setDetailVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline font-medium">
-                          詳細を見る
-                        </button>
-                        <button onClick={() => startEditVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
-                          編集
-                        </button>
-                        <button onClick={() => handleTogglePublish(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
-                          {v.isPublished ? '非公開' : '公開'}
-                        </button>
-                        <button
-                          onClick={() => handleSummarize(v.id)}
-                          disabled={summarizingId === v.id}
-                          className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
-                        >
-                          {summarizingId === v.id ? '要約中...' : (v.summary ? '再要約' : 'AI要約')}
-                        </button>
-                        <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">
-                          削除
-                        </button>
+                      {/* 公開トグル */}
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleTogglePublish(v) }}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                              v.isPublished
+                                ? 'bg-green-500'
+                                : 'bg-[var(--md-sys-color-outline-variant)]'
+                            }`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                              v.isPublished ? 'translate-x-4.5' : 'translate-x-0.5'
+                            }`} />
+                          </button>
+                          <span className={`text-xs font-medium ${v.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                            {v.isPublished ? '公開中' : '非公開'}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => startEditVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
+                            編集
+                          </button>
+                          <button
+                            onClick={() => handleSummarize(v.id)}
+                            disabled={summarizingId === v.id}
+                            className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
+                          >
+                            {summarizingId === v.id ? '要約中...' : (v.summary ? '再要約' : 'AI要約')}
+                          </button>
+                          <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">
+                            削除
+                          </button>
+                        </div>
                       </div>
+
+                      {/* 詳細を見るボタン（大きく） */}
+                      <button
+                        onClick={() => setDetailVideo(v)}
+                        className="mt-3 w-full py-2.5 rounded-xl bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-sm font-semibold hover:opacity-90 active:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                        </svg>
+                        詳細を見る
+                      </button>
                       {v.summary && (
                         <button
                           onClick={() => setDetailVideo(v)}
@@ -673,23 +693,40 @@ export default function AdminTrainingVideosPage() {
               )}
 
               {/* アクション */}
-              <div className="flex gap-2 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
-                <Button size="sm" variant="tonal" onClick={() => { startEditVideo(detailVideo); setDetailVideo(null) }}>
-                  編集
-                </Button>
-                <Button size="sm" variant="tonal" onClick={() => { handleTogglePublish(detailVideo); setDetailVideo(null) }}>
-                  {detailVideo.isPublished ? '非公開にする' : '公開する'}
-                </Button>
-                {!detailVideo.summary && (
-                  <Button
-                    size="sm"
-                    variant="tonal"
-                    onClick={() => { handleSummarize(detailVideo.id); setDetailVideo(null) }}
-                    disabled={summarizingId === detailVideo.id}
+              <div className="flex items-center gap-3 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
+                {/* 公開トグル */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { handleTogglePublish(detailVideo); setDetailVideo(null) }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      detailVideo.isPublished
+                        ? 'bg-green-500'
+                        : 'bg-[var(--md-sys-color-outline-variant)]'
+                    }`}
                   >
-                    AI要約を生成
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      detailVideo.isPublished ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                  <span className={`text-sm font-medium ${detailVideo.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                    {detailVideo.isPublished ? '公開中' : '非公開'}
+                  </span>
+                </div>
+                <div className="flex gap-2 ml-auto">
+                  <Button size="sm" variant="tonal" onClick={() => { startEditVideo(detailVideo); setDetailVideo(null) }}>
+                    編集
                   </Button>
-                )}
+                  {!detailVideo.summary && (
+                    <Button
+                      size="sm"
+                      variant="tonal"
+                      onClick={() => { handleSummarize(detailVideo.id); setDetailVideo(null) }}
+                      disabled={summarizingId === detailVideo.id}
+                    >
+                      AI要約を生成
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )

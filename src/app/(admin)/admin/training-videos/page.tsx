@@ -29,6 +29,8 @@ type TrainingVideo = {
   isPublished: boolean
   publishedAt: string | null
   sortOrder: number
+  summary: string | null
+  summaryAt: string | null
   admin: { name: string }
   createdAt: string
 }
@@ -40,6 +42,7 @@ export default function AdminTrainingVideosPage() {
   const [videos, setVideos] = useState<TrainingVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [summarizingId, setSummarizingId] = useState<string | null>(null)
 
   // カテゴリ管理
   const [showCatForm, setShowCatForm] = useState(false)
@@ -164,6 +167,25 @@ export default function AdminTrainingVideosPage() {
     if (res.ok) {
       setMessage({ type: 'success', text: v.isPublished ? '非公開にしました' : '公開しました' })
       fetchAll()
+    }
+  }
+
+  async function handleSummarize(id: string) {
+    setSummarizingId(id)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/admin/training-videos/${id}/summarize`, { method: 'POST' })
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'AI要約を生成しました' })
+        fetchAll()
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || '要約の生成に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: '通信エラー' })
+    } finally {
+      setSummarizingId(null)
     }
   }
 
@@ -486,10 +508,27 @@ export default function AdminTrainingVideosPage() {
                         <button onClick={() => handleTogglePublish(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
                           {v.isPublished ? '非公開' : '公開'}
                         </button>
+                        <button
+                          onClick={() => handleSummarize(v.id)}
+                          disabled={summarizingId === v.id}
+                          className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
+                        >
+                          {summarizingId === v.id ? '要約中...' : (v.summary ? '再要約' : 'AI要約')}
+                        </button>
                         <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">
                           削除
                         </button>
                       </div>
+                      {v.summary && (
+                        <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                          <p className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                            </svg>
+                            AI要約あり
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

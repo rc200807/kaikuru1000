@@ -324,3 +324,77 @@ export async function appraiseForPurchase(
     return null
   }
 }
+
+/* ─── 研修動画 AI 要約 ─── */
+
+export type VideoSummaryResult = {
+  summary: string        // 動画の要約（500〜1000文字程度）
+  keyPoints: string[]    // 重要ポイント（5〜10項目）
+  targetAudience: string // 対象者
+  duration: string       // おおよその所要時間
+  difficulty: string     // 難易度（初級/中級/上級）
+}
+
+const VIDEO_SUMMARY_PROMPT = `あなたは企業研修の専門家です。以下のYouTube動画の内容を分析し、研修資料として活用できるよう要約してください。
+
+【出力形式】JSON形式で以下の項目を返してください。すべて文字列で返してください（keyPointsのみ文字列の配列）。
+
+- summary: 動画の内容を500〜1000文字程度で要約。研修を受ける人が事前に読んで概要を把握できる内容にしてください。段落分けして読みやすくしてください。
+- keyPoints: 動画の重要ポイントを5〜10項目の配列で。各項目は1〜2文の簡潔な説明。
+- targetAudience: この動画の対象者（例: "新人スタッフ", "全スタッフ", "リーダー以上"）
+- duration: 動画のおおよその長さ（例: "約15分"）
+- difficulty: 内容の難易度（"初級" "中級" "上級" のいずれか）
+
+必ずJSONのみ返してください。説明文は不要です。
+日本語で回答してください。`
+
+/**
+ * YouTube動画の内容をAIで要約する
+ *
+ * @param youtubeUrl YouTube動画のURL
+ * @param title      動画のタイトル（補助情報）
+ * @param description 動画の説明（補助情報）
+ * @returns 要約結果。APIキー未設定またはエラー時は null
+ */
+export async function summarizeVideo(
+  youtubeUrl: string,
+  title: string,
+  description?: string | null,
+): Promise<VideoSummaryResult | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    console.warn('[gemini] GEMINI_API_KEY が未設定のため動画要約をスキップします')
+    return null
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+    let userPrompt = `動画タイトル: ${title}\nYouTube URL: ${youtubeUrl}`
+    if (description) {
+      userPrompt += `\n動画説明: ${description}`
+    }
+    userPrompt += '\n\nこの動画の内容を分析し、研修資料として要約してください。'
+
+    const result = await model.generateContent([
+      VIDEO_SUMMARY_PROMPT,
+      userPrompt,
+    ])
+
+    const text = result.response.text().trim()
+    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(jsonStr)
+
+    return {
+      summary:        typeof parsed.summary === 'string' ? parsed.summary : '要約を取得できませんでした',
+      keyPoints:      Array.isArray(parsed.keyPoints) ? parsed.keyPoints.map(String) : [],
+      targetAudience: typeof parsed.targetAudience === 'string' ? parsed.targetAudience : '全スタッフ',
+      duration:       typeof parsed.duration === 'string' ? parsed.duration : '不明',
+      difficulty:     typeof parsed.difficulty === 'string' ? parsed.difficulty : '初級',
+    }
+  } catch (err) {
+    console.error('[gemini] 動画要約失敗:', err)
+    return null
+  }
+}

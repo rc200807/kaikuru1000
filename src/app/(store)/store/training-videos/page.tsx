@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import { getYoutubeEmbedUrl, getYoutubeThumbnail } from '@/lib/youtube-utils'
@@ -27,7 +28,6 @@ export default function StoreTrainingVideosPage() {
   const [categories, setCategories] = useState<CategoryWithVideos[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string>('all')
-  const [playingVideo, setPlayingVideo] = useState<Video | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -60,38 +60,6 @@ export default function StoreTrainingVideosPage() {
           本部が配信する研修・教育コンテンツ
         </p>
       </div>
-
-      {/* プレーヤーモーダル */}
-      {playingVideo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => setPlayingVideo(null)} />
-          <div className="relative w-full max-w-4xl z-10">
-            <button
-              onClick={() => setPlayingVideo(null)}
-              className="absolute -top-10 right-0 text-white/80 hover:text-white text-sm flex items-center gap-1"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              閉じる
-            </button>
-            <div className="aspect-video rounded-2xl overflow-hidden bg-black shadow-2xl">
-              <iframe
-                src={getYoutubeEmbedUrl(playingVideo.youtubeUrl) + '?autoplay=1'}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-            <div className="mt-4">
-              <h2 className="text-lg font-bold text-white">{playingVideo.title}</h2>
-              {playingVideo.description && (
-                <p className="text-sm text-white/70 mt-1 whitespace-pre-wrap">{playingVideo.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {allVideos.length === 0 ? (
         <EmptyState
@@ -146,10 +114,10 @@ export default function StoreTrainingVideosPage() {
                   {cat.videos.map(video => {
                     const thumb = getYoutubeThumbnail(video.youtubeUrl)
                     return (
-                      <button
+                      <Link
                         key={video.id}
-                        onClick={() => setPlayingVideo(video)}
-                        className="text-left rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] overflow-hidden hover:border-[var(--store-primary)] hover:shadow-lg transition-all group"
+                        href={`/store/training-videos/${video.id}`}
+                        className="block rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] overflow-hidden hover:border-[var(--store-primary)] hover:shadow-lg transition-all group"
                       >
                         {/* サムネイル */}
                         <div className="relative aspect-video bg-black">
@@ -181,7 +149,7 @@ export default function StoreTrainingVideosPage() {
                             </p>
                           )}
                         </div>
-                      </button>
+                      </Link>
                     )
                   })}
                 </div>

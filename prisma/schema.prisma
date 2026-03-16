@@ -77,8 +77,25 @@ model Store {
   communityThreads   CommunityThread[]
   communityReplies   CommunityReply[]
   communityReactions CommunityReaction[]
+  googleCalendar StoreGoogleCalendar?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+// 店舗Googleカレンダー連携設定
+model StoreGoogleCalendar {
+  id              String    @id @default(cuid())
+  storeId         String    @unique
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  googleEmail     String?
+  accessToken     String?   @db.Text  // AES-256-GCM encrypted
+  refreshToken    String?   @db.Text  // AES-256-GCM encrypted
+  tokenExpiry     DateTime?
+  calendarId      String    @default("primary")  // Which calendar to sync to
+  calendarName    String?   // Display name of selected calendar
+  isEnabled       Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 // 店舗メンバー（店舗のサブアカウント）
@@ -106,6 +123,7 @@ model VisitSchedule {
   note           String?
   purchaseAmount Int?     // 買取金額（円）— 品目合計から自動計算
   billingAmount  Int?     // 請求金額（円）— 作業品目合計から自動計算
+  googleCalendarEventId String?
   purchaseItems  PurchaseItem[]
   workItems      WorkItem[]
   salesContract  SalesContract?

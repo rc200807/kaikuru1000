@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createCalendarEvent } from '@/lib/google-calendar'
 
 // 訪問スケジュール一覧
 export async function GET(request: NextRequest) {
@@ -63,10 +64,30 @@ export async function POST(request: NextRequest) {
       status: 'scheduled',
     },
     include: {
-      user: { select: { name: true } },
+      user: { select: { name: true, address: true } },
       store: { select: { name: true } },
     },
   })
+
+  // Googleカレンダーにイベントを同期（失敗してもスケジュール登録は成功とする）
+  try {
+    const eventId = await createCalendarEvent(storeId, {
+      visitDate: new Date(visitDate),
+      note,
+      user: {
+        name: schedule.user.name,
+        address: schedule.user.address ?? '',
+      },
+    })
+    if (eventId) {
+      await prisma.visitSchedule.update({
+        where: { id: schedule.id },
+        data: { googleCalendarEventId: eventId },
+      })
+    }
+  } catch (err) {
+    console.error('[GoogleCalendar] スケジュール作成時のカレンダー同期に失敗:', err)
+  }
 
   return NextResponse.json(schedule, { status: 201 })
 }

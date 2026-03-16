@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 
 const VALID_STATUSES = ['scheduled', 'pending', 'completed', 'rescheduled', 'absent', 'cancelled']
 
@@ -105,6 +106,26 @@ export async function PATCH(
       store: { select: { id: true, name: true } },
     },
   })
+
+  // Googleカレンダー同期（失敗してもスケジュール更新は成功とする）
+  try {
+    if (status === 'cancelled') {
+      // キャンセル時はカレンダーイベントを削除
+      await deleteCalendarEvent(schedule.storeId, schedule.googleCalendarEventId)
+    } else if (schedule.googleCalendarEventId) {
+      // その他の更新時はカレンダーイベントを更新
+      await updateCalendarEvent(schedule.storeId, schedule.googleCalendarEventId, {
+        visitDate: updated.visitDate,
+        note: updated.note,
+        user: {
+          name: updated.user.name,
+          address: updated.user.address ?? '',
+        },
+      })
+    }
+  } catch (err) {
+    console.error('[GoogleCalendar] スケジュール更新時のカレンダー同期に失敗:', err)
+  }
 
   return NextResponse.json(updated)
 }

@@ -59,6 +59,13 @@ export default function StoreSchedulePage() {
   const [formData, setFormData] = useState({ userId: '', visitDate: '', note: '' })
   const [saving, setSaving] = useState(false)
 
+  // ページネーション
+  const [schedulesPage, setSchedulesPage] = useState(1)
+  const [schedulesHasMore, setSchedulesHasMore] = useState(false)
+  const [schedulesTotal, setSchedulesTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const SCHEDULES_LIMIT = 50
+
   // 対応完了モーダル（金額入力）
   const [completionModal, setCompletionModal] = useState<{
     scheduleId: string
@@ -84,15 +91,35 @@ export default function StoreSchedulePage() {
     if (status === 'authenticated') {
       const storeId = (session.user as any).id
       Promise.all([
-        fetch(`/api/visit-schedules?storeId=${storeId}`).then(r => r.json()),
+        fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}`).then(r => r.json()),
         fetch(`/api/stores/${storeId}/customers`).then(r => r.json()),
       ]).then(([schedData, custData]) => {
-        setSchedules(Array.isArray(schedData) ? schedData : [])
-        setCustomers(Array.isArray(custData) ? custData : [])
+        const schedList = schedData?.schedules ?? (Array.isArray(schedData) ? schedData : [])
+        setSchedules(schedList)
+        setSchedulesTotal(schedData?.total ?? schedList.length)
+        setSchedulesPage(1)
+        setSchedulesHasMore((schedData?.total ?? schedList.length) > SCHEDULES_LIMIT)
+        const custList = custData?.customers ?? (Array.isArray(custData) ? custData : [])
+        setCustomers(custList)
         setLoading(false)
       }).catch(() => setLoading(false))
     }
   }, [status, session])
+
+  async function loadMoreSchedules() {
+    setLoadingMore(true)
+    const storeId = (session?.user as any).id
+    const nextPage = schedulesPage + 1
+    try {
+      const res = await fetch(`/api/visit-schedules?storeId=${storeId}&page=${nextPage}&limit=${SCHEDULES_LIMIT}`)
+      const data = await res.json()
+      const list = data?.schedules ?? (Array.isArray(data) ? data : [])
+      setSchedules(prev => [...prev, ...list])
+      setSchedulesPage(nextPage)
+      setSchedulesHasMore(nextPage * SCHEDULES_LIMIT < (data?.total ?? 0))
+    } catch { /* ignore */ }
+    setLoadingMore(false)
+  }
 
   async function handleStatusChange(scheduleId: string, newStatus: string) {
     // 「対応完了」のときは金額入力モーダルを開く
@@ -394,6 +421,19 @@ export default function StoreSchedulePage() {
               </div>
             </Card>
           </section>
+        )}
+
+        {schedulesHasMore && (
+          <div className="flex justify-center mt-6">
+            <Button
+              variant="tonal"
+              onClick={loadMoreSchedules}
+              loading={loadingMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? '読み込み中...' : `もっと読み込む（${schedules.length} / ${schedulesTotal}件）`}
+            </Button>
+          </div>
         )}
       </div>
 

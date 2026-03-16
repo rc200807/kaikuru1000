@@ -13,24 +13,36 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const includeTestData = searchParams.get('includeTestData') === 'true'
   const includeInactive = searchParams.get('includeInactive') === 'true'
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+  const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
 
   const where: any = {}
   if (!includeTestData) where.isTestData = false
   if (!includeInactive) where.isActive = true
 
-  const users = await prisma.user.findMany({
-    where,
-    include: {
-      store: { select: { id: true, name: true, code: true } },
-      licenseKey: { select: { key: true } },
-      visitSchedules: {
-        where: { visitDate: { gte: new Date() }, status: 'scheduled' },
-        orderBy: { visitDate: 'asc' },
-        take: 1,
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      include: {
+        store: { select: { id: true, name: true, code: true } },
+        licenseKey: { select: { key: true } },
+        visitSchedules: {
+          where: { visitDate: { gte: new Date() }, status: 'scheduled' },
+          orderBy: { visitDate: 'asc' },
+          take: 1,
+        },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.user.count({ where }),
+  ])
 
-  return NextResponse.json(users.map(({ password: _, ...u }) => u))
+  return NextResponse.json({
+    users: users.map(({ password: _, ...u }) => u),
+    total,
+    page,
+    limit,
+  })
 }

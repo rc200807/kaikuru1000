@@ -88,6 +88,13 @@ export default function CommunityPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
+  // ページネーション
+  const [threadsPage, setThreadsPage] = useState(1)
+  const [threadsHasMore, setThreadsHasMore] = useState(false)
+  const [threadsTotal, setThreadsTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const THREADS_LIMIT = 20
+
   // Compose modal
   const [showNewForm, setShowNewForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
@@ -120,15 +127,45 @@ export default function CommunityPage() {
   }, [search])
 
   const fetchThreads = useCallback(async () => {
-    const q = debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : ''
-    const res = await fetch(`/api/store/community${q}`)
-    if (res.ok) setThreads(await res.json())
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    params.set('page', '1')
+    params.set('limit', String(THREADS_LIMIT))
+    const res = await fetch(`/api/store/community?${params.toString()}`)
+    if (res.ok) {
+      const data = await res.json()
+      const list = data?.threads ?? (Array.isArray(data) ? data : [])
+      setThreads(list)
+      setThreadsTotal(data?.total ?? list.length)
+      setThreadsPage(1)
+      setThreadsHasMore((data?.total ?? list.length) > THREADS_LIMIT)
+    }
     setLoading(false)
   }, [debouncedSearch])
 
   useEffect(() => {
     if (status === 'authenticated') fetchThreads()
   }, [status, fetchThreads])
+
+  async function loadMoreThreads() {
+    setLoadingMore(true)
+    const nextPage = threadsPage + 1
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    params.set('page', String(nextPage))
+    params.set('limit', String(THREADS_LIMIT))
+    try {
+      const res = await fetch(`/api/store/community?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        const list = data?.threads ?? (Array.isArray(data) ? data : [])
+        setThreads(prev => [...prev, ...list])
+        setThreadsPage(nextPage)
+        setThreadsHasMore(nextPage * THREADS_LIMIT < (data?.total ?? 0))
+      }
+    } catch { /* ignore */ }
+    setLoadingMore(false)
+  }
 
   /* ── Actions ── */
   const openThread = async (threadId: string) => {
@@ -338,6 +375,19 @@ export default function CommunityPage() {
               </div>
             </div>
           ))}
+
+          {threadsHasMore && (
+            <div className="flex justify-center mt-4">
+              <Button
+                variant="tonal"
+                onClick={loadMoreThreads}
+                loading={loadingMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? '読み込み中...' : `もっと読み込む（${threads.length} / ${threadsTotal}件）`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

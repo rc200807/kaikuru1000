@@ -81,6 +81,13 @@ export default function AdminCustomersPage() {
   const [showTestData, setShowTestData] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
 
+  // ページネーション
+  const [usersPage, setUsersPage] = useState(1)
+  const [usersHasMore, setUsersHasMore] = useState(false)
+  const [usersTotal, setUsersTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const USERS_LIMIT = 50
+
   // 削除・無効化処理中のユーザーID
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
@@ -116,17 +123,42 @@ export default function AdminCustomersPage() {
       const params = new URLSearchParams()
       if (showTestData) params.set('includeTestData', 'true')
       if (showInactive) params.set('includeInactive', 'true')
+      params.set('page', '1')
+      params.set('limit', String(USERS_LIMIT))
       const usersUrl = `/api/admin/users?${params.toString()}`
       Promise.all([
         fetch(usersUrl).then(r => r.json()),
         fetch('/api/stores').then(r => r.json()),
       ]).then(([usersData, storesData]) => {
-        setUsers(Array.isArray(usersData) ? usersData : [])
+        const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
+        setUsers(list)
+        setUsersTotal(usersData?.total ?? list.length)
+        setUsersPage(1)
+        setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
         setStores(Array.isArray(storesData) ? storesData : [])
         setLoading(false)
       }).catch(() => setLoading(false))
     }
   }, [status, session, showTestData, showInactive])
+
+  async function loadMoreUsers() {
+    setLoadingMore(true)
+    const nextPage = usersPage + 1
+    const params = new URLSearchParams()
+    if (showTestData) params.set('includeTestData', 'true')
+    if (showInactive) params.set('includeInactive', 'true')
+    params.set('page', String(nextPage))
+    params.set('limit', String(USERS_LIMIT))
+    try {
+      const res = await fetch(`/api/admin/users?${params.toString()}`)
+      const data = await res.json()
+      const list = data?.users ?? (Array.isArray(data) ? data : [])
+      setUsers(prev => [...prev, ...list])
+      setUsersPage(nextPage)
+      setUsersHasMore(nextPage * USERS_LIMIT < (data?.total ?? 0))
+    } catch { /* ignore */ }
+    setLoadingMore(false)
+  }
 
   // 顧客詳細モーダルを開いたときにスケジュール取得
   useEffect(() => {
@@ -139,7 +171,8 @@ export default function AdminCustomersPage() {
     fetch(`/api/visit-schedules?userId=${detailUser.id}`)
       .then(r => r.json())
       .then(data => {
-        setDetailSchedules(Array.isArray(data) ? data : [])
+        const list = data?.schedules ?? (Array.isArray(data) ? data : [])
+        setDetailSchedules(list)
         setDetailSchedulesLoading(false)
       })
       .catch(() => setDetailSchedulesLoading(false))
@@ -596,6 +629,19 @@ export default function AdminCustomersPage() {
             emptyTitle="該当する顧客がいません"
           />
         </div>
+
+        {usersHasMore && (
+          <div className="flex justify-center mt-6">
+            <Button
+              variant="tonal"
+              onClick={loadMoreUsers}
+              loading={loadingMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? '読み込み中...' : `もっと読み込む（${users.length} / ${usersTotal}件）`}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 顧客詳細モーダル */}

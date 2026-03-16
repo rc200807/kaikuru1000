@@ -217,7 +217,7 @@ export default function StoreDashboardPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* ── ランク + KPI ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* ランクカード */}
           <div
             className="relative rounded-3xl p-4 overflow-hidden flex items-center justify-center"

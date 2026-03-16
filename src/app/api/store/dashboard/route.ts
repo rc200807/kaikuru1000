@@ -30,24 +30,33 @@ export async function GET(request: NextRequest) {
     .reduce((s, v) => s + (v.purchaseAmount ?? 0), 0)
 
   // ── 全店舗の買取金額ランキング（当月 TOP10） ──
-  const allStoresCurrentMonth = await prisma.visitSchedule.findMany({
+  // groupBy + _sum でDB側集計し、全行フェッチを回避
+  const storeAmountAgg = await prisma.visitSchedule.groupBy({
+    by: ['storeId'],
     where: {
       status: 'completed',
       visitDate: { gte: currentMonthStart },
       user: { isTestData: false },
     },
-    select: { storeId: true, purchaseAmount: true, store: { select: { name: true } } },
+    _sum: { purchaseAmount: true },
+    orderBy: { _sum: { purchaseAmount: 'desc' } },
   })
 
-  const storeAmountMap: Record<string, { name: string; amount: number }> = {}
-  for (const v of allStoresCurrentMonth) {
-    if (!v.storeId) continue
-    if (!storeAmountMap[v.storeId]) storeAmountMap[v.storeId] = { name: v.store.name, amount: 0 }
-    storeAmountMap[v.storeId].amount += v.purchaseAmount ?? 0
-  }
-  const ranking = Object.entries(storeAmountMap)
-    .map(([id, d]) => ({ storeId: id, name: d.name, amount: d.amount }))
-    .sort((a, b) => b.amount - a.amount)
+  // storeId → 店舗名の解決（ランキングに載る店舗のみ取得）
+  const rankedStoreIds = storeAmountAgg.map(a => a.storeId)
+  const storeNames = rankedStoreIds.length > 0
+    ? await prisma.store.findMany({
+        where: { id: { in: rankedStoreIds } },
+        select: { id: true, name: true },
+      })
+    : []
+  const storeNameMap = new Map(storeNames.map(s => [s.id, s.name]))
+
+  const ranking = storeAmountAgg.map(a => ({
+    storeId: a.storeId,
+    name: storeNameMap.get(a.storeId) ?? '',
+    amount: a._sum.purchaseAmount ?? 0,
+  }))
 
   // 自店舗の順位
   const myRankIndex = ranking.findIndex(r => r.storeId === storeId)

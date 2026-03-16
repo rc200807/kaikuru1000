@@ -119,6 +119,11 @@ export default function MyPage() {
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [visitsLoaded, setVisitsLoaded] = useState(false)
   const [visitsLoading, setVisitsLoading] = useState(false)
+  const [visitsPage, setVisitsPage] = useState(1)
+  const [visitsHasMore, setVisitsHasMore] = useState(false)
+  const [visitsTotal, setVisitsTotal] = useState(0)
+  const [visitsLoadingMore, setVisitsLoadingMore] = useState(false)
+  const VISITS_LIMIT = 30
 
   // ダッシュボード統計
   const [stats, setStats] = useState<Stats | null>(null)
@@ -128,6 +133,11 @@ export default function MyPage() {
   const [memos, setMemos] = useState<PurchaseMemo[]>([])
   const [memosLoaded, setMemosLoaded] = useState(false)
   const [memosLoading, setMemosLoading] = useState(false)
+  const [memosPage, setMemosPage] = useState(1)
+  const [memosHasMore, setMemosHasMore] = useState(false)
+  const [memosTotal, setMemosTotal] = useState(0)
+  const [memosLoadingMore, setMemosLoadingMore] = useState(false)
+  const MEMOS_LIMIT = 20
   const [showMemoForm, setShowMemoForm] = useState(false)
   const [memoForm, setMemoForm] = useState({ title: '', description: '' })
   const [memoImages, setMemoImages] = useState<string[]>([])
@@ -583,13 +593,15 @@ export default function MyPage() {
     setMessage(null)
     if (tabKey === 'history' && !visitsLoaded) {
       setVisitsLoading(true)
-      fetch('/api/visit-schedules')
+      fetch(`/api/visit-schedules?page=1&limit=${VISITS_LIMIT}`)
         .then(r => r.json())
         .then(data => {
-          const sorted = Array.isArray(data)
-            ? [...data].sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
-            : []
+          const list = data?.schedules ?? (Array.isArray(data) ? data : [])
+          const sorted = [...list].sort((a: VisitRecord, b: VisitRecord) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
           setVisits(sorted)
+          setVisitsTotal(data?.total ?? list.length)
+          setVisitsPage(1)
+          setVisitsHasMore((data?.total ?? list.length) > VISITS_LIMIT)
           setVisitsLoaded(true)
           setVisitsLoading(false)
         })
@@ -597,10 +609,14 @@ export default function MyPage() {
     }
     if (tabKey === 'memos' && !memosLoaded) {
       setMemosLoading(true)
-      fetch('/api/purchase-memos')
+      fetch(`/api/purchase-memos?page=1&limit=${MEMOS_LIMIT}`)
         .then(r => r.json())
         .then(data => {
-          setMemos(Array.isArray(data) ? data : [])
+          const list = data?.memos ?? (Array.isArray(data) ? data : [])
+          setMemos(list)
+          setMemosTotal(data?.total ?? list.length)
+          setMemosPage(1)
+          setMemosHasMore((data?.total ?? list.length) > MEMOS_LIMIT)
           setMemosLoaded(true)
           setMemosLoading(false)
         })
@@ -622,6 +638,35 @@ export default function MyPage() {
         })
         .catch(() => { setShipmentsLoaded(true); setShipmentsLoading(false) })
     }
+  }
+
+  async function loadMoreVisits() {
+    setVisitsLoadingMore(true)
+    const nextPage = visitsPage + 1
+    try {
+      const res = await fetch(`/api/visit-schedules?page=${nextPage}&limit=${VISITS_LIMIT}`)
+      const data = await res.json()
+      const list = data?.schedules ?? (Array.isArray(data) ? data : [])
+      const sorted = [...list].sort((a: VisitRecord, b: VisitRecord) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
+      setVisits(prev => [...prev, ...sorted])
+      setVisitsPage(nextPage)
+      setVisitsHasMore(nextPage * VISITS_LIMIT < (data?.total ?? 0))
+    } catch { /* ignore */ }
+    setVisitsLoadingMore(false)
+  }
+
+  async function loadMoreMemos() {
+    setMemosLoadingMore(true)
+    const nextPage = memosPage + 1
+    try {
+      const res = await fetch(`/api/purchase-memos?page=${nextPage}&limit=${MEMOS_LIMIT}`)
+      const data = await res.json()
+      const list = data?.memos ?? (Array.isArray(data) ? data : [])
+      setMemos(prev => [...prev, ...list])
+      setMemosPage(nextPage)
+      setMemosHasMore(nextPage * MEMOS_LIMIT < (data?.total ?? 0))
+    } catch { /* ignore */ }
+    setMemosLoadingMore(false)
   }
 
   // 月次グラフ最大値
@@ -683,15 +728,15 @@ export default function MyPage() {
             <div className="space-y-6">
               {/* 身分証明書未提出バナー（最上部に表示） */}
               {!user.idDocumentPath && (
-                <div className="rounded-[var(--md-sys-shape-medium)] border-2 border-amber-400 bg-amber-50 p-4">
+                <div className="rounded-[var(--md-sys-shape-medium)] border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-4">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-amber-800">身分証明書が未提出です</p>
+                      <p className="text-sm font-bold text-amber-800 dark:text-amber-200">身分証明書が未提出です</p>
                       <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
                         サービス開始前に身分証明書のご提出が必要です。<br />
                         運転免許証・マイナンバーカード・パスポートをご用意ください。
@@ -888,7 +933,7 @@ export default function MyPage() {
               )}
 
               {/* Stats cards */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card variant="outlined" padding="md">
                   <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
                     累計買取金額
@@ -1169,6 +1214,19 @@ export default function MyPage() {
                           <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} onAiAppraisal={handleAiAppraisal} isAppraising={apprasingMemoId === memo.id} appraisalDisabled={apprasingMemoId !== null || (aiAppraisalRemaining !== null && aiAppraisalRemaining <= 0)} />
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {memosHasMore && (
+                    <div className="flex justify-center py-4">
+                      <Button
+                        variant="tonal"
+                        onClick={loadMoreMemos}
+                        loading={memosLoadingMore}
+                        disabled={memosLoadingMore}
+                      >
+                        {memosLoadingMore ? '読み込み中...' : `もっと読み込む（${memos.length} / ${memosTotal}件）`}
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -1741,6 +1799,19 @@ export default function MyPage() {
                       </div>
                     </div>
                   ))}
+
+                  {visitsHasMore && (
+                    <div className="flex justify-center py-4">
+                      <Button
+                        variant="tonal"
+                        onClick={loadMoreVisits}
+                        loading={visitsLoadingMore}
+                        disabled={visitsLoadingMore}
+                      >
+                        {visitsLoadingMore ? '読み込み中...' : `もっと読み込む（${visits.length} / ${visitsTotal}件）`}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
@@ -1907,7 +1978,7 @@ const SHIPMENT_STATUS_LABEL: Record<string, string> = {
 const SHIPMENT_STATUS_STYLE: Record<string, string> = {
   registered: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
   shipped:    'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
-  received:   'bg-blue-100 text-blue-700',
+  received:   'bg-[var(--status-scheduled-bg,#DBEAFE)] text-[var(--status-scheduled-text,#1D4ED8)]',
   appraised:  'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
 }
 
@@ -2292,7 +2363,7 @@ function MemoCard({
               </div>
 
               {/* 市場相場 */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3 text-center">
                   <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">市場上限（美品）</p>
                   <p className="text-lg font-bold text-gray-900 dark:text-white">{memo.aiAppraisal.marketPriceHigh}</p>

@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const search = searchParams.get('search') || ''
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+  const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
 
   const where = search
     ? {
@@ -23,17 +25,22 @@ export async function GET(req: NextRequest) {
       }
     : {}
 
-  const threads = await prisma.communityThread.findMany({
-    where,
-    orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
-    include: {
-      store: { select: { id: true, name: true, avatar: true } },
-      _count: { select: { replies: true } },
-      reactions: {
-        select: { emoji: true, storeId: true },
+  const [threads, total] = await Promise.all([
+    prisma.communityThread.findMany({
+      where,
+      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+      include: {
+        store: { select: { id: true, name: true, avatar: true } },
+        _count: { select: { replies: true } },
+        reactions: {
+          select: { emoji: true, storeId: true },
+        },
       },
-    },
-  })
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.communityThread.count({ where: where as any }),
+  ])
 
   // Group reactions by emoji with count and whether current user reacted
   const storeId = user.storeId || user.id
@@ -54,7 +61,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json(result)
+  return NextResponse.json({ threads: result, total, page, limit })
 }
 
 /** スレッド作成 */

@@ -425,7 +425,7 @@ function AdminSettingsContent() {
             </label>
 
             {/* SMTP設定 */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="col-span-2">
                 <TextField
                   label="SMTPホスト"

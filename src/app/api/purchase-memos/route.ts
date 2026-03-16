@@ -33,14 +33,23 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const targetUserId = searchParams.get('userId')
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+  const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
+  const skip = (page - 1) * limit
 
   if (sessionUser.role === 'customer') {
     // 顧客は自分のメモのみ
-    const memos = await prisma.purchaseMemo.findMany({
-      where: { userId: sessionUser.id },
-      orderBy: { createdAt: 'desc' },
-    })
-    return NextResponse.json(memos.map(toClientMemo))
+    const where = { userId: sessionUser.id }
+    const [memos, total] = await Promise.all([
+      prisma.purchaseMemo.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.purchaseMemo.count({ where }),
+    ])
+    return NextResponse.json({ memos: memos.map(toClientMemo), total, page, limit })
   }
 
   if (sessionUser.role === 'store') {
@@ -50,23 +59,33 @@ export async function GET(request: NextRequest) {
       user: { storeId },
     }
     if (targetUserId) where.userId = targetUserId
-    const memos = await prisma.purchaseMemo.findMany({
-      where,
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
-    })
-    return NextResponse.json(memos.map(toClientMemo))
+    const [memos, total] = await Promise.all([
+      prisma.purchaseMemo.findMany({
+        where,
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.purchaseMemo.count({ where }),
+    ])
+    return NextResponse.json({ memos: memos.map(toClientMemo), total, page, limit })
   }
 
   if (sessionUser.role === 'admin') {
     const where: any = {}
     if (targetUserId) where.userId = targetUserId
-    const memos = await prisma.purchaseMemo.findMany({
-      where,
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
-    })
-    return NextResponse.json(memos.map(toClientMemo))
+    const [memos, total] = await Promise.all([
+      prisma.purchaseMemo.findMany({
+        where,
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.purchaseMemo.count({ where }),
+    ])
+    return NextResponse.json({ memos: memos.map(toClientMemo), total, page, limit })
   }
 
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

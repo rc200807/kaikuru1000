@@ -145,6 +145,7 @@ export default function AdminVisitDetailPage() {
         {visit.purchaseItems.length > 0 && (
           <Card variant="elevated" padding="md">
             <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">買取品目</h2>
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
@@ -173,6 +174,7 @@ export default function AdminVisitDetailPage() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           </Card>
         )}
 
@@ -180,6 +182,7 @@ export default function AdminVisitDetailPage() {
         {visit.workItems.length > 0 && (
           <Card variant="elevated" padding="md">
             <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">作業品目</h2>
+            <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
@@ -206,6 +209,7 @@ export default function AdminVisitDetailPage() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           </Card>
         )}
 

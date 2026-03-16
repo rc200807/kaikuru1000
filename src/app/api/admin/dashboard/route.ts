@@ -22,77 +22,64 @@ export async function GET(request: NextRequest) {
   const userWhere = includeTestData ? {} : { isTestData: false as const }
   const visitUserWhere = includeTestData ? {} : { user: { isTestData: false as const } }
 
-  // --- 全顧客 ---
-  const allUsers = await prisma.user.findMany({
-    where: userWhere,
-    select: { storeId: true, createdAt: true, store: { select: { name: true } } },
+  // === 1. サマリー（すべてDB集計） ===
+  const [
+    totalCustomers,
+    currentMonthCustomers,
+    totalVisitsCount,
+    currentMonthVisits,
+    totalPurchaseAgg,
+    currentMonthPurchaseAgg,
+  ] = await Promise.all([
+    prisma.user.count({ where: userWhere }),
+    prisma.user.count({ where: { ...userWhere, createdAt: { gte: currentMonthStart } } }),
+    prisma.visitSchedule.count({ where: visitUserWhere }),
+    prisma.visitSchedule.count({ where: { visitDate: { gte: currentMonthStart }, ...visitUserWhere } }),
+    prisma.visitSchedule.aggregate({
+      where: { status: 'completed', ...visitUserWhere },
+      _sum: { purchaseAmount: true },
+    }),
+    prisma.visitSchedule.aggregate({
+      where: { status: 'completed', visitDate: { gte: currentMonthStart }, ...visitUserWhere },
+      _sum: { purchaseAmount: true },
+    }),
+  ])
+
+  const totalPurchaseAmount = totalPurchaseAgg._sum.purchaseAmount ?? 0
+  const currentMonthPurchaseAmount = currentMonthPurchaseAgg._sum.purchaseAmount ?? 0
+
+  // === 2. 店舗別当月顧客数 TOP10（groupBy） ===
+  const storeCustomerGroups = await prisma.user.groupBy({
+    by: ['storeId'],
+    where: { ...userWhere, createdAt: { gte: currentMonthStart }, storeId: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: 'desc' } },
+    take: 10,
   })
 
-  // --- 全訪問スケジュール (直近12ヶ月) ---
-  const allVisits = await prisma.visitSchedule.findMany({
-    where: { visitDate: { gte: twelveMonthsAgo }, ...visitUserWhere },
-    select: { visitDate: true },
+  // store名を取得するために storeId のリストから一括取得
+  const storeIds = storeCustomerGroups.map(g => g.storeId).filter((id): id is string => id !== null)
+  const stores = storeIds.length > 0
+    ? await prisma.store.findMany({ where: { id: { in: storeIds } }, select: { id: true, name: true } })
+    : []
+  const storeNameMap = new Map(stores.map(s => [s.id, s.name]))
+
+  const storeRanking = storeCustomerGroups.map(g => ({
+    storeId: g.storeId!,
+    name: storeNameMap.get(g.storeId!) ?? '',
+    count: g._count.id,
+  }))
+
+  // === 3. 月次新規顧客数 (直近12ヶ月) ===
+  // createdAtだけ取得（日付のみ、最小限のデータ）
+  const newUsersInRange = await prisma.user.findMany({
+    where: { ...userWhere, createdAt: { gte: twelveMonthsAgo } },
+    select: { createdAt: true },
   })
 
-  // --- 買取実績 (completed, 直近12ヶ月 - 推移グラフ用) ---
-  const completedVisitsRecent = await prisma.visitSchedule.findMany({
-    where: {
-      status: 'completed',
-      visitDate: { gte: twelveMonthsAgo },
-      ...visitUserWhere,
-    },
-    select: {
-      visitDate: true,
-      purchaseAmount: true,
-      storeId: true,
-      store: { select: { name: true } },
-    },
-  })
-
-  // --- 店舗別買取金額ランキング用 (全期間) ---
-  const allCompletedVisits = await prisma.visitSchedule.findMany({
-    where: { status: 'completed', ...visitUserWhere },
-    select: {
-      purchaseAmount: true,
-      storeId: true,
-      store: { select: { name: true } },
-      visitDate: true,
-    },
-  })
-
-  // 1. サマリー
-  const totalCustomers = allUsers.length
-  const currentMonthCustomers = allUsers.filter(u => u.createdAt >= currentMonthStart).length
-  const totalVisitsCount = await prisma.visitSchedule.count({
-    where: visitUserWhere,
-  })
-  const currentMonthVisits = await prisma.visitSchedule.count({
-    where: { visitDate: { gte: currentMonthStart }, ...visitUserWhere },
-  })
-
-  // 総買取金額 / 当月買取金額
-  const totalPurchaseAmount = allCompletedVisits.reduce((sum, v) => sum + (v.purchaseAmount ?? 0), 0)
-  const currentMonthPurchaseAmount = allCompletedVisits
-    .filter(v => v.visitDate >= currentMonthStart)
-    .reduce((sum, v) => sum + (v.purchaseAmount ?? 0), 0)
-
-  // 2. 店舗別当月顧客数 TOP10
-  const storeMap: Record<string, { name: string; count: number }> = {}
-  for (const u of allUsers) {
-    if (!u.storeId || !u.store) continue
-    if (u.createdAt < currentMonthStart) continue
-    if (!storeMap[u.storeId]) storeMap[u.storeId] = { name: u.store.name, count: 0 }
-    storeMap[u.storeId].count++
-  }
-  const storeRanking = Object.entries(storeMap)
-    .map(([id, d]) => ({ storeId: id, name: d.name, count: d.count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
-
-  // 3. 月次新規顧客数 (直近12ヶ月)
   const monthlyNewMap: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) monthlyNewMap[format(subMonths(now, i), 'yyyy-MM')] = 0
-  for (const u of allUsers) {
+  for (const u of newUsersInRange) {
     const m = format(u.createdAt, 'yyyy-MM')
     if (m in monthlyNewMap) monthlyNewMap[m]++
   }
@@ -101,31 +88,45 @@ export async function GET(request: NextRequest) {
     count,
   }))
 
-  // 4. 月次訪問数 (直近12ヶ月)
+  // === 4 & 5. 月次訪問数 (直近12ヶ月) & 日次訪問数 (直近30日) ===
+  // visitDateだけ取得（最小限のデータ）
+  const visitsInRange = await prisma.visitSchedule.findMany({
+    where: { visitDate: { gte: twelveMonthsAgo }, ...visitUserWhere },
+    select: { visitDate: true },
+  })
+
   const monthlyVisitMap: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) monthlyVisitMap[format(subMonths(now, i), 'yyyy-MM')] = 0
-  for (const v of allVisits) {
+  const dailyMap: Record<string, number> = {}
+  for (let i = 29; i >= 0; i--) dailyMap[format(subDays(now, i), 'yyyy-MM-dd')] = 0
+
+  for (const v of visitsInRange) {
     const m = format(v.visitDate, 'yyyy-MM')
     if (m in monthlyVisitMap) monthlyVisitMap[m]++
+    const d = format(v.visitDate, 'yyyy-MM-dd')
+    if (d in dailyMap) dailyMap[d]++
   }
+
   const monthlyVisits = Object.entries(monthlyVisitMap).map(([month, count]) => ({
     month: month.slice(5) + '月',
     count,
   }))
-
-  // 5. 日次訪問数 (直近30日)
-  const dailyMap: Record<string, number> = {}
-  for (let i = 29; i >= 0; i--) dailyMap[format(subDays(now, i), 'yyyy-MM-dd')] = 0
-  for (const v of allVisits) {
-    const d = format(v.visitDate, 'yyyy-MM-dd')
-    if (d in dailyMap) dailyMap[d]++
-  }
   const dailyVisits = Object.entries(dailyMap).map(([date, count]) => ({
     date: format(new Date(date + 'T00:00:00'), 'M/d'),
     count,
   }))
 
-  // 6. 月次買取金額推移 (直近12ヶ月)
+  // === 6. 月次買取金額推移 (直近12ヶ月) ===
+  // visitDate + purchaseAmount だけ取得（store情報不要）
+  const completedVisitsRecent = await prisma.visitSchedule.findMany({
+    where: {
+      status: 'completed',
+      visitDate: { gte: twelveMonthsAgo },
+      ...visitUserWhere,
+    },
+    select: { visitDate: true, purchaseAmount: true },
+  })
+
   const monthlyAmountMap: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) monthlyAmountMap[format(subMonths(now, i), 'yyyy-MM')] = 0
   for (const v of completedVisitsRecent) {
@@ -137,17 +138,26 @@ export async function GET(request: NextRequest) {
     amount,
   }))
 
-  // 7. 店舗別買取金額ランキング (全期間 TOP10)
-  const storePurchaseMap: Record<string, { name: string; amount: number }> = {}
-  for (const v of allCompletedVisits) {
-    if (!v.storeId || !v.store) continue
-    if (!storePurchaseMap[v.storeId]) storePurchaseMap[v.storeId] = { name: v.store.name, amount: 0 }
-    storePurchaseMap[v.storeId].amount += v.purchaseAmount ?? 0
-  }
-  const storePurchaseRanking = Object.entries(storePurchaseMap)
-    .map(([id, d]) => ({ storeId: id, name: d.name, amount: d.amount }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 10)
+  // === 7. 店舗別買取金額ランキング (全期間 TOP10, groupBy + _sum) ===
+  const storePurchaseGroups = await prisma.visitSchedule.groupBy({
+    by: ['storeId'],
+    where: { status: 'completed', ...visitUserWhere },
+    _sum: { purchaseAmount: true },
+    orderBy: { _sum: { purchaseAmount: 'desc' } },
+    take: 10,
+  })
+
+  const rankingStoreIds = storePurchaseGroups.map(g => g.storeId)
+  const rankingStores = rankingStoreIds.length > 0
+    ? await prisma.store.findMany({ where: { id: { in: rankingStoreIds } }, select: { id: true, name: true } })
+    : []
+  const rankingStoreNameMap = new Map(rankingStores.map(s => [s.id, s.name]))
+
+  const storePurchaseRanking = storePurchaseGroups.map(g => ({
+    storeId: g.storeId,
+    name: rankingStoreNameMap.get(g.storeId) ?? '',
+    amount: g._sum.purchaseAmount ?? 0,
+  }))
 
   return NextResponse.json({
     summary: {

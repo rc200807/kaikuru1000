@@ -18,9 +18,16 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const customers = await prisma.user.findMany({
-    where: { storeId: id },
-    select: {
+  const { searchParams } = new URL(request.url)
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+  const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
+
+  const where = { storeId: id }
+
+  const [customers, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
       id: true, name: true, furigana: true,
       email: true, phone: true, address: true,
       idDocumentPath: true, createdAt: true,
@@ -40,7 +47,11 @@ export async function GET(
       },
     },
     orderBy: { name: 'asc' },
-  })
+    skip: (page - 1) * limit,
+    take: limit,
+  }),
+    prisma.user.count({ where }),
+  ])
 
   // idDocumentPath をプロキシ URL に変換（Blob URL をクライアントに露出しない）
   const result = customers.map(c => ({
@@ -48,5 +59,5 @@ export async function GET(
     idDocumentPath: c.idDocumentPath ? `/api/users/${c.id}/id-document` : null,
   }))
 
-  return NextResponse.json(result)
+  return NextResponse.json({ customers: result, total, page, limit })
 }

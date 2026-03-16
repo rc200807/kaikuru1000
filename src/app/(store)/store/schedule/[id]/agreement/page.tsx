@@ -349,7 +349,7 @@ export default function AgreementPage() {
 
           {/* 基本情報 */}
           <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-1 mb-4 pb-4 border-b border-[var(--md-sys-color-outline-variant)]">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><span className="font-medium">日付:</span> {today}</div>
               <div><span className="font-medium">訪問日:</span> {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}</div>
               <div><span className="font-medium">お客様:</span> {visit.user.name}</div>
@@ -451,9 +451,9 @@ export default function AgreementPage() {
                 <li>クーリングオフの通知は<strong>書面（はがき等）</strong>で行ってください。</li>
               </ul>
             </div>
-            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-red-50 border border-red-300">
-              <p className="font-semibold text-black mb-1">クーリングオフ期間:</p>
-              <p className="text-black">
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800">
+              <p className="font-semibold text-red-900 dark:text-red-200 mb-1">クーリングオフ期間:</p>
+              <p className="text-red-900 dark:text-red-200">
                 本契約書面の受領日（{today}）から <strong>{coolingOffEnd}</strong> まで
               </p>
             </div>

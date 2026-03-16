@@ -13,23 +13,31 @@ export async function GET(request: NextRequest) {
   const storeId = searchParams.get('storeId')
   const userId = searchParams.get('userId')
 
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+  const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
+
   const where: any = {}
   if (storeId) where.storeId = storeId
   if (userId) where.userId = userId
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
   if (sessionUser.role === 'store') where.storeId = sessionUser.id
 
-  const schedules = await prisma.visitSchedule.findMany({
-    where,
-    include: {
-      user: { select: { id: true, name: true, address: true, phone: true } },
-      store: { select: { id: true, name: true } },
-      salesContract: { select: { id: true } },
-    },
-    orderBy: { visitDate: 'asc' },
-  })
+  const [schedules, total] = await Promise.all([
+    prisma.visitSchedule.findMany({
+      where,
+      include: {
+        user: { select: { id: true, name: true, address: true, phone: true } },
+        store: { select: { id: true, name: true } },
+        salesContract: { select: { id: true } },
+      },
+      orderBy: { visitDate: 'asc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.visitSchedule.count({ where }),
+  ])
 
-  return NextResponse.json(schedules)
+  return NextResponse.json({ schedules, total, page, limit })
 }
 
 // 訪問スケジュール登録（店舗・管理者のみ）

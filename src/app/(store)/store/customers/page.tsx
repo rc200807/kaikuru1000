@@ -116,6 +116,13 @@ export default function StoreCustomersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
+  // ページネーション
+  const [customersPage, setCustomersPage] = useState(1)
+  const [customersHasMore, setCustomersHasMore] = useState(false)
+  const [customersTotal, setCustomersTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const CUSTOMERS_LIMIT = 50
+
   // モーダル
   const [selected, setSelected] = useState<Customer | null>(null)
   const [modalTab, setModalTab] = useState<ModalTab>('info')
@@ -153,15 +160,34 @@ export default function StoreCustomersPage() {
   useEffect(() => {
     if (status === 'authenticated') {
       const storeId = (session.user as any).id
-      fetch(`/api/stores/${storeId}/customers`)
+      fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)
         .then(r => r.json())
         .then(data => {
-          setCustomers(Array.isArray(data) ? data : [])
+          const list = data?.customers ?? (Array.isArray(data) ? data : [])
+          setCustomers(list)
+          setCustomersTotal(data?.total ?? list.length)
+          setCustomersPage(1)
+          setCustomersHasMore((data?.total ?? list.length) > CUSTOMERS_LIMIT)
           setLoading(false)
         })
         .catch(() => setLoading(false))
     }
   }, [status, session])
+
+  async function loadMoreCustomers() {
+    setLoadingMore(true)
+    const storeId = (session?.user as any).id
+    const nextPage = customersPage + 1
+    try {
+      const res = await fetch(`/api/stores/${storeId}/customers?page=${nextPage}&limit=${CUSTOMERS_LIMIT}`)
+      const data = await res.json()
+      const list = data?.customers ?? (Array.isArray(data) ? data : [])
+      setCustomers(prev => [...prev, ...list])
+      setCustomersPage(nextPage)
+      setCustomersHasMore(nextPage * CUSTOMERS_LIMIT < (data?.total ?? 0))
+    } catch { /* ignore */ }
+    setLoadingMore(false)
+  }
 
   // 顧客選択時にスケジュール一覧を取得
   useEffect(() => {
@@ -180,7 +206,8 @@ export default function StoreCustomersPage() {
     fetch(`/api/visit-schedules?userId=${selected.id}`)
       .then(r => r.json())
       .then(data => {
-        setSchedules(Array.isArray(data) ? data : [])
+        const list = data?.schedules ?? (Array.isArray(data) ? data : [])
+        setSchedules(list)
         setSchedulesLoading(false)
       })
       .catch(() => setSchedulesLoading(false))
@@ -231,7 +258,7 @@ export default function StoreCustomersPage() {
       fetch(`/api/purchase-memos?userId=${selected.id}`)
         .then(r => r.json())
         .then(data => {
-          const list = Array.isArray(data) ? data : []
+          const list = data?.memos ?? (Array.isArray(data) ? data : [])
           setMemosList(list)
           const notes: Record<string, string> = {}
           list.forEach((m: PurchaseMemo) => { notes[m.id] = m.storeNote ?? '' })
@@ -511,6 +538,19 @@ export default function StoreCustomersPage() {
             emptyTitle={customers.length === 0 ? '担当顧客がいません' : '検索結果がありません'}
           />
         </Card>
+
+        {customersHasMore && (
+          <div className="flex justify-center mt-6">
+            <Button
+              variant="tonal"
+              onClick={loadMoreCustomers}
+              loading={loadingMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? '読み込み中...' : `もっと読み込む（${customers.length} / ${customersTotal}名）`}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 顧客詳細モーダル */}
@@ -745,7 +785,7 @@ export default function StoreCustomersPage() {
                                 <button
                                   onClick={() => handleSaveShipment(s.id)}
                                   disabled={savingShipment === s.id}
-                                  className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
+                                  className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#1E3A5F)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
                                 >
                                   {savingShipment === s.id ? '保存中...' : '保存する'}
                                 </button>
@@ -843,7 +883,7 @@ export default function StoreCustomersPage() {
                             <button
                               onClick={() => handleSaveMemoNote(memo.id)}
                               disabled={savingMemoNote === memo.id}
-                              className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#B91C1C)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
+                              className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#1E3A5F)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
                             >
                               {savingMemoNote === memo.id ? '保存中...' : '保存する'}
                             </button>

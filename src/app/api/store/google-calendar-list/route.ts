@@ -11,14 +11,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const calendars = await listCalendars(sessionUser.id)
+  try {
+    const calendars = await listCalendars(sessionUser.id)
 
-  if (calendars === null) {
+    if (calendars === null) {
+      return NextResponse.json(
+        { error: 'Googleカレンダーが連携されていないか、認証が無効です。再連携をお試しください。' },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({ calendars })
+  } catch (err: any) {
+    console.error('[GoogleCalendar] カレンダー一覧API エラー:', err?.message || err)
     return NextResponse.json(
-      { error: 'Googleカレンダーが連携されていないか、認証が無効です' },
-      { status: 400 }
+      { error: 'カレンダー一覧の取得中にエラーが発生しました' },
+      { status: 500 }
     )
   }
-
-  return NextResponse.json({ calendars })
 }

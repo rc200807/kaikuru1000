@@ -149,9 +149,14 @@ function MyStoreContent() {
       if (res.ok) {
         const data = await res.json()
         setCalendars(data.calendars || [])
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setMessage({ type: 'error', text: data.error || 'カレンダー一覧の取得に失敗しました' })
+        setShowCalendarPicker(false)
       }
     } catch {
       setMessage({ type: 'error', text: 'カレンダー一覧の取得に失敗しました' })
+      setShowCalendarPicker(false)
     } finally {
       setCalendarListLoading(false)
     }

@@ -38,6 +38,8 @@ export async function PATCH(
   if (body.imageUrls !== undefined) updateData.imageUrls = JSON.stringify(body.imageUrls)
   if (body.quantity !== undefined) updateData.quantity = body.quantity
   if (body.purchasePrice !== undefined) updateData.purchasePrice = body.purchasePrice
+  if (body.janCode !== undefined) updateData.janCode = body.janCode || null
+  if (body.rakutenData !== undefined) updateData.rakutenData = body.rakutenData ? JSON.stringify(body.rakutenData) : null
 
   const updated = await prisma.$transaction(async (tx) => {
     const result = await tx.purchaseItem.update({

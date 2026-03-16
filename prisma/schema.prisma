@@ -157,6 +157,8 @@ model PurchaseItem {
   imageUrls       String   @default("[]")   // JSON配列: 画像URL[] (最大3枚)
   quantity        Int      @default(1)        // 数量
   purchasePrice   Int      @default(0)        // 買取金額（円）
+  janCode         String?                     // JANコード（バーコード）
+  rakutenData     String?  @db.Text           // 楽天商品検索APIの結果 (JSON文字列)
   aiResearch      String?                     // AI市場調査結果 (JSON文字列)
   aiResearchedAt  DateTime?                   // AI調査実行日時
   createdAt       DateTime @default(now())
@@ -233,10 +235,11 @@ model GoogleSheetsConfig {
   updatedAt           DateTime  @updatedAt
 }
 
-// サイト全体設定（Google Analyticsなど）
+// サイト全体設定（Google Analytics、楽天APIなど）
 model SiteConfig {
   id               String   @id @default(cuid())
   gaTrackingId     String?              // Google Analytics トラッキングID (G-XXXXXXX)
+  rakutenAppId     String?              // 楽天商品検索API アプリケーションID
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }

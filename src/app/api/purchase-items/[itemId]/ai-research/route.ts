@@ -116,8 +116,25 @@ export async function POST(
     if (imgData) images.push(imgData)
   }
 
-  // AI調査実行（画像付き）
-  const result = await researchMarketPrice(item.itemName, item.category, images)
+  // 楽天データがあればAI調査プロンプトに追加情報として渡す
+  let enrichedItemName = item.itemName
+  if (item.rakutenData) {
+    try {
+      const rData = JSON.parse(item.rakutenData)
+      const parts = [item.itemName]
+      if (rData.productName && rData.productName !== item.itemName) parts.push(`（楽天: ${rData.productName}）`)
+      if (rData.makerName) parts.push(`メーカー: ${rData.makerName}`)
+      if (rData.brandName) parts.push(`ブランド: ${rData.brandName}`)
+      if (item.janCode) parts.push(`JANコード: ${item.janCode}`)
+      if (rData.averagePrice) parts.push(`楽天平均価格: ¥${rData.averagePrice.toLocaleString()}`)
+      enrichedItemName = parts.join(' / ')
+    } catch { /* ignore */ }
+  } else if (item.janCode) {
+    enrichedItemName = `${item.itemName} / JANコード: ${item.janCode}`
+  }
+
+  // AI調査実行（画像付き + 楽天データ補強）
+  const result = await researchMarketPrice(enrichedItemName, item.category, images)
 
   if (!result) {
     return NextResponse.json(

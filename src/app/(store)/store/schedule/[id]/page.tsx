@@ -8,8 +8,24 @@ import { ja } from 'date-fns/locale'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import MessageBanner from '@/components/MessageBanner'
+import dynamic from 'next/dynamic'
+
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false })
 
 /* ─── 型定義 ─── */
+type RakutenProduct = {
+  productName: string
+  brandName: string | null
+  makerName: string | null
+  janCode: string
+  mediumImageUrl: string | null
+  productUrlPC: string | null
+  averagePrice: number | null
+  genreName: string | null
+  reviewCount: number | null
+  reviewAverage: number | null
+}
+
 type PurchaseItem = {
   id: string
   itemName: string
@@ -17,6 +33,8 @@ type PurchaseItem = {
   imageUrls: string[]
   quantity: number
   purchasePrice: number
+  janCode: string | null
+  rakutenData: RakutenProduct | null
   aiResearch: MarketResearch | null
   aiResearchedAt: string | null
 }
@@ -82,9 +100,14 @@ export default function VisitDetailPage() {
   // 買取品目フォーム
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
   const [editingPurchase, setEditingPurchase] = useState<PurchaseItem | null>(null)
-  const [purchaseForm, setPurchaseForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: 0, imageUrls: [] as string[] })
+  const [purchaseForm, setPurchaseForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: 0, imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null })
   const [uploading, setUploading] = useState(false)
   const [savingPurchase, setSavingPurchase] = useState(false)
+
+  // バーコードスキャン
+  const [showScanner, setShowScanner] = useState(false)
+  const [janLookupLoading, setJanLookupLoading] = useState(false)
+  const [janLookupError, setJanLookupError] = useState<string | null>(null)
 
   // 作業品目フォーム
   const [showWorkForm, setShowWorkForm] = useState(false)
@@ -130,9 +153,10 @@ export default function VisitDetailPage() {
 
   /* ─── 買取品目 ─── */
   function resetPurchaseForm() {
-    setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: 0, imageUrls: [] })
+    setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: 0, imageUrls: [], janCode: '', rakutenData: null })
     setEditingPurchase(null)
     setShowPurchaseForm(false)
+    setJanLookupError(null)
   }
 
   function startEditPurchase(item: PurchaseItem) {
@@ -142,9 +166,55 @@ export default function VisitDetailPage() {
       quantity: item.quantity,
       purchasePrice: item.purchasePrice,
       imageUrls: item.imageUrls,
+      janCode: item.janCode || '',
+      rakutenData: item.rakutenData || null,
     })
     setEditingPurchase(item)
     setShowPurchaseForm(true)
+  }
+
+  /* ─── バーコード検出 → 楽天API検索 ─── */
+  async function handleBarcodeDetected(code: string) {
+    setShowScanner(false)
+    setJanLookupLoading(true)
+    setJanLookupError(null)
+
+    // フォームにJANコードをセット
+    setPurchaseForm(prev => ({ ...prev, janCode: code }))
+
+    try {
+      const res = await fetch('/api/jan-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ janCode: code }),
+      })
+
+      if (res.ok) {
+        const product: RakutenProduct = await res.json()
+        // 商品情報でフォームを自動入力
+        setPurchaseForm(prev => ({
+          ...prev,
+          itemName: prev.itemName || product.productName,
+          category: prev.category || product.genreName || '',
+          janCode: code,
+          rakutenData: product,
+        }))
+        setMessage({ type: 'success', text: `商品を特定しました: ${product.productName}` })
+      } else {
+        const err = await res.json()
+        setJanLookupError(err.error || '商品が見つかりませんでした')
+        // JANコードはフォームに残す
+      }
+    } catch {
+      setJanLookupError('商品検索に失敗しました')
+    } finally {
+      setJanLookupLoading(false)
+    }
+
+    // フォームを開く（閉じている場合）
+    if (!showPurchaseForm) {
+      setShowPurchaseForm(true)
+    }
   }
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -190,19 +260,29 @@ export default function VisitDetailPage() {
 
     setSavingPurchase(true)
 
+    const payload = {
+      itemName: purchaseForm.itemName,
+      category: purchaseForm.category,
+      quantity: purchaseForm.quantity,
+      purchasePrice: purchaseForm.purchasePrice,
+      imageUrls: purchaseForm.imageUrls,
+      janCode: purchaseForm.janCode || null,
+      rakutenData: purchaseForm.rakutenData || null,
+    }
+
     if (editingPurchase) {
       // 更新
       await fetch(`/api/purchase-items/${editingPurchase.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(purchaseForm),
+        body: JSON.stringify(payload),
       })
     } else {
       // 新規
       await fetch(`/api/visit-schedules/${scheduleId}/purchase-items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(purchaseForm),
+        body: JSON.stringify(payload),
       })
     }
 
@@ -320,6 +400,48 @@ export default function VisitDetailPage() {
   function renderPurchaseFormFields() {
     return (
       <>
+        {/* JANコード / 楽天情報 */}
+        {purchaseForm.janCode && (
+          <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+              </svg>
+              <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300">JAN: {purchaseForm.janCode}</span>
+              <button
+                onClick={() => setPurchaseForm({ ...purchaseForm, janCode: '', rakutenData: null })}
+                className="ml-auto text-xs text-blue-500 hover:underline"
+              >
+                クリア
+              </button>
+            </div>
+            {purchaseForm.rakutenData && (
+              <div className="mt-2 space-y-1 text-xs text-blue-800 dark:text-blue-200">
+                <div className="font-medium">{purchaseForm.rakutenData.productName}</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-blue-600 dark:text-blue-400">
+                  {purchaseForm.rakutenData.makerName && <span>メーカー: {purchaseForm.rakutenData.makerName}</span>}
+                  {purchaseForm.rakutenData.brandName && <span>ブランド: {purchaseForm.rakutenData.brandName}</span>}
+                  {purchaseForm.rakutenData.genreName && <span>ジャンル: {purchaseForm.rakutenData.genreName}</span>}
+                  {purchaseForm.rakutenData.averagePrice && <span>参考価格: ¥{purchaseForm.rakutenData.averagePrice.toLocaleString()}</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {janLookupLoading && (
+          <div className="flex items-center gap-2 p-2 rounded bg-blue-50 dark:bg-blue-950/30 text-xs text-blue-700 dark:text-blue-300">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            商品情報を検索中...
+          </div>
+        )}
+
+        {janLookupError && (
+          <div className="p-2 rounded text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            {janLookupError}（手動で品名を入力してください）
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">品名 *</label>
@@ -525,9 +647,20 @@ export default function VisitDetailPage() {
             </span>
           </div>
           {!showPurchaseForm && (
-            <Button size="sm" onClick={() => { resetPurchaseForm(); setShowPurchaseForm(true) }}>
-              + 品目を追加
-            </Button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { resetPurchaseForm(); setShowScanner(true) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:hover:bg-blue-800/50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                バーコード
+              </button>
+              <Button size="sm" onClick={() => { resetPurchaseForm(); setShowPurchaseForm(true) }}>
+                + 品目を追加
+              </Button>
+            </div>
           )}
         </div>
 
@@ -559,15 +692,26 @@ export default function VisitDetailPage() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{item.itemName}</span>
                       <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
                         {item.category}
                       </span>
+                      {item.janCode && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 font-mono">
+                          JAN: {item.janCode}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
                       数量: {item.quantity} × {fmtYen(item.purchasePrice)} = <strong>{fmtYen(item.purchasePrice * item.quantity)}</strong>
                     </div>
+                    {item.rakutenData && (
+                      <div className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                        {item.rakutenData.makerName && <span>{item.rakutenData.makerName}</span>}
+                        {item.rakutenData.averagePrice && <span> / 参考: ¥{item.rakutenData.averagePrice.toLocaleString()}</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
                     {researchResults[item.id] ? (
@@ -742,7 +886,20 @@ export default function VisitDetailPage() {
         {/* 品目追加フォーム（新規のみ） */}
         {showPurchaseForm && !editingPurchase && (
           <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] space-y-3">
-            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">品目を追加</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">品目を追加</h3>
+              {!purchaseForm.janCode && (
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                  </svg>
+                  バーコードで入力
+                </button>
+              )}
+            </div>
             {renderPurchaseFormFields()}
           </div>
         )}
@@ -865,6 +1022,14 @@ export default function VisitDetailPage() {
             📝 売買契約書を作成
           </Button>
         </div>
+      )}
+
+      {/* バーコードスキャナーオーバーレイ */}
+      {showScanner && (
+        <BarcodeScanner
+          onDetected={handleBarcodeDetected}
+          onClose={() => setShowScanner(false)}
+        />
       )}
     </div>
   )

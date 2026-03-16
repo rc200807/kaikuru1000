@@ -48,6 +48,11 @@ export async function GET(
       try { aiResearch = JSON.parse(item.aiResearch) } catch { /* ignore */ }
     }
 
+    let rakutenData = null
+    if (item.rakutenData) {
+      try { rakutenData = JSON.parse(item.rakutenData) } catch { /* ignore */ }
+    }
+
     return {
       ...item,
       imageUrls: images.map((_: string, idx: number) =>
@@ -55,6 +60,8 @@ export async function GET(
       ),
       aiResearch,
       aiResearchedAt: item.aiResearchedAt,
+      janCode: item.janCode,
+      rakutenData,
     }
   })
 

@@ -63,9 +63,13 @@ export default function DataTable<T>({
     return <EmptyState title={emptyTitle} description={emptyDescription} />
   }
 
+  // Calculate min-width based on visible columns (non-hidden on mobile)
+  const visibleCount = columns.filter(c => !c.hideOnMobile).length
+  const totalCount = columns.length
+
   return (
-    <div className={`overflow-x-auto thin-scrollbar ${className}`}>
-      <table className="w-full text-sm">
+    <div className={`overflow-x-auto thin-scrollbar -webkit-overflow-scrolling-touch ${className}`}>
+      <table className={`w-full text-sm ${totalCount > 4 ? 'min-w-[900px]' : totalCount > 3 ? 'min-w-[700px]' : 'min-w-[500px]'}`}>
         <thead>
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
             {columns.map(col => (
@@ -74,7 +78,7 @@ export default function DataTable<T>({
                 onClick={() => handleSort(col)}
                 style={col.width ? { width: col.width } : undefined}
                 className={`
-                  text-left px-3 py-3 text-xs font-medium
+                  text-left px-3 py-3 text-xs font-medium whitespace-nowrap
                   text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider
                   ${col.sortable ? 'cursor-pointer select-none hover:text-[var(--md-sys-color-on-surface)]' : ''}
                   ${col.hideOnMobile ? 'hidden md:table-cell' : ''}
@@ -109,7 +113,7 @@ export default function DataTable<T>({
                 <td
                   key={col.key}
                   className={`
-                    px-3 py-3 text-[var(--md-sys-color-on-surface)]
+                    px-3 py-3 text-[var(--md-sys-color-on-surface)] whitespace-nowrap
                     ${col.hideOnMobile ? 'hidden md:table-cell' : ''}
                   `}
                 >

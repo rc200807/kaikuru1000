@@ -335,8 +335,8 @@ export default function StoreSchedulePage() {
               過去の訪問
             </h3>
             <Card variant="outlined" padding="none">
-              <div className="overflow-x-auto thin-scrollbar">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto thin-scrollbar -webkit-overflow-scrolling-touch">
+                <table className="w-full text-sm min-w-[900px]">
                   <thead>
                     <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">訪問日</th>

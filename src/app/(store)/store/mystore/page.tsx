@@ -68,7 +68,16 @@ function MyStoreContent() {
       const res = await fetch('/api/store/google-calendar-config')
       if (res.ok) {
         const data = await res.json()
-        setGcalConfig(data.config)
+        if (data.connected) {
+          setGcalConfig({
+            googleEmail: data.googleEmail,
+            calendarId: data.calendarId,
+            calendarName: data.calendarName,
+            isEnabled: data.isEnabled,
+          })
+        } else {
+          setGcalConfig(null)
+        }
       } else {
         setGcalConfig(null)
       }

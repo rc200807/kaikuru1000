@@ -150,8 +150,9 @@ model Admin {
   password      String
   role          String         @default("admin") // admin, superadmin
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
-  announcements Announcement[]
-  createdAt     DateTime       @default(now())
+  announcements  Announcement[]
+  trainingVideos TrainingVideo[]
+  createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
 
@@ -288,5 +289,36 @@ model Announcement {
   updatedAt   DateTime  @updatedAt
 
   @@index([isPublished, publishedAt])
+  @@index([adminId])
+}
+
+// 研修動画カテゴリ
+model VideoCategory {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  sortOrder Int             @default(0)
+  videos    TrainingVideo[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+// 研修動画
+model TrainingVideo {
+  id          String         @id @default(cuid())
+  title       String
+  description String?        @db.Text
+  youtubeUrl  String
+  categoryId  String
+  category    VideoCategory  @relation(fields: [categoryId], references: [id])
+  isPublished Boolean        @default(false)
+  publishedAt DateTime?
+  sortOrder   Int            @default(0)
+  adminId     String
+  admin       Admin          @relation(fields: [adminId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([isPublished])
   @@index([adminId])
 }

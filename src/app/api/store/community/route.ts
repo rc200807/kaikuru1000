@@ -37,17 +37,22 @@ export async function GET(req: NextRequest) {
 
   // Group reactions by emoji with count and whether current user reacted
   const storeId = user.storeId || user.id
-  const result = threads.map((t) => ({
-    id: t.id,
-    title: t.title,
-    content: t.content,
-    isPinned: t.isPinned,
-    store: t.store,
-    replyCount: t._count.replies,
-    reactions: groupReactions(t.reactions, storeId),
-    createdAt: t.createdAt,
-    updatedAt: t.updatedAt,
-  }))
+  const result = threads.map((t) => {
+    let imageUrls: string[] = []
+    try { imageUrls = JSON.parse(t.imageUrls || '[]') } catch { /* ignore */ }
+    return {
+      id: t.id,
+      title: t.title,
+      content: t.content,
+      imageUrls,
+      isPinned: t.isPinned,
+      store: t.store,
+      replyCount: t._count.replies,
+      reactions: groupReactions(t.reactions, storeId),
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }
+  })
 
   return NextResponse.json(result)
 }
@@ -61,10 +66,16 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { title, content } = body
+  const { title, content, imageUrls } = body
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: 'タイトルと本文は必須です' }, { status: 400 })
+  }
+
+  // imageUrlsのバリデーション（最大3枚）
+  let validImageUrls: string[] = []
+  if (Array.isArray(imageUrls)) {
+    validImageUrls = imageUrls.filter((u: any) => typeof u === 'string' && u.startsWith('http')).slice(0, 3)
   }
 
   const storeId = user.storeId || user.id
@@ -73,6 +84,7 @@ export async function POST(req: NextRequest) {
     data: {
       title: title.trim(),
       content: content.trim(),
+      imageUrls: JSON.stringify(validImageUrls),
       storeId,
     },
     include: {

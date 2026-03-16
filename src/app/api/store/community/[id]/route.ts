@@ -46,8 +46,12 @@ export async function GET(
     reactionMap.set(r.emoji, existing)
   }
 
+  let imageUrls: string[] = []
+  try { imageUrls = JSON.parse(thread.imageUrls || '[]') } catch { /* ignore */ }
+
   return NextResponse.json({
     ...thread,
+    imageUrls,
     reactions: Array.from(reactionMap.entries()).map(([emoji, data]) => ({
       emoji,
       count: data.count,

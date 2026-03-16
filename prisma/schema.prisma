@@ -334,6 +334,7 @@ model CommunityThread {
   id        String   @id @default(cuid())
   title     String
   content   String   @db.Text
+  imageUrls String   @default("[]") @db.Text  // JSON配列: 画像URL[]（最大3枚）
   storeId   String
   store     Store    @relation(fields: [storeId], references: [id])
   isPinned  Boolean  @default(false)

@@ -17,6 +17,7 @@ type Thread = {
   id: string
   title: string
   content: string
+  imageUrls: string[]
   isPinned: boolean
   store: StoreInfo
   replyCount: number
@@ -50,7 +51,10 @@ export default function CommunityPage() {
   const [showNewForm, setShowNewForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newContent, setNewContent] = useState('')
+  const [newImages, setNewImages] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
   const [creating, setCreating] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   // Thread detail
   const [selectedThread, setSelectedThread] = useState<ThreadDetail | null>(null)
@@ -99,17 +103,62 @@ export default function CommunityPage() {
     setDetailLoading(false)
   }
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    if (newImages.length >= 3) {
+      alert('画像は最大3枚までです')
+      return
+    }
+
+    setUploading(true)
+    const remaining = 3 - newImages.length
+    const filesToUpload = Array.from(files).slice(0, remaining)
+
+    for (const file of filesToUpload) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`${file.name}: ファイルサイズは10MB以下にしてください`)
+        continue
+      }
+      const formData = new FormData()
+      formData.append('file', file)
+      try {
+        const res = await fetch('/api/store/community/images', {
+          method: 'POST',
+          body: formData,
+        })
+        if (res.ok) {
+          const { url } = await res.json()
+          setNewImages((prev) => [...prev, url])
+        } else {
+          const err = await res.json()
+          alert(err.error || 'アップロードに失敗しました')
+        }
+      } catch {
+        alert('アップロードに失敗しました')
+      }
+    }
+    setUploading(false)
+    // reset input
+    if (imageInputRef.current) imageInputRef.current.value = ''
+  }
+
+  const removeImage = (index: number) => {
+    setNewImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const createThread = async () => {
     if (!newTitle.trim() || !newContent.trim()) return
     setCreating(true)
     const res = await fetch('/api/store/community', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newTitle, content: newContent }),
+      body: JSON.stringify({ title: newTitle, content: newContent, imageUrls: newImages }),
     })
     if (res.ok) {
       setNewTitle('')
       setNewContent('')
+      setNewImages([])
       setShowNewForm(false)
       await fetchThreads()
     }
@@ -315,6 +364,20 @@ export default function CommunityPage() {
                 {thread.content}
               </p>
 
+              {/* Image thumbnails */}
+              {thread.imageUrls && thread.imageUrls.length > 0 && (
+                <div className="flex gap-2 mt-2">
+                  {thread.imageUrls.map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`画像${i + 1}`}
+                      className="w-14 h-14 rounded-lg object-cover border border-[var(--md-sys-color-outline-variant)]"
+                    />
+                  ))}
+                </div>
+              )}
+
               {/* Bottom row: reactions + reply count */}
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 {thread.reactions.map((r) => (
@@ -386,6 +449,57 @@ export default function CommunityPage() {
             rows={6}
             placeholder="投稿内容を入力..."
           />
+          {/* 画像アップロード */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-2">
+              画像（最大3枚）
+            </label>
+            {newImages.length > 0 && (
+              <div className="flex gap-2 mb-3 flex-wrap">
+                {newImages.map((url, i) => (
+                  <div key={i} className="relative group">
+                    <img
+                      src={url}
+                      alt={`画像${i + 1}`}
+                      className="w-20 h-20 rounded-xl object-cover border border-[var(--md-sys-color-outline-variant)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--md-sys-color-error)] text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {newImages.length < 3 && (
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-[var(--md-sys-color-outline-variant)] text-sm text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--store-primary)] hover:text-[var(--store-primary)] transition-colors disabled:opacity-50"
+              >
+                {uploading ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                )}
+                {uploading ? 'アップロード中...' : '画像を追加'}
+              </button>
+            )}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic"
+              multiple
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+          </div>
         </div>
       </Modal>
 
@@ -452,6 +566,28 @@ export default function CommunityPage() {
             <div className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed">
               {selectedThread.content}
             </div>
+
+            {/* Thread images */}
+            {selectedThread.imageUrls && selectedThread.imageUrls.length > 0 && (
+              <div className="flex gap-3 flex-wrap">
+                {selectedThread.imageUrls.map((url, i) => (
+                  <a
+                    key={i}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="block"
+                  >
+                    <img
+                      src={url}
+                      alt={`画像${i + 1}`}
+                      className="max-w-[200px] max-h-[200px] rounded-xl object-cover border border-[var(--md-sys-color-outline-variant)] hover:opacity-90 transition-opacity cursor-zoom-in"
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
 
             {/* Reaction bar */}
             <div className="flex items-center gap-2 flex-wrap pb-3 border-b border-[var(--md-sys-color-outline-variant)]">

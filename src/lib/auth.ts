@@ -175,6 +175,19 @@ export const authOptions: NextAuthOptions = {
       }
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
+        // 店舗切り替え
+        if (updatedSession.switchStoreId && token.role === 'store') {
+          const targetStore = await prisma.store.findUnique({
+            where: { id: updatedSession.switchStoreId },
+            select: { id: true, name: true, email: true, avatar: true },
+          })
+          if (targetStore) {
+            token.id = targetStore.id
+            token.name = targetStore.name
+            token.email = targetStore.email || token.email
+            token.avatar = targetStore.avatar || null
+          }
+        }
         if (updatedSession.name !== undefined) token.name = updatedSession.name
         if (updatedSession.email !== undefined) token.email = updatedSession.email
         if (updatedSession.avatar !== undefined) token.avatar = updatedSession.avatar

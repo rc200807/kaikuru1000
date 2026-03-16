@@ -78,6 +78,8 @@ model Store {
   communityReplies   CommunityReply[]
   communityReactions CommunityReaction[]
   googleCalendar StoreGoogleCalendar?
+  storeLinksFrom StoreLink[] @relation("StoreLinkFrom")
+  storeLinksTo   StoreLink[] @relation("StoreLinkTo")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -96,6 +98,20 @@ model StoreGoogleCalendar {
   isEnabled       Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+// 店舗アカウントリンク（複数店舗の切り替え用）
+model StoreLink {
+  id            String   @id @default(cuid())
+  storeId       String   // リンク元の店舗
+  store         Store    @relation("StoreLinkFrom", fields: [storeId], references: [id], onDelete: Cascade)
+  linkedStoreId String   // リンク先の店舗
+  linkedStore   Store    @relation("StoreLinkTo", fields: [linkedStoreId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([storeId, linkedStoreId])
+  @@index([storeId])
+  @@index([linkedStoreId])
 }
 
 // 店舗メンバー（店舗のサブアカウント）
@@ -215,6 +231,14 @@ model GoogleSheetsConfig {
   storeColumnMapping  String?     // JSON: {"code":"A","name":"B",...}
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+}
+
+// サイト全体設定（Google Analyticsなど）
+model SiteConfig {
+  id               String   @id @default(cuid())
+  gaTrackingId     String?              // Google Analytics トラッキングID (G-XXXXXXX)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 // 買取相談メモ（顧客が買取希望品を事前に登録）

@@ -26,6 +26,13 @@ type StoreInfo = {
   _count: { customers: number; visitSchedules: number }
 }
 
+type LinkedStoreInfo = {
+  id: string
+  name: string
+  code: string
+  avatar: string | null
+}
+
 type GCalConfig = {
   googleEmail: string | null
   calendarId: string
@@ -54,6 +61,15 @@ function MyStoreContent() {
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Linked accounts state
+  const [linkedStores, setLinkedStores] = useState<LinkedStoreInfo[]>([])
+  const [linkedLoading, setLinkedLoading] = useState(true)
+  const [showLinkForm, setShowLinkForm] = useState(false)
+  const [linkEmail, setLinkEmail] = useState('')
+  const [linkPassword, setLinkPassword] = useState('')
+  const [linkSubmitting, setLinkSubmitting] = useState(false)
+  const [unlinking, setUnlinking] = useState<string | null>(null)
 
   // Google Calendar state
   const [gcalConfig, setGcalConfig] = useState<GCalConfig | null>(null)
@@ -88,6 +104,65 @@ function MyStoreContent() {
     }
   }, [])
 
+  const fetchLinkedAccounts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/store/linked-accounts')
+      if (res.ok) {
+        const data = await res.json()
+        setLinkedStores(data.linkedStores || [])
+      }
+    } catch { /* ignore */ }
+    finally { setLinkedLoading(false) }
+  }, [])
+
+  async function handleLinkAccount() {
+    if (!linkEmail || !linkPassword) return
+    setLinkSubmitting(true)
+    try {
+      const res = await fetch('/api/store/linked-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: linkEmail, password: linkPassword }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: `「${data.linkedStore.name}」をリンクしました` })
+        setLinkEmail('')
+        setLinkPassword('')
+        setShowLinkForm(false)
+        fetchLinkedAccounts()
+      } else {
+        setMessage({ type: 'error', text: data.error || 'リンクに失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'リンクに失敗しました' })
+    } finally {
+      setLinkSubmitting(false)
+    }
+  }
+
+  async function handleUnlink(targetId: string, targetName: string) {
+    if (!confirm(`「${targetName}」のリンクを解除しますか？`)) return
+    setUnlinking(targetId)
+    try {
+      const res = await fetch('/api/store/linked-accounts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linkedStoreId: targetId }),
+      })
+      if (res.ok) {
+        setMessage({ type: 'success', text: `「${targetName}」のリンクを解除しました` })
+        fetchLinkedAccounts()
+      } else {
+        setMessage({ type: 'error', text: 'リンク解除に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'リンク解除に失敗しました' })
+    } finally {
+      setUnlinking(null)
+    }
+  }
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
@@ -104,6 +179,7 @@ function MyStoreContent() {
         })
         .catch(() => setLoading(false))
       fetchGcalConfig()
+      fetchLinkedAccounts()
     }
   }, [status, session])
 
@@ -461,6 +537,113 @@ function MyStoreContent() {
                   </div>
                 </Card>
               )}
+            </div>
+            {/* ===== アカウント切り替え（リンク管理） ===== */}
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                店舗アカウント切り替え
+              </h3>
+
+              <Card variant="elevated" padding="md" className="space-y-4">
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  複数の店舗を運営している場合、他の店舗アカウントをリンクすると、ナビゲーションから素早く切り替えできます。
+                </p>
+
+                {linkedLoading ? (
+                  <div className="flex justify-center py-4">
+                    <LoadingSpinner size="sm" label="読み込み中..." />
+                  </div>
+                ) : (
+                  <>
+                    {/* リンク済み店舗一覧 */}
+                    {linkedStores.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">リンク済みの店舗</p>
+                        {linkedStores.map(s => (
+                          <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+                            {s.avatar ? (
+                              <img src={s.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+                                <span className="text-[var(--store-on-primary)] text-xs font-semibold">{s.name[0]}</span>
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate">{s.name}</p>
+                              <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] font-mono">{s.code}</p>
+                            </div>
+                            <button
+                              onClick={() => handleUnlink(s.id, s.name)}
+                              disabled={unlinking === s.id}
+                              className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50 shrink-0"
+                            >
+                              {unlinking === s.id ? '解除中...' : '解除'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* リンク追加フォーム */}
+                    {showLinkForm ? (
+                      <div className="space-y-3 p-4 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)]">
+                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)]">リンクする店舗の認証情報</p>
+                        <div>
+                          <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">メールアドレス</label>
+                          <input
+                            type="email"
+                            value={linkEmail}
+                            onChange={(e) => setLinkEmail(e.target.value)}
+                            placeholder="store@example.com"
+                            className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">パスワード</label>
+                          <input
+                            type="password"
+                            value={linkPassword}
+                            onChange={(e) => setLinkPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleLinkAccount}
+                            disabled={linkSubmitting || !linkEmail || !linkPassword}
+                          >
+                            {linkSubmitting ? 'リンク中...' : 'リンクする'}
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => { setShowLinkForm(false); setLinkEmail(''); setLinkPassword('') }}
+                            className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline px-3 py-1.5"
+                          >
+                            キャンセル
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowLinkForm(true)}
+                        className="flex items-center gap-2 text-sm font-medium text-[var(--store-primary,#1E3A5F)] hover:underline"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        別の店舗アカウントをリンク
+                      </button>
+                    )}
+                  </>
+                )}
+              </Card>
             </div>
           </div>
         ) : (

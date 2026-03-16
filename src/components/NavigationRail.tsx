@@ -1,8 +1,16 @@
 'use client'
 
+import { useState, useEffect, useRef } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+
+type LinkedStore = {
+  id: string
+  name: string
+  code: string
+  avatar: string | null
+}
 
 const navItems = [
   {
@@ -89,22 +97,142 @@ const navItems = [
 ]
 
 export default function NavigationRail() {
-  const { data: session } = useSession()
+  const { data: session, update } = useSession()
   const pathname = usePathname()
+  const router = useRouter()
   const user = session?.user as any
+
+  const [showSwitcher, setShowSwitcher] = useState(false)
+  const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([])
+  const [switching, setSwitching] = useState(false)
+  const switcherRef = useRef<HTMLDivElement>(null)
+
+  // Fetch linked accounts on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetch('/api/store/linked-accounts')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.currentStore && data?.linkedStores?.length > 0) {
+            // 自分 + リンク先をまとめる
+            const all = [data.currentStore, ...data.linkedStores]
+            setLinkedStores(all)
+          } else {
+            setLinkedStores([])
+          }
+        })
+        .catch(() => setLinkedStores([]))
+    }
+  }, [user?.id])
+
+  // Close switcher on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+        setShowSwitcher(false)
+      }
+    }
+    if (showSwitcher) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showSwitcher])
+
+  async function handleSwitch(targetId: string) {
+    if (targetId === user?.id || switching) return
+    setSwitching(true)
+    try {
+      const res = await fetch('/api/store/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStoreId: targetId }),
+      })
+      if (res.ok) {
+        await update({ switchStoreId: targetId })
+        setShowSwitcher(false)
+        router.refresh()
+      }
+    } catch { /* ignore */ }
+    finally { setSwitching(false) }
+  }
+
+  const hasLinkedStores = linkedStores.length > 1
 
   return (
     <aside className="hidden md:flex flex-col items-center w-20 flex-shrink-0 h-screen sticky top-0 bg-[var(--md-sys-color-surface-container)] py-4 gap-2">
-      {/* Profile avatar */}
-      <Link href="/store/profile" className="mb-4 group">
-        {user?.avatar ? (
-          <img src={user.avatar} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 ring-[var(--store-primary)] transition-all" alt="" />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center group-hover:ring-2 ring-[var(--store-primary-container)] transition-all">
-            <span className="text-[var(--store-on-primary)] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
+      {/* Profile avatar + store switcher */}
+      <div className="relative mb-4" ref={switcherRef}>
+        <button
+          onClick={() => hasLinkedStores ? setShowSwitcher(!showSwitcher) : router.push('/store/profile')}
+          className="relative group"
+        >
+          {user?.avatar ? (
+            <img src={user.avatar} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 ring-[var(--store-primary)] transition-all" alt="" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center group-hover:ring-2 ring-[var(--store-primary-container)] transition-all">
+              <span className="text-[var(--store-on-primary)] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
+            </div>
+          )}
+          {/* 切り替えバッジ */}
+          {hasLinkedStores && (
+            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--store-primary)] flex items-center justify-center border-2 border-[var(--md-sys-color-surface-container)]">
+              <svg className="w-2.5 h-2.5 text-[var(--store-on-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
+              </svg>
+            </div>
+          )}
+        </button>
+
+        {/* Store switcher popup */}
+        {showSwitcher && hasLinkedStores && (
+          <div className="absolute left-full top-0 ml-2 z-50 w-56 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-lg overflow-hidden">
+            <div className="p-2.5 border-b border-[var(--md-sys-color-outline-variant)]">
+              <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">店舗を切り替え</p>
+            </div>
+            <div className="py-1 max-h-64 overflow-y-auto">
+              {linkedStores.map(store => {
+                const isCurrent = store.id === user?.id
+                return (
+                  <button
+                    key={store.id}
+                    onClick={() => handleSwitch(store.id)}
+                    disabled={isCurrent || switching}
+                    className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 transition-colors ${
+                      isCurrent
+                        ? 'bg-[var(--store-primary-container)]/30'
+                        : 'hover:bg-[var(--md-sys-color-surface-container-high)]'
+                    } disabled:opacity-70`}
+                  >
+                    {store.avatar ? (
+                      <img src={store.avatar} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+                        <span className="text-[var(--store-on-primary)] text-xs font-semibold">{store.name[0]}</span>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)] truncate">{store.name}</p>
+                      <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] font-mono">{store.code}</p>
+                    </div>
+                    {isCurrent && (
+                      <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="p-2 border-t border-[var(--md-sys-color-outline-variant)]">
+              <Link
+                href="/store/profile"
+                onClick={() => setShowSwitcher(false)}
+                className="block text-center text-[10px] text-[var(--md-sys-color-on-surface-variant)] hover:underline py-1"
+              >
+                プロフィール設定
+              </Link>
+            </div>
           </div>
         )}
-      </Link>
+      </div>
 
       {/* Nav items */}
       <nav className="flex-1 flex flex-col items-center gap-1">

@@ -2,8 +2,8 @@ import { google } from 'googleapis'
 import { prisma } from './prisma'
 import { encrypt, decrypt } from './encrypt'
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CALENDAR_CLIENT_ID ?? ''
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CALENDAR_CLIENT_SECRET ?? ''
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? ''
 
 /**
  * 店舗のGoogleカレンダー連携用 OAuth2 クライアントを取得

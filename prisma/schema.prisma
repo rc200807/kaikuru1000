@@ -144,14 +144,15 @@ model WorkItem {
 
 // 管理者
 model Admin {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("admin") // admin, superadmin
-  avatar    String?  @db.Text  // プロフィール画像URL（Vercel Blob）
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          String         @default("admin") // admin, superadmin
+  avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
+  announcements Announcement[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 // Googleスプレッドシート同期ログ
@@ -271,4 +272,21 @@ model PhoneMarketPrice {
 
   @@unique([model, storage])
   @@index([series])
+}
+
+// 本部からのお知らせ
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    @db.Text
+  category    String    @default("general") // general, important, system, campaign
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  adminId     String
+  admin       Admin     @relation(fields: [adminId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isPublished, publishedAt])
+  @@index([adminId])
 }

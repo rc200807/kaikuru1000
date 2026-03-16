@@ -470,19 +470,75 @@ export default function AdminTrainingVideosPage() {
                 return (
                   <div
                     key={v.id}
-                    className="rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] overflow-hidden group"
+                    className={`relative rounded-2xl border overflow-hidden group transition-all ${
+                      summarizingId === v.id
+                        ? 'border-purple-400/60 dark:border-purple-500/40 shadow-[0_0_16px_rgba(139,92,246,0.15)]'
+                        : 'border-[var(--md-sys-color-outline-variant)]'
+                    } bg-[var(--md-sys-color-surface-container-low)]`}
                   >
                     {/* サムネイル（クリックで詳細） */}
                     {thumb && (
                       <button onClick={() => setDetailVideo(v)} className="relative aspect-video bg-black w-full">
-                        <img src={thumb} alt="" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
+                        <img
+                          src={thumb} alt=""
+                          className={`w-full h-full object-cover transition-opacity ${summarizingId === v.id ? 'opacity-40' : ''}`}
+                        />
+                        {summarizingId === v.id ? (
+                          /* 要約中: サムネイル上のAI解析オーバーレイ */
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
+                            {/* 回転リング */}
+                            <div className="relative w-14 h-14 mb-2">
+                              <div
+                                className="absolute inset-0 rounded-full"
+                                style={{
+                                  background: 'conic-gradient(from 0deg, #7c3aed, #3b82f6, #06b6d4, #8b5cf6, #ec4899, #7c3aed)',
+                                  animation: 'ai-spin 2s linear infinite',
+                                }}
+                              />
+                              <div className="absolute inset-[3px] rounded-full bg-black/80" />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                </svg>
+                              </div>
+                            </div>
+                            <span
+                              className="text-sm font-bold"
+                              style={{
+                                background: 'linear-gradient(90deg, #c4b5fd, #93c5fd, #67e8f9, #c4b5fd)',
+                                backgroundSize: '200% auto',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                animation: 'ai-shimmer 2s linear infinite',
+                              }}
+                            >
+                              AI解析中...
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                          </div>
+                        )}
                       </button>
                     )}
+
+                    {/* 要約中: カード下部のプログレスバー */}
+                    {summarizingId === v.id && (
+                      <div className="h-1 bg-purple-100 dark:bg-purple-950/40 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            background: 'linear-gradient(90deg, #7c3aed, #3b82f6, #06b6d4)',
+                            animation: 'ai-progress 2s ease-in-out infinite',
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <div className="p-4">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)]">
@@ -500,64 +556,84 @@ export default function AdminTrainingVideosPage() {
                       <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
                         {format(new Date(v.createdAt), 'M/d', { locale: ja })} · {v.admin.name}
                       </p>
-                      {/* 公開トグル */}
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleTogglePublish(v) }}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                              v.isPublished
-                                ? 'bg-green-500'
-                                : 'bg-[var(--md-sys-color-outline-variant)]'
-                            }`}
-                          >
-                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                              v.isPublished ? 'translate-x-4.5' : 'translate-x-0.5'
-                            }`} />
-                          </button>
-                          <span className={`text-xs font-medium ${v.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
-                            {v.isPublished ? '公開中' : '非公開'}
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => startEditVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
-                            編集
-                          </button>
-                          <button
-                            onClick={() => handleSummarize(v.id)}
-                            disabled={summarizingId === v.id}
-                            className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
-                          >
-                            {summarizingId === v.id ? '要約中...' : (v.summary ? '再要約' : 'AI要約')}
-                          </button>
-                          <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">
-                            削除
-                          </button>
-                        </div>
-                      </div>
 
-                      {/* 詳細を見るボタン（大きく） */}
-                      <button
-                        onClick={() => setDetailVideo(v)}
-                        className="mt-3 w-full py-2.5 rounded-xl bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-sm font-semibold hover:opacity-90 active:opacity-80 transition-opacity flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-                        </svg>
-                        詳細を見る
-                      </button>
-                      {v.summary && (
-                        <button
-                          onClick={() => setDetailVideo(v)}
-                          className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] w-full text-left"
-                        >
-                          <p className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 hover:underline">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                      {/* 要約中: ステップ表示 */}
+                      {summarizingId === v.id ? (
+                        <div className="mt-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/30">
+                          <div className="flex items-center justify-center gap-3">
+                            {['字幕取得', 'AI解析', '要約生成'].map((step, i) => (
+                              <div key={step} className="flex items-center gap-1">
+                                <div
+                                  className="w-1.5 h-1.5 rounded-full bg-purple-500"
+                                  style={{ animation: `ai-dot 1.8s ease-in-out ${i * 0.6}s infinite` }}
+                                />
+                                <span className="text-[10px] text-purple-600 dark:text-purple-400">{step}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* 公開トグル */}
+                          <div className="flex items-center justify-between mt-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleTogglePublish(v) }}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                  v.isPublished
+                                    ? 'bg-green-500'
+                                    : 'bg-[var(--md-sys-color-outline-variant)]'
+                                }`}
+                              >
+                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                  v.isPublished ? 'translate-x-4.5' : 'translate-x-0.5'
+                                }`} />
+                              </button>
+                              <span className={`text-xs font-medium ${v.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                                {v.isPublished ? '公開中' : '非公開'}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => startEditVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
+                                編集
+                              </button>
+                              <button
+                                onClick={() => handleSummarize(v.id)}
+                                disabled={summarizingId === v.id}
+                                className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
+                              >
+                                {v.summary ? '再要約' : 'AI要約'}
+                              </button>
+                              <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">
+                                削除
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 詳細を見るボタン */}
+                          <button
+                            onClick={() => setDetailVideo(v)}
+                            className="mt-3 w-full py-2.5 rounded-xl bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-sm font-semibold hover:opacity-90 active:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
                             </svg>
-                            AI要約を確認
-                          </p>
-                        </button>
+                            詳細を見る
+                          </button>
+                          {v.summary && (
+                            <button
+                              onClick={() => setDetailVideo(v)}
+                              className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] w-full text-left"
+                            >
+                              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 hover:underline">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                </svg>
+                                AI要約を確認
+                              </p>
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -568,178 +644,21 @@ export default function AdminTrainingVideosPage() {
         </div>
       )}
 
-      {/* ===== AI要約中オーバーレイ ===== */}
+      {/* AI要約アニメーション用CSS */}
       {summarizingId && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center">
-          {/* 背景 */}
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-
-          {/* メインコンテンツ */}
-          <div className="relative z-10 flex flex-col items-center gap-8 px-6 max-w-md text-center">
-
-            {/* 回転グラデーションリング */}
-            <div className="relative w-40 h-40">
-              {/* 外側リング（回転） */}
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: 'conic-gradient(from 0deg, #7c3aed, #3b82f6, #06b6d4, #8b5cf6, #ec4899, #7c3aed)',
-                  animation: 'ai-spin 2s linear infinite',
-                }}
-              />
-              {/* 内側切り抜き */}
-              <div className="absolute inset-[4px] rounded-full bg-black/80" />
-
-              {/* 中間リング（逆回転） */}
-              <div
-                className="absolute inset-[12px] rounded-full"
-                style={{
-                  background: 'conic-gradient(from 180deg, transparent 0%, #8b5cf6 25%, transparent 50%, #3b82f6 75%, transparent 100%)',
-                  animation: 'ai-spin-reverse 3s linear infinite',
-                  opacity: 0.7,
-                }}
-              />
-              <div className="absolute inset-[16px] rounded-full bg-black/80" />
-
-              {/* 内側パルス */}
-              <div
-                className="absolute inset-[24px] rounded-full"
-                style={{
-                  background: 'radial-gradient(circle, rgba(139,92,246,0.3) 0%, rgba(59,130,246,0.1) 50%, transparent 70%)',
-                  animation: 'ai-pulse-glow 1.5s ease-in-out infinite',
-                }}
-              />
-
-              {/* 中央AIアイコン */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg
-                  className="w-12 h-12 text-white"
-                  style={{ animation: 'ai-icon-breathe 2s ease-in-out infinite' }}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            {/* スキャンライン */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <div
-                className="w-full h-[2px]"
-                style={{
-                  background: 'linear-gradient(90deg, transparent, rgba(139,92,246,0.6), rgba(59,130,246,0.8), rgba(139,92,246,0.6), transparent)',
-                  animation: 'ai-scanline 2.5s ease-in-out infinite',
-                }}
-              />
-            </div>
-
-            {/* フローティングパーティクル */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              {[...Array(12)].map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute w-1 h-1 rounded-full"
-                  style={{
-                    background: i % 3 === 0 ? '#8b5cf6' : i % 3 === 1 ? '#3b82f6' : '#06b6d4',
-                    left: `${10 + (i * 7) % 80}%`,
-                    top: `${15 + (i * 11) % 70}%`,
-                    animation: `ai-particle ${2 + (i % 3)}s ease-in-out ${i * 0.3}s infinite`,
-                    boxShadow: `0 0 6px ${i % 3 === 0 ? '#8b5cf6' : i % 3 === 1 ? '#3b82f6' : '#06b6d4'}`,
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* テキスト */}
-            <div className="space-y-3">
-              <h2
-                className="text-xl font-bold text-white"
-                style={{
-                  background: 'linear-gradient(90deg, #c4b5fd, #93c5fd, #67e8f9, #c4b5fd)',
-                  backgroundSize: '200% auto',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  animation: 'ai-text-shimmer 2s linear infinite',
-                }}
-              >
-                AIが動画を解析中...
-              </h2>
-              <p className="text-sm text-gray-400">
-                動画の内容を分析し、要約と重要ポイントを抽出しています
-              </p>
-
-              {/* プログレスバー */}
-              <div className="w-64 h-1.5 rounded-full bg-white/10 overflow-hidden mx-auto mt-4">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    background: 'linear-gradient(90deg, #7c3aed, #3b82f6, #06b6d4, #8b5cf6)',
-                    backgroundSize: '200% auto',
-                    animation: 'ai-progress 1.5s ease-in-out infinite',
-                  }}
-                />
-              </div>
-
-              {/* ステップ表示 */}
-              <div className="flex items-center justify-center gap-3 mt-4">
-                {['字幕取得', 'AI解析', '要約生成'].map((step, i) => (
-                  <div key={step} className="flex items-center gap-1.5">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        background: '#8b5cf6',
-                        animation: `ai-step-dot 1.8s ease-in-out ${i * 0.6}s infinite`,
-                      }}
-                    />
-                    <span className="text-xs text-gray-400">{step}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* CSS Animations */}
-          <style>{`
-            @keyframes ai-spin {
-              to { transform: rotate(360deg); }
-            }
-            @keyframes ai-spin-reverse {
-              to { transform: rotate(-360deg); }
-            }
-            @keyframes ai-pulse-glow {
-              0%, 100% { opacity: 0.3; transform: scale(1); }
-              50% { opacity: 0.8; transform: scale(1.1); }
-            }
-            @keyframes ai-icon-breathe {
-              0%, 100% { transform: scale(1); opacity: 0.9; }
-              50% { transform: scale(1.15); opacity: 1; }
-            }
-            @keyframes ai-scanline {
-              0% { transform: translateY(-100px); opacity: 0; }
-              20% { opacity: 1; }
-              80% { opacity: 1; }
-              100% { transform: translateY(calc(100vh + 100px)); opacity: 0; }
-            }
-            @keyframes ai-particle {
-              0%, 100% { transform: translateY(0) scale(1); opacity: 0.4; }
-              50% { transform: translateY(-20px) scale(1.8); opacity: 1; }
-            }
-            @keyframes ai-text-shimmer {
-              to { background-position: 200% center; }
-            }
-            @keyframes ai-progress {
-              0% { width: 5%; background-position: 0% center; }
-              50% { width: 70%; background-position: 100% center; }
-              100% { width: 30%; background-position: 200% center; }
-            }
-            @keyframes ai-step-dot {
-              0%, 100% { opacity: 0.3; transform: scale(0.8); box-shadow: none; }
-              50% { opacity: 1; transform: scale(1.4); box-shadow: 0 0 8px #8b5cf6; }
-            }
-          `}</style>
-        </div>
+        <style>{`
+          @keyframes ai-spin { to { transform: rotate(360deg); } }
+          @keyframes ai-shimmer { to { background-position: 200% center; } }
+          @keyframes ai-progress {
+            0% { width: 10%; }
+            50% { width: 75%; }
+            100% { width: 40%; }
+          }
+          @keyframes ai-dot {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+          }
+        `}</style>
       )}
 
       {/* ===== 動画詳細モーダル ===== */}

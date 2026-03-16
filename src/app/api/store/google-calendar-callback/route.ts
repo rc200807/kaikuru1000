@@ -14,14 +14,14 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get('state')
   const error = searchParams.get('error')
 
-  const profileUrl = `${process.env.NEXTAUTH_URL}/store/profile`
+  const mystoreUrl = `${process.env.NEXTAUTH_URL}/store/mystore`
 
   if (error || !code || !state) {
-    return NextResponse.redirect(`${profileUrl}?gcal=error`)
+    return NextResponse.redirect(`${mystoreUrl}?gcal=error`)
   }
 
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    return NextResponse.redirect(`${profileUrl}?gcal=error`)
+    return NextResponse.redirect(`${mystoreUrl}?gcal=error`)
   }
 
   // state パラメータから storeId をデコード
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     if (!storeId) throw new Error('Missing storeId')
   } catch {
     console.error('[GoogleCalendar] state パラメータのパースに失敗')
-    return NextResponse.redirect(`${profileUrl}?gcal=error`)
+    return NextResponse.redirect(`${mystoreUrl}?gcal=error`)
   }
 
   try {
@@ -83,9 +83,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.redirect(`${profileUrl}?gcal=connected`)
+    return NextResponse.redirect(`${mystoreUrl}?gcal=connected`)
   } catch (err: any) {
     console.error('[GoogleCalendar] OAuth callback error:', err)
-    return NextResponse.redirect(`${profileUrl}?gcal=error`)
+    return NextResponse.redirect(`${mystoreUrl}?gcal=error`)
   }
 }

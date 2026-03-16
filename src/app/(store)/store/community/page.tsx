@@ -64,6 +64,9 @@ export default function CommunityPage() {
   const [replying, setReplying] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
+  // Image lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+
   const repliesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -364,16 +367,37 @@ export default function CommunityPage() {
                 {thread.content}
               </p>
 
-              {/* Image thumbnails */}
+              {/* Image grid (SNS-style) */}
               {thread.imageUrls && thread.imageUrls.length > 0 && (
-                <div className="flex gap-2 mt-2">
+                <div
+                  className={`mt-3 grid gap-1.5 rounded-2xl overflow-hidden ${
+                    thread.imageUrls.length === 1
+                      ? 'grid-cols-1'
+                      : thread.imageUrls.length === 2
+                      ? 'grid-cols-2'
+                      : 'grid-cols-3'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {thread.imageUrls.map((url, i) => (
-                    <img
+                    <button
                       key={i}
-                      src={url}
-                      alt={`画像${i + 1}`}
-                      className="w-14 h-14 rounded-lg object-cover border border-[var(--md-sys-color-outline-variant)]"
-                    />
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setLightboxUrl(url)
+                      }}
+                      className="relative block w-full overflow-hidden"
+                    >
+                      <img
+                        src={url}
+                        alt={`画像${i + 1}`}
+                        className={`w-full object-cover hover:scale-105 transition-transform duration-200 ${
+                          thread.imageUrls.length === 1
+                            ? 'max-h-[280px] rounded-2xl'
+                            : 'aspect-square rounded-xl'
+                        }`}
+                      />
+                    </button>
                   ))}
                 </div>
               )}
@@ -503,6 +527,29 @@ export default function CommunityPage() {
         </div>
       </Modal>
 
+      {/* Image Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="拡大画像"
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* Thread Detail Modal */}
       <Modal
         open={detailOpen}
@@ -567,24 +614,37 @@ export default function CommunityPage() {
               {selectedThread.content}
             </div>
 
-            {/* Thread images */}
+            {/* Thread images (SNS-style full-width) */}
             {selectedThread.imageUrls && selectedThread.imageUrls.length > 0 && (
-              <div className="flex gap-3 flex-wrap">
+              <div
+                className={`grid gap-2 rounded-2xl overflow-hidden ${
+                  selectedThread.imageUrls.length === 1
+                    ? 'grid-cols-1'
+                    : 'grid-cols-2'
+                }`}
+              >
                 {selectedThread.imageUrls.map((url, i) => (
-                  <a
+                  <button
                     key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="block"
+                    onClick={() => setLightboxUrl(url)}
+                    className={`relative block w-full overflow-hidden ${
+                      selectedThread.imageUrls.length === 3 && i === 0
+                        ? 'row-span-2'
+                        : ''
+                    }`}
                   >
                     <img
                       src={url}
                       alt={`画像${i + 1}`}
-                      className="max-w-[200px] max-h-[200px] rounded-xl object-cover border border-[var(--md-sys-color-outline-variant)] hover:opacity-90 transition-opacity cursor-zoom-in"
+                      className={`w-full object-cover hover:scale-105 transition-transform duration-200 cursor-zoom-in ${
+                        selectedThread.imageUrls.length === 1
+                          ? 'max-h-[400px] rounded-2xl'
+                          : selectedThread.imageUrls.length === 3 && i === 0
+                          ? 'h-full rounded-l-2xl'
+                          : 'aspect-square rounded-xl'
+                      }`}
                     />
-                  </a>
+                  </button>
                 ))}
               </div>
             )}

@@ -185,6 +185,25 @@ body {
 .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .thin-scrollbar::-webkit-scrollbar-thumb { background: var(--md-sys-color-outline-variant); border-radius: 3px; }
 
+/* ── Table horizontal scroll (mobile-friendly) ───────── */
+.table-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-sys-color-outline-variant) transparent;
+}
+.table-scroll-container::-webkit-scrollbar { height: 4px; }
+.table-scroll-container::-webkit-scrollbar-track { background: transparent; }
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--md-sys-color-outline-variant);
+  border-radius: 2px;
+}
+@media (max-width: 767px) {
+  .table-scroll-container::-webkit-scrollbar { height: 3px; }
+  .table-scroll-container::-webkit-scrollbar-thumb {
+    background: var(--md-sys-color-outline);
+  }
+}
+
 /* ── Transition defaults ──────────────────────────────── */
 .transition-md3 { transition: all 200ms cubic-bezier(0.2, 0, 0, 1); }
 

@@ -9,11 +9,21 @@ import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 
+type AnnouncementCategory = {
+  id: string
+  name: string
+  color: string
+  icon: string
+}
+
 type Announcement = {
   id: string
   title: string
   content: string
   category: string
+  priority: 'normal' | 'high' | 'urgent'
+  isRead: boolean
+  announcementCategory: AnnouncementCategory | null
   publishedAt: string
   admin: { name: string }
 }
@@ -72,28 +82,99 @@ export default function StoreAnnouncementsPage() {
       ) : (
         <div className="space-y-3">
           {announcements.map(a => {
-            const cat = CATEGORIES[a.category] || CATEGORIES.general
             const isNew = Date.now() - new Date(a.publishedAt).getTime() < 3 * 24 * 60 * 60 * 1000 // 3日以内
+
+            // Category display: prefer announcementCategory, fallback to hardcoded
+            const catDisplay = a.announcementCategory
+              ? {
+                  label: a.announcementCategory.name,
+                  icon: a.announcementCategory.icon,
+                  color: a.announcementCategory.color
+                    ? `bg-[${a.announcementCategory.color}]/10 text-[${a.announcementCategory.color}]`
+                    : 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-300',
+                }
+              : (() => {
+                  const fallback = CATEGORIES[a.category] || CATEGORIES.general
+                  return { label: fallback.label, icon: fallback.icon, color: fallback.color }
+                })()
+
+            // Priority-based styles
+            const priorityBorder =
+              a.priority === 'urgent'
+                ? 'border-l-4 border-l-red-500'
+                : a.priority === 'high'
+                  ? 'border-l-4 border-l-orange-500'
+                  : ''
+
+            const priorityBg =
+              a.priority === 'urgent'
+                ? 'bg-red-50/50 dark:bg-red-950/20'
+                : !a.isRead
+                  ? 'bg-blue-50/30 dark:bg-blue-950/10'
+                  : 'bg-[var(--md-sys-color-surface-container-low)]'
+
             return (
               <Link
                 key={a.id}
                 href={`/store/announcements/${a.id}`}
-                className="block px-5 py-4 rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors group"
+                className={`block px-5 py-4 rounded-2xl border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors group relative ${priorityBorder} ${priorityBg}`}
               >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cat.color}`}>
-                    {cat.label}
-                  </span>
+                {/* Unread indicator dot */}
+                {!a.isRead && (
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                )}
+
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  {/* Category badge */}
+                  {a.announcementCategory ? (
+                    <span
+                      className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: a.announcementCategory.color
+                          ? `${a.announcementCategory.color}20`
+                          : undefined,
+                        color: a.announcementCategory.color || undefined,
+                      }}
+                    >
+                      {a.announcementCategory.icon} {a.announcementCategory.name}
+                    </span>
+                  ) : (
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${catDisplay.color}`}>
+                      {catDisplay.label}
+                    </span>
+                  )}
+
+                  {/* Priority badge */}
+                  {a.priority === 'urgent' && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 animate-pulse">
+                      緊急
+                    </span>
+                  )}
+                  {a.priority === 'high' && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
+                      重要
+                    </span>
+                  )}
+
+                  {/* NEW badge */}
                   {isNew && (
                     <span className="text-xs font-bold text-red-500 dark:text-red-400 animate-pulse">
                       NEW
                     </span>
                   )}
+
                   <span className="text-xs text-[var(--md-sys-color-outline)] ml-auto">
                     {format(new Date(a.publishedAt), 'yyyy年M月d日', { locale: ja })}
                   </span>
                 </div>
-                <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] group-hover:text-[var(--store-primary)] transition-colors">
+
+                <h3
+                  className={`text-sm group-hover:text-[var(--store-primary)] transition-colors ${
+                    !a.isRead || a.priority === 'urgent' || a.priority === 'high'
+                      ? 'font-bold text-[var(--md-sys-color-on-surface)]'
+                      : 'font-semibold text-[var(--md-sys-color-on-surface)]'
+                  }`}
+                >
                   {a.title}
                 </h3>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] line-clamp-2 mt-1">

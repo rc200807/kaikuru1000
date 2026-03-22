@@ -102,6 +102,24 @@ export default function NavigationRail() {
   const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([])
   const [switching, setSwitching] = useState(false)
   const switcherRef = useRef<HTMLDivElement>(null)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Fetch unread announcement count
+  useEffect(() => {
+    if (user?.id) {
+      const fetchUnread = () => {
+        fetch('/api/store/announcements/unread-count')
+          .then(r => r.ok ? r.json() : { count: 0 })
+          .then(data => setUnreadCount(data.count || 0))
+          .catch(() => {})
+      }
+      fetchUnread()
+      // ページフォーカス時にも更新
+      const onFocus = () => fetchUnread()
+      window.addEventListener('focus', onFocus)
+      return () => window.removeEventListener('focus', onFocus)
+    }
+  }, [user?.id, pathname])
 
   // Fetch linked accounts on mount
   useEffect(() => {
@@ -234,6 +252,7 @@ export default function NavigationRail() {
       <nav className="flex-1 flex flex-col items-center gap-1">
         {navItems.map(item => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
+          const showBadge = item.href === '/store/announcements' && unreadCount > 0
           return (
             <Link
               key={item.href}
@@ -241,13 +260,18 @@ export default function NavigationRail() {
               className="flex flex-col items-center gap-0.5 py-1 group"
             >
               <div className={`
-                px-4 py-1.5 rounded-full transition-colors
+                relative px-4 py-1.5 rounded-full transition-colors
                 ${active
                   ? 'bg-[var(--store-primary-container)] text-[var(--store-on-primary-container)]'
                   : 'text-[var(--md-sys-color-on-surface-variant)] group-hover:bg-[var(--md-sys-color-surface-container-high)]'
                 }
               `}>
                 {item.icon}
+                {showBadge && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </div>
               <span className={`text-[10px] font-medium ${active ? 'text-[var(--store-primary)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
                 {item.label}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -8,11 +8,20 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
+type AnnouncementCategory = {
+  id: string
+  name: string
+  color: string
+  icon: string
+}
+
 type Announcement = {
   id: string
   title: string
   content: string
   category: string
+  priority: 'normal' | 'high' | 'urgent'
+  announcementCategory: AnnouncementCategory | null
   publishedAt: string
   admin: { name: string }
 }
@@ -31,6 +40,7 @@ export default function StoreAnnouncementDetailPage() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const markedReadRef = useRef(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -45,6 +55,14 @@ export default function StoreAnnouncementDetailPage() {
         })
         .then(data => { if (data) setAnnouncement(data) })
         .finally(() => setLoading(false))
+    }
+  }, [status, params.id])
+
+  // Auto-mark as read on page load
+  useEffect(() => {
+    if (status === 'authenticated' && params.id && !markedReadRef.current) {
+      markedReadRef.current = true
+      fetch(`/api/store/announcements/${params.id}/read`, { method: 'POST' }).catch(() => {})
     }
   }, [status, params.id])
 
@@ -80,10 +98,37 @@ export default function StoreAnnouncementDetailPage() {
 
       {/* 記事ヘッダー */}
       <div className="mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${cat.color}`}>
-            {cat.label}
-          </span>
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {/* Category badge */}
+          {announcement.announcementCategory ? (
+            <span
+              className="text-xs font-medium px-2.5 py-1 rounded-full"
+              style={{
+                backgroundColor: announcement.announcementCategory.color
+                  ? `${announcement.announcementCategory.color}20`
+                  : undefined,
+                color: announcement.announcementCategory.color || undefined,
+              }}
+            >
+              {announcement.announcementCategory.icon} {announcement.announcementCategory.name}
+            </span>
+          ) : (
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${cat.color}`}>
+              {cat.label}
+            </span>
+          )}
+
+          {/* Priority badge */}
+          {announcement.priority === 'urgent' && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 animate-pulse">
+              緊急
+            </span>
+          )}
+          {announcement.priority === 'high' && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
+              重要
+            </span>
+          )}
         </div>
         <h1 className="text-xl sm:text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-tight">
           {announcement.title}

@@ -17,7 +17,14 @@ export async function GET(
   const { id } = await params
   const announcement = await prisma.announcement.findUnique({
     where: { id },
-    include: { admin: { select: { name: true } } },
+    include: {
+      admin: { select: { name: true } },
+      announcementCategory: { select: { id: true, name: true, color: true, icon: true } },
+      reads: {
+        include: { store: { select: { name: true, code: true } } },
+        orderBy: { readAt: 'desc' },
+      },
+    },
   })
 
   if (!announcement) {
@@ -49,11 +56,11 @@ export async function PATCH(
   const updateData: any = {}
   if (body.title !== undefined) updateData.title = body.title.trim()
   if (body.content !== undefined) updateData.content = body.content.trim()
-  if (body.category !== undefined) updateData.category = body.category
+  if (body.categoryId !== undefined) updateData.categoryId = body.categoryId || null
+  if (body.priority !== undefined) updateData.priority = body.priority
 
   if (body.isPublished !== undefined) {
     updateData.isPublished = body.isPublished
-    // 初めて公開する場合のみ publishedAt を設定
     if (body.isPublished && !existing.publishedAt) {
       updateData.publishedAt = new Date()
     }
@@ -62,7 +69,10 @@ export async function PATCH(
   const updated = await prisma.announcement.update({
     where: { id },
     data: updateData,
-    include: { admin: { select: { name: true } } },
+    include: {
+      admin: { select: { name: true } },
+      announcementCategory: { select: { id: true, name: true, color: true, icon: true } },
+    },
   })
 
   return NextResponse.json(updated)

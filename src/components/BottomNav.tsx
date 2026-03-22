@@ -143,6 +143,23 @@ export default function BottomNav() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([])
   const [switching, setSwitching] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Fetch unread announcement count
+  useEffect(() => {
+    if (user?.id) {
+      const fetchUnread = () => {
+        fetch('/api/store/announcements/unread-count')
+          .then(r => r.ok ? r.json() : { count: 0 })
+          .then(data => setUnreadCount(data.count || 0))
+          .catch(() => {})
+      }
+      fetchUnread()
+      const onFocus = () => fetchUnread()
+      window.addEventListener('focus', onFocus)
+      return () => window.removeEventListener('focus', onFocus)
+    }
+  }, [user?.id, pathname])
 
   // Fetch linked accounts
   useEffect(() => {
@@ -279,20 +296,28 @@ export default function BottomNav() {
             <div className="grid grid-cols-3 gap-1">
               {menuNavItems.map(item => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/')
+                const showBadge = item.href === '/store/announcements' && unreadCount > 0
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setMenuOpen(false)}
                     className={`
-                      flex flex-col items-center gap-1 py-3 px-1 rounded-xl transition-colors
+                      flex flex-col items-center gap-1 py-3 px-1 rounded-xl transition-colors relative
                       ${active
                         ? 'bg-[var(--store-primary-container)] text-[var(--store-on-primary-container)]'
                         : 'text-[var(--md-sys-color-on-surface-variant)] active:bg-[var(--md-sys-color-surface-container-high)]'
                       }
                     `}
                   >
-                    {item.icon}
+                    <div className="relative">
+                      {item.icon}
+                      {showBadge && (
+                        <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </div>
                     <span className={`text-[10px] font-medium leading-tight text-center ${active ? 'text-[var(--store-primary)]' : ''}`}>
                       {item.label}
                     </span>

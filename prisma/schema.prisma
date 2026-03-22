@@ -355,7 +355,9 @@ model TrainingVideo {
   id            String         @id @default(cuid())
   title         String
   description   String?        @db.Text
-  youtubeUrl    String
+  videoUrl      String                     // 動画ファイルURL（Vercel Blob）
+  thumbnailUrl  String?                    // サムネイル画像URL
+  fileSize      Int?                       // ファイルサイズ（バイト）
   categoryId    String
   category      VideoCategory  @relation(fields: [categoryId], references: [id])
   isPublished   Boolean        @default(false)

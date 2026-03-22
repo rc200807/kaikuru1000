@@ -21,7 +21,7 @@ export async function POST(
     return NextResponse.json({ error: '動画が見つかりません' }, { status: 404 })
   }
 
-  const result = await summarizeVideo(video.youtubeUrl, video.title, video.description)
+  const result = await summarizeVideo(video.videoUrl, video.title, video.description)
   if (!result) {
     return NextResponse.json({ error: 'AI要約の生成に失敗しました' }, { status: 500 })
   }

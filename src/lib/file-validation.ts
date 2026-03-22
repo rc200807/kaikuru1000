@@ -11,6 +11,9 @@ const FILE_SIGNATURES: Record<string, number[][]> = {
   'image/webp': [[0x52, 0x49, 0x46, 0x46]], // RIFF (+ WEBP マーク確認)
   'image/gif':  [[0x47, 0x49, 0x46, 0x38]],  // GIF8
   'application/pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  'video/mp4':  [[0x00, 0x00, 0x00]], // ftyp box (offset 4 has 'ftyp')
+  'video/webm': [[0x1A, 0x45, 0xDF, 0xA3]], // EBML header
+  'video/quicktime': [[0x00, 0x00, 0x00]], // ftyp/moov box
 }
 
 // MIMEタイプ → 安全な拡張子マッピング（ファイル名に依存しない）
@@ -20,6 +23,9 @@ const MIME_TO_EXT: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif':  'gif',
   'application/pdf': 'pdf',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
 }
 
 /**
@@ -115,4 +121,27 @@ export async function validateIdDocumentFile(
   if (!magicResult.valid) return { valid: false, error: magicResult.error }
 
   return { valid: true, ext: getSafeExtension(magicResult.detectedType ?? file.type) }
+}
+
+/**
+ * 動画ファイルの総合検証（研修動画用）
+ * - サイズ: 500MB 以下
+ * - 形式: MP4 / WebM / MOV のみ
+ */
+export async function validateVideoFile(
+  file: File,
+): Promise<{ valid: boolean; ext?: string; error?: string }> {
+  const ALLOWED_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
+  const MAX_SIZE = 500 * 1024 * 1024 // 500MB
+
+  if (file.size > MAX_SIZE) {
+    return { valid: false, error: '動画ファイルは500MB以下にしてください' }
+  }
+
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return { valid: false, error: 'MP4・WebM・MOV 形式の動画のみアップロードできます' }
+  }
+
+  const ext = getSafeExtension(file.type)
+  return { valid: true, ext }
 }

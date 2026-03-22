@@ -31,17 +31,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { title, description, youtubeUrl, categoryId, isPublished } = body
+  const { title, description, videoUrl, thumbnailUrl, fileSize, categoryId, isPublished } = body
 
-  if (!title?.trim() || !youtubeUrl?.trim() || !categoryId) {
-    return NextResponse.json({ error: 'タイトル、YouTube URL、カテゴリは必須です' }, { status: 400 })
+  if (!title?.trim() || !videoUrl?.trim() || !categoryId) {
+    return NextResponse.json({ error: 'タイトル、動画ファイル、カテゴリは必須です' }, { status: 400 })
   }
 
   const video = await prisma.trainingVideo.create({
     data: {
       title: title.trim(),
       description: description?.trim() || null,
-      youtubeUrl: youtubeUrl.trim(),
+      videoUrl: videoUrl.trim(),
+      thumbnailUrl: thumbnailUrl?.trim() || null,
+      fileSize: fileSize || null,
       categoryId,
       isPublished: !!isPublished,
       publishedAt: isPublished ? new Date() : null,

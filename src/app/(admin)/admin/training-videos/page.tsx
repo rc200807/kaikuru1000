@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -11,7 +11,6 @@ import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
-import { getYoutubeEmbedUrl, getYoutubeThumbnail } from '@/lib/youtube-utils'
 
 type VideoCategory = {
   id: string
@@ -24,7 +23,9 @@ type TrainingVideo = {
   id: string
   title: string
   description: string | null
-  youtubeUrl: string
+  videoUrl: string
+  thumbnailUrl: string | null
+  fileSize: number | null
   categoryId: string
   category: { id: string; name: string }
   isPublished: boolean
@@ -35,6 +36,13 @@ type TrainingVideo = {
   keyPoints: string | null
   admin: { name: string }
   createdAt: string
+}
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return ''
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 export default function AdminTrainingVideosPage() {
@@ -56,9 +64,13 @@ export default function AdminTrainingVideosPage() {
   const [showVideoForm, setShowVideoForm] = useState(false)
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null)
   const [videoForm, setVideoForm] = useState({
-    title: '', description: '', youtubeUrl: '', categoryId: '', isPublished: false,
+    title: '', description: '', videoUrl: '', thumbnailUrl: '', fileSize: 0, categoryId: '', isPublished: false,
   })
   const [videoSubmitting, setVideoSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  const thumbInputRef = useRef<HTMLInputElement>(null)
 
   // タブ
   const [activeTab, setActiveTab] = useState<'videos' | 'categories'>('videos')
@@ -128,6 +140,67 @@ export default function AdminTrainingVideosPage() {
     }
   }
 
+  // === ファイルアップロード ===
+  async function handleVideoUpload(file: File) {
+    setUploading(true)
+    setUploadProgress(0)
+    setMessage(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'video')
+
+      // XMLHttpRequest で進捗を取得
+      const url = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/admin/training-videos/upload')
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100))
+          }
+        }
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            const data = JSON.parse(xhr.responseText)
+            resolve(data.url)
+          } else {
+            const data = JSON.parse(xhr.responseText)
+            reject(new Error(data.error || 'アップロード失敗'))
+          }
+        }
+        xhr.onerror = () => reject(new Error('通信エラー'))
+        xhr.send(formData)
+      })
+
+      setVideoForm(prev => ({ ...prev, videoUrl: url, fileSize: file.size }))
+      setMessage({ type: 'success', text: '動画をアップロードしました' })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'アップロードに失敗しました' })
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  async function handleThumbnailUpload(file: File) {
+    setMessage(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'thumbnail')
+      const res = await fetch('/api/admin/training-videos/upload', { method: 'POST', body: formData })
+      if (res.ok) {
+        const data = await res.json()
+        setVideoForm(prev => ({ ...prev, thumbnailUrl: data.url }))
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || 'サムネイルのアップロードに失敗' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'サムネイルのアップロードに失敗しました' })
+    }
+  }
+
   // === 動画操作 ===
   async function handleVideoSubmit(publish: boolean) {
     setVideoSubmitting(true)
@@ -154,7 +227,7 @@ export default function AdminTrainingVideosPage() {
   }
 
   async function handleDeleteVideo(id: string) {
-    if (!confirm('この動画を削除しますか？')) return
+    if (!confirm('この動画を削除しますか？動画ファイルも削除されます。')) return
     const res = await fetch(`/api/admin/training-videos/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setMessage({ type: 'success', text: '削除しました' })
@@ -198,7 +271,9 @@ export default function AdminTrainingVideosPage() {
     setVideoForm({
       title: v.title,
       description: v.description || '',
-      youtubeUrl: v.youtubeUrl,
+      videoUrl: v.videoUrl,
+      thumbnailUrl: v.thumbnailUrl || '',
+      fileSize: v.fileSize || 0,
       categoryId: v.categoryId,
       isPublished: v.isPublished,
     })
@@ -209,7 +284,7 @@ export default function AdminTrainingVideosPage() {
   function resetVideoForm() {
     setShowVideoForm(false)
     setEditingVideoId(null)
-    setVideoForm({ title: '', description: '', youtubeUrl: '', categoryId: categories[0]?.id || '', isPublished: false })
+    setVideoForm({ title: '', description: '', videoUrl: '', thumbnailUrl: '', fileSize: 0, categoryId: categories[0]?.id || '', isPublished: false })
   }
 
   const filteredVideos = filterCatId === 'all' ? videos : videos.filter(v => v.categoryId === filterCatId)
@@ -301,38 +376,21 @@ export default function AdminTrainingVideosPage() {
 
           {categories.length === 0 ? (
             <EmptyState
-              icon={
-                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-                </svg>
-              }
+              icon={<svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" /></svg>}
               title="カテゴリがありません"
               description="動画を追加する前にカテゴリを作成してください"
             />
           ) : (
             <div className="space-y-2">
               {categories.map(cat => (
-                <div
-                  key={cat.id}
-                  className="flex items-center justify-between px-4 py-3 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
-                >
+                <div key={cat.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]">
                   <div>
                     <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{cat.name}</p>
                     <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{cat._count.videos}件の動画</p>
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => { setEditingCatId(cat.id); setCatName(cat.name); setShowCatForm(true) }}
-                      className="text-xs text-[var(--admin-primary)] hover:underline"
-                    >
-                      編集
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCat(cat.id)}
-                      className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline"
-                    >
-                      削除
-                    </button>
+                    <button onClick={() => { setEditingCatId(cat.id); setCatName(cat.name); setShowCatForm(true) }} className="text-xs text-[var(--admin-primary)] hover:underline">編集</button>
+                    <button onClick={() => handleDeleteCat(cat.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">削除</button>
                   </div>
                 </div>
               ))}
@@ -358,25 +416,133 @@ export default function AdminTrainingVideosPage() {
                   required
                   placeholder="動画のタイトル"
                 />
-                <TextField
-                  label="YouTube URL"
-                  value={videoForm.youtubeUrl}
-                  onChange={v => setVideoForm({ ...videoForm, youtubeUrl: v })}
-                  required
-                  placeholder="https://www.youtube.com/watch?v=... または https://youtu.be/..."
-                />
 
-                {/* プレビュー */}
-                {videoForm.youtubeUrl && getYoutubeEmbedUrl(videoForm.youtubeUrl) && (
-                  <div className="aspect-video max-w-md rounded-xl overflow-hidden bg-black">
-                    <iframe
-                      src={getYoutubeEmbedUrl(videoForm.youtubeUrl)!}
-                      className="w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
+                {/* 動画ファイルアップロード */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-2">動画ファイル</label>
+                  {videoForm.videoUrl ? (
+                    <div className="space-y-3">
+                      {/* アップロード済みプレビュー */}
+                      <div className="aspect-video max-w-lg rounded-xl overflow-hidden bg-black">
+                        <video
+                          src={videoForm.videoUrl}
+                          controls
+                          className="w-full h-full"
+                          preload="metadata"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          アップロード済み {videoForm.fileSize ? `(${formatFileSize(videoForm.fileSize)})` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoForm(prev => ({ ...prev, videoUrl: '', fileSize: 0 }))
+                            if (videoInputRef.current) videoInputRef.current.value = ''
+                          }}
+                          className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline"
+                        >
+                          差し替え
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => !uploading && videoInputRef.current?.click()}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
+                      onDrop={e => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const file = e.dataTransfer.files[0]
+                        if (file && !uploading) handleVideoUpload(file)
+                      }}
+                      className={`
+                        relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors
+                        ${uploading
+                          ? 'border-[var(--admin-primary)] bg-[var(--admin-primary-container)]/10'
+                          : 'border-[var(--md-sys-color-outline-variant)] hover:border-[var(--admin-primary)] hover:bg-[var(--md-sys-color-surface-container-low)]'
+                        }
+                      `}
+                    >
+                      {uploading ? (
+                        <div className="space-y-3">
+                          <div className="w-12 h-12 mx-auto rounded-full border-4 border-[var(--admin-primary-container)] border-t-[var(--admin-primary)] animate-spin" />
+                          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">アップロード中... {uploadProgress}%</p>
+                          <div className="max-w-xs mx-auto h-2 bg-[var(--md-sys-color-surface-container)] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[var(--admin-primary)] rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <svg className="w-12 h-12 mx-auto text-[var(--md-sys-color-on-surface-variant)] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                            クリックまたはドラッグ&ドロップ
+                          </p>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                            MP4・WebM・MOV（最大500MB）
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (file) handleVideoUpload(file)
+                    }}
+                  />
+                </div>
+
+                {/* サムネイル画像（任意） */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-2">
+                    サムネイル画像（任意）
+                  </label>
+                  {videoForm.thumbnailUrl ? (
+                    <div className="flex items-start gap-3">
+                      <img src={videoForm.thumbnailUrl} alt="" className="w-40 h-auto rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVideoForm(prev => ({ ...prev, thumbnailUrl: '' }))
+                          if (thumbInputRef.current) thumbInputRef.current.value = ''
+                        }}
+                        className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => thumbInputRef.current?.click()}
+                      className="px-4 py-2 rounded-xl border border-dashed border-[var(--md-sys-color-outline-variant)] text-sm text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--admin-primary)] hover:text-[var(--admin-primary)] transition-colors"
+                    >
+                      画像を選択
+                    </button>
+                  )}
+                  <input
+                    ref={thumbInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0]
+                      if (file) handleThumbnailUpload(file)
+                    }}
+                  />
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">カテゴリ</label>
@@ -405,7 +571,7 @@ export default function AdminTrainingVideosPage() {
                 <div className="flex flex-wrap gap-3">
                   <Button
                     onClick={() => handleVideoSubmit(true)}
-                    disabled={videoSubmitting || !videoForm.title.trim() || !videoForm.youtubeUrl.trim() || !videoForm.categoryId}
+                    disabled={videoSubmitting || uploading || !videoForm.title.trim() || !videoForm.videoUrl || !videoForm.categoryId}
                     loading={videoSubmitting}
                   >
                     {editingVideoId ? '更新して公開' : '公開する'}
@@ -413,7 +579,7 @@ export default function AdminTrainingVideosPage() {
                   <Button
                     variant="tonal"
                     onClick={() => handleVideoSubmit(false)}
-                    disabled={videoSubmitting || !videoForm.title.trim() || !videoForm.youtubeUrl.trim() || !videoForm.categoryId}
+                    disabled={videoSubmitting || uploading || !videoForm.title.trim() || !videoForm.videoUrl || !videoForm.categoryId}
                   >
                     下書き保存
                   </Button>
@@ -455,190 +621,106 @@ export default function AdminTrainingVideosPage() {
           {/* 動画一覧 */}
           {filteredVideos.length === 0 ? (
             <EmptyState
-              icon={
-                <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-                </svg>
-              }
+              icon={<svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>}
               title={categories.length === 0 ? 'まずカテゴリを作成してください' : '研修動画がありません'}
               description={categories.length === 0 ? 'カテゴリタブからカテゴリを作成後、動画を追加できます' : '「動画を追加」から研修動画を登録しましょう'}
             />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredVideos.map(v => {
-                const thumb = getYoutubeThumbnail(v.youtubeUrl)
-                return (
-                  <div
-                    key={v.id}
-                    className={`relative rounded-2xl border overflow-hidden group transition-all ${
-                      summarizingId === v.id
-                        ? 'border-purple-400/60 dark:border-purple-500/40 shadow-[0_0_16px_rgba(139,92,246,0.15)]'
-                        : 'border-[var(--md-sys-color-outline-variant)]'
-                    } bg-[var(--md-sys-color-surface-container-low)]`}
-                  >
-                    {/* サムネイル（クリックで詳細） */}
-                    {thumb && (
-                      <button onClick={() => setDetailVideo(v)} className="relative aspect-video bg-black w-full">
-                        <img
-                          src={thumb} alt=""
-                          className={`w-full h-full object-cover transition-opacity ${summarizingId === v.id ? 'opacity-40' : ''}`}
-                        />
-                        {summarizingId === v.id ? (
-                          /* 要約中: サムネイル上のAI解析オーバーレイ */
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
-                            {/* 回転リング */}
-                            <div className="relative w-14 h-14 mb-2">
-                              <div
-                                className="absolute inset-0 rounded-full"
-                                style={{
-                                  background: 'conic-gradient(from 0deg, #7c3aed, #3b82f6, #06b6d4, #8b5cf6, #ec4899, #7c3aed)',
-                                  animation: 'ai-spin 2s linear infinite',
-                                }}
-                              />
-                              <div className="absolute inset-[3px] rounded-full bg-black/80" />
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                                </svg>
-                              </div>
-                            </div>
-                            <span
-                              className="text-sm font-bold"
-                              style={{
-                                background: 'linear-gradient(90deg, #c4b5fd, #93c5fd, #67e8f9, #c4b5fd)',
-                                backgroundSize: '200% auto',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                                animation: 'ai-shimmer 2s linear infinite',
-                              }}
-                            >
-                              AI解析中...
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          </div>
-                        )}
-                      </button>
-                    )}
-
-                    {/* 要約中: カード下部のプログレスバー */}
-                    {summarizingId === v.id && (
-                      <div className="h-1 bg-purple-100 dark:bg-purple-950/40 overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            background: 'linear-gradient(90deg, #7c3aed, #3b82f6, #06b6d4)',
-                            animation: 'ai-progress 2s ease-in-out infinite',
-                          }}
-                        />
+              {filteredVideos.map(v => (
+                <div
+                  key={v.id}
+                  className={`relative rounded-2xl border overflow-hidden group transition-all ${
+                    summarizingId === v.id
+                      ? 'border-purple-400/60 dark:border-purple-500/40 shadow-[0_0_16px_rgba(139,92,246,0.15)]'
+                      : 'border-[var(--md-sys-color-outline-variant)]'
+                  } bg-[var(--md-sys-color-surface-container-low)]`}
+                >
+                  {/* サムネイル / 動画プレビュー */}
+                  <button onClick={() => setDetailVideo(v)} className="relative aspect-video bg-black/90 w-full">
+                    {v.thumbnailUrl ? (
+                      <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                        <svg className="w-12 h-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+                        </svg>
                       </div>
                     )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                    </div>
+                    {v.fileSize && (
+                      <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono">
+                        {formatFileSize(v.fileSize)}
+                      </span>
+                    )}
+                  </button>
 
-                    <div className="p-4">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)]">
-                          {v.category.name}
+                  {/* 要約中プログレスバー */}
+                  {summarizingId === v.id && (
+                    <div className="h-1 bg-purple-100 dark:bg-purple-950/40 overflow-hidden">
+                      <div className="h-full rounded-full" style={{ background: 'linear-gradient(90deg, #7c3aed, #3b82f6, #06b6d4)', animation: 'ai-progress 2s ease-in-out infinite' }} />
+                    </div>
+                  )}
+
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)]">{v.category.name}</span>
+                    </div>
+                    <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] line-clamp-2">{v.title}</h3>
+                    {v.description && (
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] line-clamp-2 mt-1">{v.description}</p>
+                    )}
+                    <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
+                      {format(new Date(v.createdAt), 'M/d', { locale: ja })} · {v.admin.name}
+                    </p>
+
+                    {/* 公開トグル + アクション */}
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleTogglePublish(v) }}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${v.isPublished ? 'bg-green-500' : 'bg-[var(--md-sys-color-outline-variant)]'}`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${v.isPublished ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                        </button>
+                        <span className={`text-xs font-medium ${v.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                          {v.isPublished ? '公開中' : '非公開'}
                         </span>
                       </div>
-                      <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] line-clamp-2">
-                        {v.title}
-                      </h3>
-                      {v.description && (
-                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] line-clamp-2 mt-1">
-                          {v.description}
-                        </p>
-                      )}
-                      <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
-                        {format(new Date(v.createdAt), 'M/d', { locale: ja })} · {v.admin.name}
-                      </p>
-
-                      {/* 要約中: ステップ表示 */}
-                      {summarizingId === v.id ? (
-                        <div className="mt-3 px-3 py-2.5 rounded-xl bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/30">
-                          <div className="flex items-center justify-center gap-3">
-                            {['字幕取得', 'AI解析', '要約生成'].map((step, i) => (
-                              <div key={step} className="flex items-center gap-1">
-                                <div
-                                  className="w-1.5 h-1.5 rounded-full bg-purple-500"
-                                  style={{ animation: `ai-dot 1.8s ease-in-out ${i * 0.6}s infinite` }}
-                                />
-                                <span className="text-[10px] text-purple-600 dark:text-purple-400">{step}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {/* 公開トグル */}
-                          <div className="flex items-center justify-between mt-3">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleTogglePublish(v) }}
-                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                  v.isPublished
-                                    ? 'bg-green-500'
-                                    : 'bg-[var(--md-sys-color-outline-variant)]'
-                                }`}
-                              >
-                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                                  v.isPublished ? 'translate-x-4.5' : 'translate-x-0.5'
-                                }`} />
-                              </button>
-                              <span className={`text-xs font-medium ${v.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
-                                {v.isPublished ? '公開中' : '非公開'}
-                              </span>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={() => startEditVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline">
-                                編集
-                              </button>
-                              <button
-                                onClick={() => handleSummarize(v.id)}
-                                disabled={summarizingId === v.id}
-                                className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
-                              >
-                                {v.summary ? '再要約' : 'AI要約'}
-                              </button>
-                              <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">
-                                削除
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 詳細を見るボタン */}
-                          <button
-                            onClick={() => setDetailVideo(v)}
-                            className="mt-3 w-full py-2.5 rounded-xl bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-sm font-semibold hover:opacity-90 active:opacity-80 transition-opacity flex items-center justify-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-                            </svg>
-                            詳細を見る
-                          </button>
-                          {v.summary && (
-                            <button
-                              onClick={() => setDetailVideo(v)}
-                              className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] w-full text-left"
-                            >
-                              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 hover:underline">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-                                </svg>
-                                AI要約を確認
-                              </p>
-                            </button>
-                          )}
-                        </>
-                      )}
+                      <div className="flex gap-2">
+                        <button onClick={() => startEditVideo(v)} className="text-xs text-[var(--admin-primary)] hover:underline">編集</button>
+                        <button
+                          onClick={() => handleSummarize(v.id)}
+                          disabled={summarizingId === v.id}
+                          className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
+                        >
+                          {v.summary ? '再要約' : 'AI要約'}
+                        </button>
+                        <button onClick={() => handleDeleteVideo(v.id)} className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline">削除</button>
+                      </div>
                     </div>
+
+                    {/* 詳細を見る */}
+                    <button
+                      onClick={() => setDetailVideo(v)}
+                      className="mt-3 w-full py-2.5 rounded-xl bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-sm font-semibold hover:opacity-90 active:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+                      詳細を見る
+                    </button>
+                    {v.summary && (
+                      <button onClick={() => setDetailVideo(v)} className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] w-full text-left">
+                        <p className="text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1 hover:underline">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
+                          AI要約を確認
+                        </p>
+                      </button>
+                    )}
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -648,28 +730,13 @@ export default function AdminTrainingVideosPage() {
       {summarizingId && (
         <style>{`
           @keyframes ai-spin { to { transform: rotate(360deg); } }
-          @keyframes ai-shimmer { to { background-position: 200% center; } }
-          @keyframes ai-progress {
-            0% { width: 10%; }
-            50% { width: 75%; }
-            100% { width: 40%; }
-          }
-          @keyframes ai-dot {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
-          }
+          @keyframes ai-progress { 0% { width: 10%; } 50% { width: 75%; } 100% { width: 40%; } }
         `}</style>
       )}
 
       {/* ===== 動画詳細モーダル ===== */}
-      <Modal
-        open={!!detailVideo}
-        onClose={() => setDetailVideo(null)}
-        title={detailVideo?.title || '動画詳細'}
-        size="lg"
-      >
+      <Modal open={!!detailVideo} onClose={() => setDetailVideo(null)} title={detailVideo?.title || '動画詳細'} size="lg">
         {detailVideo && (() => {
-          const embedUrl = getYoutubeEmbedUrl(detailVideo.youtubeUrl)
           let keyPoints: string[] = []
           if (detailVideo.keyPoints) {
             try { keyPoints = JSON.parse(detailVideo.keyPoints) } catch { /* ignore */ }
@@ -677,26 +744,26 @@ export default function AdminTrainingVideosPage() {
           return (
             <div className="space-y-5">
               {/* 動画プレーヤー */}
-              {embedUrl && (
-                <div className="aspect-video rounded-2xl overflow-hidden bg-black shadow-lg">
-                  <iframe
-                    src={embedUrl}
-                    className="w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              )}
+              <div className="aspect-video rounded-2xl overflow-hidden bg-black shadow-lg">
+                <video
+                  src={detailVideo.videoUrl}
+                  controls
+                  className="w-full h-full"
+                  preload="metadata"
+                  poster={detailVideo.thumbnailUrl || undefined}
+                />
+              </div>
 
               {/* 基本情報 */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)]">
-                  {detailVideo.category.name}
-                </span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)]">{detailVideo.category.name}</span>
                 {detailVideo.isPublished ? (
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">公開中</span>
                 ) : (
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">下書き</span>
+                )}
+                {detailVideo.fileSize && (
+                  <span className="text-xs text-[var(--md-sys-color-outline)]">{formatFileSize(detailVideo.fileSize)}</span>
                 )}
                 <span className="text-xs text-[var(--md-sys-color-outline)] ml-auto">
                   {format(new Date(detailVideo.createdAt), 'yyyy年M月d日', { locale: ja })} · {detailVideo.admin.name}
@@ -706,57 +773,35 @@ export default function AdminTrainingVideosPage() {
               {/* 説明 */}
               {detailVideo.description && (
                 <div className="px-4 py-3 rounded-xl bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)]">
-                  <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">
-                    {detailVideo.description}
-                  </p>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{detailVideo.description}</p>
                 </div>
               )}
 
               {/* AI要約セクション */}
               {detailVideo.summary ? (
                 <div className="space-y-4">
-                  {/* ヘッダー */}
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
-                      </svg>
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">AI要約</h3>
-                      {detailVideo.summaryAt && (
-                        <p className="text-xs text-[var(--md-sys-color-outline)]">
-                          {format(new Date(detailVideo.summaryAt), 'yyyy年M月d日 生成', { locale: ja })}
-                        </p>
-                      )}
+                      {detailVideo.summaryAt && <p className="text-xs text-[var(--md-sys-color-outline)]">{format(new Date(detailVideo.summaryAt), 'yyyy年M月d日 生成', { locale: ja })}</p>}
                     </div>
                   </div>
-
-                  {/* 要約本文 */}
                   <div className="px-5 py-4 rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/30">
-                    <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed">
-                      {detailVideo.summary}
-                    </p>
+                    <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed">{detailVideo.summary}</p>
                   </div>
-
-                  {/* 重要ポイント */}
                   {keyPoints.length > 0 && (
                     <div>
                       <h4 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-[var(--admin-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <svg className="w-4 h-4 text-[var(--admin-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         重要ポイント
                       </h4>
                       <div className="space-y-2">
                         {keyPoints.map((point, i) => (
-                          <div
-                            key={i}
-                            className="flex gap-3 px-4 py-3 rounded-xl bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)]"
-                          >
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-xs font-bold flex items-center justify-center mt-0.5">
-                              {i + 1}
-                            </span>
+                          <div key={i} className="flex gap-3 px-4 py-3 rounded-xl bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)]">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--admin-primary)] text-[var(--admin-on-primary)] text-xs font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
                             <p className="text-sm text-[var(--md-sys-color-on-surface)] leading-relaxed">{point}</p>
                           </div>
                         ))}
@@ -766,59 +811,26 @@ export default function AdminTrainingVideosPage() {
                 </div>
               ) : (
                 <div className="text-center py-6">
-                  <div className="w-12 h-12 rounded-full bg-[var(--md-sys-color-surface-container)] flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-3">
-                    AI要約はまだ生成されていません
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="tonal"
-                    onClick={() => { handleSummarize(detailVideo.id); setDetailVideo(null) }}
-                    disabled={summarizingId === detailVideo.id}
-                  >
-                    AI要約を生成
-                  </Button>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-3">AI要約はまだ生成されていません</p>
+                  <Button size="sm" variant="tonal" onClick={() => { handleSummarize(detailVideo.id); setDetailVideo(null) }}>AI要約を生成</Button>
                 </div>
               )}
 
               {/* アクション */}
               <div className="flex items-center gap-3 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
-                {/* 公開トグル */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { handleTogglePublish(detailVideo); setDetailVideo(null) }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      detailVideo.isPublished
-                        ? 'bg-green-500'
-                        : 'bg-[var(--md-sys-color-outline-variant)]'
-                    }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${detailVideo.isPublished ? 'bg-green-500' : 'bg-[var(--md-sys-color-outline-variant)]'}`}
                   >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      detailVideo.isPublished ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${detailVideo.isPublished ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                   <span className={`text-sm font-medium ${detailVideo.isPublished ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
                     {detailVideo.isPublished ? '公開中' : '非公開'}
                   </span>
                 </div>
                 <div className="flex gap-2 ml-auto">
-                  <Button size="sm" variant="tonal" onClick={() => { startEditVideo(detailVideo); setDetailVideo(null) }}>
-                    編集
-                  </Button>
-                  {!detailVideo.summary && (
-                    <Button
-                      size="sm"
-                      variant="tonal"
-                      onClick={() => { handleSummarize(detailVideo.id); setDetailVideo(null) }}
-                      disabled={summarizingId === detailVideo.id}
-                    >
-                      AI要約を生成
-                    </Button>
-                  )}
+                  <Button size="sm" variant="tonal" onClick={() => { startEditVideo(detailVideo); setDetailVideo(null) }}>編集</Button>
                 </div>
               </div>
             </div>

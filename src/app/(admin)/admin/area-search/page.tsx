@@ -28,6 +28,7 @@ type StoreResult = {
   email: string | null
   score: number
   matchReason: string
+  distanceKm: number | null
 }
 
 type SearchResponse = {
@@ -151,7 +152,9 @@ export default function AdminAreaSearchPage() {
 
   function getScoreBadge(score: number, reason: string) {
     if (score >= 20) return { color: 'from-emerald-500 to-green-500', text: reason, icon: '◎' }
+    if (score >= 15) return { color: 'from-teal-500 to-emerald-500', text: reason, icon: '◎' }
     if (score >= 10) return { color: 'from-blue-500 to-cyan-500', text: reason, icon: '○' }
+    if (score >= 5) return { color: 'from-sky-500 to-blue-400', text: reason, icon: '○' }
     return { color: 'from-amber-500 to-orange-500', text: reason, icon: '△' }
   }
 
@@ -296,12 +299,19 @@ export default function AdminAreaSearchPage() {
         {/* マッチ度の凡例 */}
         <div className="bg-[var(--md-sys-color-surface-container)] rounded-2xl p-5 border border-[var(--md-sys-color-outline-variant)]">
           <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-3 uppercase tracking-wider">マッチ度の見方</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">◎</div>
               <div>
-                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同一区内</p>
-                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">入力住所と同じ市区町村にある店舗</p>
+                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同一区内・市区町村</p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">入力住所と同じエリアの店舗</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">◎</div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同一市内・近隣エリア</p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">同じ市内や距離15km以内</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -312,6 +322,13 @@ export default function AdminAreaSearchPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-sky-500 to-blue-400 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">○</div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">近隣エリア（県境）</p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">隣接県で距離20km以内</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">△</div>
               <div>
                 <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">隣接都道府県</p>
@@ -319,6 +336,7 @@ export default function AdminAreaSearchPage() {
               </div>
             </div>
           </div>
+          <p className="text-[10px] text-[var(--md-sys-color-outline)] mt-3">※ 同一ランク内では距離が近い店舗を優先的に表示します</p>
         </div>
 
         {/* エラー */}
@@ -378,10 +396,20 @@ export default function AdminAreaSearchPage() {
                                 </span>
                               </div>
 
-                              {/* マッチ理由バッジ */}
-                              <span className={`inline-block mt-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full text-white bg-gradient-to-r ${badge.color}`}>
-                                {store.matchReason}
-                              </span>
+                              {/* マッチ理由バッジ + 距離 */}
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                <span className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full text-white bg-gradient-to-r ${badge.color}`}>
+                                  {store.matchReason}
+                                </span>
+                                {store.distanceKm !== null && (
+                                  <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] flex items-center gap-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                    </svg>
+                                    約 {store.distanceKm} km
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 

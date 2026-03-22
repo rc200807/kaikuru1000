@@ -73,36 +73,91 @@ export type StoreForScoring = {
 export type ScoredStore = StoreForScoring & {
   score: number
   matchReason: string
+  distanceKm: number | null
+}
+
+/**
+ * 2点間の距離(km)をHaversine公式で計算
+ */
+export function haversineDistanceKm(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number,
+): number {
+  const R = 6371 // 地球半径(km)
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+    * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 /**
  * 顧客住所に近い店舗をスコアリングして返す
+ *
+ * スコアリング基準:
+ *   25 = 同一区内（◎◎ 最優先）
+ *   20 = 同一市区町村（◎ 高優先）
+ *   15 = 近隣市区町村（◎ 同一県内・近接エリア）← NEW
+ *   10 = 同一都道府県（○ 中優先）
+ *    3 = 隣接都道府県（△ 低優先）
+ *
+ * 同一スコア内では距離が近い順にソート
  */
 export function scoreStoresByAddress(
   customerAddress: string,
   stores: StoreForScoring[],
+  customerCoords?: { lat: number; lng: number } | null,
+  storeCoords?: Map<string, { lat: number; lng: number }>,
 ): ScoredStore[] {
   const customer = extractAddressParts(customerAddress)
   if (!customer.prefecture) return []
+
+  // 顧客の市名部分を抽出（区を除いた市名）
+  // 例: "渋谷区" → null, "横浜市中区" → "横浜市", "さいたま市大宮区" → "さいたま市"
+  const customerBaseCity = customer.city.match(/^(.+?市)/)?.[1]
 
   return stores
     .map(store => {
       let score = 0
       let matchReason = ''
+      let distanceKm: number | null = null
       const storePref = store.prefecture || ''
       const storeAddr = store.address || ''
       const storeParts = extractAddressParts(storeAddr || storePref)
       const effectivePref = storeParts.prefecture || storePref
+
+      // 距離計算（座標がある場合）
+      if (customerCoords && storeCoords?.has(store.id)) {
+        const sc = storeCoords.get(store.id)!
+        distanceKm = Math.round(haversineDistanceKm(
+          customerCoords.lat, customerCoords.lng,
+          sc.lat, sc.lng,
+        ) * 10) / 10
+      }
 
       if (customer.prefecture === effectivePref) {
         score += 10
         matchReason = '同一都道府県'
 
         if (customer.city && storeParts.city && customer.city === storeParts.city) {
+          // 完全一致（同一市区町村）
           score += 10
           matchReason = '同一市区町村'
+        } else if (customer.city && storeParts.city) {
+          // 同一市内の別の区（例: 横浜市中区 vs 横浜市港北区）
+          const storeBaseCity = storeParts.city.match(/^(.+?市)/)?.[1]
+          if (customerBaseCity && storeBaseCity && customerBaseCity === storeBaseCity) {
+            score += 8
+            matchReason = '同一市内'
+          } else if (distanceKm !== null && distanceKm <= 15) {
+            // 距離15km以内なら近隣市区町村ボーナス
+            score += 5
+            matchReason = '近隣エリア'
+          }
         }
 
+        // 区レベルの一致ボーナス
         if (storeAddr && customer.city) {
           const customerWard = customer.city.match(/(.+?区)/)?.[1]
           if (customerWard && storeAddr.includes(customerWard)) {
@@ -113,10 +168,26 @@ export function scoreStoresByAddress(
       } else if (NEIGHBOR_PREFECTURES[customer.prefecture]?.includes(effectivePref)) {
         score += 3
         matchReason = '隣接都道府県'
+
+        // 隣接県でも距離が近い場合はボーナス（県境付近）
+        if (distanceKm !== null && distanceKm <= 20) {
+          score += 4
+          matchReason = '近隣エリア（県境）'
+        }
       }
 
-      return { ...store, score, matchReason }
+      // 距離ボーナス（全体に適用、スコアが同じ場合のソートに活用）
+      // 近い店舗ほど同一スコア内で優先される
+
+      return { ...store, score, matchReason, distanceKm }
     })
     .filter(s => s.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      // まずスコア降順、同スコアなら距離昇順
+      if (b.score !== a.score) return b.score - a.score
+      if (a.distanceKm !== null && b.distanceKm !== null) return a.distanceKm - b.distanceKm
+      if (a.distanceKm !== null) return -1
+      if (b.distanceKm !== null) return 1
+      return 0
+    })
 }

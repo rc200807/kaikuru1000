@@ -10,17 +10,13 @@ export async function GET(request: NextRequest) {
   const user = session.user as any
   if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { searchParams } = new URL(request.url)
-  const includeTestData = searchParams.get('includeTestData') === 'true'
-
   const now = new Date()
   const currentMonthStart = startOfMonth(now)
   const twelveMonthsAgo = startOfMonth(subMonths(now, 11))
   const thirtyDaysAgo = startOfDay(subDays(now, 29))
 
-  // テストデータフィルター（includeTestData=trueなら全データ、falseならテスト除外）
-  const userWhere = includeTestData ? {} : { isTestData: false as const }
-  const visitUserWhere = includeTestData ? {} : { user: { isTestData: false as const } }
+  const userWhere = {}
+  const visitUserWhere = {}
 
   // === 1. サマリー（すべてDB集計） ===
   const [

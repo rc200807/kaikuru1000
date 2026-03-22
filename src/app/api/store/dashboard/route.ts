@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   // ── 自店舗の訪問データ（直近12ヶ月） ──
   const myVisits = await prisma.visitSchedule.findMany({
-    where: { storeId, visitDate: { gte: twelveMonthsAgo }, user: { isTestData: false } },
+    where: { storeId, visitDate: { gte: twelveMonthsAgo } },
     select: { visitDate: true, purchaseAmount: true, status: true },
   })
 
@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
     where: {
       status: 'completed',
       visitDate: { gte: currentMonthStart },
-      user: { isTestData: false },
     },
     _sum: { purchaseAmount: true },
     orderBy: { _sum: { purchaseAmount: 'desc' } },
@@ -102,7 +101,6 @@ export async function GET(request: NextRequest) {
     where: {
       storeId,
       visitDate: { gte: today, lt: tomorrow },
-      user: { isTestData: false },
     },
     include: {
       user: { select: { id: true, name: true, address: true, phone: true } },

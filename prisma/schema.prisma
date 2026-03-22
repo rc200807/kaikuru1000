@@ -41,7 +41,6 @@ model User {
   idOcrIssueReport String?  @db.Text  // 顧客によるOCR誤り報告
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
-  isTestData     Boolean   @default(false)
   isActive       Boolean   @default(true)
   // 顧客タイプ
   customerType   String    @default("visit")  // "visit" | "delivery" | "regular"

@@ -21,11 +21,6 @@ export async function GET(request: NextRequest) {
   const limit   = Math.min(200, parseInt(searchParams.get('limit') || '100'))
 
   const where: any = {}
-  const includeTestData = searchParams.get('includeTestData') === 'true'
-
-  if (!includeTestData) {
-    where.user = { isTestData: false }
-  }
 
   if (storeId) {
     where.storeId = storeId

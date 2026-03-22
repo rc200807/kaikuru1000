@@ -121,8 +121,6 @@ export default function AdminDashboardPage() {
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showTestData, setShowTestData] = useState(false)
-
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -132,12 +130,11 @@ export default function AdminDashboardPage() {
     const user = session.user as any
     if (user.role !== 'admin') { router.push('/'); return }
     setLoading(true)
-    const url = showTestData ? '/api/admin/dashboard?includeTestData=true' : '/api/admin/dashboard'
-    fetch(url)
+    fetch('/api/admin/dashboard')
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [status, session, router, showTestData])
+  }, [status, session, router])
 
   if (loading || !data) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
 
@@ -232,19 +229,6 @@ export default function AdminDashboardPage() {
       <AppBar title="ダッシュボード" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-
-        {/* テストデータトグル */}
-        <div className="flex justify-end">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <div
-              onClick={() => setShowTestData(prev => !prev)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${showTestData ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'}`}
-            >
-              <div className={`absolute top-0.5 w-4 h-4 bg-[var(--toggle-thumb,#fff)] rounded-full shadow transition-transform ${showTestData ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </div>
-            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">テストデータを含む</span>
-          </label>
-        </div>
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

@@ -29,7 +29,6 @@ type User = {
   licenseKey: { key: string } | null
   store: { id: string; name: string; code: string } | null
   visitSchedules: Array<{ visitDate: string; status: string }>
-  isTestData?: boolean
   isActive: boolean
   // 顧客タイプ
   customerType: string  // "visit" | "delivery" | "regular"
@@ -78,7 +77,6 @@ export default function AdminCustomersPage() {
   const [search, setSearch] = useState('')
   const [filterStore, setFilterStore] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [showTestData, setShowTestData] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
 
   // ページネーション
@@ -121,7 +119,6 @@ export default function AdminCustomersPage() {
       }
 
       const params = new URLSearchParams()
-      if (showTestData) params.set('includeTestData', 'true')
       if (showInactive) params.set('includeInactive', 'true')
       params.set('page', '1')
       params.set('limit', String(USERS_LIMIT))
@@ -139,13 +136,12 @@ export default function AdminCustomersPage() {
         setLoading(false)
       }).catch(() => setLoading(false))
     }
-  }, [status, session, showTestData, showInactive])
+  }, [status, session, showInactive])
 
   async function loadMoreUsers() {
     setLoadingMore(true)
     const nextPage = usersPage + 1
     const params = new URLSearchParams()
-    if (showTestData) params.set('includeTestData', 'true')
     if (showInactive) params.set('includeInactive', 'true')
     params.set('page', String(nextPage))
     params.set('limit', String(USERS_LIMIT))
@@ -439,11 +435,6 @@ export default function AdminCustomersPage() {
                 無効
               </span>
             )}
-            {user.isTestData && (
-              <span className="ml-1.5 text-[10px] font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
-                テスト
-              </span>
-            )}
           </div>
           <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{user.furigana}</div>
         </div>
@@ -582,21 +573,6 @@ export default function AdminCustomersPage() {
             </div>
             <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
               無効化済みを表示
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <div
-              onClick={() => setShowTestData(prev => !prev)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${
-                showTestData ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
-              }`}
-            >
-              <div className={`absolute top-0.5 w-4 h-4 bg-[var(--toggle-thumb,#fff)] rounded-full shadow transition-transform ${
-                showTestData ? 'translate-x-4' : 'translate-x-0.5'
-              }`} />
-            </div>
-            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-              テストデータを表示
             </span>
           </label>
         </div>

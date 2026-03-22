@@ -227,6 +227,7 @@ export default function RichTextEditor({ content, onChange, placeholder = 'æœ¬æ–
         }
         .tiptap {
           min-height: 200px;
+          color: var(--md-sys-color-on-surface);
         }
         .tiptap h2 { font-size: 1.25rem; font-weight: 700; margin: 1rem 0 0.5rem; }
         .tiptap h3 { font-size: 1.1rem; font-weight: 600; margin: 0.75rem 0 0.5rem; }

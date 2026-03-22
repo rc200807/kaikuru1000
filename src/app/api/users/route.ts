@@ -97,8 +97,9 @@ export async function POST(request: NextRequest) {
       email: user.email,
       licenseKey: licenseKey,
     }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('User creation error:', error)
-    return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
+    const detail = error?.message || String(error)
+    return NextResponse.json({ error: 'サーバーエラーが発生しました', detail }, { status: 500 })
   }
 }

@@ -178,7 +178,7 @@ export default function StoreAnnouncementsPage() {
                   {a.title}
                 </h3>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] line-clamp-2 mt-1">
-                  {a.content}
+                  {a.content.replace(/<[^>]*>/g, '')}
                 </p>
               </Link>
             )

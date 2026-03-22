@@ -145,9 +145,10 @@ export default function StoreAnnouncementDetailPage() {
       <hr className="border-[var(--md-sys-color-outline-variant)] mb-6" />
 
       {/* 記事本文 */}
-      <article className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed">
-        {announcement.content}
-      </article>
+      <article
+        className="prose prose-sm dark:prose-invert max-w-none text-[var(--md-sys-color-on-surface)] leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: announcement.content }}
+      />
 
       {/* フッター */}
       <div className="mt-10 pt-4 border-t border-[var(--md-sys-color-outline-variant)]">

@@ -5,12 +5,15 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import dynamic from 'next/dynamic'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
+
+const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false })
 
 type AnnouncementCategory = {
   id: string
@@ -539,12 +542,10 @@ export default function AdminAnnouncementsPage() {
                   <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
                     本文
                   </label>
-                  <textarea
-                    value={form.content}
-                    onChange={e => setForm({ ...form, content: e.target.value })}
-                    rows={10}
+                  <RichTextEditor
+                    content={form.content}
+                    onChange={(html) => setForm({ ...form, content: html })}
                     placeholder="お知らせの本文を入力してください..."
-                    className="w-full px-4 py-3 rounded-xl bg-[var(--md-sys-color-surface-container-highest)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)] focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[var(--admin-primary)] outline-none transition-colors text-sm"
                   />
                 </div>
 
@@ -621,9 +622,10 @@ export default function AdminAnnouncementsPage() {
                   </svg>
                 </button>
               </div>
-              <div className="prose prose-sm dark:prose-invert max-w-none text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed">
-                {detailAnnouncement.content}
-              </div>
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none text-[var(--md-sys-color-on-surface)] leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: detailAnnouncement.content }}
+              />
               <div className="flex gap-2 mt-6 pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
                 <Button size="sm" onClick={() => startEdit(detailAnnouncement)}>編集</Button>
                 <Button size="sm" variant="tonal" onClick={() => handleTogglePublish(detailAnnouncement)}>
@@ -698,7 +700,7 @@ export default function AdminAnnouncementsPage() {
                       {a.title}
                     </h3>
                     <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] line-clamp-1 mt-0.5">
-                      {a.content}
+                      {a.content.replace(/<[^>]*>/g, '')}
                     </p>
                   </button>
                 )

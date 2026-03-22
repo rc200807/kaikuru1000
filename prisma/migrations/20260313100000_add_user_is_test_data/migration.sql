@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN "isTestData" BOOLEAN NOT NULL DEFAULT false;

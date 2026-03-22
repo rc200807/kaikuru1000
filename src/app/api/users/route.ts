@@ -13,7 +13,8 @@ const registerSchema = z.object({
   address:      z.string().min(1, '住所は必須です').max(200),
   password:     z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`),
   licenseKey:   z.string().optional(),
-  customerType: z.enum(['visit', 'regular']).optional(),
+  customerType: z.enum(['visit', 'delivery', 'regular']).optional(),
+  skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
 
 // 顧客登録（ライセンスキー必須 or 通常顧客はキー不要）
@@ -28,12 +29,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 })
     }
 
-    const { name, furigana, email, phone, address, password, licenseKey, customerType } = parsed.data
+    const { name, furigana, email, phone, address, password, licenseKey, customerType, skipLicenseKey } = parsed.data
 
-    // 通常顧客（ライセンスキー不要）
+    // 通常顧客 or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
     const isRegular = customerType === 'regular'
+    const needsLicenseKey = !isRegular && !skipLicenseKey && !licenseKey
 
-    if (!isRegular && !licenseKey) {
+    if (needsLicenseKey) {
       return NextResponse.json({ error: 'ライセンスキーは必須です' }, { status: 400 })
     }
 
@@ -45,13 +47,13 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    if (isRegular) {
-      // 通常顧客: ライセンスキーなしで作成
+    // ライセンスキーなしで作成（通常顧客 or 管理者/店舗からの追加）
+    if (isRegular || skipLicenseKey || !licenseKey) {
       const user = await prisma.user.create({
         data: {
           name, furigana, email, phone, address,
           password: hashedPassword,
-          customerType: 'regular',
+          customerType: customerType || 'visit',
         },
       })
       return NextResponse.json({
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
       }, { status: 201 })
     }
 
-    // 訪問/宅配顧客: ライセンスキー必須
+    // ライセンスキーありの場合
     const licenseKeyRecord = await prisma.licenseKey.findUnique({
       where: { key: licenseKey! },
     })

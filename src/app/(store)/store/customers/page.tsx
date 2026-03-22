@@ -153,6 +153,12 @@ export default function StoreCustomersPage() {
   const [deletingDoc, setDeletingDoc] = useState(false)
   const [docMsg, setDocMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 新規顧客追加
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', password: '' })
+  const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
+  const [addCustomerMsg, setAddCustomerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
@@ -387,6 +393,58 @@ export default function StoreCustomersPage() {
     }
   }
 
+  async function handleAddCustomer(e: React.FormEvent) {
+    e.preventDefault()
+    setAddCustomerSubmitting(true)
+    setAddCustomerMsg(null)
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: addCustomerForm.name,
+          furigana: addCustomerForm.furigana,
+          email: addCustomerForm.email,
+          phone: addCustomerForm.phone,
+          address: addCustomerForm.address,
+          password: addCustomerForm.password,
+          customerType: 'regular',
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setAddCustomerMsg({ type: 'error', text: data.error ?? '顧客の作成に失敗しました' })
+        setAddCustomerSubmitting(false)
+        return
+      }
+      const newUser = await res.json()
+
+      // 店舗に自動アサイン
+      const storeId = (session?.user as any).id
+      await fetch('/api/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: newUser.id, storeId }),
+      })
+
+      // 顧客一覧を再取得
+      const listRes = await fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)
+      const listData = await listRes.json()
+      const list = listData?.customers ?? (Array.isArray(listData) ? listData : [])
+      setCustomers(list)
+      setCustomersTotal(listData?.total ?? list.length)
+      setCustomersPage(1)
+      setCustomersHasMore((listData?.total ?? list.length) > CUSTOMERS_LIMIT)
+
+      setAddCustomerMsg({ type: 'success', text: `${addCustomerForm.name} 様を追加しました` })
+      setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '', password: '' })
+      setTimeout(() => setShowAddCustomer(false), 1200)
+    } catch {
+      setAddCustomerMsg({ type: 'error', text: '顧客の作成に失敗しました' })
+    }
+    setAddCustomerSubmitting(false)
+  }
+
   function closeModal() {
     setSelected(null)
     setSchedules([])
@@ -520,15 +578,24 @@ export default function StoreCustomersPage() {
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <SearchFilterBar
-          filters={[
-            { key: 'search', label: '検索', type: 'text', placeholder: '氏名・メール・電話で検索...' },
-          ]}
-          values={{ search }}
-          onChange={(_, v) => setSearch(v)}
-          onClear={() => setSearch('')}
-          className="mb-6"
-        />
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="flex-1">
+            <SearchFilterBar
+              filters={[
+                { key: 'search', label: '検索', type: 'text', placeholder: '氏名・メール・電話で検索...' },
+              ]}
+              values={{ search }}
+              onChange={(_, v) => setSearch(v)}
+              onClear={() => setSearch('')}
+            />
+          </div>
+          <Button
+            variant="filled"
+            onClick={() => { setShowAddCustomer(true); setAddCustomerMsg(null); setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '', password: '' }) }}
+          >
+            新規顧客追加
+          </Button>
+        </div>
 
         <Card variant="outlined" padding="none">
           <DataTable
@@ -985,6 +1052,80 @@ export default function StoreCustomersPage() {
             )}
           </>
         )}
+      </Modal>
+
+      {/* 新規顧客追加モーダル */}
+      <Modal
+        open={showAddCustomer}
+        onClose={() => setShowAddCustomer(false)}
+        title="新規顧客追加"
+      >
+        <form onSubmit={handleAddCustomer} className="space-y-4">
+          {addCustomerMsg && (
+            <MessageBanner severity={addCustomerMsg.type} dismissible onDismiss={() => setAddCustomerMsg(null)}>
+              {addCustomerMsg.text}
+            </MessageBanner>
+          )}
+          <TextField
+            label="氏名"
+            value={addCustomerForm.name}
+            onChange={v => setAddCustomerForm(f => ({ ...f, name: v }))}
+            required
+            placeholder="山田 太郎"
+          />
+          <TextField
+            label="ふりがな"
+            value={addCustomerForm.furigana}
+            onChange={v => setAddCustomerForm(f => ({ ...f, furigana: v }))}
+            required
+            placeholder="やまだ たろう"
+          />
+          <TextField
+            label="メールアドレス"
+            type="email"
+            value={addCustomerForm.email}
+            onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))}
+            required
+            placeholder="taro@example.com"
+          />
+          <TextField
+            label="電話番号"
+            type="tel"
+            value={addCustomerForm.phone}
+            onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))}
+            required
+            placeholder="090-1234-5678"
+          />
+          <TextField
+            label="住所"
+            value={addCustomerForm.address}
+            onChange={v => setAddCustomerForm(f => ({ ...f, address: v }))}
+            required
+            placeholder="東京都渋谷区..."
+          />
+          <TextField
+            label="パスワード"
+            type="password"
+            value={addCustomerForm.password}
+            onChange={v => setAddCustomerForm(f => ({ ...f, password: v }))}
+            required
+            placeholder="8文字以上"
+          />
+          {addCustomerForm.password.length > 0 && addCustomerForm.password.length < 8 && (
+            <p className="text-xs text-[var(--md-sys-color-error,#B3261E)]">パスワードは8文字以上で入力してください</p>
+          )}
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="submit"
+              variant="filled"
+              loading={addCustomerSubmitting}
+              disabled={addCustomerSubmitting || addCustomerForm.password.length < 8}
+              fullWidth
+            >
+              {addCustomerSubmitting ? '登録中...' : '登録する'}
+            </Button>
+          </div>
+        </form>
       </Modal>
     </>
   )

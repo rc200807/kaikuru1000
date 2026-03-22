@@ -106,6 +106,13 @@ export default function AdminCustomersPage() {
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false)
   const [scheduleMsg, setScheduleMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 新規顧客追加モーダル
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [addForm, setAddForm] = useState({
+    name: '', furigana: '', email: '', phone: '', address: '', password: '', customerType: 'visit', storeId: '',
+  })
+  const [addSubmitting, setAddSubmitting] = useState(false)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -266,6 +273,67 @@ export default function AdminCustomersPage() {
     setDetailUser(null)
     setDetailSchedules([])
     setScheduleMsg(null)
+  }
+
+  async function handleAddCustomer(e: React.FormEvent) {
+    e.preventDefault()
+    setAddSubmitting(true)
+    setMessage(null)
+
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: addForm.name,
+          furigana: addForm.furigana,
+          email: addForm.email,
+          phone: addForm.phone,
+          address: addForm.address,
+          password: addForm.password,
+          customerType: addForm.customerType,
+          skipLicenseKey: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || '顧客の追加に失敗しました' })
+        setAddSubmitting(false)
+        return
+      }
+
+      const created = await res.json()
+
+      // 店舗割り当て
+      if (addForm.storeId) {
+        await fetch('/api/assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: created.id, storeId: addForm.storeId }),
+        })
+      }
+
+      // ユーザー一覧を再取得
+      const params = new URLSearchParams()
+      if (showInactive) params.set('includeInactive', 'true')
+      params.set('page', '1')
+      params.set('limit', String(USERS_LIMIT))
+      const usersRes = await fetch(`/api/admin/users?${params.toString()}`)
+      const usersData = await usersRes.json()
+      const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
+      setUsers(list)
+      setUsersTotal(usersData?.total ?? list.length)
+      setUsersPage(1)
+      setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
+
+      setMessage({ type: 'success', text: `${addForm.name} を追加しました` })
+      setShowAddCustomer(false)
+      setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', password: '', customerType: 'visit', storeId: '' })
+    } catch {
+      setMessage({ type: 'error', text: '顧客の追加に失敗しました' })
+    }
+    setAddSubmitting(false)
   }
 
   async function handleToggleActive(user: User) {
@@ -557,7 +625,12 @@ export default function AdminCustomersPage() {
           </MessageBanner>
         )}
 
-        <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)] mb-4">顧客一覧</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)]">顧客一覧</h2>
+          <Button onClick={() => setShowAddCustomer(true)}>
+            新規顧客追加
+          </Button>
+        </div>
 
         <div className="flex items-center gap-4 px-4 sm:px-6 flex-wrap">
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -859,6 +932,104 @@ export default function AdminCustomersPage() {
             )}
           </>
         )}
+      </Modal>
+
+      {/* 新規顧客追加モーダル */}
+      <Modal
+        open={showAddCustomer}
+        onClose={() => setShowAddCustomer(false)}
+        title="新規顧客追加"
+        size="lg"
+      >
+        <form onSubmit={handleAddCustomer} className="space-y-4">
+          <TextField
+            label="氏名"
+            value={addForm.name}
+            onChange={v => setAddForm(prev => ({ ...prev, name: v }))}
+            required
+            placeholder="山田 太郎"
+          />
+          <TextField
+            label="ふりがな"
+            value={addForm.furigana}
+            onChange={v => setAddForm(prev => ({ ...prev, furigana: v }))}
+            required
+            placeholder="やまだ たろう"
+          />
+          <TextField
+            label="メールアドレス"
+            value={addForm.email}
+            onChange={v => setAddForm(prev => ({ ...prev, email: v }))}
+            required
+            type="email"
+            placeholder="example@mail.com"
+          />
+          <TextField
+            label="電話番号"
+            value={addForm.phone}
+            onChange={v => setAddForm(prev => ({ ...prev, phone: v }))}
+            required
+            placeholder="090-1234-5678"
+          />
+          <TextField
+            label="住所"
+            value={addForm.address}
+            onChange={v => setAddForm(prev => ({ ...prev, address: v }))}
+            required
+            placeholder="東京都渋谷区..."
+          />
+          <TextField
+            label="パスワード（8文字以上）"
+            value={addForm.password}
+            onChange={v => setAddForm(prev => ({ ...prev, password: v }))}
+            required
+            type="password"
+            placeholder="8文字以上のパスワード"
+          />
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+              顧客タイプ <span className="text-[var(--md-sys-color-error)]">*</span>
+            </label>
+            <select
+              value={addForm.customerType}
+              onChange={e => setAddForm(prev => ({ ...prev, customerType: e.target.value }))}
+              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            >
+              <option value="visit">出張買取</option>
+              <option value="delivery">宅配買取</option>
+              <option value="regular">通常顧客</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+              担当店舗（任意）
+            </label>
+            <select
+              value={addForm.storeId}
+              onChange={e => setAddForm(prev => ({ ...prev, storeId: e.target.value }))}
+              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            >
+              <option value="">店舗を選択しない</option>
+              {stores.map(s => (
+                <option key={s.id} value={s.id}>
+                  [{s.code}] {s.name} {s.prefecture ? `（${s.prefecture}）` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="outlined" onClick={() => setShowAddCustomer(false)} type="button">
+              キャンセル
+            </Button>
+            <Button
+              type="submit"
+              disabled={addSubmitting || !addForm.name || !addForm.furigana || !addForm.email || !addForm.phone || !addForm.address || addForm.password.length < 8}
+              loading={addSubmitting}
+            >
+              {addSubmitting ? '追加中...' : '顧客を追加'}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* 店舗割り当てモーダル */}

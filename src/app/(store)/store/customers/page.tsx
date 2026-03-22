@@ -507,7 +507,7 @@ export default function StoreCustomersPage() {
       ]
     : [
         { key: 'info',    label: '基本情報' },
-        { key: 'memos',   label: memosList.length > 0 ? `買取メモ（${memosList.length}）` : '買取メモ' },
+        { key: 'memos',   label: memosList.length > 0 ? `買取トライ（${memosList.length}）` : '買取トライ' },
         { key: 'add',     label: 'スケジュール追加' },
         { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
       ]

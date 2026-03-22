@@ -129,7 +129,7 @@ export default function MyPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [statsLoaded, setStatsLoaded] = useState(false)
 
-  // 買取相談メモ
+  // 買取トライ
   const [memos, setMemos] = useState<PurchaseMemo[]>([])
   const [memosLoaded, setMemosLoaded] = useState(false)
   const [memosLoading, setMemosLoading] = useState(false)
@@ -429,7 +429,7 @@ export default function MyPage() {
       setMemoForm({ title: '', description: '' })
       setMemoImages([])
       setShowMemoForm(false)
-      setMessage({ type: 'success', text: '買取相談メモを登録しました' })
+      setMessage({ type: 'success', text: '買取トライを登録しました' })
     } else {
       setMessage({ type: 'error', text: 'メモの登録に失敗しました' })
     }
@@ -580,7 +580,7 @@ export default function MyPage() {
       ]
     : [
         { key: 'dashboard',   label: 'ダッシュボード' },
-        { key: 'memos',       label: '買取相談メモ' },
+        { key: 'memos',       label: '買取トライ' },
         { key: 'history',     label: '訪問履歴' },
         { key: 'profile',     label: 'プロフィール' },
         { key: 'password',    label: 'パスワード' },
@@ -784,8 +784,8 @@ export default function MyPage() {
                   },
                   {
                     key: 'memo',
-                    label: '買取メモを登録してAI査定',
-                    sub: '売りたい品物をメモしてAIで概算査定',
+                    label: '買取トライで事前査定',
+                    sub: '写真で簡単に買取価格を事前チェック',
                     done: memos.length > 0,
                     action: () => handleTabChange('memos'),
                     icon: (
@@ -1048,13 +1048,13 @@ export default function MyPage() {
             </div>
           )}
 
-          {/* ─── 買取相談メモタブ ─── */}
+          {/* ─── 買取トライタブ ─── */}
           {activeTab === 'memos' && (
             <div className="space-y-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">
-                    買取相談メモ
+                    買取トライ
                   </h2>
                   <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
                     買取を検討しているものをメモしておきましょう
@@ -1082,7 +1082,7 @@ export default function MyPage() {
               {showMemoForm && (
                 <Card variant="elevated" padding="md">
                   <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
-                    新しい買取相談メモ
+                    新しい買取トライ
                   </h3>
                   <form onSubmit={handleSubmitMemo} className="space-y-4">
                     <TextField
@@ -1187,7 +1187,7 @@ export default function MyPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   }
-                  title="買取相談メモがありません"
+                  title="買取トライがありません"
                   description="「メモを追加」から買取を検討しているものを登録しましょう"
                 />
               ) : (

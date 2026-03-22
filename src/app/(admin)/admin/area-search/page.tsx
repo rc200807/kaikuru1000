@@ -41,7 +41,11 @@ export default function AdminAreaSearchPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  // 住所入力
+  // 検索モード: 'simple' = テキスト一行, 'detail' = 段階式
+  const [searchMode, setSearchMode] = useState<'simple' | 'detail'>('simple')
+  const [simpleAddress, setSimpleAddress] = useState('')
+
+  // 住所入力（詳細モード）
   const [prefecture, setPrefecture] = useState('')
   const [cityInput, setCityInput] = useState('')
   const [detail, setDetail] = useState('')
@@ -85,7 +89,9 @@ export default function AdminAreaSearchPage() {
   if (status === 'loading') return <LoadingSpinner size="lg" fullPage />
   if (status === 'unauthenticated') { router.push('/admin/login'); return null }
 
-  const fullAddress = `${prefecture}${cityInput}${detail}`.trim()
+  const fullAddress = searchMode === 'simple'
+    ? simpleAddress.trim()
+    : `${prefecture}${cityInput}${detail}`.trim()
 
   function handlePrefChange(pref: string) {
     setPrefecture(pref)
@@ -167,111 +173,194 @@ export default function AdminAreaSearchPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 検索フォーム */}
         <div className="bg-[var(--md-sys-color-surface-container)] rounded-2xl p-6 border border-[var(--md-sys-color-outline-variant)]">
+          {/* モード切替タブ */}
+          <div className="flex gap-1 mb-4 p-1 bg-[var(--md-sys-color-surface-container-high)] rounded-xl">
+            <button
+              type="button"
+              onClick={() => setSearchMode('simple')}
+              className={`flex-1 text-sm font-medium py-2 px-4 rounded-lg transition-all ${
+                searchMode === 'simple'
+                  ? 'bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm'
+                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)]'
+              }`}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                テキスト検索
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchMode('detail')}
+              className={`flex-1 text-sm font-medium py-2 px-4 rounded-lg transition-all ${
+                searchMode === 'detail'
+                  ? 'bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm'
+                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)]'
+              }`}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                </svg>
+                詳細入力
+              </span>
+            </button>
+          </div>
+
           <form onSubmit={handleSearch} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-2">
-                住所を入力
-              </label>
-              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
-                都道府県を選択し、市区町村をサジェストから選んでください
-              </p>
-
-              {/* 3段入力: 都道府県 → 市区町村 → 番地等 */}
-              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr_1fr] gap-2 mb-3">
-                {/* 都道府県 */}
-                <select
-                  value={prefecture}
-                  onChange={e => handlePrefChange(e.target.value)}
-                  className={`${inputCls} w-full`}
-                >
-                  <option value="">都道府県</option>
-                  {PREFECTURES.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-
-                {/* 市区町村（サジェスト付き） */}
-                <div className="relative" ref={suggestRef}>
+            {/* ── テキスト検索モード ── */}
+            {searchMode === 'simple' && (
+              <div>
+                <label className="block text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-2">
+                  住所を入力して検索
+                </label>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
+                  住所を自由に入力してください（例: 東京都渋谷区神宮前1-2-3）
+                </p>
+                <div className="flex gap-2">
                   <input
-                    ref={cityInputRef}
                     type="text"
-                    value={cityInput}
-                    onChange={e => { setCityInput(e.target.value); setShowSuggestions(true) }}
-                    onFocus={() => { if (cities.length > 0) setShowSuggestions(true) }}
-                    placeholder={loadingCities ? '読み込み中...' : prefecture ? '市区町村を入力' : '先に都道府県を選択'}
-                    disabled={!prefecture}
+                    value={simpleAddress}
+                    onChange={e => setSimpleAddress(e.target.value)}
+                    placeholder="住所を入力（例: 東京都渋谷区、大阪市北区梅田）"
+                    className={`${inputCls} flex-1`}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSearch(e as any) } }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={searching || !simpleAddress.trim()}
+                    className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
+                  >
+                    {searching ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        検索中
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        検索
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── 詳細入力モード ── */}
+            {searchMode === 'detail' && (
+              <div>
+                <label className="block text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-2">
+                  住所を入力
+                </label>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
+                  都道府県を選択し、市区町村をサジェストから選んでください
+                </p>
+
+                {/* 3段入力: 都道府県 → 市区町村 → 番地等 */}
+                <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr_1fr] gap-2 mb-3">
+                  {/* 都道府県 */}
+                  <select
+                    value={prefecture}
+                    onChange={e => handlePrefChange(e.target.value)}
+                    className={`${inputCls} w-full`}
+                  >
+                    <option value="">都道府県</option>
+                    {PREFECTURES.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+
+                  {/* 市区町村（サジェスト付き） */}
+                  <div className="relative" ref={suggestRef}>
+                    <input
+                      ref={cityInputRef}
+                      type="text"
+                      value={cityInput}
+                      onChange={e => { setCityInput(e.target.value); setShowSuggestions(true) }}
+                      onFocus={() => { if (cities.length > 0) setShowSuggestions(true) }}
+                      placeholder={loadingCities ? '読み込み中...' : prefecture ? '市区町村を入力' : '先に都道府県を選択'}
+                      disabled={!prefecture}
+                      className={`${inputCls} w-full`}
+                    />
+                    {/* サジェストドロップダウン */}
+                    {showSuggestions && filteredCities.length > 0 && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-xl shadow-lg">
+                        {filteredCities.map(c => (
+                          <button
+                            key={c.city}
+                            type="button"
+                            onClick={() => handleCitySelect(c.city)}
+                            className="w-full text-left px-3 py-2.5 text-sm text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center justify-between"
+                          >
+                            <span>{c.city}</span>
+                            {c.city_kana && (
+                              <span className="text-xs text-[var(--md-sys-color-outline)] ml-2">{c.city_kana}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {showSuggestions && cityInput && filteredCities.length === 0 && cities.length > 0 && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-xl shadow-lg px-3 py-3 text-xs text-[var(--md-sys-color-outline)]">
+                        候補が見つかりません
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 番地等（任意） */}
+                  <input
+                    id="detail-input"
+                    type="text"
+                    value={detail}
+                    onChange={e => setDetail(e.target.value)}
+                    placeholder="番地・建物名（任意）"
                     className={`${inputCls} w-full`}
                   />
-                  {/* サジェストドロップダウン */}
-                  {showSuggestions && filteredCities.length > 0 && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-xl shadow-lg">
-                      {filteredCities.map(c => (
-                        <button
-                          key={c.city}
-                          type="button"
-                          onClick={() => handleCitySelect(c.city)}
-                          className="w-full text-left px-3 py-2.5 text-sm text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors first:rounded-t-xl last:rounded-b-xl flex items-center justify-between"
-                        >
-                          <span>{c.city}</span>
-                          {c.city_kana && (
-                            <span className="text-xs text-[var(--md-sys-color-outline)] ml-2">{c.city_kana}</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {showSuggestions && cityInput && filteredCities.length === 0 && cities.length > 0 && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-xl shadow-lg px-3 py-3 text-xs text-[var(--md-sys-color-outline)]">
-                      候補が見つかりません
-                    </div>
-                  )}
                 </div>
 
-                {/* 番地等（任意） */}
-                <input
-                  id="detail-input"
-                  type="text"
-                  value={detail}
-                  onChange={e => setDetail(e.target.value)}
-                  placeholder="番地・建物名（任意）"
-                  className={`${inputCls} w-full`}
-                />
-              </div>
-
-              {/* 組み立てた住所プレビュー + 検索ボタン */}
-              <div className="flex gap-3 items-center">
-                <div className="flex-1 min-w-0">
-                  {fullAddress && (
-                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] truncate">
-                      <span className="font-medium text-[var(--md-sys-color-on-surface)]">検索住所:</span>{' '}
-                      {fullAddress}
-                    </p>
-                  )}
+                {/* 組み立てた住所プレビュー + 検索ボタン */}
+                <div className="flex gap-3 items-center">
+                  <div className="flex-1 min-w-0">
+                    {fullAddress && (
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] truncate">
+                        <span className="font-medium text-[var(--md-sys-color-on-surface)]">検索住所:</span>{' '}
+                        {fullAddress}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={searching || !prefecture}
+                    className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
+                  >
+                    {searching ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        検索中
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        検索
+                      </>
+                    )}
+                  </button>
                 </div>
-                <button
-                  type="submit"
-                  disabled={searching || !prefecture}
-                  className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
-                >
-                  {searching ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      検索中
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      検索
-                    </>
-                  )}
-                </button>
               </div>
-            </div>
+            )}
 
             {/* クイック住所ボタン */}
             <div className="flex flex-wrap gap-2">
@@ -286,7 +375,13 @@ export default function AdminAreaSearchPage() {
                 <button
                   key={q}
                   type="button"
-                  onClick={() => handleQuickAddress(q)}
+                  onClick={() => {
+                    if (searchMode === 'simple') {
+                      setSimpleAddress(q)
+                    } else {
+                      handleQuickAddress(q)
+                    }
+                  }}
                   className="text-xs px-3 py-1.5 rounded-full border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)] transition-all"
                 >
                   {q}

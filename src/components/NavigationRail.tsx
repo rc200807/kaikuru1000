@@ -67,11 +67,6 @@ const navItems = [
       </svg>
     ),
   },
-  // コミュニティは一旦非表示
-  // {
-  //   href: '/store/community',
-  //   label: 'コミュニティ',
-  // },
   {
     href: '/store/training-videos',
     label: '研修動画',
@@ -98,11 +93,11 @@ export default function NavigationRail() {
   const router = useRouter()
   const user = session?.user as any
 
-  const [showSwitcher, setShowSwitcher] = useState(false)
   const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([])
   const [switching, setSwitching] = useState(false)
-  const switcherRef = useRef<HTMLDivElement>(null)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   // Fetch unread announcement count
   useEffect(() => {
@@ -127,8 +122,7 @@ export default function NavigationRail() {
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (data?.currentStore && data?.linkedStores?.length > 0) {
-            const all = [data.currentStore, ...data.linkedStores]
-            setLinkedStores(all)
+            setLinkedStores([data.currentStore, ...data.linkedStores])
           } else {
             setLinkedStores([])
           }
@@ -137,16 +131,16 @@ export default function NavigationRail() {
     }
   }, [user?.id])
 
-  // Close switcher on outside click
+  // Close user menu on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
-        setShowSwitcher(false)
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
       }
     }
-    if (showSwitcher) document.addEventListener('mousedown', handleClick)
+    if (userMenuOpen) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [showSwitcher])
+  }, [userMenuOpen])
 
   async function handleSwitch(targetId: string) {
     if (targetId === user?.id || switching) return
@@ -159,7 +153,7 @@ export default function NavigationRail() {
       })
       if (res.ok) {
         await update({ switchStoreId: targetId })
-        setShowSwitcher(false)
+        setUserMenuOpen(false)
         router.refresh()
       }
     } catch { /* ignore */ }
@@ -170,76 +164,19 @@ export default function NavigationRail() {
 
   return (
     <aside className="hidden md:flex flex-col w-56 lg:w-64 flex-shrink-0 h-screen sticky top-0 bg-[var(--md-sys-color-surface-container-low)] border-r border-[var(--md-sys-color-outline-variant)]">
-      {/* Header: Avatar + Store info + Switcher */}
-      <div className="px-4 pt-5 pb-3" ref={switcherRef}>
-        <button
-          onClick={() => hasLinkedStores ? setShowSwitcher(!showSwitcher) : router.push('/store/profile')}
-          className="flex items-center gap-3 group w-full text-left"
-        >
-          {user?.avatar ? (
-            <img src={user.avatar} className="w-10 h-10 rounded-full object-cover shrink-0 group-hover:ring-2 ring-[var(--store-primary)] transition-all" alt="" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0 group-hover:ring-2 ring-[var(--store-primary-container)] transition-all">
-              <span className="text-[var(--store-on-primary)] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-medium tracking-widest uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              店舗ポータル
-            </p>
-            <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate group-hover:text-[var(--store-primary)] transition-colors">
-              {user?.name ?? '店舗'}
-            </p>
-          </div>
-          {hasLinkedStores && (
-            <svg className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
+      {/* Header branding */}
+      <div className="px-4 pt-5 pb-4">
+        <Link href="/store/dashboard" className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+            <svg className="w-4.5 h-4.5 text-[var(--store-on-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35" />
             </svg>
-          )}
-        </button>
-
-        {/* Store switcher dropdown */}
-        {showSwitcher && hasLinkedStores && (
-          <div className="mt-2 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-lg overflow-hidden z-50 relative">
-            <div className="p-2 border-b border-[var(--md-sys-color-outline-variant)]">
-              <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">店舗を切り替え</p>
-            </div>
-            <div className="py-1 max-h-48 overflow-y-auto">
-              {linkedStores.map(store => {
-                const isCurrent = store.id === user?.id
-                return (
-                  <button
-                    key={store.id}
-                    onClick={() => handleSwitch(store.id)}
-                    disabled={isCurrent || switching}
-                    className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${
-                      isCurrent
-                        ? 'bg-[var(--store-primary-container)]/30'
-                        : 'hover:bg-[var(--md-sys-color-surface-container-high)]'
-                    } disabled:opacity-70`}
-                  >
-                    {store.avatar ? (
-                      <img src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
-                        <span className="text-[var(--store-on-primary)] text-[10px] font-semibold">{store.name[0]}</span>
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)] truncate">{store.name}</p>
-                      <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] font-mono">{store.code}</p>
-                    </div>
-                    {isCurrent && (
-                      <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
           </div>
-        )}
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">買いクル</p>
+            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">店舗ポータル</p>
+          </div>
+        </Link>
       </div>
 
       <hr className="border-[var(--md-sys-color-outline-variant)] mx-4" />
@@ -275,16 +212,111 @@ export default function NavigationRail() {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="px-3 py-4">
+      {/* User menu at bottom */}
+      <div className="relative border-t border-[var(--md-sys-color-outline-variant)]" ref={userMenuRef}>
+        {/* Popup menu (opens upward) */}
+        {userMenuOpen && (
+          <div className="absolute bottom-full left-2 right-2 mb-1 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-lg overflow-hidden z-50">
+            {/* Store switcher */}
+            {hasLinkedStores && (
+              <>
+                <div className="px-3 pt-2.5 pb-1.5">
+                  <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">店舗を切り替え</p>
+                </div>
+                <div className="max-h-36 overflow-y-auto">
+                  {linkedStores.map(store => {
+                    const isCurrent = store.id === user?.id
+                    return (
+                      <button
+                        key={store.id}
+                        onClick={() => handleSwitch(store.id)}
+                        disabled={isCurrent || switching}
+                        className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${
+                          isCurrent ? 'bg-[var(--store-primary-container)]/30' : 'hover:bg-[var(--md-sys-color-surface-container-high)]'
+                        } disabled:opacity-70`}
+                      >
+                        {store.avatar ? (
+                          <img src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+                            <span className="text-[var(--store-on-primary)] text-[10px] font-semibold">{store.name[0]}</span>
+                          </div>
+                        )}
+                        <p className="text-xs text-[var(--md-sys-color-on-surface)] truncate flex-1">{store.name}</p>
+                        {isCurrent && (
+                          <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+                <hr className="border-[var(--md-sys-color-outline-variant)]" />
+              </>
+            )}
+
+            {/* Menu items */}
+            <div className="py-1">
+              <Link
+                href="/store/profile"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+                プロフィール設定
+              </Link>
+              <Link
+                href="/store/mystore"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                店舗設定
+              </Link>
+            </div>
+
+            <hr className="border-[var(--md-sys-color-outline-variant)]" />
+
+            {/* Logout */}
+            <div className="py-1">
+              <button
+                onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/store/login' }) }}
+                className="flex items-center gap-3 px-3 py-2.5 w-full text-sm text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+                ログアウト
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* User button */}
         <button
-          onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/store/login' }) }}
-          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-[var(--md-sys-shape-full)] text-sm text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+          onClick={() => setUserMenuOpen(!userMenuOpen)}
+          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+          {user?.avatar ? (
+            <img src={user.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+              <span className="text-[var(--store-on-primary)] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
+            </div>
+          )}
+          <div className="min-w-0 flex-1 text-left">
+            <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate">{user?.name ?? '店舗'}</p>
+            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] truncate">{user?.email ?? ''}</p>
+          </div>
+          <svg className={`w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] shrink-0 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4" />
           </svg>
-          ログアウト
         </button>
       </div>
     </aside>

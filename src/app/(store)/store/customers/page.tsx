@@ -409,6 +409,7 @@ export default function StoreCustomersPage() {
           address: addCustomerForm.address,
           password: addCustomerForm.password,
           customerType: 'regular',
+          skipLicenseKey: true,
         }),
       })
       if (!res.ok) {

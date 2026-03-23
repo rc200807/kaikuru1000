@@ -39,7 +39,8 @@ export default function TextField({
   const [focused, setFocused] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const hasValue = value.length > 0
-  const isFloating = focused || hasValue || !!placeholder
+  const hasNativeUI = type === 'date' || type === 'time' || type === 'datetime-local'
+  const isFloating = focused || hasValue || !!placeholder || hasNativeUI
   const isPassword = type === 'password'
   const inputType = isPassword && showPassword ? 'text' : type
 

@@ -51,7 +51,7 @@ const navItems = [
   },
   {
     href: '/store/market',
-    label: '相場',
+    label: '相場検索',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
@@ -114,7 +114,6 @@ export default function NavigationRail() {
           .catch(() => {})
       }
       fetchUnread()
-      // ページフォーカス時にも更新
       const onFocus = () => fetchUnread()
       window.addEventListener('focus', onFocus)
       return () => window.removeEventListener('focus', onFocus)
@@ -128,7 +127,6 @@ export default function NavigationRail() {
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (data?.currentStore && data?.linkedStores?.length > 0) {
-            // 自分 + リンク先をまとめる
             const all = [data.currentStore, ...data.linkedStores]
             setLinkedStores(all)
           } else {
@@ -171,37 +169,42 @@ export default function NavigationRail() {
   const hasLinkedStores = linkedStores.length > 1
 
   return (
-    <aside className="hidden md:flex flex-col items-center w-20 flex-shrink-0 h-screen sticky top-0 bg-[var(--md-sys-color-surface-container)] py-4 gap-2">
-      {/* Profile avatar + store switcher */}
-      <div className="relative mb-4" ref={switcherRef}>
+    <aside className="hidden md:flex flex-col w-56 lg:w-64 flex-shrink-0 h-screen sticky top-0 bg-[var(--md-sys-color-surface-container-low)] border-r border-[var(--md-sys-color-outline-variant)]">
+      {/* Header: Avatar + Store info + Switcher */}
+      <div className="px-4 pt-5 pb-3" ref={switcherRef}>
         <button
           onClick={() => hasLinkedStores ? setShowSwitcher(!showSwitcher) : router.push('/store/profile')}
-          className="relative group"
+          className="flex items-center gap-3 group w-full text-left"
         >
           {user?.avatar ? (
-            <img src={user.avatar} className="w-10 h-10 rounded-full object-cover group-hover:ring-2 ring-[var(--store-primary)] transition-all" alt="" />
+            <img src={user.avatar} className="w-10 h-10 rounded-full object-cover shrink-0 group-hover:ring-2 ring-[var(--store-primary)] transition-all" alt="" />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center group-hover:ring-2 ring-[var(--store-primary-container)] transition-all">
+            <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0 group-hover:ring-2 ring-[var(--store-primary-container)] transition-all">
               <span className="text-[var(--store-on-primary)] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
             </div>
           )}
-          {/* 切り替えバッジ */}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-medium tracking-widest uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              店舗ポータル
+            </p>
+            <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate group-hover:text-[var(--store-primary)] transition-colors">
+              {user?.name ?? '店舗'}
+            </p>
+          </div>
           {hasLinkedStores && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--store-primary)] flex items-center justify-center border-2 border-[var(--md-sys-color-surface-container)]">
-              <svg className="w-2.5 h-2.5 text-[var(--store-on-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
-              </svg>
-            </div>
+            <svg className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4M16 15l-4 4-4-4" />
+            </svg>
           )}
         </button>
 
-        {/* Store switcher popup */}
+        {/* Store switcher dropdown */}
         {showSwitcher && hasLinkedStores && (
-          <div className="absolute left-full top-0 ml-2 z-50 w-56 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-lg overflow-hidden">
-            <div className="p-2.5 border-b border-[var(--md-sys-color-outline-variant)]">
+          <div className="mt-2 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-lg overflow-hidden z-50 relative">
+            <div className="p-2 border-b border-[var(--md-sys-color-outline-variant)]">
               <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">店舗を切り替え</p>
             </div>
-            <div className="py-1 max-h-64 overflow-y-auto">
+            <div className="py-1 max-h-48 overflow-y-auto">
               {linkedStores.map(store => {
                 const isCurrent = store.id === user?.id
                 return (
@@ -209,17 +212,17 @@ export default function NavigationRail() {
                     key={store.id}
                     onClick={() => handleSwitch(store.id)}
                     disabled={isCurrent || switching}
-                    className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 transition-colors ${
+                    className={`w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors ${
                       isCurrent
                         ? 'bg-[var(--store-primary-container)]/30'
                         : 'hover:bg-[var(--md-sys-color-surface-container-high)]'
                     } disabled:opacity-70`}
                   >
                     {store.avatar ? (
-                      <img src={store.avatar} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
+                      <img src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
-                        <span className="text-[var(--store-on-primary)] text-xs font-semibold">{store.name[0]}</span>
+                      <div className="w-7 h-7 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+                        <span className="text-[var(--store-on-primary)] text-[10px] font-semibold">{store.name[0]}</span>
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
@@ -235,21 +238,14 @@ export default function NavigationRail() {
                 )
               })}
             </div>
-            <div className="p-2 border-t border-[var(--md-sys-color-outline-variant)]">
-              <Link
-                href="/store/profile"
-                onClick={() => setShowSwitcher(false)}
-                className="block text-center text-[10px] text-[var(--md-sys-color-on-surface-variant)] hover:underline py-1"
-              >
-                プロフィール設定
-              </Link>
-            </div>
           </div>
         )}
       </div>
 
+      <hr className="border-[var(--md-sys-color-outline-variant)] mx-4" />
+
       {/* Nav items */}
-      <nav className="flex-1 flex flex-col items-center gap-1">
+      <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto thin-scrollbar">
         {navItems.map(item => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           const showBadge = item.href === '/store/announcements' && unreadCount > 0
@@ -257,40 +253,40 @@ export default function NavigationRail() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-col items-center gap-0.5 py-1 group"
-            >
-              <div className={`
-                relative px-4 py-1.5 rounded-full transition-colors
+              className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-[var(--md-sys-shape-full)] text-sm transition-colors relative
                 ${active
-                  ? 'bg-[var(--store-primary-container)] text-[var(--store-on-primary-container)]'
-                  : 'text-[var(--md-sys-color-on-surface-variant)] group-hover:bg-[var(--md-sys-color-surface-container-high)]'
+                  ? 'bg-[var(--store-primary-container)] text-[var(--store-on-primary-container)] font-medium'
+                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
                 }
-              `}>
+              `}
+            >
+              <span className="flex-shrink-0 relative">
                 {item.icon}
                 {showBadge && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-[16px] flex items-center justify-center px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
-              </div>
-              <span className={`text-[10px] font-medium ${active ? 'text-[var(--store-primary)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
-                {item.label}
               </span>
+              {item.label}
             </Link>
           )
         })}
       </nav>
 
       {/* Logout */}
-      <button
-        onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/store/login' }) }}
-        className="p-2 rounded-full text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
-        aria-label="ログアウト"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-        </svg>
-      </button>
+      <div className="px-3 py-4">
+        <button
+          onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/store/login' }) }}
+          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-[var(--md-sys-shape-full)] text-sm text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+          </svg>
+          ログアウト
+        </button>
+      </div>
     </aside>
   )
 }

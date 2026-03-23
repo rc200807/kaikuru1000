@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { userId, storeId, visitDate, note } = body
+  const { userId, storeId, visitDate, startTime, endTime, note } = body
 
   if (!userId || !storeId || !visitDate) {
     return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
     data: {
       userId, storeId,
       visitDate: new Date(visitDate),
+      startTime: startTime || null,
+      endTime: endTime || null,
       note,
       status: 'scheduled',
     },
@@ -73,6 +75,8 @@ export async function POST(request: NextRequest) {
   try {
     const eventId = await createCalendarEvent(storeId, {
       visitDate: new Date(visitDate),
+      startTime: startTime || undefined,
+      endTime: endTime || undefined,
       note,
       user: {
         name: schedule.user.name,

@@ -144,6 +144,8 @@ model VisitSchedule {
   storeId        String
   store          Store    @relation(fields: [storeId], references: [id])
   visitDate      DateTime
+  startTime      String?  // "HH:mm" 形式（例: "10:00"）
+  endTime        String?  // "HH:mm" 形式（例: "11:30"）
   status         String   @default("scheduled") // scheduled, completed, cancelled
   note           String?
   purchaseAmount Int?     // 買取金額（円）— 品目合計から自動計算

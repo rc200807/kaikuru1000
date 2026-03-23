@@ -130,7 +130,7 @@ export default function StoreCustomersPage() {
   const [schedulesLoading, setSchedulesLoading] = useState(false)
 
   // スケジュール追加フォーム
-  const [addForm, setAddForm] = useState({ visitDate: '', note: '' })
+  const [addForm, setAddForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
   const [submitting, setSubmitting] = useState(false)
   const [scheduleMsg, setScheduleMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -200,7 +200,7 @@ export default function StoreCustomersPage() {
     if (!selected) return
     setModalTab('info')
     setScheduleMsg(null)
-    setAddForm({ visitDate: '', note: '' })
+    setAddForm({ visitDate: '', startTime: '', endTime: '', note: '' })
     setSchedulesLoading(true)
     setSchedules([])
     setMemosList([])
@@ -233,6 +233,8 @@ export default function StoreCustomersPage() {
         userId: selected.id,
         storeId,
         visitDate: addForm.visitDate,
+        startTime: addForm.startTime || undefined,
+        endTime: addForm.endTime || undefined,
         note: addForm.note || undefined,
       }),
     })
@@ -249,7 +251,7 @@ export default function StoreCustomersPage() {
           : c
       ))
       setScheduleMsg({ type: 'success', text: '訪問スケジュールを追加しました' })
-      setAddForm({ visitDate: '', note: '' })
+      setAddForm({ visitDate: '', startTime: '', endTime: '', note: '' })
     } else {
       setScheduleMsg({ type: 'error', text: 'スケジュールの追加に失敗しました' })
     }
@@ -979,6 +981,20 @@ export default function StoreCustomersPage() {
                   onChange={v => setAddForm({ ...addForm, visitDate: v })}
                   required
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <TextField
+                    label="開始時間"
+                    type="time"
+                    value={addForm.startTime}
+                    onChange={v => setAddForm({ ...addForm, startTime: v })}
+                  />
+                  <TextField
+                    label="終了時間"
+                    type="time"
+                    value={addForm.endTime}
+                    onChange={v => setAddForm({ ...addForm, endTime: v })}
+                  />
+                </div>
                 <TextField
                   label="メモ（任意）"
                   value={addForm.note}

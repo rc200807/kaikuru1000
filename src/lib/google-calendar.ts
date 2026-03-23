@@ -70,6 +70,8 @@ export async function createCalendarEvent(
   storeId: string,
   visitSchedule: {
     visitDate: Date
+    startTime?: string  // "HH:mm"
+    endTime?: string    // "HH:mm"
     note?: string | null
     user: {
       name: string
@@ -88,10 +90,33 @@ export async function createCalendarEvent(
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
 
-    const startTime = new Date(visitSchedule.visitDate)
-    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000) // 1時間
+    // visitDateから日付部分を取得 (YYYY-MM-DD)
+    const dateStr = visitSchedule.visitDate.toISOString().split('T')[0]
+
+    // 開始・終了時間を計算
+    let startDateTime: Date
+    let endDateTime: Date
+
+    if (visitSchedule.startTime) {
+      const [sh, sm] = visitSchedule.startTime.split(':').map(Number)
+      startDateTime = new Date(`${dateStr}T${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}:00+09:00`)
+    } else {
+      startDateTime = new Date(visitSchedule.visitDate)
+    }
+
+    if (visitSchedule.endTime) {
+      const [eh, em] = visitSchedule.endTime.split(':').map(Number)
+      endDateTime = new Date(`${dateStr}T${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}:00+09:00`)
+    } else {
+      // endTimeが未指定の場合、開始から1時間
+      endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
+    }
 
     const descriptionParts: string[] = []
+    if (visitSchedule.startTime || visitSchedule.endTime) {
+      const timePart = [visitSchedule.startTime, visitSchedule.endTime].filter(Boolean).join(' 〜 ')
+      descriptionParts.push(`時間: ${timePart}`)
+    }
     if (visitSchedule.note) {
       descriptionParts.push(visitSchedule.note)
     }
@@ -105,11 +130,11 @@ export async function createCalendarEvent(
         summary: `【買いクル】${visitSchedule.user.name}様 定期訪問`,
         description: descriptionParts.join('\n') || undefined,
         start: {
-          dateTime: startTime.toISOString(),
+          dateTime: startDateTime.toISOString(),
           timeZone: 'Asia/Tokyo',
         },
         end: {
-          dateTime: endTime.toISOString(),
+          dateTime: endDateTime.toISOString(),
           timeZone: 'Asia/Tokyo',
         },
         location: visitSchedule.user.address || undefined,

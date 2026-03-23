@@ -158,13 +158,25 @@ model VisitSchedule {
   updatedAt      DateTime @updatedAt
 }
 
+// 買取品目カテゴリ（管理ポータルから管理）
+model PurchaseCategory {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  sortOrder     Int            @default(0)
+  purchaseItems PurchaseItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
 // 買取品目（訪問ごとに記録する買取商品）
 model PurchaseItem {
   id              String        @id @default(cuid())
   visitScheduleId String
   visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
   itemName        String                      // 品名
-  category        String                      // カテゴリー
+  category        String                      // カテゴリー名（表示用）
+  categoryId      String?                     // PurchaseCategoryへの参照
+  purchaseCategory PurchaseCategory? @relation(fields: [categoryId], references: [id])
   imageUrls       String   @default("[]")   // JSON配列: 画像URL[] (最大3枚)
   quantity        Int      @default(1)        // 数量
   purchasePrice   Int      @default(0)        // 買取金額（円）

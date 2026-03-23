@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
+import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import dynamic from 'next/dynamic'
 
@@ -97,6 +98,9 @@ export default function VisitDetailPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 買取カテゴリー
+  const [purchaseCategories, setPurchaseCategories] = useState<{id: string; name: string}[]>([])
+
   // 買取品目フォーム
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
   const [editingPurchase, setEditingPurchase] = useState<PurchaseItem | null>(null)
@@ -151,6 +155,13 @@ export default function VisitDetailPage() {
   useEffect(() => {
     if (session) fetchVisit()
   }, [session, fetchVisit])
+
+  useEffect(() => {
+    fetch('/api/purchase-categories')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setPurchaseCategories(data))
+      .catch(() => {})
+  }, [])
 
   /* ─── 買取品目 ─── */
   function resetPurchaseForm() {
@@ -473,12 +484,16 @@ export default function VisitDetailPage() {
           </div>
           <div>
             <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">カテゴリー *</label>
-            <input
+            <select
               className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
               value={purchaseForm.category}
               onChange={(e) => setPurchaseForm({ ...purchaseForm, category: e.target.value })}
-              placeholder="例: バッグ / 時計 / 貴金属"
-            />
+            >
+              <option value="">カテゴリーを選択</option>
+              {purchaseCategories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">数量</label>

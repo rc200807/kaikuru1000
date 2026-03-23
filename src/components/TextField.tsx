@@ -6,7 +6,7 @@ type TextFieldProps = {
   label: string
   value: string
   onChange: (value: string) => void
-  type?: 'text' | 'email' | 'password' | 'tel' | 'number' | 'date' | 'datetime-local' | 'url'
+  type?: 'text' | 'email' | 'password' | 'tel' | 'number' | 'date' | 'datetime-local' | 'url' | 'time'
   placeholder?: string
   error?: string
   helper?: string

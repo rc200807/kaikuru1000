@@ -452,27 +452,49 @@ export default function AgreementPage() {
 
         {/* ──── クーリングオフについて ──── */}
         <Card variant="elevated" padding="md">
-          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">クーリングオフについて</h2>
-          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-3 leading-relaxed">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-4">クーリングオフについて</h2>
+          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-4 leading-relaxed">
             <p>
-              特定商取引に関する法律に基づき、訪問購入（定期訪問）においては、<strong className="text-[var(--md-sys-color-on-surface)]">契約書面を受領した日から8日間</strong>はクーリングオフ（契約の解除）が可能です。
+              お客様が、訪問買取でご契約された場合、<strong className="text-[var(--md-sys-color-on-surface)]">法律で決められている書類を受け取った日から、8日間の間</strong>はクーリングオフ（契約の解除）ができます。
             </p>
+
             <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
-              <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-1">クーリングオフの要点:</p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>契約書面を受領した日を含めて<strong>8日以内</strong>であれば、書面により契約の解除が可能です。</li>
-                <li>クーリングオフ期間中は、売主（お客様）は<strong>物品の引渡しを拒むことができます。</strong></li>
-                <li>クーリングオフをした場合、購入業者は受け取った物品を速やかに返還します。</li>
-                <li>クーリングオフに伴う損害賠償や違約金の請求はありません。</li>
-                <li>クーリングオフの通知は<strong>書面（はがき等）</strong>で行ってください。</li>
+              <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-2">クーリングオフの要点</p>
+              <ul className="list-disc list-inside space-y-1.5">
+                <li>訪問購入に係る売買契約で、直接物品の引渡しを行う時は、クーリングオフ期間中は、お客様は<strong>物品の引渡しの拒絶が可能</strong>です。（物品の引渡拒絶についての規定）</li>
+                <li>クーリングオフをした場合、物品を既に引き渡していた際には<strong>物品が返却</strong>されます。</li>
+                <li>契約書に「キャンセル料」や「違約金」について書かれていても、これらを<strong>一切支払う必要がありません。</strong></li>
+                <li>訪問購入の場合、受け取った代金を返還する際にかかる費用は、<strong>事業者の負担</strong>となります。</li>
               </ul>
             </div>
+
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800">
+              <p className="font-semibold text-amber-900 dark:text-amber-200 mb-2">期間を過ぎてもクーリングオフができる場合</p>
+              <p className="mb-1.5 text-amber-900 dark:text-amber-200">期間を過ぎた場合は原則クーリングオフができませんが、下記の場合は期間を過ぎてもクーリングオフができます。</p>
+              <ul className="list-disc list-inside space-y-1.5 text-amber-900 dark:text-amber-200">
+                <li>受け取った書類が、法律で決められている通りにクーリングオフについての注意書きをしていないなどの<strong>不備がある場合。</strong></li>
+                <li>事業者が、「クーリングオフはできない」と嘘を言ったために、できないものと誤解をして期間が過ぎた場合や、クーリングオフをさせないよう<strong>威迫</strong>したために、困惑してしまって期間を過ぎた場合。</li>
+              </ul>
+            </div>
+
             <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800">
-              <p className="font-semibold text-red-900 dark:text-red-200 mb-1">クーリングオフ期間:</p>
+              <p className="font-semibold text-red-900 dark:text-red-200 mb-1">クーリングオフ期間</p>
               <p className="text-red-900 dark:text-red-200">
                 本契約書面の受領日（{today}）から <strong>{coolingOffEnd}</strong> まで
               </p>
             </div>
+
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-blue-50 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-800">
+              <p className="font-semibold text-blue-900 dark:text-blue-200 mb-2">クーリングオフの書き方</p>
+              <p className="mb-2 text-blue-900 dark:text-blue-200">必ず<strong>ハガキ等の書面</strong>で行います（書面で行うことが法律で決められています）。</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-blue-900 dark:text-blue-200">
+                <li>お客様（受取人）の住所、氏名と契約（申込）日、事業者名、担当者名、商品名、契約金額を書いて、<strong>この契約を解除する</strong>という旨を記載。</li>
+                <li>ハガキを書いたら、<strong>両面コピー</strong>を取ります（証拠を残すため）。</li>
+                <li>ハガキは郵便局の窓口で、<strong>簡易書留等</strong>の「出した日付」が分かる方法で出す（クーリングオフは書面を出した瞬間に有効になるため、仮に事業者が「受け取っていない」と言っても、クーリングオフは成立します）。</li>
+                <li>両面コピーと簡易書留等の証明郵便の紙を<strong>保存する</strong>（この2つが、クーリングオフをしたことの証明になります）。</li>
+              </ol>
+            </div>
+
             <p>
               クーリングオフに関するご不明な点は、最寄りの消費生活センター（局番なし<strong>188</strong>）にご相談ください。
             </p>

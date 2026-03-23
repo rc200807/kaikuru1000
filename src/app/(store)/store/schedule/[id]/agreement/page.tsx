@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Card from '@/components/Card'
@@ -30,8 +30,8 @@ type VisitDetail = {
   visitDate: string
   status: string
   note: string | null
-  user: { id: string; name: string; address: string; phone: string; email?: string }
-  store: { id: string; name: string }
+  user: { id: string; name: string; address: string; phone: string; email?: string; idAddress?: string | null; idName?: string | null }
+  store: { id: string; name: string; address?: string | null; phone?: string | null }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
 }
@@ -152,7 +152,9 @@ export default function AgreementPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const scheduleId = params.id as string
+  const staffName = searchParams.get('staff') || ''
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -348,14 +350,28 @@ export default function AgreementPage() {
           <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">取引内容</h2>
 
           {/* 基本情報 */}
-          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-1 mb-4 pb-4 border-b border-[var(--md-sys-color-outline-variant)]">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div><span className="font-medium">日付:</span> {today}</div>
-              <div><span className="font-medium">訪問日:</span> {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}</div>
-              <div><span className="font-medium">お客様:</span> {visit.user.idName || visit.user.name}</div>
-              <div><span className="font-medium">住所:</span> {visit.user.idAddress || visit.user.address}</div>
-              <div><span className="font-medium">電話:</span> {visit.user.phone}</div>
-              <div><span className="font-medium">店舗:</span> {visit.store.name}</div>
+          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4 pb-4 border-b border-[var(--md-sys-color-outline-variant)]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* 日付 */}
+              <div className="sm:col-span-2 flex flex-wrap gap-x-6 gap-y-1">
+                <div><span className="font-medium">日付:</span> {today}</div>
+                <div><span className="font-medium">訪問日:</span> {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}</div>
+              </div>
+              {/* お客様情報 */}
+              <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
+                <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">お客様情報</div>
+                <div><span className="font-medium">氏名:</span> {visit.user.idName || visit.user.name}</div>
+                <div><span className="font-medium">住所:</span> {visit.user.idAddress || visit.user.address}</div>
+                <div><span className="font-medium">電話:</span> {visit.user.phone}</div>
+              </div>
+              {/* 店舗情報 */}
+              <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
+                <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">店舗情報</div>
+                <div><span className="font-medium">店舗名:</span> {visit.store.name}</div>
+                {visit.store.address && <div><span className="font-medium">住所:</span> {visit.store.address}</div>}
+                {visit.store.phone && <div><span className="font-medium">電話:</span> {visit.store.phone}</div>}
+                {staffName && <div><span className="font-medium">担当者:</span> {staffName}</div>}
+              </div>
             </div>
           </div>
 

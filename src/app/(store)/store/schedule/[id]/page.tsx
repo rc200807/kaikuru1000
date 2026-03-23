@@ -106,6 +106,7 @@ export default function VisitDetailPage() {
 
   // バーコードスキャン
   const [showScanner, setShowScanner] = useState(false)
+  const [staffName, setStaffName] = useState('')
   const [janLookupLoading, setJanLookupLoading] = useState(false)
   const [janLookupError, setJanLookupError] = useState<string | null>(null)
 
@@ -1042,14 +1043,24 @@ export default function VisitDetailPage() {
 
       {/* ────────── 売買契約書ボタン ────────── */}
       {visit.purchaseItems.length > 0 && (
-        <div className="flex justify-center">
-          <Button
-            onClick={() => router.push(`/store/schedule/${scheduleId}/agreement`)}
-            className="w-full sm:w-auto"
-          >
-            📝 売買契約書を作成
-          </Button>
-        </div>
+        <Card variant="elevated" padding="md">
+          <div className="space-y-3">
+            <TextField
+              label="担当者名"
+              value={staffName}
+              onChange={v => setStaffName(v)}
+              placeholder="契約書に記載する担当者名を入力"
+            />
+            <div className="flex justify-center">
+              <Button
+                onClick={() => router.push(`/store/schedule/${scheduleId}/agreement?staff=${encodeURIComponent(staffName)}`)}
+                className="w-full sm:w-auto"
+              >
+                📝 売買契約書を作成
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* バーコードスキャナーオーバーレイ */}

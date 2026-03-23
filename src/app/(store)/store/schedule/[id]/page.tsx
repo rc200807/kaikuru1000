@@ -106,7 +106,6 @@ export default function VisitDetailPage() {
 
   // バーコードスキャン
   const [showScanner, setShowScanner] = useState(false)
-  const [showConfirmation, setShowConfirmation] = useState(false)
   const [janLookupLoading, setJanLookupLoading] = useState(false)
   const [janLookupError, setJanLookupError] = useState<string | null>(null)
 
@@ -1041,107 +1040,16 @@ export default function VisitDetailPage() {
         </div>
       </Card>
 
-      {/* ────────── 内容確認 → 契約書作成フロー ────────── */}
+      {/* ────────── 売買契約書ボタン ────────── */}
       {visit.purchaseItems.length > 0 && (
-        <Card variant="elevated" padding="md">
-          {!showConfirmation ? (
-            <div className="flex justify-center">
-              <Button onClick={() => setShowConfirmation(true)} className="w-full sm:w-auto">
-                ✅ 入力内容を確認する
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">📋 買取・請求内容の確認</h2>
-                <button onClick={() => setShowConfirmation(false)} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">
-                  閉じる
-                </button>
-              </div>
-
-              {/* 顧客情報 */}
-              <div className="rounded-lg border border-[var(--md-sys-color-outline-variant)] p-4 space-y-1">
-                <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-2">顧客情報</h3>
-                <p className="text-sm text-[var(--md-sys-color-on-surface)]"><span className="text-[var(--md-sys-color-on-surface-variant)]">氏名:</span> {visit.user.name}</p>
-                <p className="text-sm text-[var(--md-sys-color-on-surface)]"><span className="text-[var(--md-sys-color-on-surface-variant)]">住所:</span> {visit.user.address || '未設定'}</p>
-                <p className="text-sm text-[var(--md-sys-color-on-surface)]"><span className="text-[var(--md-sys-color-on-surface-variant)]">電話:</span> {visit.user.phone || '未設定'}</p>
-                <p className="text-sm text-[var(--md-sys-color-on-surface)]"><span className="text-[var(--md-sys-color-on-surface-variant)]">訪問日:</span> {new Date(visit.visitDate).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}</p>
-              </div>
-
-              {/* 買取品目明細 */}
-              <div className="rounded-lg border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
-                <div className="bg-[var(--md-sys-color-surface-container)] px-4 py-2.5">
-                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">買取品目（{visit.purchaseItems.length}品）</h3>
-                </div>
-                <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
-                  {visit.purchaseItems.map((item, i) => (
-                    <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-5 text-right shrink-0">{i + 1}.</span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate">{item.itemName}</p>
-                          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">{item.category} / 数量: {item.quantity}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] shrink-0 ml-3">
-                        {fmtYen(item.purchasePrice * item.quantity)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="bg-[var(--status-completed-bg)] px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-[var(--status-completed-text)]">買取金額合計</span>
-                  <span className="text-lg font-bold text-[var(--status-completed-text)]">{fmtYen(purchaseTotal)}</span>
-                </div>
-              </div>
-
-              {/* 作業品目明細 */}
-              {visit.workItems.length > 0 && (
-                <div className="rounded-lg border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
-                  <div className="bg-[var(--md-sys-color-surface-container)] px-4 py-2.5">
-                    <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">作業品目（{visit.workItems.length}件）</h3>
-                  </div>
-                  <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
-                    {visit.workItems.map((item, i) => (
-                      <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-5 text-right shrink-0">{i + 1}.</span>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate">{item.workName}</p>
-                            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">単価: {fmtYen(item.unitPrice)} × {item.quantity}</p>
-                          </div>
-                        </div>
-                        <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] shrink-0 ml-3">
-                          {fmtYen(item.unitPrice * item.quantity)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bg-[var(--status-scheduled-bg)] px-4 py-3 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-[var(--status-scheduled-text)]">請求金額合計</span>
-                    <span className="text-lg font-bold text-[var(--status-scheduled-text)]">{fmtYen(workTotal)}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 差引金額 */}
-              <div className="rounded-lg border-2 border-[var(--portal-primary)] p-4 flex items-center justify-between">
-                <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">お支払い金額（買取 − 請求）</span>
-                <span className="text-xl font-bold text-[var(--portal-primary)]">{fmtYen(purchaseTotal - workTotal)}</span>
-              </div>
-
-              {/* 契約書作成ボタン */}
-              <div className="flex gap-3 justify-center pt-2">
-                <Button variant="text" onClick={() => setShowConfirmation(false)}>
-                  修正する
-                </Button>
-                <Button onClick={() => router.push(`/store/schedule/${scheduleId}/agreement`)}>
-                  📝 売買契約書を作成
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
+        <div className="flex justify-center">
+          <Button
+            onClick={() => router.push(`/store/schedule/${scheduleId}/agreement`)}
+            className="w-full sm:w-auto"
+          >
+            📝 売買契約書を作成
+          </Button>
+        </div>
       )}
 
       {/* バーコードスキャナーオーバーレイ */}

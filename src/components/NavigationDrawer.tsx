@@ -123,11 +123,7 @@ export default function NavigationDrawer() {
       {/* Header branding */}
       <div className="px-4 pt-5 pb-4">
         <Link href="/admin/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-          <div className="w-8 h-8 rounded-lg bg-[var(--admin-primary)] flex items-center justify-center shrink-0">
-            <svg className="w-4.5 h-4.5 text-[var(--admin-on-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
+          <img src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">買いクル</p>
             <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">管理ポータル</p>

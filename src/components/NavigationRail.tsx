@@ -167,11 +167,7 @@ export default function NavigationRail() {
       {/* Header branding */}
       <div className="px-4 pt-5 pb-4">
         <Link href="/store/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[var(--store-primary)] flex items-center justify-center shrink-0">
-            <svg className="w-4.5 h-4.5 text-[var(--store-on-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35" />
-            </svg>
-          </div>
+          <img src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">買いクル</p>
             <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">店舗ポータル</p>

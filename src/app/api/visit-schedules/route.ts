@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       status: 'scheduled',
     },
     include: {
-      user: { select: { name: true, address: true } },
+      user: { select: { name: true, address: true, customerType: true } },
       store: { select: { name: true } },
     },
   })
@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       startTime: startTime || undefined,
       endTime: endTime || undefined,
       note,
+      customerType: schedule.user.customerType ?? undefined,
       user: {
         name: schedule.user.name,
         address: schedule.user.address ?? '',

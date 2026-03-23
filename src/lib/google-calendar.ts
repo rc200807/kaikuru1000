@@ -73,6 +73,7 @@ export async function createCalendarEvent(
     startTime?: string  // "HH:mm"
     endTime?: string    // "HH:mm"
     note?: string | null
+    customerType?: string // visit, delivery, regular
     user: {
       name: string
       address: string
@@ -112,6 +113,10 @@ export async function createCalendarEvent(
       endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
     }
 
+    const typeLabel = visitSchedule.customerType === 'delivery' ? '定期宅配'
+      : visitSchedule.customerType === 'regular' ? '通常買取'
+      : '定期訪問'
+
     const descriptionParts: string[] = []
     if (visitSchedule.startTime || visitSchedule.endTime) {
       const timePart = [visitSchedule.startTime, visitSchedule.endTime].filter(Boolean).join(' 〜 ')
@@ -127,7 +132,7 @@ export async function createCalendarEvent(
     const event = await calendar.events.insert({
       calendarId,
       requestBody: {
-        summary: `【買いクル】${visitSchedule.user.name}様 定期訪問`,
+        summary: `【買いクル】${visitSchedule.user.name}様 ${typeLabel}`,
         description: descriptionParts.join('\n') || undefined,
         start: {
           dateTime: startDateTime.toISOString(),
@@ -158,6 +163,7 @@ export async function updateCalendarEvent(
   visitSchedule: {
     visitDate: Date
     note?: string | null
+    customerType?: string
     user: {
       name: string
       address: string
@@ -180,6 +186,10 @@ export async function updateCalendarEvent(
     const startTime = new Date(visitSchedule.visitDate)
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000)
 
+    const typeLabel = visitSchedule.customerType === 'delivery' ? '定期宅配'
+      : visitSchedule.customerType === 'regular' ? '通常買取'
+      : '定期訪問'
+
     const descriptionParts: string[] = []
     if (visitSchedule.note) {
       descriptionParts.push(visitSchedule.note)
@@ -192,7 +202,7 @@ export async function updateCalendarEvent(
       calendarId,
       eventId,
       requestBody: {
-        summary: `【買いクル】${visitSchedule.user.name}様 定期訪問`,
+        summary: `【買いクル】${visitSchedule.user.name}様 ${typeLabel}`,
         description: descriptionParts.join('\n') || undefined,
         start: {
           dateTime: startTime.toISOString(),

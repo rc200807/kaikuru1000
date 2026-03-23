@@ -352,8 +352,8 @@ export default function AgreementPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><span className="font-medium">日付:</span> {today}</div>
               <div><span className="font-medium">訪問日:</span> {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}</div>
-              <div><span className="font-medium">お客様:</span> {visit.user.name}</div>
-              <div><span className="font-medium">住所:</span> {visit.user.address}</div>
+              <div><span className="font-medium">お客様:</span> {visit.user.idName || visit.user.name}</div>
+              <div><span className="font-medium">住所:</span> {visit.user.idAddress || visit.user.address}</div>
               <div><span className="font-medium">電話:</span> {visit.user.phone}</div>
               <div><span className="font-medium">店舗:</span> {visit.store.name}</div>
             </div>

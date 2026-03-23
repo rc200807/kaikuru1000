@@ -22,7 +22,7 @@ export async function GET(
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, address: true, phone: true, customerType: true } },
+      user: { select: { id: true, name: true, address: true, phone: true, customerType: true, idAddress: true, idName: true } },
       store: { select: { id: true, name: true } },
       purchaseItems: { orderBy: { createdAt: 'asc' } },
       workItems: { orderBy: { createdAt: 'asc' } },

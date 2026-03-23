@@ -151,6 +151,9 @@ model VisitSchedule {
   purchaseAmount Int?     // 買取金額（円）— 品目合計から自動計算
   billingAmount  Int?     // 請求金額（円）— 作業品目合計から自動計算
   googleCalendarEventId String?
+  preConsentSignature   String?  @db.Text  // 事前同意の署名画像（base64）
+  preConsentAt          DateTime?           // 事前同意日時
+  staffName             String?             // 担当者名
   purchaseItems  PurchaseItem[]
   workItems      WorkItem[]
   salesContract  SalesContract?

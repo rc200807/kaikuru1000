@@ -83,7 +83,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { status, note, purchaseAmount, billingAmount } = body
+  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName } = body
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -104,6 +104,11 @@ export async function PATCH(
   if (note !== undefined) updateData.note = note
   if (purchaseAmount !== undefined) updateData.purchaseAmount = purchaseAmount
   if (billingAmount !== undefined) updateData.billingAmount = billingAmount
+  if (preConsentSignature !== undefined) {
+    updateData.preConsentSignature = preConsentSignature
+    updateData.preConsentAt = new Date()
+  }
+  if (staffName !== undefined) updateData.staffName = staffName
 
   const updated = await prisma.visitSchedule.update({
     where: { id },

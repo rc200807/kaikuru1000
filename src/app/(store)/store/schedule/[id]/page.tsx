@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import { format } from 'date-fns'
@@ -63,8 +63,11 @@ type VisitDetail = {
   note: string | null
   purchaseAmount: number | null
   billingAmount: number | null
+  preConsentSignature: string | null
+  preConsentAt: string | null
+  staffName: string | null
   user: { id: string; name: string; address: string; phone: string; customerType: string }
-  store: { id: string; name: string }
+  store: { id: string; name: string; address?: string; phone?: string }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
 }
@@ -114,6 +117,13 @@ export default function VisitDetailPage() {
   const [janLookupLoading, setJanLookupLoading] = useState(false)
   const [janLookupError, setJanLookupError] = useState<string | null>(null)
 
+  // 事前同意モーダル
+  const [showConsentModal, setShowConsentModal] = useState(false)
+  const [consentSaving, setConsentSaving] = useState(false)
+  const consentCanvasRef = useRef<HTMLCanvasElement>(null)
+  const consentDrawingRef = useRef(false)
+  const consentHasDrawnRef = useRef(false)
+
   // 作業品目フォーム
   const [showWorkForm, setShowWorkForm] = useState(false)
   const [editingWork, setEditingWork] = useState<WorkItem | null>(null)
@@ -136,6 +146,7 @@ export default function VisitDetailPage() {
       const data = await res.json()
       setVisit(data)
       setEditNote(data.note || '')
+      if (data.staffName) setStaffName(data.staffName)
 
       // 保存済みのAI調査結果をstateにロード
       const saved: Record<string, MarketResearch> = {}
@@ -582,6 +593,69 @@ export default function VisitDetailPage() {
   const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
 
+  /* ─── 事前同意キャンバス ─── */
+  function getConsentPos(e: React.TouchEvent | React.MouseEvent) {
+    const canvas = consentCanvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    if ('touches' in e) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY }
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
+  }
+  function consentStartDraw(e: React.TouchEvent | React.MouseEvent) {
+    consentDrawingRef.current = true
+    consentHasDrawnRef.current = true
+    const ctx = consentCanvasRef.current?.getContext('2d')
+    if (!ctx) return
+    const pos = getConsentPos(e)
+    ctx.beginPath()
+    ctx.moveTo(pos.x, pos.y)
+  }
+  function consentDraw(e: React.TouchEvent | React.MouseEvent) {
+    if (!consentDrawingRef.current) return
+    const ctx = consentCanvasRef.current?.getContext('2d')
+    if (!ctx) return
+    const pos = getConsentPos(e)
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = '#000'
+    ctx.lineTo(pos.x, pos.y)
+    ctx.stroke()
+  }
+  function consentEndDraw() { consentDrawingRef.current = false }
+  function consentClear() {
+    const canvas = consentCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    ctx?.clearRect(0, 0, canvas.width, canvas.height)
+    consentHasDrawnRef.current = false
+  }
+
+  async function handleSaveConsent() {
+    if (!consentHasDrawnRef.current) {
+      setMessage({ type: 'error', text: '署名してください' })
+      return
+    }
+    setConsentSaving(true)
+    try {
+      const signature = consentCanvasRef.current?.toDataURL('image/png') || ''
+      const res = await fetch(`/api/visit-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preConsentSignature: signature, staffName }),
+      })
+      if (res.ok) {
+        await fetchVisit()
+        setShowConsentModal(false)
+        setMessage({ type: 'success', text: '事前同意を保存しました' })
+      }
+    } catch { /* ignore */ }
+    finally { setConsentSaving(false) }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -670,6 +744,96 @@ export default function VisitDetailPage() {
           </div>
         </div>
       </Card>
+
+      {/* ────────── 事前同意ボタン ────────── */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => { if (!visit.preConsentAt) { consentHasDrawnRef.current = false; setShowConsentModal(true) } }}
+          className={`
+            flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors
+            ${visit.preConsentAt
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-300 dark:border-green-700'
+              : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+            }
+          `}
+        >
+          {visit.preConsentAt ? (
+            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+          )}
+          事前同意
+        </button>
+        {visit.preConsentAt && (
+          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+            {format(new Date(visit.preConsentAt), 'M月d日 HH:mm', { locale: ja })} に同意済み
+          </span>
+        )}
+      </div>
+
+      {/* ────────── 事前同意モーダル ────────── */}
+      {showConsentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[var(--md-sys-color-surface)] rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-[var(--md-sys-color-on-surface)]">弊社サービスをご利用のお客様へ</h2>
+                <button onClick={() => setShowConsentModal(false)} className="p-1 rounded-full hover:bg-[var(--md-sys-color-surface-container-high)]">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="text-sm text-[var(--md-sys-color-on-surface-variant)] space-y-3 leading-relaxed mb-5">
+                <p className="indent-4">この度は、弊社高価古物買取サービスにお申込みいただき、ありがとうございます。お手数ではありますが、担当査定員がお客様のご自宅に訪問し、査定をさせていただく前に必ずご一読ください。</p>
+                <p className="indent-4">法令を遵守したお取引をさせていただくために、必要な内容となっておりますのでご協力の程、よろしくお願いいたします。</p>
+                <p className="indent-4">弊社コールセンター受付担当のご案内により、お客様のご自宅で買取に関する提案のご承諾をいただきました品種は下記になります。</p>
+                <p className="font-semibold text-[var(--md-sys-color-on-surface)]">家電類／ブランド家具類／骨董品類／着物類／ブランド類／金券類／金／宝飾品類／酒類／車／玩具類／楽器類</p>
+                <p className="indent-4">弊社ではお客様からの申し込み時に、査定員から上記品種に関する買取の提案について、ご承諾いただいております。査定員による買取の提案について、ご承諾いただけないお客様のご自宅への訪問購入は行っておりません。</p>
+                <p className="indent-4">また、いただきました個人情報については、個人情報保護法に従い取り扱い、適切に管理させていただきます。</p>
+              </div>
+
+              {/* 担当者名 */}
+              <div className="mb-4">
+                <TextField
+                  label="担当者名"
+                  value={staffName}
+                  onChange={v => setStaffName(v)}
+                  placeholder="査定担当者のお名前"
+                />
+              </div>
+
+              {/* 署名欄 */}
+              <div className="mb-4">
+                <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">上記内容に同意します。（署名してください）</p>
+                <div className="border border-[var(--md-sys-color-outline-variant)] rounded-lg overflow-hidden bg-white">
+                  <canvas
+                    ref={consentCanvasRef}
+                    width={500}
+                    height={150}
+                    className="w-full touch-none cursor-crosshair"
+                    onMouseDown={consentStartDraw}
+                    onMouseMove={consentDraw}
+                    onMouseUp={consentEndDraw}
+                    onMouseLeave={consentEndDraw}
+                    onTouchStart={(e) => { e.preventDefault(); consentStartDraw(e) }}
+                    onTouchMove={(e) => { e.preventDefault(); consentDraw(e) }}
+                    onTouchEnd={consentEndDraw}
+                  />
+                </div>
+                <button onClick={consentClear} className="text-xs text-[var(--md-sys-color-primary)] hover:underline mt-1">
+                  署名をクリア
+                </button>
+              </div>
+
+              {/* ボタン */}
+              <div className="flex gap-3 justify-end">
+                <Button variant="text" onClick={() => setShowConsentModal(false)}>キャンセル</Button>
+                <Button variant="filled" loading={consentSaving} onClick={handleSaveConsent}>同意して保存</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ────────── 買取品目セクション ────────── */}
       <Card variant="elevated" padding="md">

@@ -499,7 +499,7 @@ export default function MyPage() {
       setShipmentForm({ description: '' })
       setShipmentImages([])
       setShowShipmentForm(false)
-      setMessage({ type: 'success', text: `送付を登録しました。宅配買取番号: ${created.shipmentNumber}` })
+      setMessage({ type: 'success', text: `送付を登録しました。定期宅配番号: ${created.shipmentNumber}` })
     } else {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || '送付登録に失敗しました' })
@@ -796,8 +796,8 @@ export default function MyPage() {
                   },
                   ...(user.customerType !== 'delivery' ? [{
                     key: 'visit',
-                    label: '出張査定の予約',
-                    sub: 'お近くの店舗が出張査定に伺います',
+                    label: '定期訪問の予約',
+                    sub: 'お近くの店舗が定期訪問に伺います',
                     done: user.visitSchedules.length > 0,
                     action: () => handleTabChange('dashboard'),
                     icon: (

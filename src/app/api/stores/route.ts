@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
     select: {
       id: true, name: true, code: true,
       prefecture: true, address: true, phone: true, email: true,
+      storeStatus: true, openingDate: true, closingDate: true,
+      googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+      invoiceNumber: true, antiquePermitNumber: true,
       _count: { select: { customers: true } },
     },
     orderBy: { code: 'asc' },

@@ -263,7 +263,7 @@ export default function AdminCustomersPage() {
     if (res.ok) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, customerType: newType } : u))
       setDetailUser(prev => prev && prev.id === userId ? { ...prev, customerType: newType } : prev)
-      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '宅配買取' : newType === 'regular' ? '通常' : '訪問買取'}」に変更しました` })
+      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '定期宅配' : newType === 'regular' ? '通常買取' : '定期訪問'}」に変更しました` })
     } else {
       setMessage({ type: 'error', text: 'タイプ変更に失敗しました' })
     }
@@ -550,9 +550,9 @@ export default function AdminCustomersPage() {
       hideOnMobile: true,
       render: (user) => {
         const typeMap: Record<string, {label:string, cls:string}> = {
-          delivery: { label: '宅配', cls: 'bg-blue-100 text-blue-700' },
-          regular:  { label: '通常', cls: 'bg-purple-100 text-purple-700' },
-          visit:    { label: '訪問', cls: 'bg-green-100 text-green-700' },
+          delivery: { label: '定期宅配', cls: 'bg-blue-100 text-blue-700' },
+          regular:  { label: '通常買取', cls: 'bg-purple-100 text-purple-700' },
+          visit:    { label: '定期訪問', cls: 'bg-green-100 text-green-700' },
         }
         const t = typeMap[user.customerType] ?? typeMap.visit
         return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
@@ -564,7 +564,7 @@ export default function AdminCustomersPage() {
       hideOnMobile: true,
       render: (user) => {
         if (user.customerType === 'delivery') {
-          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">宅配</span>
+          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">定期宅配</span>
         }
         const nextVisit = user.visitSchedules?.[0]
         return nextVisit ? (
@@ -780,7 +780,7 @@ export default function AdminCustomersPage() {
                   </div>
                   <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
                     <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : detailUser.customerType === 'regular' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                      {detailUser.customerType === 'delivery' ? '宅配買取' : detailUser.customerType === 'regular' ? '通常' : '訪問買取'}
+                      {detailUser.customerType === 'delivery' ? '定期宅配' : detailUser.customerType === 'regular' ? '通常買取' : '定期訪問'}
                     </span>
                     <select
                       className="text-xs px-2 py-1 rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
@@ -788,9 +788,9 @@ export default function AdminCustomersPage() {
                       disabled={changingType === detailUser.id}
                       onChange={(e) => handleChangeCustomerType(detailUser.id, e.target.value)}
                     >
-                      <option value="visit">訪問買取</option>
-                      <option value="delivery">宅配買取</option>
-                      <option value="regular">通常</option>
+                      <option value="visit">定期訪問</option>
+                      <option value="delivery">定期宅配</option>
+                      <option value="regular">通常買取</option>
                     </select>
                   </div>
                 </div>
@@ -995,9 +995,9 @@ export default function AdminCustomersPage() {
               onChange={e => setAddForm(prev => ({ ...prev, customerType: e.target.value }))}
               className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
             >
-              <option value="visit">出張買取</option>
-              <option value="delivery">宅配買取</option>
-              <option value="regular">通常顧客</option>
+              <option value="visit">定期訪問</option>
+              <option value="delivery">定期宅配</option>
+              <option value="regular">通常買取</option>
             </select>
           </div>
           <div>

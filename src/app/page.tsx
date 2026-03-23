@@ -10,7 +10,7 @@ export default function Home() {
           <img src="/logo-white.svg" alt="買いクル" className="h-10 mx-auto hidden dark:block" />
         </h1>
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant,#49454F)] mb-10">
-          出張買取サービス
+          定期訪問サービス
         </p>
 
         {/* Customer portal card */}

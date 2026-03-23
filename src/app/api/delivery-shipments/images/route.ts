@@ -6,7 +6,7 @@ import { uploadFile } from '@/lib/storage'
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
 
-/** 宅配買取送付用の画像アップロード（顧客のみ） */
+/** 定期宅配送付用の画像アップロード（顧客のみ） */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any

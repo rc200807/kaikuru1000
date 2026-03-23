@@ -510,9 +510,9 @@ export default function StoreCustomersPage() {
       hideOnMobile: true,
       render: (c) => {
         const typeMap: Record<string, {label:string, cls:string}> = {
-          delivery: { label: '宅配', cls: 'bg-blue-100 text-blue-700' },
-          regular:  { label: '通常', cls: 'bg-purple-100 text-purple-700' },
-          visit:    { label: '訪問', cls: 'bg-green-100 text-green-700' },
+          delivery: { label: '定期宅配', cls: 'bg-blue-100 text-blue-700' },
+          regular:  { label: '通常買取', cls: 'bg-purple-100 text-purple-700' },
+          visit:    { label: '定期訪問', cls: 'bg-green-100 text-green-700' },
         }
         const t = typeMap[c.customerType] ?? typeMap.visit
         return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
@@ -523,7 +523,7 @@ export default function StoreCustomersPage() {
       header: '次回訪問',
       render: (c) => {
         if (c.customerType === 'delivery') {
-          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">宅配</span>
+          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">定期宅配</span>
         }
         const nextVisit = c.visitSchedules?.[0]
         return nextVisit ? (

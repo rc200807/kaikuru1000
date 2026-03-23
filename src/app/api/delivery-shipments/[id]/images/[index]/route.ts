@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 /**
- * 宅配買取送付画像を認証プロキシ経由で配信
+ * 定期宅配送付画像を認証プロキシ経由で配信
  * Blob URL をクライアントに露出させず、認証・認可チェック後にコンテンツを返す
  *
  * GET /api/delivery-shipments/[id]/images/[index]

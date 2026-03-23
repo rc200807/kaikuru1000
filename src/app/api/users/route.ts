@@ -17,7 +17,7 @@ const registerSchema = z.object({
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
 
-// 顧客登録（ライセンスキー必須 or 通常顧客はキー不要）
+// 顧客登録（ライセンスキー必須 or 通常買取はキー不要）
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     const { name, furigana, email, phone, address, password, licenseKey, customerType, skipLicenseKey } = parsed.data
 
-    // 通常顧客 or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
+    // 通常買取 or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
     const isRegular = customerType === 'regular'
     const needsLicenseKey = !isRegular && !skipLicenseKey && !licenseKey
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // ライセンスキーなしで作成（通常顧客 or 管理者/店舗からの追加）
+    // ライセンスキーなしで作成（通常買取 or 管理者/店舗からの追加）
     if (isRegular || skipLicenseKey || !licenseKey) {
       const user = await prisma.user.create({
         data: {

@@ -13,29 +13,29 @@ const roboto = Roboto({
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://kaikuru.jp";
 
 export const metadata: Metadata = {
-  title: "買いクル | 出張買取サービス",
-  description: "出張買取サービス「買いクル」のマイページ。訪問・宅配買取のスケジュール確認、買取相談メモの管理、口座情報の登録などができます。",
+  title: "買いクル | 定期訪問サービス",
+  description: "定期訪問サービス「買いクル」のマイページ。定期訪問・定期宅配のスケジュール確認、買取相談メモの管理、口座情報の登録などができます。",
   metadataBase: new URL(siteUrl),
   openGraph: {
     type: "website",
     url: siteUrl,
     siteName: "買いクル",
-    title: "買いクル | 出張買取サービス",
-    description: "出張買取サービス「買いクル」のマイページ。訪問・宅配買取のスケジュール確認、買取相談メモの管理などができます。",
+    title: "買いクル | 定期訪問サービス",
+    description: "定期訪問サービス「買いクル」のマイページ。定期訪問・定期宅配のスケジュール確認、買取相談メモの管理などができます。",
     images: [
       {
         url: "/ogp.png",
         width: 1200,
         height: 630,
-        alt: "買いクル | 出張買取サービス",
+        alt: "買いクル | 定期訪問サービス",
       },
     ],
     locale: "ja_JP",
   },
   twitter: {
     card: "summary_large_image",
-    title: "買いクル | 出張買取サービス",
-    description: "出張買取サービス「買いクル」のマイページ。",
+    title: "買いクル | 定期訪問サービス",
+    description: "定期訪問サービス「買いクル」のマイページ。",
     images: ["/ogp.png"],
   },
   icons: {

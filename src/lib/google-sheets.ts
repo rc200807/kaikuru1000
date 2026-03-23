@@ -81,6 +81,14 @@ interface StoreRow {
   address: string
   phone: string
   email: string
+  storeStatus?: string
+  openingDate?: string
+  closingDate?: string
+  googleBusinessUrl?: string
+  oikuraPageUrl?: string
+  bankInfo?: string
+  invoiceNumber?: string
+  antiquePermitNumber?: string
 }
 
 export async function syncStoresFromGoogleSheets(): Promise<{
@@ -158,15 +166,27 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       return v
     }
 
-    const storeRows: StoreRow[] = rows.map((row, index) => ({
-      rowId: `row_${index + 2}`,
-      code:        (row[colIdx(colMap.code        || 'A')] || '').trim(),
-      name:        (row[colIdx(colMap.name        || 'B')] || '').trim(),
-      prefecture:  cleanField(row[colIdx(colMap.prefecture  || 'C')]),
-      address:     cleanField(row[colIdx(colMap.address     || 'D')]),
-      phone:       cleanField(row[colIdx(colMap.phone       || 'E')]),
-      email:       cleanField(row[colIdx(colMap.email       || 'F')]),
-    })).filter(row => row.code && row.name)
+    const storeRows: StoreRow[] = rows.map((row, index) => {
+      const base: StoreRow = {
+        rowId: `row_${index + 2}`,
+        code:        (row[colIdx(colMap.code        || 'A')] || '').trim(),
+        name:        (row[colIdx(colMap.name        || 'B')] || '').trim(),
+        prefecture:  cleanField(row[colIdx(colMap.prefecture  || 'C')]),
+        address:     cleanField(row[colIdx(colMap.address     || 'D')]),
+        phone:       cleanField(row[colIdx(colMap.phone       || 'E')]),
+        email:       cleanField(row[colIdx(colMap.email       || 'F')]),
+      }
+      // 新フィールド（列がマッピングされている場合のみ取得）
+      if (colMap.storeStatus)         base.storeStatus         = cleanField(row[colIdx(colMap.storeStatus)])
+      if (colMap.openingDate)         base.openingDate         = cleanField(row[colIdx(colMap.openingDate)])
+      if (colMap.closingDate)         base.closingDate         = cleanField(row[colIdx(colMap.closingDate)])
+      if (colMap.googleBusinessUrl)   base.googleBusinessUrl   = cleanField(row[colIdx(colMap.googleBusinessUrl)])
+      if (colMap.oikuraPageUrl)       base.oikuraPageUrl       = cleanField(row[colIdx(colMap.oikuraPageUrl)])
+      if (colMap.bankInfo)            base.bankInfo            = cleanField(row[colIdx(colMap.bankInfo)])
+      if (colMap.invoiceNumber)       base.invoiceNumber       = cleanField(row[colIdx(colMap.invoiceNumber)])
+      if (colMap.antiquePermitNumber) base.antiquePermitNumber = cleanField(row[colIdx(colMap.antiquePermitNumber)])
+      return base
+    }).filter(row => row.code && row.name)
 
     // デバッグ: 最初の3件のデータをログ出力
     console.log('[StoreSync] 取得範囲:', `${sheetName}!A2:${endCol}1000`)
@@ -180,6 +200,21 @@ export async function syncStoresFromGoogleSheets(): Promise<{
     const sheetCodes = new Set(storeRows.map(r => r.code))
 
     for (const storeRow of storeRows) {
+      // 新フィールドのデータを構築（マッピング設定済みの項目のみ）
+      const extraData: Record<string, any> = {}
+      if (storeRow.storeStatus !== undefined)         extraData.storeStatus         = storeRow.storeStatus || null
+      if (storeRow.googleBusinessUrl !== undefined)    extraData.googleBusinessUrl   = storeRow.googleBusinessUrl || null
+      if (storeRow.oikuraPageUrl !== undefined)        extraData.oikuraPageUrl       = storeRow.oikuraPageUrl || null
+      if (storeRow.bankInfo !== undefined)             extraData.bankInfo            = storeRow.bankInfo || null
+      if (storeRow.invoiceNumber !== undefined)        extraData.invoiceNumber       = storeRow.invoiceNumber || null
+      if (storeRow.antiquePermitNumber !== undefined)  extraData.antiquePermitNumber = storeRow.antiquePermitNumber || null
+      if (storeRow.openingDate !== undefined && storeRow.openingDate) {
+        try { extraData.openingDate = new Date(storeRow.openingDate) } catch {}
+      }
+      if (storeRow.closingDate !== undefined && storeRow.closingDate) {
+        try { extraData.closingDate = new Date(storeRow.closingDate) } catch {}
+      }
+
       await prisma.store.upsert({
         where: { code: storeRow.code },
         update: {
@@ -191,6 +226,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
           sheetRowId: storeRow.rowId,
           isActive: true,
           updatedAt: new Date(),
+          ...extraData,
         },
         create: {
           code: storeRow.code,
@@ -202,6 +238,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
           sheetRowId: storeRow.rowId,
           // 新規店舗ごとにランダムな初期パスワードを生成（共通デフォルトパスワードを廃止）
           password: await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10),
+          ...extraData,
         },
       })
       synced++

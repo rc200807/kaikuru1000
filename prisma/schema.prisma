@@ -70,6 +70,15 @@ model Store {
   avatar     String?  @db.Text  // プロフィール画像URL（Vercel Blob）
   sheetRowId String?  // Googleスプレッドシートの行ID（同期用）
   isActive   Boolean  @default(true)
+  // 店舗詳細情報
+  storeStatus         String?   @default("active")  // "active" or "closed"
+  openingDate         DateTime? // 開業日
+  closingDate         DateTime? // 閉店日
+  googleBusinessUrl   String?   // Googleビジネスプロフィール URL
+  oikuraPageUrl       String?   // おいくらページ URL
+  bankInfo            String?   @db.Text  // 銀行情報（JSON or テキスト）
+  invoiceNumber       String?   // インボイス番号
+  antiquePermitNumber String?   // 古物営業許可番号
   customers  User[]
   visitSchedules VisitSchedule[]
   members    StoreMember[]

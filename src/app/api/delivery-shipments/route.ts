@@ -13,7 +13,7 @@ function toClientShipment(s: any) {
   }
 }
 
-/** 宅配買取番号を生成: HD-YYYYMM-NNNN */
+/** 定期宅配番号を生成: HD-YYYYMM-NNNN */
 async function generateShipmentNumber(shipmentMonth: string): Promise<string> {
   const count = await prisma.deliveryShipment.count({
     where: { shipmentMonth },
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   // 顧客タイプ確認
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { customerType: true } })
   if (user?.customerType !== 'delivery') {
-    return NextResponse.json({ error: '宅配買取顧客のみ送付登録できます' }, { status: 403 })
+    return NextResponse.json({ error: '定期宅配顧客のみ送付登録できます' }, { status: 403 })
   }
 
   const body = await request.json()

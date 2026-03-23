@@ -439,7 +439,7 @@ export default function AgreementPage() {
           <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">クーリングオフについて</h2>
           <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-3 leading-relaxed">
             <p>
-              特定商取引に関する法律に基づき、訪問購入（出張買取）においては、<strong className="text-[var(--md-sys-color-on-surface)]">契約書面を受領した日から8日間</strong>はクーリングオフ（契約の解除）が可能です。
+              特定商取引に関する法律に基づき、訪問購入（定期訪問）においては、<strong className="text-[var(--md-sys-color-on-surface)]">契約書面を受領した日から8日間</strong>はクーリングオフ（契約の解除）が可能です。
             </p>
             <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
               <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-1">クーリングオフの要点:</p>

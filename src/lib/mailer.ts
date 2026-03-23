@@ -73,7 +73,7 @@ export async function sendAssignmentNotification(params: {
               <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
                 ${params.storeName} 様<br><br>
                 本部より担当顧客を割り当てましたのでご案内いたします。
-                ご確認の上、出張買取の日程調整をお願いいたします。
+                ご確認の上、定期訪問の日程調整をお願いいたします。
               </p>
 
               <!-- 顧客情報カード -->
@@ -143,7 +143,7 @@ export async function sendAssignmentNotification(params: {
       `住所: ${params.customerAddress}`,
       `登録日: ${dateStr}`,
       '',
-      'ご確認の上、出張買取の日程調整をお願いいたします。',
+      'ご確認の上、定期訪問の日程調整をお願いいたします。',
     ].join('\n'),
   })
 }
@@ -304,7 +304,7 @@ export async function sendContractEmail(params: {
           <!-- ヘッダー -->
           <tr>
             <td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
-              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル 出張買取</p>
+              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル 定期訪問</p>
               <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">売買契約書のご送付</h1>
             </td>
           </tr>
@@ -314,7 +314,7 @@ export async function sendContractEmail(params: {
             <td style="background-color:#ffffff;padding:32px;">
               <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
                 ${params.customerName} 様<br><br>
-                このたびは${params.storeName}の出張買取サービスをご利用いただき、誠にありがとうございます。<br>
+                このたびは${params.storeName}の定期訪問サービスをご利用いただき、誠にありがとうございます。<br>
                 ${visitDateStr}の訪問にかかる売買契約書を添付ファイルにてお送りいたします。
               </p>
 
@@ -362,7 +362,7 @@ export async function sendContractEmail(params: {
     text: [
       `${params.customerName} 様`,
       '',
-      `${params.storeName}の出張買取サービスをご利用いただき、ありがとうございます。`,
+      `${params.storeName}の定期訪問サービスをご利用いただき、ありがとうございます。`,
       `${visitDateStr}の訪問にかかる売買契約書を添付ファイルにてお送りいたします。`,
       '',
       '■ クーリングオフについて',

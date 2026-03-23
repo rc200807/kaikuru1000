@@ -102,7 +102,7 @@ export async function createCalendarEvent(
     const event = await calendar.events.insert({
       calendarId,
       requestBody: {
-        summary: `【買いクル】${visitSchedule.user.name}様 出張買取`,
+        summary: `【買いクル】${visitSchedule.user.name}様 定期訪問`,
         description: descriptionParts.join('\n') || undefined,
         start: {
           dateTime: startTime.toISOString(),
@@ -167,7 +167,7 @@ export async function updateCalendarEvent(
       calendarId,
       eventId,
       requestBody: {
-        summary: `【買いクル】${visitSchedule.user.name}様 出張買取`,
+        summary: `【買いクル】${visitSchedule.user.name}様 定期訪問`,
         description: descriptionParts.join('\n') || undefined,
         start: {
           dateTime: startTime.toISOString(),

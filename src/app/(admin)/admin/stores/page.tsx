@@ -21,6 +21,14 @@ type Store = {
   address: string | null
   phone: string | null
   email: string | null
+  storeStatus: string | null
+  openingDate: string | null
+  closingDate: string | null
+  googleBusinessUrl: string | null
+  oikuraPageUrl: string | null
+  bankInfo: string | null
+  invoiceNumber: string | null
+  antiquePermitNumber: string | null
   _count: { customers: number }
 }
 
@@ -63,7 +71,12 @@ export default function AdminStoresPage() {
   const [sheetSaved, setSheetSaved] = useState(false)
 
   // カラムマッピング
-  type ColMap = { code: string; name: string; prefecture: string; address: string; phone: string; email: string }
+  type ColMap = {
+    code: string; name: string; prefecture: string; address: string; phone: string; email: string
+    storeStatus?: string; openingDate?: string; closingDate?: string
+    googleBusinessUrl?: string; oikuraPageUrl?: string; bankInfo?: string
+    invoiceNumber?: string; antiquePermitNumber?: string
+  }
   const defaultColMap: ColMap = { code: 'A', name: 'B', prefecture: 'C', address: 'D', phone: 'E', email: 'F' }
   const [colMap, setColMap] = useState<ColMap>(defaultColMap)
   const [sheetHeaders, setSheetHeaders] = useState<{ letter: string; header: string }[]>([])
@@ -78,6 +91,9 @@ export default function AdminStoresPage() {
 
   // 店舗詳細サイドバー
   const [detailStore, setDetailStore] = useState<Store | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
@@ -233,6 +249,51 @@ export default function AdminStoresPage() {
     setCopied(false)
     setSendingEmail(false)
     setEmailSentDone(false)
+  }
+
+  function handleStartEdit(store: Store) {
+    setEditForm({
+      name: store.name || '',
+      email: store.email || '',
+      phone: store.phone || '',
+      address: store.address || '',
+      prefecture: store.prefecture || '',
+      storeStatus: store.storeStatus || 'active',
+      openingDate: store.openingDate ? store.openingDate.slice(0, 10) : '',
+      closingDate: store.closingDate ? store.closingDate.slice(0, 10) : '',
+      googleBusinessUrl: store.googleBusinessUrl || '',
+      oikuraPageUrl: store.oikuraPageUrl || '',
+      bankInfo: store.bankInfo || '',
+      invoiceNumber: store.invoiceNumber || '',
+      antiquePermitNumber: store.antiquePermitNumber || '',
+    })
+    setEditMode(true)
+  }
+
+  async function handleSaveEdit() {
+    if (!detailStore) return
+    setSaving(true)
+    const res = await fetch(`/api/admin/stores/${detailStore.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updateDetails: true, ...editForm }),
+    })
+    setSaving(false)
+    if (res.ok) {
+      const updated = await res.json()
+      setDetailStore({ ...detailStore, ...updated })
+      setEditMode(false)
+      refreshStores()
+      setMessage({ type: 'success', text: '店舗情報を更新しました' })
+    } else {
+      const data = await res.json()
+      setMessage({ type: 'error', text: data.error || '更新に失敗しました' })
+    }
+  }
+
+  function handleCloseDetail() {
+    setDetailStore(null)
+    setEditMode(false)
   }
 
   if (status === 'loading' || loading) {
@@ -456,7 +517,15 @@ export default function AdminStoresPage() {
                   { key: 'address',     label: '住所' },
                   { key: 'phone',       label: '電話番号' },
                   { key: 'email',       label: 'メールアドレス' },
-                ] as const).map(({ key, label }) => (
+                  { key: 'storeStatus',         label: 'ステータス' },
+                  { key: 'openingDate',         label: '開業日' },
+                  { key: 'closingDate',         label: '閉店日' },
+                  { key: 'googleBusinessUrl',   label: 'GoogleビジネスURL' },
+                  { key: 'oikuraPageUrl',       label: 'おいくらURL' },
+                  { key: 'bankInfo',            label: '銀行情報' },
+                  { key: 'invoiceNumber',       label: 'インボイス番号' },
+                  { key: 'antiquePermitNumber', label: '古物許可番号' },
+                ] as { key: keyof ColMap; label: string }[]).map(({ key, label }) => (
                   <div key={key}>
                     <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">{label}</label>
                     <select
@@ -703,7 +772,7 @@ export default function AdminStoresPage() {
       {/* オーバーレイ */}
       <div
         className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ${detailStore ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setDetailStore(null)}
+        onClick={handleCloseDetail}
       />
 
       {/* サイドパネル */}
@@ -721,7 +790,7 @@ export default function AdminStoresPage() {
                 <code className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{detailStore.code}</code>
               </div>
               <button
-                onClick={() => setDetailStore(null)}
+                onClick={handleCloseDetail}
                 className="w-9 h-9 rounded-full hover:bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center transition-colors"
               >
                 <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -731,70 +800,207 @@ export default function AdminStoresPage() {
             </div>
 
             {/* コンテンツ */}
-            <div className="flex-1 px-6 py-5 space-y-5">
-              {/* 基本情報 */}
-              <section>
-                <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">基本情報</h3>
-                <dl className="space-y-3">
-                  {[
-                    { label: '店舗名', value: detailStore.name },
-                    { label: '店舗コード', value: detailStore.code, mono: true },
-                    { label: '都道府県', value: detailStore.prefecture },
-                    { label: '住所', value: detailStore.address },
-                    { label: '電話番号', value: detailStore.phone },
-                    { label: 'メール', value: detailStore.email },
-                    { label: '担当顧客数', value: `${detailStore._count.customers} 名` },
-                  ].map(item => (
-                    <div key={item.label} className="flex gap-3">
-                      <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 pt-0.5">{item.label}</dt>
-                      <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>
-                        {item.value || <span className="text-[var(--md-sys-color-outline)]">\u2014</span>}
-                      </dd>
+            <div className="flex-1 px-6 py-5 space-y-5 overflow-y-auto">
+              {editMode ? (
+                /* ─── 編集モード ─── */
+                <div className="space-y-4">
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">基本情報</h3>
+                    <div className="space-y-3">
+                      <TextField label="店舗名" value={editForm.name || ''} onChange={v => setEditForm({...editForm, name: v})} required />
+                      <div className="grid grid-cols-2 gap-3">
+                        <TextField label="都道府県" value={editForm.prefecture || ''} onChange={v => setEditForm({...editForm, prefecture: v})} />
+                        <div>
+                          <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">ステータス</label>
+                          <select
+                            value={editForm.storeStatus || 'active'}
+                            onChange={e => setEditForm({...editForm, storeStatus: e.target.value})}
+                            className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                          >
+                            <option value="active">営業中</option>
+                            <option value="closed">閉店</option>
+                          </select>
+                        </div>
+                      </div>
+                      <TextField label="住所" value={editForm.address || ''} onChange={v => setEditForm({...editForm, address: v})} />
+                      <TextField label="電話番号" value={editForm.phone || ''} onChange={v => setEditForm({...editForm, phone: v})} />
+                      <TextField label="メールアドレス" type="email" value={editForm.email || ''} onChange={v => setEditForm({...editForm, email: v})} />
                     </div>
-                  ))}
-                </dl>
-              </section>
+                  </section>
 
-              {/* 住所・地図 */}
-              {detailStore.address && (
-                <section>
-                  <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">住所・地図</h3>
-                  <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] overflow-hidden">
-                    <div className="px-4 py-3 flex items-start gap-2">
-                      <svg className="w-4 h-4 mt-0.5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <p className="text-sm text-[var(--md-sys-color-on-surface)] break-all leading-relaxed">{detailStore.address}</p>
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">営業情報</h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <TextField label="開業日" type="date" value={editForm.openingDate || ''} onChange={v => setEditForm({...editForm, openingDate: v})} />
+                        <TextField label="閉店日" type="date" value={editForm.closingDate || ''} onChange={v => setEditForm({...editForm, closingDate: v})} />
+                      </div>
+                      <TextField label="古物営業許可番号" value={editForm.antiquePermitNumber || ''} onChange={v => setEditForm({...editForm, antiquePermitNumber: v})} placeholder="第○○○号" />
+                      <TextField label="インボイス番号" value={editForm.invoiceNumber || ''} onChange={v => setEditForm({...editForm, invoiceNumber: v})} placeholder="T1234567890123" />
                     </div>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailStore.address)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 px-4 py-2.5 border-t border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors text-xs font-medium text-[var(--md-sys-color-primary,#374151)]"
-                    >
-                      Google Maps で開く
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
-                  </div>
-                </section>
+                  </section>
+
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">外部リンク</h3>
+                    <div className="space-y-3">
+                      <TextField label="GoogleビジネスプロフィールURL" value={editForm.googleBusinessUrl || ''} onChange={v => setEditForm({...editForm, googleBusinessUrl: v})} placeholder="https://business.google.com/..." />
+                      <TextField label="おいくらページURL" value={editForm.oikuraPageUrl || ''} onChange={v => setEditForm({...editForm, oikuraPageUrl: v})} placeholder="https://oikura.jp/..." />
+                    </div>
+                  </section>
+
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行情報</h3>
+                    <div>
+                      <textarea
+                        value={editForm.bankInfo || ''}
+                        onChange={e => setEditForm({...editForm, bankInfo: e.target.value})}
+                        placeholder={"金融機関名:\n支店名:\n支店番号:\n口座種別: 普通/当座\n口座番号:\n口座名義:\n入金時の名義:"}
+                        rows={6}
+                        className="w-full px-3 py-2 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-y"
+                      />
+                    </div>
+                  </section>
+                </div>
+              ) : (
+                /* ─── 閲覧モード ─── */
+                <>
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">基本情報</h3>
+                    <dl className="space-y-3">
+                      {[
+                        { label: '店舗名', value: detailStore.name },
+                        { label: '店舗コード', value: detailStore.code, mono: true },
+                        { label: 'ステータス', value: detailStore.storeStatus === 'closed' ? '閉店' : '営業中' },
+                        { label: '都道府県', value: detailStore.prefecture },
+                        { label: '住所', value: detailStore.address },
+                        { label: '電話番号', value: detailStore.phone },
+                        { label: 'メール', value: detailStore.email },
+                        { label: '担当顧客数', value: `${detailStore._count.customers} 名` },
+                      ].map(item => (
+                        <div key={item.label} className="flex gap-3">
+                          <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 pt-0.5">{item.label}</dt>
+                          <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>
+                            {item.value || <span className="text-[var(--md-sys-color-outline)]">{'\u2014'}</span>}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">営業情報</h3>
+                    <dl className="space-y-3">
+                      {[
+                        { label: '開業日', value: detailStore.openingDate ? new Date(detailStore.openingDate).toLocaleDateString('ja-JP') : null },
+                        { label: '閉店日', value: detailStore.closingDate ? new Date(detailStore.closingDate).toLocaleDateString('ja-JP') : null },
+                        { label: '古物許可番号', value: detailStore.antiquePermitNumber },
+                        { label: 'インボイス', value: detailStore.invoiceNumber },
+                      ].map(item => (
+                        <div key={item.label} className="flex gap-3">
+                          <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 pt-0.5">{item.label}</dt>
+                          <dd className="text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0">
+                            {item.value || <span className="text-[var(--md-sys-color-outline)]">{'\u2014'}</span>}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+
+                  <section>
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">外部リンク</h3>
+                    <div className="space-y-2">
+                      {detailStore.googleBusinessUrl ? (
+                        <a href={detailStore.googleBusinessUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-[var(--md-sys-color-primary,#374151)] hover:underline">
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          Googleビジネスプロフィール
+                        </a>
+                      ) : (
+                        <p className="text-sm text-[var(--md-sys-color-outline)]">Googleビジネス: 未設定</p>
+                      )}
+                      {detailStore.oikuraPageUrl ? (
+                        <a href={detailStore.oikuraPageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-[var(--md-sys-color-primary,#374151)] hover:underline">
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          おいくらページ
+                        </a>
+                      ) : (
+                        <p className="text-sm text-[var(--md-sys-color-outline)]">おいくら: 未設定</p>
+                      )}
+                    </div>
+                  </section>
+
+                  {detailStore.bankInfo && (
+                    <section>
+                      <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行情報</h3>
+                      <pre className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] p-3 border border-[var(--md-sys-color-outline-variant)]">{detailStore.bankInfo}</pre>
+                    </section>
+                  )}
+
+                  {/* 住所・地図 */}
+                  {detailStore.address && (
+                    <section>
+                      <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">地図</h3>
+                      <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] overflow-hidden">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailStore.address)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 hover:bg-[var(--md-sys-color-surface-container)] transition-colors text-xs font-medium text-[var(--md-sys-color-primary,#374151)]"
+                        >
+                          Google Maps で開く
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
+                    </section>
+                  )}
+                </>
               )}
             </div>
 
             {/* フッターアクション */}
             <div className="sticky bottom-0 bg-[var(--md-sys-color-surface-container)] border-t border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex gap-3">
-              <Button
-                size="sm"
-                variant="outlined"
-                disabled={resettingId === detailStore.id}
-                loading={resettingId === detailStore.id}
-                onClick={() => { handleResetPassword(detailStore); setDetailStore(null) }}
-                fullWidth
-              >
-                {resettingId === detailStore.id ? '処理中...' : 'パスワード再発行'}
-              </Button>
+              {editMode ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outlined"
+                    onClick={() => setEditMode(false)}
+                    fullWidth
+                  >
+                    キャンセル
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveEdit}
+                    disabled={saving}
+                    loading={saving}
+                    fullWidth
+                  >
+                    {saving ? '保存中...' : '保存'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outlined"
+                    disabled={resettingId === detailStore.id}
+                    loading={resettingId === detailStore.id}
+                    onClick={() => { handleResetPassword(detailStore); handleCloseDetail() }}
+                    fullWidth
+                  >
+                    {resettingId === detailStore.id ? '処理中...' : 'PW再発行'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleStartEdit(detailStore)}
+                    fullWidth
+                  >
+                    編集
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

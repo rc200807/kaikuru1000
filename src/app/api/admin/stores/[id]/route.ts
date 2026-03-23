@@ -65,5 +65,64 @@ export async function PATCH(
     }
   }
 
+  // 店舗詳細情報の更新
+  if (body.updateDetails) {
+    const allowedFields = [
+      'name', 'email', 'phone', 'address', 'prefecture',
+      'storeStatus', 'openingDate', 'closingDate',
+      'googleBusinessUrl', 'oikuraPageUrl', 'bankInfo',
+      'invoiceNumber', 'antiquePermitNumber',
+    ] as const
+    const data: Record<string, any> = {}
+    for (const field of allowedFields) {
+      if (field in body) {
+        if (field === 'openingDate' || field === 'closingDate') {
+          data[field] = body[field] ? new Date(body[field]) : null
+        } else {
+          data[field] = body[field] || null
+        }
+      }
+    }
+    const updated = await prisma.store.update({
+      where: { id },
+      data,
+      select: {
+        id: true, code: true, name: true,
+        email: true, phone: true, prefecture: true, address: true,
+        storeStatus: true, openingDate: true, closingDate: true,
+        googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+        invoiceNumber: true, antiquePermitNumber: true,
+        _count: { select: { customers: true } },
+      },
+    })
+    return NextResponse.json(updated)
+  }
+
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as any
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { id } = await params
+  const store = await prisma.store.findUnique({
+    where: { id },
+    select: {
+      id: true, code: true, name: true,
+      email: true, phone: true, prefecture: true, address: true,
+      storeStatus: true, openingDate: true, closingDate: true,
+      googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+      invoiceNumber: true, antiquePermitNumber: true,
+      isActive: true,
+      _count: { select: { customers: true } },
+    },
+  })
+  if (!store) return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 })
+  return NextResponse.json(store)
 }

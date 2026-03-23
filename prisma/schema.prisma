@@ -316,6 +316,17 @@ model SalesContract {
   updatedAt       DateTime      @updatedAt
 }
 
+// パスワードリセットトークン
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  email     String
+  userType  String    // "store" | "customer"
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
 // ログイン試行回数制限（DB実装: サーバーレス対応）
 model LoginAttempt {
   id           String    @id @default(cuid())

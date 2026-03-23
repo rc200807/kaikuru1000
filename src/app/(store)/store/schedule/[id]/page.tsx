@@ -742,7 +742,7 @@ export default function VisitDetailPage() {
                     )}
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
-                    {researchResults[item.id] ? (
+                    {item.category === '1000円ボックス' ? null : researchResults[item.id] ? (
                       <button
                         onClick={() => toggleResearch(item.id)}
                         className="text-xs px-2 py-1 rounded-full font-medium transition-all flex items-center gap-1 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/50 dark:text-purple-300"

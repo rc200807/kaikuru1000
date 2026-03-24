@@ -2362,29 +2362,13 @@ function MemoCard({
                 <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{memo.aiAppraisal.productDetail}</p>
               </div>
 
-              {/* 市場相場 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3 text-center">
-                  <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">市場上限（美品）</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">{memo.aiAppraisal.marketPriceHigh}</p>
-                </div>
-                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3 text-center">
-                  <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-1">市場下限（並品）</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white">{memo.aiAppraisal.marketPriceLow}</p>
-                </div>
-              </div>
-
-              {/* プラットフォーム・補足 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">参考プラットフォーム</p>
-                  <p className="text-sm text-gray-800 dark:text-gray-200">{memo.aiAppraisal.platforms}</p>
-                </div>
+              {/* 補足情報 */}
+              {memo.aiAppraisal.supplement && (
                 <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
                   <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">補足情報</p>
                   <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
                 </div>
-              </div>
+              )}
 
               <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
                 ※ AIによる概算です。実際の買取金額は査定時に確定します。

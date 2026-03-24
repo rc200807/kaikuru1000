@@ -208,20 +208,17 @@ export async function researchMarketPrice(
 
 export type PurchaseAppraisalResult = {
   productDetail: string     // 商品の詳細情報
-  marketPriceHigh: string   // 中古市場の上限価格
-  marketPriceLow: string    // 中古市場の下限価格
-  offerPrice: string        // 買取提示額（上限の40%）
+  offerPrice: string        // 買取提示額
   offerReason: string       // 提示額の根拠
-  platforms: string         // 主な取引プラットフォーム
   supplement: string        // 補足情報
 }
 
-const PURCHASE_APPRAISAL_PROMPT = `あなたは中古品の買取査定の専門家です。以下の商品について、日本の中古市場における取引相場を調査し、買取提示額を算出してください。
+const PURCHASE_APPRAISAL_PROMPT = `あなたは中古品の買取業者の査定専門家です。以下の商品について、買取業者として買い取れる金額を算出してください。
 
 【査定ルール】
-1. まず中古市場での販売相場（上限・下限）を調査する
-2. 販売相場の上限価格の40%を買取提示額として算出する
-3. 提示額の根拠を分かりやすく説明する
+1. 中古市場での販売相場を調査し、その30〜50%程度を買取提示額として算出する
+2. 提示額の根拠を分かりやすく説明する
+3. 買取業者の立場で、現実的な買取可能金額を提示する
 
 【重要】画像が添付されている場合は、画像を注意深く分析してください。
 画像から以下を読み取ってください:
@@ -233,12 +230,9 @@ const PURCHASE_APPRAISAL_PROMPT = `あなたは中古品の買取査定の専門
 
 回答する項目（すべて文字列で返してください）:
 - productDetail: 商品の詳細情報（メーカー名、正式な商品名、型番、発売年、色、サイズなど。画像から読み取れた情報をすべて含める）
-- marketPriceHigh: 中古市場での販売相場の上限（良品〜美品。"¥XX,XXX" の形式で単一の金額）
-- marketPriceLow: 中古市場での販売相場の下限（難あり〜並品。"¥XX,XXX" の形式で単一の金額）
-- offerPrice: 買取提示額（marketPriceHighの40%の金額。"¥XX,XXX" の形式で単一の金額）
-- offerReason: 提示額の根拠（「中古市場の上限価格 ¥XX,XXX の40%で算出」のように、計算の根拠を明記）
-- platforms: 主な取引プラットフォーム（カンマ区切りの文字列で。例: "メルカリ、ヤフオク、楽天ラクマ"）
-- supplement: 補足情報（査定時の注意点、付属品の有無による価格差、コンディションによる変動幅など）
+- offerPrice: 買取提示額（"¥XX,XXX" の形式で単一の金額。買取業者が買い取れる現実的な金額）
+- offerReason: 提示額の根拠（市場相場からどのように算出したか、簡潔に説明）
+- supplement: 補足情報（査定時の注意点、付属品の有無による価格変動、コンディションによる変動幅など）
 
 必ずJSONのみ返してください。説明文は不要です。
 すべての値は文字列型で返してください（配列やオブジェクトは使わないでください）。
@@ -312,11 +306,8 @@ export async function appraiseForPurchase(
 
     return {
       productDetail:   stringify(parsed.productDetail),
-      marketPriceHigh: stringify(parsed.marketPriceHigh),
-      marketPriceLow:  stringify(parsed.marketPriceLow),
       offerPrice:      stringify(parsed.offerPrice),
       offerReason:     stringify(parsed.offerReason),
-      platforms:       stringify(parsed.platforms),
       supplement:      stringify(parsed.supplement),
     }
   } catch (err) {

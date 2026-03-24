@@ -2246,37 +2246,17 @@ function MemoCard({
         </div>
 
         {total > 0 && (
-          <div className="mt-3">
-            <button
-              onClick={() => setShowImages(v => !v)}
-              className="text-xs text-[var(--portal-primary)] hover:underline"
-            >
-              {showImages ? '画像を非表示' : `画像を見る（${total}枚）`}
-            </button>
-            {showImages && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {memo.imageUrls.map((url, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setLightboxIndex(i)}
-                    className="relative w-24 h-24 rounded-[var(--md-sys-shape-small)] overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]"
-                  >
-                    <img
-                      src={url}
-                      alt={`画像 ${i + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    {/* 拡大アイコン */}
-                    <span className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
-                      <svg className="w-6 h-6 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0zm-2 0a4 4 0 10-8 0 4 4 0 008 0z" />
-                      </svg>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {memo.imageUrls.map((url, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setLightboxIndex(i)}
+                className="relative w-20 h-20 rounded-lg overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]"
+              >
+                <img src={url} alt={`画像 ${i + 1}`} className="w-full h-full object-cover" />
+              </button>
+            ))}
           </div>
         )}
 

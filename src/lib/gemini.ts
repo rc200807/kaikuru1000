@@ -425,3 +425,102 @@ export async function summarizeVideo(
     return null
   }
 }
+
+/* ─── 顔照合（本人確認） ─── */
+
+export type FaceComparisonResult = {
+  match: boolean
+  confidence: 'high' | 'medium' | 'low'
+  reason: string
+}
+
+const FACE_COMPARISON_PROMPT = `あなたは本人確認の専門家です。以下の2枚の顔写真を比較し、同一人物かどうかを判定してください。
+
+【判定基準】
+1. 顔の輪郭、目、鼻、口、眉毛などの特徴を総合的に比較する
+2. 髪型、メガネの有無、化粧の違いなどは考慮しない（同一人物でも変わりうるため）
+3. 撮影角度や照明の違いも考慮する
+
+【1枚目】身分証明書から抽出した顔写真
+【2枚目】本人が撮影したセルフィー写真
+
+以下のJSON形式で回答してください:
+- match: 同一人物と判定した場合 true、そうでない場合 false（真偽値）
+- confidence: 判定の確信度（"high"=高い確信 / "medium"=中程度 / "low"=低い確信）
+- reason: 判定理由の説明（日本語で簡潔に）
+
+必ずJSONのみ返してください。説明文は不要です。
+例: {"match":true,"confidence":"high","reason":"顔の輪郭・目・鼻の特徴が一致しており、同一人物と判定しました。"}`
+
+/**
+ * 2枚の顔写真を比較して同一人物かどうかを判定する
+ *
+ * @param idFaceImageUrl   身分証明書から抽出した顔写真のURL
+ * @param selfieImageUrl   本人が撮影したセルフィー写真のURL
+ * @returns 照合結果。APIキー未設定またはエラー時は null
+ */
+export async function compareFaces(
+  idFaceImageUrl: string,
+  selfieImageUrl: string,
+): Promise<FaceComparisonResult | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    console.warn('[gemini] GEMINI_API_KEY が未設定のため顔照合をスキップします')
+    return null
+  }
+
+  try {
+    // 2枚の画像をダウンロードしてbase64に変換
+    const [idFaceRes, selfieRes] = await Promise.all([
+      fetch(idFaceImageUrl),
+      fetch(selfieImageUrl),
+    ])
+
+    if (!idFaceRes.ok || !selfieRes.ok) {
+      console.error('[gemini] 顔画像のダウンロードに失敗しました')
+      return null
+    }
+
+    const idFaceBuffer = Buffer.from(await idFaceRes.arrayBuffer())
+    const selfieBuffer = Buffer.from(await selfieRes.arrayBuffer())
+
+    const idFaceMime = idFaceRes.headers.get('content-type') || 'image/jpeg'
+    const selfieMime = selfieRes.headers.get('content-type') || 'image/jpeg'
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+    const result = await model.generateContent([
+      FACE_COMPARISON_PROMPT,
+      {
+        inlineData: {
+          mimeType: idFaceMime,
+          data: idFaceBuffer.toString('base64'),
+        },
+      },
+      {
+        inlineData: {
+          mimeType: selfieMime,
+          data: selfieBuffer.toString('base64'),
+        },
+      },
+    ])
+
+    const text = result.response.text().trim()
+    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(jsonStr)
+
+    const confidence = ['high', 'medium', 'low'].includes(parsed.confidence)
+      ? (parsed.confidence as 'high' | 'medium' | 'low')
+      : 'low'
+
+    return {
+      match:      Boolean(parsed.match),
+      confidence,
+      reason:     typeof parsed.reason === 'string' ? parsed.reason : '判定理由を取得できませんでした',
+    }
+  } catch (err) {
+    console.error('[gemini] 顔照合失敗:', err)
+    return null
+  }
+}

@@ -195,6 +195,20 @@ function MyPageContent() {
   const frontInputRef = useRef<HTMLInputElement>(null)
   const backInputRef = useRef<HTMLInputElement>(null)
 
+  // 顔照合（セルフィー）
+  const [cameraActive, setCameraActive] = useState(false)
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
+  const [selfieBlob, setSelfieBlob] = useState<Blob | null>(null)
+  const [verifying, setVerifying] = useState(false)
+  const [verificationResult, setVerificationResult] = useState<{
+    match: boolean
+    confidence: number
+    verifiedAt: string
+  } | null>(null)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const selfieVideoRef = useRef<HTMLVideoElement>(null)
+  const selfieStreamRef = useRef<MediaStream | null>(null)
+
   const docTypesRequiringBack = ['運転免許証', 'マイナンバーカード']
   const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
@@ -249,6 +263,94 @@ function MyPageContent() {
         .catch(() => setShipmentsLoaded(true))
     }
   }, [activeTab, shipmentsLoaded, status, user?.customerType])
+
+  // カメラストリームのクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (selfieStreamRef.current) {
+        selfieStreamRef.current.getTracks().forEach(t => t.stop())
+        selfieStreamRef.current = null
+      }
+    }
+  }, [])
+
+  // タブ切替時にカメラを停止
+  useEffect(() => {
+    if (activeTab !== 'id-document' && selfieStreamRef.current) {
+      selfieStreamRef.current.getTracks().forEach(t => t.stop())
+      selfieStreamRef.current = null
+      setCameraActive(false)
+    }
+  }, [activeTab])
+
+  async function startSelfieCamera() {
+    setCameraError(null)
+    setSelfiePreview(null)
+    setSelfieBlob(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 640, height: 480 },
+      })
+      selfieStreamRef.current = stream
+      setCameraActive(true)
+      // videoRef へのアタッチは次のレンダー後に行う
+      requestAnimationFrame(() => {
+        if (selfieVideoRef.current) {
+          selfieVideoRef.current.srcObject = stream
+        }
+      })
+    } catch {
+      setCameraError('カメラへのアクセスが拒否されました。ブラウザの設定でカメラの使用を許可してください。')
+    }
+  }
+
+  function stopSelfieCamera() {
+    if (selfieStreamRef.current) {
+      selfieStreamRef.current.getTracks().forEach(t => t.stop())
+      selfieStreamRef.current = null
+    }
+    setCameraActive(false)
+  }
+
+  function captureSelfie() {
+    const video = selfieVideoRef.current
+    if (!video) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    setSelfiePreview(dataUrl)
+    canvas.toBlob(blob => {
+      if (blob) setSelfieBlob(blob)
+    }, 'image/jpeg', 0.9)
+    stopSelfieCamera()
+  }
+
+  async function handleSelfieVerify() {
+    if (!selfieBlob || !user) return
+    setVerifying(true)
+    try {
+      const fd = new FormData()
+      fd.append('selfie', selfieBlob, 'selfie.jpg')
+      const res = await fetch(`/api/users/${user.id}/selfie-verify`, { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('verification failed')
+      const data = await res.json()
+      setVerificationResult({
+        match: data.match,
+        confidence: data.confidence,
+        verifiedAt: data.verifiedAt || new Date().toISOString(),
+      })
+      setSelfiePreview(null)
+      setSelfieBlob(null)
+    } catch {
+      setMessage({ type: 'error', text: '顔照合に失敗しました。もう一度お試しください。' })
+    } finally {
+      setVerifying(false)
+    }
+  }
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault()
@@ -1843,6 +1945,144 @@ function MyPageContent() {
                     </div>
                   )}
                   </>
+                  )}
+                </Card>
+
+                {/* ── 本人確認（顔照合） ── */}
+                <Card variant="outlined" padding="md">
+                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-1 flex items-center gap-2">
+                    <span className="text-base">🤳</span>
+                    本人確認（顔照合）
+                  </h3>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+                    身分証明書の顔写真と本人の顔を照合します
+                  </p>
+
+                  {verificationResult ? (
+                    /* ── 照合結果表示 ── */
+                    <div className="space-y-4">
+                      <div className={`flex items-center gap-3 p-4 rounded-[var(--md-sys-shape-medium)] ${
+                        verificationResult.match
+                          ? 'bg-emerald-50 border border-emerald-200'
+                          : 'bg-red-50 border border-red-200'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0 ${
+                          verificationResult.match ? 'bg-emerald-100' : 'bg-red-100'
+                        }`}>
+                          {verificationResult.match ? '✅' : '❌'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-semibold ${
+                            verificationResult.match ? 'text-emerald-800' : 'text-red-800'
+                          }`}>
+                            {verificationResult.match ? '本人確認が完了しました' : '顔が一致しませんでした'}
+                          </p>
+                          <p className={`text-xs mt-0.5 ${
+                            verificationResult.match ? 'text-emerald-600' : 'text-red-600'
+                          }`}>
+                            一致度: {Math.round(verificationResult.confidence * 100)}%
+                          </p>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                            照合日時: {format(new Date(verificationResult.verifiedAt), 'yyyy/MM/dd HH:mm', { locale: ja })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => {
+                            setVerificationResult(null)
+                            setSelfiePreview(null)
+                            setSelfieBlob(null)
+                          }}
+                          className="text-xs px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          再撮影する
+                        </button>
+                      </div>
+                    </div>
+                  ) : verifying ? (
+                    /* ── 照合中 ── */
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <div className="w-10 h-10 border-3 border-[var(--portal-primary,#B91C1C)] border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">顔照合中...</p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">しばらくお待ちください</p>
+                    </div>
+                  ) : selfiePreview ? (
+                    /* ── 撮影プレビュー ── */
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-[var(--md-sys-color-outline-variant)] shadow-inner">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={selfiePreview} alt="撮影プレビュー" className="w-full h-full object-cover" />
+                        </div>
+                      </div>
+                      <div className="flex justify-center gap-3">
+                        <button
+                          onClick={() => {
+                            setSelfiePreview(null)
+                            setSelfieBlob(null)
+                            startSelfieCamera()
+                          }}
+                          className="text-sm px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          撮り直す
+                        </button>
+                        <Button onClick={handleSelfieVerify}>
+                          この写真で照合する
+                        </Button>
+                      </div>
+                    </div>
+                  ) : cameraActive ? (
+                    /* ── カメラビュー ── */
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-2xl overflow-hidden bg-black">
+                          <video
+                            ref={selfieVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                            style={{ transform: 'scaleX(-1)' }}
+                          />
+                          {/* 顔ガイドオーバーレイ */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-44 h-56 sm:w-48 sm:h-60 rounded-[50%] border-[3px] border-white/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+                          </div>
+                          <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80 drop-shadow">
+                            枠内に顔を合わせてください
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-center gap-3">
+                        <button
+                          onClick={stopSelfieCamera}
+                          className="text-sm px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          キャンセル
+                        </button>
+                        <Button onClick={captureSelfie}>
+                          撮影
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── カメラ起動前 ── */
+                    <div className="space-y-3">
+                      {cameraError && (
+                        <MessageBanner severity="error">
+                          <p className="text-xs">{cameraError}</p>
+                        </MessageBanner>
+                      )}
+                      <div className="flex justify-center">
+                        <Button onClick={startSelfieCamera}>
+                          カメラを起動して撮影
+                        </Button>
+                      </div>
+                      <p className="text-xs text-center text-[var(--md-sys-color-on-surface-variant)]">
+                        インカメラ（フロントカメラ）を使用します
+                      </p>
+                    </div>
                   )}
                 </Card>
 

@@ -42,6 +42,9 @@ model User {
   idDocumentBackPath  String?  @db.Text  // 身分証裏面ファイルURL
   idBackAddress       String?            // 裏面記載の新住所
   idFacePhotoPath     String?  @db.Text  // 顔写真抽出画像URL
+  selfieImagePath     String?  @db.Text  // セルフィー画像URL（本人確認用）
+  faceVerificationResult String?         // 顔照合結果（JSON文字列）
+  faceVerificationAt  DateTime?          // 顔照合実行日時
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
   isActive       Boolean   @default(true)

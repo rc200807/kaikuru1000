@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
   const where: any = {}
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
   if (sessionUser.role === 'store') where.storeId = sessionUser.id
-  if (status) where.status = status
+  if (status) {
+    const statuses = status.split(',').map(s => s.trim())
+    where.status = statuses.length === 1 ? statuses[0] : { in: statuses }
+  }
 
   const requests = await prisma.visitRequest.findMany({
     where,

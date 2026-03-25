@@ -840,15 +840,7 @@ function MyPageContent() {
                   <h1 className="text-lg font-bold text-white">
                     {user.customerType === 'regular' ? '買いクル' : 'エコ得BOX'}
                   </h1>
-                  <button
-                    onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/login' }) }}
-                    className="text-white/70 hover:text-white text-xs flex items-center gap-1 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    ログアウト
-                  </button>
+                  <div />
                 </div>
 
                 {/* User info */}
@@ -1497,11 +1489,12 @@ function MyPageContent() {
                     { key: 'id-document', label: '身分証明書', sub: user.idDocumentPath ? '提出済み' : '未提出', icon: '🪪', color: user.idDocumentPath ? 'text-green-600' : 'text-red-500' },
                     { key: 'password', label: 'パスワード変更', sub: 'セキュリティ設定', icon: '🔒', color: 'text-gray-600' },
                     { key: 'bank-account', label: '口座情報', sub: user.bankName ? `${user.bankName} ${user.branchName || ''}` : '未登録', icon: '🏦', color: user.bankName ? 'text-green-600' : 'text-amber-500' },
+                    { key: '_logout', label: 'ログアウト', sub: '', icon: '🚪', color: 'text-gray-400' },
                   ].map(item => (
                     <button
                       key={item.key}
-                      onClick={() => handleTabChange(item.key)}
-                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+                      onClick={() => item.key === '_logout' ? (confirm('ログアウトしますか？') && signOut({ callbackUrl: '/login' })) : handleTabChange(item.key)}
+                      className={`w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left ${item.key === '_logout' ? 'text-red-500' : ''}`}
                     >
                       <span className="text-2xl">{item.icon}</span>
                       <div className="flex-1 min-w-0">

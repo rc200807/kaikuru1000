@@ -129,11 +129,13 @@ model StoreMember {
   storeId   String
   store     Store    @relation(fields: [storeId], references: [id])
   name      String
-  email     String   @unique
+  email     String
   password  String
   avatar    String?  @db.Text  // プロフィール画像URL（Vercel Blob）
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([storeId, email]) // 同一店舗内でのみメール一意
 }
 
 // 訪問スケジュール

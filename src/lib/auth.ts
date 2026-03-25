@@ -98,31 +98,28 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // 店舗メンバーアカウントを確認
-        const member = await prisma.storeMember.findUnique({
+        // 店舗メンバーアカウントを確認（同一メールで複数店舗のメンバーの場合あり）
+        const members = await prisma.storeMember.findMany({
           where: { email: credentials.email },
           include: { store: true },
         })
-        if (!member) {
-          await recordLoginFailure(key)
-          return null
+        for (const member of members) {
+          const isValid = await bcrypt.compare(credentials.password, member.password)
+          if (isValid) {
+            await resetLoginFailures(key)
+            return {
+              id: member.storeId,
+              email: member.email,
+              name: member.name,
+              avatar: member.avatar || null,
+              role: 'store' as const,
+            }
+          }
         }
 
-        const isValid = await bcrypt.compare(credentials.password, member.password)
-        if (!isValid) {
-          await recordLoginFailure(key)
-          return null
-        }
-
-        await resetLoginFailures(key)
-        // storeId をセッション id にして既存の店舗ポータルをそのまま使えるようにする
-        return {
-          id: member.storeId,
-          email: member.email,
-          name: member.name,
-          avatar: member.avatar || null,
-          role: 'store' as const,
-        }
+        // どのアカウントにも一致しなかった
+        await recordLoginFailure(key)
+        return null
       },
     }),
     // 管理者ログイン

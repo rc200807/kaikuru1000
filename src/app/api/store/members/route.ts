@@ -47,13 +47,12 @@ export async function POST(request: NextRequest) {
 
   const { name, email, password } = parsed.data
 
-  // メール重複チェック（Store + StoreMember 両方）
-  const [existingStore, existingMember] = await Promise.all([
-    prisma.store.findFirst({ where: { email } }),
-    prisma.storeMember.findUnique({ where: { email } }),
-  ])
-  if (existingStore || existingMember) {
-    return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
+  // 同一店舗内でのメール重複チェック
+  const existingMember = await prisma.storeMember.findFirst({
+    where: { storeId: sessionUser.id, email },
+  })
+  if (existingMember) {
+    return NextResponse.json({ error: 'この店舗内で同じメールアドレスが既に使用されています' }, { status: 409 })
   }
 
   const hashed = await bcrypt.hash(password, 10)

@@ -663,56 +663,14 @@ export default function StoreCustomersPage() {
                 ))}
                 <div className="flex gap-4">
                   <dt className="w-28 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
-                  <dd className="text-sm flex items-center gap-3 flex-wrap">
+                  <dd className="text-sm">
                     {selected.idDocumentPath
-                      ? <a href={selected.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-[var(--portal-primary)] underline">確認する</a>
-                      : <span className="text-[var(--status-pending-text)]">未提出</span>
+                      ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">提出済み</span>
+                      : <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">未提出</span>
                     }
-                    {selected.idDocumentPath && (
-                      <button
-                        onClick={() => { setConfirmDeleteDoc(v => !v); setDocMsg(null) }}
-                        className="text-xs px-2.5 py-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error,#B3261E)] text-[var(--md-sys-color-error,#B3261E)] hover:bg-red-50 transition-colors flex items-center gap-1"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        {confirmDeleteDoc ? 'キャンセル' : '削除'}
-                      </button>
-                    )}
                   </dd>
                 </div>
               </dl>
-
-              {/* 身分証削除メッセージ */}
-              {docMsg && (
-                <div className={`mt-3 px-3 py-2 rounded-[var(--md-sys-shape-small)] text-sm ${docMsg.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                  {docMsg.text}
-                </div>
-              )}
-
-              {/* 身分証削除確認エリア */}
-              {confirmDeleteDoc && selected.idDocumentPath && (
-                <div className="mt-3 p-3 rounded-[var(--md-sys-shape-small)] bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-800 mb-1">身分証明書を削除しますか？</p>
-                  <p className="text-xs text-red-600 mb-3">ファイルと読み取り情報がすべて削除されます。この操作は取り消せません。</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleDeleteIdDocument}
-                      disabled={deletingDoc}
-                      className="text-xs px-4 py-1.5 bg-red-600 text-white rounded-[var(--md-sys-shape-small)] hover:bg-red-700 transition-colors disabled:opacity-50"
-                    >
-                      {deletingDoc ? '削除中...' : '削除する'}
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteDoc(false)}
-                      disabled={deletingDoc}
-                      className="text-xs px-4 py-1.5 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] rounded-[var(--md-sys-shape-small)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
-                    >
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* 口座情報（読み取り専用） */}
               {(selected.bankName || selected.branchName || selected.accountNumber) && (

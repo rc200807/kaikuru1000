@@ -128,6 +128,11 @@ export default function AdminCustomersPage() {
   const [editForm, setEditForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit' })
   const [editSubmitting, setEditSubmitting] = useState(false)
 
+  // OCR情報編集
+  const [ocrEditMode, setOcrEditMode] = useState(false)
+  const [ocrForm, setOcrForm] = useState({ idName: '', idBirthDate: '', idAddress: '', idLicenseNumber: '', idExpiryDate: '', idBackAddress: '' })
+  const [ocrSaving, setOcrSaving] = useState(false)
+
   // 新規顧客追加モーダル
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -393,11 +398,57 @@ export default function AdminCustomersPage() {
     setEditSubmitting(false)
   }
 
+  function startOcrEditMode() {
+    if (!detailUser) return
+    setOcrForm({
+      idName: detailUser.idName || '',
+      idBirthDate: detailUser.idBirthDate || '',
+      idAddress: detailUser.idAddress || '',
+      idLicenseNumber: detailUser.idLicenseNumber || '',
+      idExpiryDate: detailUser.idExpiryDate || '',
+      idBackAddress: detailUser.idBackAddress || '',
+    })
+    setOcrEditMode(true)
+  }
+
+  async function handleSaveOcr() {
+    if (!detailUser) return
+    setOcrSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${detailUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idName: ocrForm.idName,
+          idBirthDate: ocrForm.idBirthDate,
+          idAddress: ocrForm.idAddress,
+          idLicenseNumber: ocrForm.idLicenseNumber,
+          idExpiryDate: ocrForm.idExpiryDate,
+          idBackAddress: ocrForm.idBackAddress,
+        }),
+      })
+      if (res.ok) {
+        const patch = { ...ocrForm }
+        setDetailUser(prev => prev ? { ...prev, ...patch } : null)
+        setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, ...patch } : u))
+        setOcrEditMode(false)
+        setMessage({ type: 'success', text: 'OCR情報を更新しました' })
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || 'OCR情報の更新に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'OCR情報の更新に失敗しました' })
+    }
+    setOcrSaving(false)
+  }
+
   function closeDetailModal() {
     setDetailUser(null)
     setDetailSchedules([])
     setScheduleMsg(null)
     setEditMode(false)
+    setOcrEditMode(false)
     updateUrlParams({ customer: null, tab: null })
   }
 
@@ -707,7 +758,12 @@ export default function AdminCustomersPage() {
       header: '身分証',
       hideOnMobile: true,
       render: (user) => user.idDocumentPath ? (
-        <span className="text-xs font-medium text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] px-2 py-0.5 rounded-full">提出済</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-medium text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] px-2 py-0.5 rounded-full">提出済</span>
+          {user.idOcrIssueReport && (
+            <span className="text-[10px] font-medium text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full">要確認</span>
+          )}
+        </div>
       ) : (
         <span className="text-xs font-medium text-[var(--status-pending-text)] bg-[var(--status-pending-bg)] px-2 py-0.5 rounded-full">未提出</span>
       ),
@@ -1038,33 +1094,84 @@ export default function AdminCustomersPage() {
                       )}
 
                       {/* OCR抽出データ */}
-                      {(detailUser.idName || detailUser.idBirthDate || detailUser.idAddress || detailUser.idLicenseNumber || detailUser.idExpiryDate) && (
+                      {(detailUser.idName || detailUser.idBirthDate || detailUser.idAddress || detailUser.idLicenseNumber || detailUser.idExpiryDate || detailUser.idBackAddress) ? (
                         <div>
-                          <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-2 border-t border-[var(--md-sys-color-surface-container-high)] pt-2">OCR読み取りデータ</p>
-                          <dl className="space-y-1.5">
-                            {[
-                              { label: '氏名',     value: detailUser.idName },
-                              { label: '生年月日', value: detailUser.idBirthDate },
-                              { label: '住所',     value: detailUser.idAddress },
-                              { label: '証明書番号', value: detailUser.idLicenseNumber },
-                              { label: '有効期限', value: detailUser.idExpiryDate },
-                            ].filter(item => item.value).map(item => (
-                              <div key={item.label} className="flex gap-3">
-                                <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                                <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
+                          <div className="flex items-center justify-between border-t border-[var(--md-sys-color-surface-container-high)] pt-2 mb-2">
+                            <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">OCR読み取りデータ</p>
+                            {!ocrEditMode && (
+                              <Button size="sm" variant="tonal" onClick={startOcrEditMode}>
+                                編集
+                              </Button>
+                            )}
+                          </div>
+                          {ocrEditMode ? (
+                            <div className="space-y-2.5">
+                              <TextField
+                                label="氏名"
+                                value={ocrForm.idName}
+                                onChange={v => setOcrForm(prev => ({ ...prev, idName: v }))}
+                              />
+                              <TextField
+                                label="生年月日"
+                                value={ocrForm.idBirthDate}
+                                onChange={v => setOcrForm(prev => ({ ...prev, idBirthDate: v }))}
+                              />
+                              <TextField
+                                label="住所"
+                                value={ocrForm.idAddress}
+                                onChange={v => setOcrForm(prev => ({ ...prev, idAddress: v }))}
+                              />
+                              <TextField
+                                label="証明書番号"
+                                value={ocrForm.idLicenseNumber}
+                                onChange={v => setOcrForm(prev => ({ ...prev, idLicenseNumber: v }))}
+                              />
+                              <TextField
+                                label="有効期限"
+                                value={ocrForm.idExpiryDate}
+                                onChange={v => setOcrForm(prev => ({ ...prev, idExpiryDate: v }))}
+                              />
+                              <TextField
+                                label="裏面新住所"
+                                value={ocrForm.idBackAddress}
+                                onChange={v => setOcrForm(prev => ({ ...prev, idBackAddress: v }))}
+                              />
+                              <div className="flex justify-end gap-3 pt-1">
+                                <Button variant="outlined" onClick={() => setOcrEditMode(false)} disabled={ocrSaving}>
+                                  キャンセル
+                                </Button>
+                                <Button onClick={handleSaveOcr} disabled={ocrSaving} loading={ocrSaving}>
+                                  {ocrSaving ? '保存中...' : '保存'}
+                                </Button>
                               </div>
-                            ))}
-                          </dl>
+                            </div>
+                          ) : (
+                            <>
+                              <dl className="space-y-1.5">
+                                {[
+                                  { label: '氏名',     value: detailUser.idName },
+                                  { label: '生年月日', value: detailUser.idBirthDate },
+                                  { label: '住所',     value: detailUser.idAddress },
+                                  { label: '証明書番号', value: detailUser.idLicenseNumber },
+                                  { label: '有効期限', value: detailUser.idExpiryDate },
+                                ].filter(item => item.value).map(item => (
+                                  <div key={item.label} className="flex gap-3">
+                                    <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                                    <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                              {/* 裏面新住所 */}
+                              {detailUser.idBackAddress && (
+                                <div className="flex gap-3 border-t border-[var(--md-sys-color-surface-container-high)] pt-2 mt-2">
+                                  <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">裏面新住所</dt>
+                                  <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{detailUser.idBackAddress}</dd>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
-                      )}
-
-                      {/* 裏面新住所 */}
-                      {detailUser.idBackAddress && (
-                        <div className="flex gap-3 border-t border-[var(--md-sys-color-surface-container-high)] pt-2">
-                          <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">裏面新住所</dt>
-                          <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{detailUser.idBackAddress}</dd>
-                        </div>
-                      )}
+                      ) : null}
 
                       {/* OCR誤り報告 */}
                       {detailUser.idOcrIssueReport && (

@@ -68,6 +68,25 @@ export async function PATCH(
     return NextResponse.json(updated)
   }
 
+  // OCR情報の編集（idName キーが含まれていればOCR更新とみなす）
+  if ('idName' in body) {
+    const data: Record<string, unknown> = {
+      idName:          typeof body.idName === 'string' ? body.idName.trim() || null : null,
+      idBirthDate:     typeof body.idBirthDate === 'string' ? body.idBirthDate.trim() || null : null,
+      idAddress:       typeof body.idAddress === 'string' ? body.idAddress.trim() || null : null,
+      idLicenseNumber: typeof body.idLicenseNumber === 'string' ? body.idLicenseNumber.trim() || null : null,
+      idExpiryDate:    typeof body.idExpiryDate === 'string' ? body.idExpiryDate.trim() || null : null,
+      idBackAddress:   typeof body.idBackAddress === 'string' ? body.idBackAddress.trim() || null : null,
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, idName: true, idBirthDate: true, idAddress: true, idLicenseNumber: true, idExpiryDate: true, idBackAddress: true },
+    })
+    return NextResponse.json(updated)
+  }
+
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })
 }
 

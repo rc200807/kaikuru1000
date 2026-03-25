@@ -49,7 +49,7 @@ export async function GET() {
   return NextResponse.json({
     businessHoursStart: store.businessHoursStart ?? '09:00',
     businessHoursEnd: store.businessHoursEnd ?? '18:00',
-    businessDays: store.businessDays ?? '[1,2,3,4,5]',
+    businessDays: store.businessDays ?? '[0,1,2,3,4,5,6]',
   })
 }
 

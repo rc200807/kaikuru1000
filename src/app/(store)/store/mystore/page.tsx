@@ -80,7 +80,7 @@ function MyStoreContent() {
   // Business hours state
   const [bizHoursStart, setBizHoursStart] = useState('10:00')
   const [bizHoursEnd, setBizHoursEnd] = useState('19:00')
-  const [bizDays, setBizDays] = useState<number[]>([1, 2, 3, 4, 5])
+  const [bizDays, setBizDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6])
   const [bizHoursLoading, setBizHoursLoading] = useState(true)
   const [bizHoursSaving, setBizHoursSaving] = useState(false)
 
@@ -136,9 +136,9 @@ function MyStoreContent() {
         setBizHoursStart(data.businessHoursStart || '10:00')
         setBizHoursEnd(data.businessHoursEnd || '19:00')
         try {
-          setBizDays(JSON.parse(data.businessDays || '[1,2,3,4,5]'))
+          setBizDays(JSON.parse(data.businessDays || '[0,1,2,3,4,5,6]'))
         } catch {
-          setBizDays([1, 2, 3, 4, 5])
+          setBizDays([0, 1, 2, 3, 4, 5, 6])
         }
       }
     } catch { /* ignore */ }

@@ -2635,7 +2635,7 @@ function VisitRequestCalendarForm({
   submitting: boolean
   onCancel: () => void
 }) {
-  const [bizHours, setBizHours] = useState({ start: '10:00', end: '19:00', days: [1,2,3,4,5] })
+  const [bizHours, setBizHours] = useState({ start: '10:00', end: '19:00', days: [0,1,2,3,4,5,6] })
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - d.getDay() + 1) // Monday
@@ -2650,8 +2650,8 @@ function VisitRequestCalendarForm({
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data) {
-          let days = [1,2,3,4,5]
-          try { days = JSON.parse(data.businessDays || '[1,2,3,4,5]') } catch {}
+          let days = [0,1,2,3,4,5,6]
+          try { days = JSON.parse(data.businessDays || '[0,1,2,3,4,5,6]') } catch {}
           setBizHours({ start: data.businessHoursStart || '10:00', end: data.businessHoursEnd || '19:00', days })
         }
       })

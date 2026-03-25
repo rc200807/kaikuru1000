@@ -5,8 +5,6 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import AppBar from '@/components/AppBar'
-import Tabs from '@/components/Tabs'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
@@ -762,31 +760,50 @@ function MyPageContent() {
   const activeMemos = memos.filter(m => m.status !== 'completed')
   const completedMemos = memos.filter(m => m.status === 'completed')
 
-  return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)]">
-      {/* App Bar */}
-      <AppBar
-        title={user.customerType === 'regular' ? '買いクル マイページ' : 'エコ得BOX'}
-        actions={
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:inline text-sm text-[var(--md-sys-color-on-surface-variant)]">
-              {user.name} 様
-            </span>
-            <Button
-              variant="text"
-              size="sm"
-              onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/login' }) }}
-            >
-              ログアウト
-            </Button>
-          </div>
-        }
-      />
+  // Listen for bottom nav tab changes
+  useEffect(() => {
+    function onBottomNavChange(e: Event) {
+      const detail = (e as CustomEvent).detail
+      if (detail) handleTabChange(detail)
+    }
+    window.addEventListener('bottomnav-tab-change', onBottomNavChange)
+    return () => window.removeEventListener('bottomnav-tab-change', onBottomNavChange)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+  const customerTypeLabel = user.customerType === 'visit' ? '定期訪問' : user.customerType === 'delivery' ? '定期宅配' : '一般'
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* ─── Hidden Tabs for non-dashboard tabs on desktop ─── */}
+      {activeTab !== 'dashboard' && (
+        <>
+          {/* Compact top bar for non-dashboard tabs */}
+          <div className="bg-white border-b border-gray-100 sticky top-0 z-40">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6">
+              <div className="flex items-center justify-between h-14">
+                <button
+                  onClick={() => handleTabChange('dashboard')}
+                  className="flex items-center gap-2 text-gray-600 hover:text-[#B91C1C] transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  <span className="text-sm font-medium">戻る</span>
+                </button>
+                <h1 className="text-sm font-bold text-gray-900">
+                  {tabs.find(t => t.key === activeTab)?.label || 'マイページ'}
+                </h1>
+                <div className="w-16" />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="max-w-5xl mx-auto">
         {/* Message banner */}
         {message && (
-          <div className="pt-6">
+          <div className="px-4 sm:px-6 pt-4">
             <MessageBanner
               severity={message.type}
               dismissible
@@ -797,339 +814,361 @@ function MyPageContent() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="mt-4">
-          <Tabs
-            tabs={tabs}
-            activeKey={activeTab}
-            onChange={handleTabChange}
-            mobileVariant="menu"
-          />
-        </div>
-
-        <div className="py-6">
+        <div className={activeTab === 'dashboard' ? '' : 'px-4 sm:px-6 py-6'}>
           {/* ─── Dashboard tab ─── */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              {/* 身分証明書未提出バナー（最上部に表示） */}
-              {!user.idDocumentPath && (
-                <div className="rounded-[var(--md-sys-shape-medium)] border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div>
+              {/* ─── Gradient Header ─── */}
+              <div className="bg-gradient-to-br from-[#B91C1C] to-[#991B1B] px-5 pt-6 pb-8 relative overflow-hidden">
+                {/* Decorative circles */}
+                <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/4" />
+
+                {/* Top bar */}
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                  <h1 className="text-lg font-bold text-white">
+                    {user.customerType === 'regular' ? '買いクル' : 'エコ得BOX'}
+                  </h1>
+                  <button
+                    onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/login' }) }}
+                    className="text-white/70 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    ログアウト
+                  </button>
+                </div>
+
+                {/* User info */}
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                      <span className="text-white text-lg font-bold">{user.name.charAt(0)}</span>
+                    </div>
+                    <div>
+                      <p className="text-white text-lg font-bold">{user.name} 様</p>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/20 text-white">
+                        {customerTypeLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Next visit / delivery status in header */}
+                  {isDelivery ? (
+                    (() => {
+                      const now = new Date()
+                      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                      const thisMonthShipment = shipments.find(s => s.shipmentMonth === currentMonth)
+                      const shipStatusLabel: Record<string, string> = {
+                        registered: '登録済み', shipped: '発送済み', received: '受取済み', appraised: '査定完了',
+                      }
+                      return (
+                        <div className="mt-2 bg-white/10 rounded-xl px-4 py-3">
+                          <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">今月の送付状況</p>
+                          {thisMonthShipment ? (
+                            <p className="text-white text-xl font-bold">{shipStatusLabel[thisMonthShipment.status] ?? thisMonthShipment.status}</p>
+                          ) : (
+                            <p className="text-white/80 text-sm">未登録</p>
+                          )}
+                        </div>
+                      )
+                    })()
+                  ) : nextVisit ? (
+                    <div className="mt-2 bg-white/10 rounded-xl px-4 py-3">
+                      <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定日</p>
+                      <p className="text-white text-xl font-bold">
+                        {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
+                      </p>
+                      {user.store && (
+                        <p className="text-white/60 text-xs mt-0.5">{user.store.name}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-2 bg-white/10 rounded-xl px-4 py-3">
+                      <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定日</p>
+                      <p className="text-white/80 text-sm">未定</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ─── Main Content Area ─── */}
+              <div className="px-4 sm:px-6 -mt-4 relative z-10 space-y-5 pb-8">
+
+                {/* ─── Quick Action Cards (2x2 grid) ─── */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    {
+                      label: '買取トライ',
+                      sub: '写真で事前査定',
+                      tab: 'memos',
+                      color: 'text-[#B91C1C]',
+                      bgColor: 'bg-red-50',
+                      icon: (
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      label: '訪問リクエスト',
+                      sub: '日時を予約',
+                      tab: 'visit-request',
+                      color: 'text-blue-600',
+                      bgColor: 'bg-blue-50',
+                      icon: (
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      label: '訪問履歴',
+                      sub: '過去の訪問一覧',
+                      tab: 'history',
+                      color: 'text-emerald-600',
+                      bgColor: 'bg-emerald-50',
+                      icon: (
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      label: 'プロフィール',
+                      sub: '設定・口座情報',
+                      tab: 'profile',
+                      color: 'text-purple-600',
+                      bgColor: 'bg-purple-50',
+                      icon: (
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                        </svg>
+                      ),
+                    },
+                  ].filter(item => {
+                    // Hide visit-request and history for delivery customers
+                    if (isDelivery && (item.tab === 'visit-request' || item.tab === 'history')) return false
+                    return true
+                  }).map(item => (
+                    <button
+                      key={item.tab}
+                      onClick={() => handleTabChange(item.tab)}
+                      className="bg-white rounded-2xl p-4 text-left shadow-sm hover:shadow-md transition-all active:scale-[0.98] border border-gray-100"
+                    >
+                      <div className={`w-12 h-12 ${item.bgColor} rounded-xl flex items-center justify-center mb-3`}>
+                        <span className={item.color}>{item.icon}</span>
+                      </div>
+                      <p className="text-sm font-bold text-gray-900">{item.label}</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{item.sub}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {/* ─── 身分証明書未提出バナー ─── */}
+                {!user.idDocumentPath && (
+                  <button
+                    onClick={() => handleTabChange('id-document')}
+                    className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-left hover:bg-amber-100 transition-colors"
+                  >
+                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-amber-800 dark:text-amber-200">身分証明書が未提出です</p>
-                      <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                        サービス開始前に身分証明書のご提出が必要です。<br />
-                        運転免許証・マイナンバーカード・パスポートをご用意ください。
-                      </p>
-                      <button
-                        onClick={() => handleTabChange('id-document')}
-                        className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        身分証明書を登録する
-                      </button>
+                      <p className="text-sm font-bold text-amber-800">身分証明書が未提出です</p>
+                      <p className="text-xs text-amber-600 mt-0.5">タップして登録する</p>
                     </div>
+                    <svg className="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* ─── Stats Section ─── */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-[11px] font-medium text-gray-500 mb-1">累計買取金額</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {stats
+                        ? `¥${stats.totalPurchaseAmount.toLocaleString()}`
+                        : <span className="text-sm text-gray-400">---</span>
+                      }
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                    <p className="text-[11px] font-medium text-gray-500 mb-1">買取回数</p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {stats
+                        ? `${stats.purchaseCount}回`
+                        : <span className="text-sm text-gray-400">---</span>
+                      }
+                    </p>
                   </div>
                 </div>
-              )}
 
-              {/* ─── はじめにやるべきタスク ─── */}
-              {(() => {
-                const tasks = [
-                  {
-                    key: 'id-document',
-                    label: '身分証明書を登録',
-                    sub: '写真を撮るだけ10秒',
-                    done: !!user.idDocumentPath,
-                    action: () => handleTabChange('id-document'),
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15A2.25 2.25 0 002.25 6.75v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
-                      </svg>
-                    ),
-                  },
-                  {
-                    key: 'bank',
-                    label: '口座情報を登録',
-                    sub: '買取金額の振込先を設定',
-                    done: !!(user.bankName && user.accountNumber),
-                    action: () => handleTabChange('bank-account'),
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                      </svg>
-                    ),
-                  },
-                  {
-                    key: 'memo',
-                    label: '買取トライで事前査定',
-                    sub: '写真で簡単に買取価格を事前チェック',
-                    done: memos.length > 0,
-                    action: () => handleTabChange('memos'),
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                    ),
-                  },
-                  ...(user.customerType !== 'delivery' ? [{
-                    key: 'visit',
-                    label: '定期訪問の予約',
-                    sub: 'お近くの店舗が定期訪問に伺います',
-                    done: user.visitSchedules.length > 0,
-                    action: () => handleTabChange('visit-request'),
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                      </svg>
-                    ),
-                  }] : []),
-                ]
-                const completedCount = tasks.filter(t => t.done).length
-                const allDone = completedCount === tasks.length
-
-                if (allDone) return null
-
-                return (
-                  <Card variant="outlined" padding="md">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">
-                          はじめにやること
-                        </h3>
-                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
-                          {completedCount}/{tasks.length} 完了
-                        </p>
-                      </div>
-                      {/* プログレスバー */}
-                      <div className="w-24 h-2 bg-[var(--md-sys-color-surface-container-highest)] rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-green-500 rounded-full transition-all duration-500"
-                          style={{ width: `${(completedCount / tasks.length) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      {tasks.map(task => (
-                        <button
-                          key={task.key}
-                          onClick={task.done ? undefined : task.action}
-                          disabled={task.done}
-                          className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
-                            task.done
-                              ? 'bg-green-50 dark:bg-green-950/20 opacity-60 cursor-default'
-                              : 'bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer'
-                          }`}
-                        >
-                          {/* チェックアイコン or 番号 */}
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            task.done
-                              ? 'bg-green-500 text-white'
-                              : 'bg-[var(--portal-primary,#B91C1C)] text-white'
-                          }`}>
-                            {task.done ? (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              <span className="text-white">{task.icon}</span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium ${
-                              task.done
-                                ? 'text-green-700 dark:text-green-400 line-through'
-                                : 'text-[var(--md-sys-color-on-surface)]'
-                            }`}>
-                              {task.label}
-                            </p>
-                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                              {task.sub}
-                            </p>
-                          </div>
-                          {!task.done && (
-                            <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </Card>
-                )
-              })()}
-
-              {/* Next visit card / Delivery shipment status card */}
-              {isDelivery ? (
-                (() => {
-                  const now = new Date()
-                  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-                  const thisMonthShipment = shipments.find(s => s.shipmentMonth === currentMonth)
-                  const shipStatusLabel: Record<string, string> = {
-                    registered: '登録済み', shipped: '発送済み', received: '受取済み', appraised: '査定完了',
-                  }
-                  return (
-                    <div className={`rounded-[var(--md-sys-shape-medium)] p-6 text-white ${thisMonthShipment ? 'bg-[var(--portal-primary,#B91C1C)]' : 'bg-[var(--md-sys-color-outline)]'}`}>
-                      <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">今月の送付状況</p>
-                      {thisMonthShipment ? (
-                        <>
-                          <p className="text-3xl font-bold mb-1">{shipStatusLabel[thisMonthShipment.status] ?? thisMonthShipment.status}</p>
-                          <p className="text-sm opacity-75">{thisMonthShipment.shipmentNumber}</p>
-                          {thisMonthShipment.purchaseAmount !== null && (
-                            <p className="text-sm opacity-75 mt-1">査定額: ¥{thisMonthShipment.purchaseAmount.toLocaleString()}</p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-xl font-semibold">今月の送付は未登録です</p>
-                      )}
-                    </div>
-                  )
-                })()
-              ) : (
-                <div
-                  className={`
-                    rounded-[var(--md-sys-shape-medium)] p-6 text-white
-                    ${nextVisit ? 'bg-[var(--portal-primary,#B91C1C)]' : 'bg-[var(--md-sys-color-outline)]'}
-                  `}
-                >
-                  <p className="text-xs font-medium opacity-70 mb-2 tracking-wide uppercase">
-                    次回訪問予定日
-                  </p>
-                  {nextVisit ? (
-                    <>
-                      <p className="text-4xl font-bold mb-1">
-                        {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
-                      </p>
-                      {nextVisit.note && (
-                        <p className="text-sm opacity-75 mt-1">{nextVisit.note}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xl font-semibold">訪問日が未定です</p>
-                  )}
-                </div>
-              )}
-
-              {/* Stats cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card variant="outlined" padding="md">
-                  <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
-                    累計買取金額
-                  </p>
-                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
-                    {stats
-                      ? `¥${stats.totalPurchaseAmount.toLocaleString()}`
-                      : <span className="text-base text-[var(--md-sys-color-on-surface-variant)]">---</span>
-                    }
-                  </p>
-                </Card>
-                <Card variant="outlined" padding="md">
-                  <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
-                    買取回数
-                  </p>
-                  <p className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
-                    {stats
-                      ? `${stats.purchaseCount}回`
-                      : <span className="text-base text-[var(--md-sys-color-on-surface-variant)]">---</span>
-                    }
-                  </p>
-                </Card>
-              </div>
-
-              {/* Monthly bar chart */}
-              {stats && (
-                <Card variant="outlined" padding="md">
-                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
-                    月次買取金額推移
-                  </h3>
-                  {stats.totalPurchaseAmount === 0 ? (
-                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-4">
-                      まだ買取履歴がありません
-                    </p>
-                  ) : (
-                    <div className="flex items-end gap-1 h-32">
+                {/* ─── Monthly bar chart ─── */}
+                {stats && stats.totalPurchaseAmount > 0 && (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                    <h3 className="text-sm font-bold text-gray-900 mb-4">月次買取金額推移</h3>
+                    <div className="flex items-end gap-1 h-28">
                       {stats.monthlyStats.map((m, i) => {
                         const pct = maxMonthlyAmount > 0 ? (m.amount / maxMonthlyAmount) * 100 : 0
                         return (
                           <div key={i} className="flex-1 flex flex-col items-center gap-1">
                             <div
-                              className="w-full rounded-t-sm"
+                              className="w-full rounded-t-md"
                               style={{
                                 height: `${Math.max(pct, m.amount > 0 ? 4 : 0)}%`,
-                                backgroundColor: 'var(--portal-primary, #B91C1C)',
-                                opacity: m.amount > 0 ? 1 : 0.15,
+                                backgroundColor: '#B91C1C',
+                                opacity: m.amount > 0 ? 1 : 0.1,
                                 minHeight: m.amount > 0 ? '4px' : undefined,
                               }}
                             />
-                            <span className="text-[9px] text-[var(--md-sys-color-on-surface-variant)]">
-                              {m.month}月
-                            </span>
+                            <span className="text-[9px] text-gray-400">{m.month}月</span>
                           </div>
                         )
                       })}
                     </div>
-                  )}
-                </Card>
-              )}
+                  </div>
+                )}
 
-              {/* Info summary grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card variant="outlined" padding="md">
-                  <h3 className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-3 tracking-wide uppercase">
-                    基本情報
-                  </h3>
-                  <dl className="space-y-2.5">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">氏名</dt>
-                      <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)] text-right">{user.name}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">電話番号</dt>
-                      <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)] text-right">{user.phone}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">住所</dt>
-                      <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)] text-right break-all">{user.address}</dd>
-                    </div>
-                  </dl>
-                </Card>
+                {/* ─── Onboarding Checklist (horizontal scrollable) ─── */}
+                {(() => {
+                  const tasks = [
+                    {
+                      key: 'id-document',
+                      label: '身分証明書を登録',
+                      sub: '写真を撮るだけ10秒',
+                      done: !!user.idDocumentPath,
+                      action: () => handleTabChange('id-document'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15A2.25 2.25 0 002.25 6.75v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      key: 'bank',
+                      label: '口座情報を登録',
+                      sub: '買取金額の振込先を設定',
+                      done: !!(user.bankName && user.accountNumber),
+                      action: () => handleTabChange('bank-account'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      key: 'memo',
+                      label: '買取トライで事前査定',
+                      sub: '写真で簡単に買取価格をチェック',
+                      done: memos.length > 0,
+                      action: () => handleTabChange('memos'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      ),
+                    },
+                    ...(user.customerType !== 'delivery' ? [{
+                      key: 'visit',
+                      label: '定期訪問の予約',
+                      sub: 'お近くの店舗が定期訪問',
+                      done: user.visitSchedules.length > 0,
+                      action: () => handleTabChange('visit-request'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                      ),
+                    }] : []),
+                  ]
+                  const completedCount = tasks.filter(t => t.done).length
+                  const allDone = completedCount === tasks.length
 
-                <Card variant="outlined" padding="md">
-                  <h3 className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-3 tracking-wide uppercase">
-                    契約情報
-                  </h3>
-                  <dl className="space-y-2.5">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">ライセンスキー</dt>
-                      <dd className="text-xs font-mono font-medium text-[var(--md-sys-color-on-surface)] text-right break-all">{user.licenseKey.key}</dd>
+                  if (allDone) return null
+
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-gray-900">はじめにやること</h3>
+                        <span className="text-xs text-gray-500">{completedCount}/{tasks.length}</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
+                        <div
+                          className="h-full bg-[#B91C1C] rounded-full transition-all duration-500"
+                          style={{ width: `${(completedCount / tasks.length) * 100}%` }}
+                        />
+                      </div>
+                      {/* Horizontal scrollable cards */}
+                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
+                        {tasks.filter(t => !t.done).map(task => (
+                          <button
+                            key={task.key}
+                            onClick={task.action}
+                            className="flex-shrink-0 w-40 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left snap-start hover:shadow-md transition-all active:scale-[0.98]"
+                          >
+                            <div className="w-10 h-10 bg-[#B91C1C] rounded-xl flex items-center justify-center mb-3">
+                              <span className="text-white">{task.icon}</span>
+                            </div>
+                            <p className="text-xs font-bold text-gray-900 leading-tight">{task.label}</p>
+                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">{task.sub}</p>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">担当店舗</dt>
-                      <dd className="text-sm font-medium text-right">
-                        {user.store ? (
-                          <span className="text-[var(--md-sys-color-on-surface)]">{user.store.name}</span>
-                        ) : (
-                          <span className="text-[var(--status-pending-text)]">割り当て待ち</span>
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
-                      <dd className={`text-sm font-medium ${user.idDocumentPath ? 'text-[var(--status-completed-text)]' : 'text-[var(--status-pending-text)]'}`}>
-                        {user.idDocumentPath ? '提出済み' : '未提出'}
-                      </dd>
-                    </div>
-                  </dl>
-                </Card>
+                  )
+                })()}
+
+                {/* ─── Info Cards ─── */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-4 border-b border-gray-50">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">基本情報</h3>
+                    <dl className="space-y-2.5">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-sm text-gray-500">氏名</dt>
+                        <dd className="text-sm font-medium text-gray-900 text-right">{user.name}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-sm text-gray-500">電話番号</dt>
+                        <dd className="text-sm font-medium text-gray-900 text-right">{user.phone}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-sm text-gray-500">担当店舗</dt>
+                        <dd className="text-sm font-medium text-right">
+                          {user.store ? (
+                            <span className="text-gray-900">{user.store.name}</span>
+                          ) : (
+                            <span className="text-amber-600">割り当て待ち</span>
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">契約情報</h3>
+                    <dl className="space-y-2.5">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-sm text-gray-500">ライセンスキー</dt>
+                        <dd className="text-xs font-mono font-medium text-gray-900 text-right break-all">{user.licenseKey.key}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-sm text-gray-500">身分証</dt>
+                        <dd className={`text-sm font-medium ${user.idDocumentPath ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {user.idDocumentPath ? '提出済み' : '未提出'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </div>
+
               </div>
-
             </div>
           )}
 

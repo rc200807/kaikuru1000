@@ -227,5 +227,9 @@ body {
   position: absolute;
 }
 
+/* ── Utility: hide scrollbar ─────────────────────────── */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
 /* ── Safe area (mobile bottom nav) ───────────────────── */
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }

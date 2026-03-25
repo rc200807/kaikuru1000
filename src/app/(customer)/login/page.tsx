@@ -150,16 +150,14 @@ export default function CustomerLoginPage() {
                 </button>
               </div>
 
-              <div className="text-center mt-4 space-y-2">
-                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-                  <Link
-                    href="/register"
-                    className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
-                  >
-                    ライセンスキーを使って新規登録
-                  </Link>
-                </p>
-                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+              <div className="mt-4 space-y-3">
+                <Link
+                  href="/register"
+                  className="block w-full text-center py-3 rounded-xl border-2 border-[var(--portal-primary,#B91C1C)] text-[var(--portal-primary,#B91C1C)] font-medium text-sm hover:bg-red-50 transition-colors"
+                >
+                  ライセンスキーを使って新規登録
+                </Link>
+                <p className="text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
                   ライセンスキーをお持ちでない方は{' '}
                   <Link
                     href="/register-regular"

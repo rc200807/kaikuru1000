@@ -174,15 +174,6 @@ export default function CustomerLoginPage() {
           )}
         </Card>
 
-        {/* Back link */}
-        <p className="text-center mt-5 text-sm text-[var(--md-sys-color-on-surface-variant)]">
-          <Link
-            href="/"
-            className="hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-          >
-            &#8592; トップページへ
-          </Link>
-        </p>
       </div>
     </div>
   )

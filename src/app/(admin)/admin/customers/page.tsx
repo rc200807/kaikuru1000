@@ -57,7 +57,7 @@ type VisitSchedule = {
   user: { id: string; name: string }
 }
 
-const STATUS_OPTIONS = [
+const DEFAULT_STATUS_OPTIONS = [
   { value: 'scheduled',   label: '予定' },
   { value: 'pending',     label: '未対応' },
   { value: 'completed',   label: '対応完了' },
@@ -78,6 +78,12 @@ export default function AdminCustomersPage() {
   const [filterStore, setFilterStore] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showInactive, setShowInactive] = useState(false)
+
+  // 訪問ステータス（動的取得）
+  const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
+  const STATUS_OPTIONS = visitStatuses.length > 0
+    ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
+    : DEFAULT_STATUS_OPTIONS
 
   // ページネーション
   const [usersPage, setUsersPage] = useState(1)
@@ -116,6 +122,13 @@ export default function AdminCustomersPage() {
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
+
+  useEffect(() => {
+    fetch('/api/visit-statuses')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setVisitStatuses(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (status === 'authenticated') {

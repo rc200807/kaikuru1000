@@ -28,16 +28,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください` }, { status: 400 })
   }
 
-  // メールアドレスの重複チェック（自分以外）
-  if (email && email !== currentEmail) {
-    const [existStore, existMember] = await Promise.all([
-      prisma.store.findFirst({ where: { email } }),
-      prisma.storeMember.findUnique({ where: { email } }),
-    ])
-    if (existStore || existMember) {
-      return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
-    }
-  }
+  // メールアドレスの重複チェックは不要（同一メールで複数アカウント許可）
 
   // アバター画像のアップロード（Magic Number検証 + Vercel Blob）
   let avatarUrl: string | undefined
@@ -73,7 +64,7 @@ export async function PATCH(request: NextRequest) {
     })
   }
 
-  const member = await prisma.storeMember.findUnique({ where: { email: currentEmail } })
+  const member = await prisma.storeMember.findFirst({ where: { email: currentEmail } })
   if (member) {
     const updateData: any = {}
     if (name)      updateData.name     = name

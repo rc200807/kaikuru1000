@@ -34,7 +34,7 @@ type Customer = {
   furigana: string
 }
 
-const STATUS_OPTIONS = [
+const DEFAULT_STATUS_OPTIONS = [
   { value: 'scheduled',   label: '予定' },
   { value: 'pending',     label: '未対応' },
   { value: 'completed',   label: '対応完了' },
@@ -58,6 +58,12 @@ export default function StoreSchedulePage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [formData, setFormData] = useState({ userId: '', visitDate: '', note: '' })
   const [saving, setSaving] = useState(false)
+
+  // 訪問ステータス（動的取得）
+  const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
+  const STATUS_OPTIONS = visitStatuses.length > 0
+    ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
+    : DEFAULT_STATUS_OPTIONS
 
   // ページネーション
   const [schedulesPage, setSchedulesPage] = useState(1)
@@ -86,6 +92,13 @@ export default function StoreSchedulePage() {
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
+
+  useEffect(() => {
+    fetch('/api/visit-statuses')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setVisitStatuses(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (status === 'authenticated') {

@@ -163,6 +163,18 @@ model VisitSchedule {
   updatedAt      DateTime @updatedAt
 }
 
+// 訪問ステータス（管理ポータルから管理）
+model VisitStatus {
+  id        String   @id @default(cuid())
+  key       String   @unique  // e.g. "scheduled", "completed", etc.
+  label     String            // Japanese display label
+  color     String   @default("#6B7280")  // hex color for badge
+  sortOrder Int      @default(0)
+  isDefault Boolean  @default(false)  // default status for new visits
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // 買取品目カテゴリ（管理ポータルから管理）
 model PurchaseCategory {
   id            String         @id @default(cuid())

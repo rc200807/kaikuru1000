@@ -27,7 +27,7 @@ type VisitRecord = {
 
 type Store = { id: string; name: string; code: string }
 
-const STATUS_OPTIONS = [
+const DEFAULT_STATUS_OPTIONS = [
   { value: '',            label: 'すべて' },
   { value: 'scheduled',   label: '予定' },
   { value: 'pending',     label: '未対応' },
@@ -60,9 +60,23 @@ export default function AdminVisitsPage() {
   // 入力中の値（確定前）
   const [inputQ, setInputQ] = useState('')
 
+  // 訪問ステータス（動的取得）
+  const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
+  const STATUS_OPTIONS = visitStatuses.length > 0
+    ? [{ value: '', label: 'すべて' }, ...visitStatuses.map(s => ({ value: s.key, label: s.label }))]
+    : DEFAULT_STATUS_OPTIONS
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
+
+  // 訪問ステータス取得
+  useEffect(() => {
+    fetch('/api/visit-statuses')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setVisitStatuses(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [])
 
   // 店舗一覧取得
   useEffect(() => {

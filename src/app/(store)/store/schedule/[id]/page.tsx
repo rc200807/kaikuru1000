@@ -101,6 +101,9 @@ export default function VisitDetailPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 訪問ステータス（動的取得）
+  const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
+
   // 買取カテゴリー
   const [purchaseCategories, setPurchaseCategories] = useState<{id: string; name: string}[]>([])
 
@@ -171,6 +174,13 @@ export default function VisitDetailPage() {
     fetch('/api/purchase-categories')
       .then(res => res.ok ? res.json() : [])
       .then(data => setPurchaseCategories(data))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/visit-statuses')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setVisitStatuses(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
 
@@ -696,9 +706,24 @@ export default function VisitDetailPage() {
             <span className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">
               {visit.user.name}
             </span>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[visit.status] || ''}`}>
-              {STATUS_LABELS[visit.status] || visit.status}
-            </span>
+            {(() => {
+              const dynStatus = visitStatuses.find(s => s.key === visit.status)
+              if (dynStatus) {
+                return (
+                  <span
+                    className="text-xs font-medium px-2 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: dynStatus.color }}
+                  >
+                    {dynStatus.label}
+                  </span>
+                )
+              }
+              return (
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_STYLES[visit.status] || ''}`}>
+                  {STATUS_LABELS[visit.status] || visit.status}
+                </span>
+              )
+            })()}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-[var(--md-sys-color-on-surface-variant)]">
@@ -722,8 +747,11 @@ export default function VisitDetailPage() {
               value={visit.status}
               onChange={(e) => handleStatusChange(e.target.value)}
             >
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {(visitStatuses.length > 0
+                ? visitStatuses.map(s => ({ key: s.key, label: s.label }))
+                : Object.entries(STATUS_LABELS).map(([k, v]) => ({ key: k, label: v }))
+              ).map(s => (
+                <option key={s.key} value={s.key}>{s.label}</option>
               ))}
             </select>
           </div>

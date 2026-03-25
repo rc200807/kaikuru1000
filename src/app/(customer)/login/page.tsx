@@ -124,7 +124,7 @@ export default function CustomerLoginPage() {
                   value={email}
                   onChange={setEmail}
                   required
-                  placeholder="example@email.com / 090-1234-5678"
+                  placeholder="example@email.com / 09012345678"
                 />
 
                 <TextField

@@ -7,9 +7,21 @@ import BottomNav from '@/components/BottomNav'
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === '/store/login'
+  const isAgreementPage = /\/store\/schedule\/[^/]+\/agreement/.test(pathname)
 
   if (isLoginPage) {
     return <div data-portal="store">{children}</div>
+  }
+
+  // 契約書ページではサイドバー・ボトムナビを非表示
+  if (isAgreementPage) {
+    return (
+      <div data-portal="store" className="min-h-screen bg-[var(--md-sys-color-surface)]">
+        <main className="min-w-0">
+          {children}
+        </main>
+      </div>
+    )
   }
 
   return (

@@ -71,6 +71,12 @@ function MyStoreContent() {
   const [linkSubmitting, setLinkSubmitting] = useState(false)
   const [unlinking, setUnlinking] = useState<string | null>(null)
 
+  // Lock PIN state
+  const [lockPinHas, setLockPinHas] = useState(false)
+  const [lockPinInput, setLockPinInput] = useState('')
+  const [lockPinLoading, setLockPinLoading] = useState(true)
+  const [lockPinSaving, setLockPinSaving] = useState(false)
+
   // Google Calendar state
   const [gcalConfig, setGcalConfig] = useState<GCalConfig | null>(null)
   const [gcalLoading, setGcalLoading] = useState(true)
@@ -180,6 +186,11 @@ function MyStoreContent() {
         .catch(() => setLoading(false))
       fetchGcalConfig()
       fetchLinkedAccounts()
+      // Lock PIN
+      fetch('/api/store/lock-pin')
+        .then(r => r.json())
+        .then(data => { setLockPinHas(data.hasPin); setLockPinLoading(false) })
+        .catch(() => setLockPinLoading(false))
     }
   }, [status, session])
 
@@ -538,6 +549,115 @@ function MyStoreContent() {
                 </Card>
               )}
             </div>
+            {/* ===== 画面ロック暗証番号 ===== */}
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                画面ロック暗証番号
+              </h3>
+
+              <Card variant="elevated" padding="md" className="space-y-4">
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  売買契約書ページで画面ロックを有効にします。ロック中はサイドバーやナビゲーションが非表示になり、暗証番号を入力しないと他のページに移動できません。
+                </p>
+
+                {lockPinLoading ? (
+                  <div className="flex justify-center py-2">
+                    <LoadingSpinner size="sm" label="読み込み中..." />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        lockPinHas
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                      }`}>
+                        {lockPinHas ? (
+                          <>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            設定済み
+                          </>
+                        ) : '未設定'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">
+                          {lockPinHas ? '新しい暗証番号' : '暗証番号'}（4〜6桁の数字）
+                        </label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={lockPinInput}
+                          onChange={(e) => setLockPinInput(e.target.value.replace(/\D/g, ''))}
+                          placeholder="例: 1234"
+                          className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={lockPinSaving || lockPinInput.length < 4}
+                        onClick={async () => {
+                          setLockPinSaving(true)
+                          try {
+                            const res = await fetch('/api/store/lock-pin', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ pin: lockPinInput }),
+                            })
+                            const data = await res.json()
+                            if (res.ok) {
+                              setLockPinHas(true)
+                              setLockPinInput('')
+                              setMessage({ type: 'success', text: '暗証番号を設定しました' })
+                            } else {
+                              setMessage({ type: 'error', text: data.error || '設定に失敗しました' })
+                            }
+                          } catch {
+                            setMessage({ type: 'error', text: '設定に失敗しました' })
+                          } finally {
+                            setLockPinSaving(false)
+                          }
+                        }}
+                      >
+                        {lockPinSaving ? '保存中...' : '保存'}
+                      </Button>
+                    </div>
+
+                    {lockPinHas && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm('暗証番号を削除しますか？売買契約書ページの画面ロックが無効になります。')) return
+                          setLockPinSaving(true)
+                          try {
+                            const res = await fetch('/api/store/lock-pin', { method: 'DELETE' })
+                            if (res.ok) {
+                              setLockPinHas(false)
+                              setLockPinInput('')
+                              setMessage({ type: 'success', text: '暗証番号を削除しました' })
+                            }
+                          } catch {
+                            setMessage({ type: 'error', text: '削除に失敗しました' })
+                          } finally {
+                            setLockPinSaving(false)
+                          }
+                        }}
+                        disabled={lockPinSaving}
+                        className="text-xs text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50"
+                      >
+                        暗証番号を削除
+                      </button>
+                    )}
+                  </div>
+                )}
+              </Card>
+            </div>
+
             {/* ===== アカウント切り替え（リンク管理） ===== */}
             <div>
               <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">

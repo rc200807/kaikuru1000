@@ -79,6 +79,7 @@ model Store {
   bankInfo            String?   @db.Text  // 銀行情報（JSON or テキスト）
   invoiceNumber       String?   // インボイス番号
   antiquePermitNumber String?   // 古物営業許可番号
+  lockPin             String?   // 画面ロック暗証番号（4〜6桁）
   customers  User[]
   visitSchedules VisitSchedule[]
   members    StoreMember[]

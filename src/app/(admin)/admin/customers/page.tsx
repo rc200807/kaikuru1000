@@ -123,6 +123,11 @@ export default function AdminCustomersPage() {
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false)
   const [scheduleMsg, setScheduleMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 顧客情報編集
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit' })
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
   // 新規顧客追加モーダル
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [addForm, setAddForm] = useState({
@@ -335,10 +340,64 @@ export default function AdminCustomersPage() {
     }
   }
 
+  function startEditMode() {
+    if (!detailUser) return
+    setEditForm({
+      name: detailUser.name,
+      furigana: detailUser.furigana,
+      email: detailUser.email || '',
+      phone: detailUser.phone,
+      address: detailUser.address,
+      customerType: detailUser.customerType,
+    })
+    setEditMode(true)
+  }
+
+  async function handleSaveCustomer() {
+    if (!detailUser) return
+    setEditSubmitting(true)
+    try {
+      const res = await fetch(`/api/admin/users/${detailUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name,
+          furigana: editForm.furigana,
+          email: editForm.email,
+          phone: editForm.phone,
+          address: editForm.address,
+          customerType: editForm.customerType,
+        }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        const patch = {
+          name: updated.name ?? editForm.name,
+          furigana: updated.furigana ?? editForm.furigana,
+          email: updated.email ?? editForm.email,
+          phone: updated.phone ?? editForm.phone,
+          address: updated.address ?? editForm.address,
+          customerType: updated.customerType ?? editForm.customerType,
+        }
+        setDetailUser(prev => prev ? { ...prev, ...patch } : null)
+        setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, ...patch } : u))
+        setEditMode(false)
+        setMessage({ type: 'success', text: `${patch.name} の情報を更新しました` })
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || '更新に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: '更新に失敗しました' })
+    }
+    setEditSubmitting(false)
+  }
+
   function closeDetailModal() {
     setDetailUser(null)
     setDetailSchedules([])
     setScheduleMsg(null)
+    setEditMode(false)
     updateUrlParams({ customer: null, tab: null })
   }
 
@@ -815,21 +874,90 @@ export default function AdminCustomersPage() {
             {/* 基本情報 */}
             {detailTab === 'info' && (
               <div className="space-y-4">
-                <dl className="space-y-3">
-                  {[
-                    { label: 'メール', value: detailUser.email },
-                    { label: '電話番号', value: detailUser.phone },
-                    { label: '訪問先住所', value: detailUser.address },
-                    { label: 'ライセンスキー', value: detailUser.licenseKey?.key || '—', mono: true },
-                    { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
-                    { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
-                  ].map(item => (
-                    <div key={item.label} className="flex gap-3">
-                      <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                      <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
+                {!editMode && (
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="tonal" onClick={startEditMode}>
+                      編集
+                    </Button>
+                  </div>
+                )}
+
+                {editMode ? (
+                  <div className="space-y-3">
+                    <TextField
+                      label="氏名"
+                      value={editForm.name}
+                      onChange={v => setEditForm(prev => ({ ...prev, name: v }))}
+                      required
+                    />
+                    <TextField
+                      label="ふりがな"
+                      value={editForm.furigana}
+                      onChange={v => setEditForm(prev => ({ ...prev, furigana: v }))}
+                      required
+                    />
+                    <TextField
+                      label="メールアドレス（任意）"
+                      value={editForm.email}
+                      onChange={v => setEditForm(prev => ({ ...prev, email: v }))}
+                      type="email"
+                    />
+                    <TextField
+                      label="電話番号"
+                      value={editForm.phone}
+                      onChange={v => setEditForm(prev => ({ ...prev, phone: v }))}
+                      required
+                    />
+                    <TextField
+                      label="住所"
+                      value={editForm.address}
+                      onChange={v => setEditForm(prev => ({ ...prev, address: v }))}
+                      required
+                    />
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                        顧客タイプ
+                      </label>
+                      <select
+                        value={editForm.customerType}
+                        onChange={e => setEditForm(prev => ({ ...prev, customerType: e.target.value }))}
+                        className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                      >
+                        <option value="visit">定期訪問</option>
+                        <option value="delivery">定期宅配</option>
+                        <option value="regular">通常買取</option>
+                      </select>
                     </div>
-                  ))}
-                </dl>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button variant="outlined" onClick={() => setEditMode(false)} disabled={editSubmitting}>
+                        キャンセル
+                      </Button>
+                      <Button
+                        onClick={handleSaveCustomer}
+                        disabled={editSubmitting || !editForm.name || !editForm.furigana || !editForm.phone || !editForm.address}
+                        loading={editSubmitting}
+                      >
+                        {editSubmitting ? '保存中...' : '保存'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <dl className="space-y-3">
+                    {[
+                      { label: 'メール', value: detailUser.email },
+                      { label: '電話番号', value: detailUser.phone },
+                      { label: '訪問先住所', value: detailUser.address },
+                      { label: 'ライセンスキー', value: detailUser.licenseKey?.key || '—', mono: true },
+                      { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
+                      { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
+                    ].map(item => (
+                      <div key={item.label} className="flex gap-3">
+                        <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                        <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
 
                 {/* 身分証明書セクション */}
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">

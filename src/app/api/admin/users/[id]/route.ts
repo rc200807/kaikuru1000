@@ -22,7 +22,8 @@ export async function PATCH(
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
 
-  if (typeof body.isActive === 'boolean') {
+  // 有効化・無効化
+  if (typeof body.isActive === 'boolean' && Object.keys(body).length === 1) {
     const updated = await prisma.user.update({
       where: { id },
       data: { isActive: body.isActive },
@@ -30,12 +31,41 @@ export async function PATCH(
     return NextResponse.json({ id: updated.id, isActive: updated.isActive })
   }
 
-  if (VALID_CUSTOMER_TYPES.includes(body.customerType)) {
+  // 顧客タイプのみ変更
+  if (body.customerType && Object.keys(body).length === 1 && VALID_CUSTOMER_TYPES.includes(body.customerType)) {
     const updated = await prisma.user.update({
       where: { id },
       data: { customerType: body.customerType },
     })
     return NextResponse.json({ id: updated.id, customerType: updated.customerType })
+  }
+
+  // 顧客情報の編集（name が含まれていればプロフィール編集とみなす）
+  if (typeof body.name === 'string') {
+    const data: Record<string, unknown> = {}
+
+    if (body.name?.trim()) data.name = body.name.trim()
+    else return NextResponse.json({ error: '氏名は必須です' }, { status: 400 })
+
+    if (typeof body.furigana === 'string') data.furigana = body.furigana.trim()
+    if (typeof body.phone === 'string') data.phone = body.phone.replace(/[-ー\s]/g, '')
+    if (typeof body.address === 'string') data.address = body.address.trim()
+
+    // email: 空文字なら null にする
+    if (typeof body.email === 'string') {
+      data.email = body.email.trim() || null
+    }
+
+    if (body.customerType && VALID_CUSTOMER_TYPES.includes(body.customerType)) {
+      data.customerType = body.customerType
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true },
+    })
+    return NextResponse.json(updated)
   }
 
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })

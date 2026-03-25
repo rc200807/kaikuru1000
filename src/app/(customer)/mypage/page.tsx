@@ -793,7 +793,7 @@ function MyPageContent() {
             <div className="max-w-5xl mx-auto px-4 sm:px-6">
               <div className="flex items-center justify-between h-14">
                 <button
-                  onClick={() => handleTabChange('dashboard')}
+                  onClick={() => handleTabChange(['id-document','password','bank-account','edit-profile'].includes(activeTab) ? 'profile' : 'dashboard')}
                   className="flex items-center gap-2 text-gray-600 hover:text-[#B91C1C] transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

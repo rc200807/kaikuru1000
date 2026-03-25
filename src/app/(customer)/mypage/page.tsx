@@ -681,7 +681,7 @@ export default function MyPage() {
     <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)]">
       {/* App Bar */}
       <AppBar
-        title="買いクル マイページ"
+        title={user.customerType === 'regular' ? '買いクル マイページ' : 'エコ得BOX'}
         actions={
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline text-sm text-[var(--md-sys-color-on-surface-variant)]">

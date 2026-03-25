@@ -153,7 +153,7 @@ export default function CustomerLoginPage() {
               <div className="mt-4 space-y-3">
                 <Link
                   href="/register"
-                  className="block w-full text-center py-3 rounded-xl border-2 border-[var(--portal-primary,#B91C1C)] text-[var(--portal-primary,#B91C1C)] font-medium text-sm hover:bg-red-50 transition-colors"
+                  className="block w-full text-center py-3 rounded-[var(--md-sys-shape-full)] border-2 border-[var(--portal-primary,#B91C1C)] text-[var(--portal-primary,#B91C1C)] font-medium text-sm hover:bg-red-50 transition-colors"
                 >
                   ライセンスキーを使って新規登録
                 </Link>

@@ -48,7 +48,12 @@ type VisitRecord = {
   visitDate: string
   status: string
   note: string | null
+  purchaseAmount: number | null
+  billingAmount: number | null
   store: { id: string; name: string }
+  purchaseItems: { id: string; itemName: string; category: string; quantity: number; price: number }[]
+  workItems: { id: string; itemName: string; quantity: number; price: number }[]
+  salesContract: { id: string; createdAt: string } | null
 }
 
 type Stats = {
@@ -2677,14 +2682,78 @@ function MyPageContent() {
                             {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}
                           </span>
                           <StatusBadge status={visit.status as Status} />
+                          {visit.salesContract && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">契約書あり</span>
+                          )}
                         </div>
                         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
                           {visit.store.name}
                         </p>
+                        {visit.purchaseAmount != null && visit.purchaseAmount > 0 && (
+                          <p className="text-sm font-semibold text-[#B91C1C] mt-1">
+                            買取金額: ¥{visit.purchaseAmount.toLocaleString()}
+                          </p>
+                        )}
                         {visit.note && (
                           <p className="text-xs text-[var(--md-sys-color-outline)] mt-0.5">
                             {visit.note}
                           </p>
+                        )}
+
+                        {/* 売買内容詳細（purchaseItems がある場合） */}
+                        {visit.purchaseItems && visit.purchaseItems.length > 0 && (
+                          <details className="mt-3">
+                            <summary className="text-xs text-[#B91C1C] font-medium cursor-pointer hover:underline">
+                              売買内容を確認
+                            </summary>
+                            <div className="mt-2 space-y-3">
+                              {/* 買取品目 */}
+                              <div className="bg-gray-50 rounded-lg p-3">
+                                <p className="text-xs font-semibold text-gray-700 mb-2">買取品目</p>
+                                <div className="space-y-1">
+                                  {visit.purchaseItems.map(item => (
+                                    <div key={item.id} className="flex justify-between text-xs text-gray-600">
+                                      <span>{item.itemName} <span className="text-gray-400">({item.category})</span> ×{item.quantity}</span>
+                                      <span className="font-medium">¥{(item.price * item.quantity).toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex justify-between text-xs font-bold text-gray-800 mt-2 pt-2 border-t border-gray-200">
+                                  <span>買取合計</span>
+                                  <span>¥{visit.purchaseItems.reduce((sum, it) => sum + it.price * it.quantity, 0).toLocaleString()}</span>
+                                </div>
+                              </div>
+
+                              {/* 作業品目 */}
+                              {visit.workItems && visit.workItems.length > 0 && (
+                                <div className="bg-gray-50 rounded-lg p-3">
+                                  <p className="text-xs font-semibold text-gray-700 mb-2">作業品目</p>
+                                  <div className="space-y-1">
+                                    {visit.workItems.map(item => (
+                                      <div key={item.id} className="flex justify-between text-xs text-gray-600">
+                                        <span>{item.itemName} ×{item.quantity}</span>
+                                        <span className="font-medium">¥{(item.price * item.quantity).toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="flex justify-between text-xs font-bold text-gray-800 mt-2 pt-2 border-t border-gray-200">
+                                    <span>作業費合計</span>
+                                    <span>¥{visit.workItems.reduce((sum, it) => sum + it.price * it.quantity, 0).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* お支払い金額 */}
+                              {visit.purchaseAmount != null && (
+                                <div className="bg-[#B91C1C]/5 rounded-lg p-3 flex justify-between items-center">
+                                  <span className="text-xs font-bold text-gray-800">お支払い金額</span>
+                                  <span className="text-base font-bold text-[#B91C1C]">
+                                    ¥{((visit.purchaseAmount || 0) - (visit.billingAmount || 0)).toLocaleString()}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </details>
                         )}
                       </div>
                     </div>

@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
       include: {
         user: { select: { id: true, name: true, address: true, phone: true } },
         store: { select: { id: true, name: true } },
-        salesContract: { select: { id: true } },
+        salesContract: { select: { id: true, createdAt: true } },
+        purchaseItems: { select: { id: true, itemName: true, category: true, quantity: true, price: true } },
+        workItems: { select: { id: true, itemName: true, quantity: true, price: true } },
       },
       orderBy: { visitDate: 'asc' },
       skip: (page - 1) * limit,

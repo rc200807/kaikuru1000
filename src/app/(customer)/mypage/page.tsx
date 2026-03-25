@@ -1478,10 +1478,37 @@ function MyPageContent() {
 
           {/* ─── Profile tab ─── */}
           {activeTab === 'profile' && (
-            <Card variant="elevated" padding="md">
-              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
-                プロフィール編集
-              </h2>
+            <div className="space-y-4">
+              {/* メニューカード */}
+              <Card variant="elevated" padding="none">
+                <div className="divide-y divide-gray-100">
+                  {[
+                    { key: 'id-document', label: '身分証明書', sub: user.idDocumentPath ? '提出済み' : '未提出', icon: '🪪', color: user.idDocumentPath ? 'text-green-600' : 'text-red-500' },
+                    { key: 'password', label: 'パスワード変更', sub: 'セキュリティ設定', icon: '🔒', color: 'text-gray-600' },
+                    { key: 'bank-account', label: '口座情報', sub: user.bankName ? `${user.bankName} ${user.branchName || ''}` : '未登録', icon: '🏦', color: user.bankName ? 'text-green-600' : 'text-amber-500' },
+                  ].map(item => (
+                    <button
+                      key={item.key}
+                      onClick={() => handleTabChange(item.key)}
+                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <span className="text-2xl">{item.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                        <p className={`text-xs ${item.color}`}>{item.sub}</p>
+                      </div>
+                      <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+
+              <Card variant="elevated" padding="md">
+                <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
+                  プロフィール編集
+                </h2>
               <form onSubmit={handleSaveProfile} className="space-y-5 max-w-lg">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <TextField
@@ -1539,6 +1566,7 @@ function MyPageContent() {
                 </Button>
               </form>
             </Card>
+            </div>
           )}
 
           {/* ─── Password tab ─── */}

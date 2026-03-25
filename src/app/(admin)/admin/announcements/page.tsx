@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import dynamic from 'next/dynamic'
@@ -58,12 +58,16 @@ function getPriorityInfo(priority: string) {
   return PRIORITY_OPTIONS.find(p => p.value === priority) || PRIORITY_OPTIONS[0]
 }
 
-export default function AdminAnnouncementsPage() {
+function AdminAnnouncementsContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [activeTab, setActiveTab] = useState<'announcements' | 'categories'>('announcements')
+  const [activeTab, setActiveTab] = useState<'announcements' | 'categories'>(() => {
+    const t = searchParams.get('tab')
+    return t === 'categories' ? 'categories' : 'announcements'
+  })
 
   // Announcements
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
@@ -238,6 +242,13 @@ export default function AdminAnnouncementsPage() {
 
   // === Derived ===
 
+  function handleTabSwitch(tab: 'announcements' | 'categories') {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    window.history.replaceState({}, '', url.toString())
+  }
+
   const detailAnnouncement = detailId ? announcements.find(a => a.id === detailId) : null
 
   function getCategoryDisplay(a: Announcement) {
@@ -282,7 +293,7 @@ export default function AdminAnnouncementsPage() {
           <button
             key={tab}
             onClick={() => {
-              setActiveTab(tab)
+              handleTabSwitch(tab)
               setShowForm(false)
               setShowCatForm(false)
               setDetailId(null)
@@ -710,5 +721,13 @@ export default function AdminAnnouncementsPage() {
         </>
       )}
     </div>
+  )
+}
+
+export default function AdminAnnouncementsPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner size="lg" fullPage />}>
+      <AdminAnnouncementsContent />
+    </Suspense>
   )
 }

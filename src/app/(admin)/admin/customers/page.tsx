@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -119,6 +119,20 @@ export default function AdminCustomersPage() {
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
 
+  // URL同期用: 復元フラグ（URL由来の初回openでtabリセットを抑止）
+  const restoringFromUrl = useRef(false)
+
+  // URL更新ヘルパー（history entryを増やさない）
+  const updateUrlParams = useCallback((params: Record<string, string | null>) => {
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === null) url.searchParams.delete(key)
+      else url.searchParams.set(key, value)
+    })
+    window.history.replaceState(null, '', url.toString())
+  }, [])
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
@@ -158,6 +172,29 @@ export default function AdminCustomersPage() {
     }
   }, [status, session, showInactive])
 
+  // URLから顧客ID・タブを復元
+  useEffect(() => {
+    if (loading || users.length === 0) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const customerId = params.get('customer')
+    const tab = params.get('tab') as DetailTab | null
+    if (customerId) {
+      const user = users.find(u => u.id === customerId)
+      if (user) {
+        if (tab && ['info', 'add', 'history'].includes(tab)) {
+          restoringFromUrl.current = true
+          setDetailTab(tab)
+        }
+        setDetailUser(user)
+      } else {
+        // ユーザーが見つからない場合はURLをクリア
+        updateUrlParams({ customer: null, tab: null })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
   async function loadMoreUsers() {
     setLoadingMore(true)
     const nextPage = usersPage + 1
@@ -179,7 +216,12 @@ export default function AdminCustomersPage() {
   // 顧客詳細モーダルを開いたときにスケジュール取得
   useEffect(() => {
     if (!detailUser) return
-    setDetailTab('info')
+    // URL復元時はtabをリセットしない
+    if (restoringFromUrl.current) {
+      restoringFromUrl.current = false
+    } else {
+      setDetailTab('info')
+    }
     setScheduleMsg(null)
     setScheduleForm({ storeId: detailUser.store?.id || '', visitDate: '', note: '' })
     setDetailSchedulesLoading(true)
@@ -286,6 +328,7 @@ export default function AdminCustomersPage() {
     setDetailUser(null)
     setDetailSchedules([])
     setScheduleMsg(null)
+    updateUrlParams({ customer: null, tab: null })
   }
 
   async function handleAddCustomer(e: React.FormEvent) {
@@ -604,7 +647,7 @@ export default function AdminCustomersPage() {
       header: '',
       render: (user) => (
         <div className="flex gap-2 flex-wrap">
-          <Button size="sm" onClick={() => setDetailUser(user)}>
+          <Button size="sm" onClick={() => { setDetailUser(user); updateUrlParams({ customer: user.id, tab: 'info' }) }}>
             詳細
           </Button>
           <Button
@@ -754,7 +797,7 @@ export default function AdminCustomersPage() {
                 { key: 'history', label: detailSchedules.length > 0 ? `訪問履歴（${detailSchedules.length}）` : '訪問履歴' },
               ]}
               activeKey={detailTab}
-              onChange={(key) => { setDetailTab(key as DetailTab); setScheduleMsg(null) }}
+              onChange={(key) => { setDetailTab(key as DetailTab); setScheduleMsg(null); updateUrlParams({ tab: key }) }}
               className="mb-4"
             />
 

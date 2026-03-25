@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment, Suspense } from 'react'
 import { useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
@@ -95,10 +95,19 @@ type DeliveryShipment = {
 }
 
 export default function MyPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <MyPageContent />
+    </Suspense>
+  )
+}
+
+function MyPageContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [user, setUser] = useState<UserData | null>(null)
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'dashboard')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -604,6 +613,9 @@ export default function MyPage() {
 
   function handleTabChange(tabKey: string) {
     setActiveTab(tabKey)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tabKey)
+    window.history.replaceState({}, '', url.toString())
     setMessage(null)
     if (tabKey === 'history' && !visitsLoaded) {
       setVisitsLoading(true)

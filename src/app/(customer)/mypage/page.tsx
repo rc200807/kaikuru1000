@@ -146,6 +146,19 @@ export default function MyPage() {
   const [aiAppraisalRemaining, setAiAppraisalRemaining] = useState<number | null>(null)
   const [apprasingMemoId, setApprasingMemoId] = useState<string | null>(null)
 
+  // 訪問リクエスト
+  const [visitRequests, setVisitRequests] = useState<any[]>([])
+  const [visitRequestsLoaded, setVisitRequestsLoaded] = useState(false)
+  const [showRequestForm, setShowRequestForm] = useState(false)
+  const [requestForm, setRequestForm] = useState({
+    candidate1Date: '', candidate1Start: '', candidate1End: '',
+    candidate2Date: '', candidate2Start: '', candidate2End: '',
+    candidate3Date: '', candidate3Start: '', candidate3End: '',
+    customerNote: '',
+  })
+  const [requestSubmitting, setRequestSubmitting] = useState(false)
+  const [requestMsg, setRequestMsg] = useState<{type:'success'|'error',text:string}|null>(null)
+
   // 宅配送付履歴
   const [shipments, setShipments] = useState<DeliveryShipment[]>([])
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
@@ -581,6 +594,7 @@ export default function MyPage() {
     : [
         { key: 'dashboard',   label: 'ダッシュボード' },
         { key: 'memos',       label: '買取トライ' },
+        { key: 'visit-request', label: '訪問リクエスト' },
         { key: 'history',     label: '訪問履歴' },
         { key: 'profile',     label: 'プロフィール' },
         { key: 'password',    label: 'パスワード' },
@@ -627,6 +641,12 @@ export default function MyPage() {
         .then(data => { if (data) setAiAppraisalRemaining(data.remaining) })
         .catch(() => {})
     }
+    if (tabKey === 'visit-request' && !visitRequestsLoaded) {
+      fetch('/api/visit-requests')
+        .then(r => r.ok ? r.json() : { requests: [] })
+        .then(data => { setVisitRequests(Array.isArray(data) ? data : data.requests || []); setVisitRequestsLoaded(true) })
+        .catch(() => setVisitRequestsLoaded(true))
+    }
     if (tabKey === 'shipments' && !shipmentsLoaded) {
       setShipmentsLoading(true)
       fetch('/api/delivery-shipments')
@@ -667,6 +687,59 @@ export default function MyPage() {
       setMemosHasMore(nextPage * MEMOS_LIMIT < (data?.total ?? 0))
     } catch { /* ignore */ }
     setMemosLoadingMore(false)
+  }
+
+  // 訪問リクエスト送信
+  async function handleSubmitRequest(e: React.FormEvent) {
+    e.preventDefault()
+    if (!requestForm.candidate1Date) return
+    setRequestSubmitting(true)
+    setRequestMsg(null)
+    try {
+      const res = await fetch('/api/visit-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestForm),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setVisitRequests(prev => [created, ...prev])
+        setRequestForm({
+          candidate1Date: '', candidate1Start: '', candidate1End: '',
+          candidate2Date: '', candidate2Start: '', candidate2End: '',
+          candidate3Date: '', candidate3Start: '', candidate3End: '',
+          customerNote: '',
+        })
+        setShowRequestForm(false)
+        setRequestMsg({ type: 'success', text: '訪問リクエストを送信しました' })
+      } else {
+        const d = await res.json()
+        setRequestMsg({ type: 'error', text: d.error || '送信に失敗しました' })
+      }
+    } catch {
+      setRequestMsg({ type: 'error', text: '送信に失敗しました' })
+    }
+    setRequestSubmitting(false)
+  }
+
+  // 訪問リクエストアクション（accept_counter, decline_counter, cancel）
+  async function handleRequestAction(id: string, action: string) {
+    try {
+      const res = await fetch(`/api/visit-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setVisitRequests(prev => prev.map(r => r.id === id ? updated : r))
+        setRequestMsg({ type: 'success', text: action === 'cancel' ? 'キャンセルしました' : action === 'accept_counter' ? '日程を承認しました' : '日程を辞退しました' })
+      } else {
+        setRequestMsg({ type: 'error', text: '操作に失敗しました' })
+      }
+    } catch {
+      setRequestMsg({ type: 'error', text: '操作に失敗しました' })
+    }
   }
 
   // 月次グラフ最大値
@@ -799,7 +872,7 @@ export default function MyPage() {
                     label: '定期訪問の予約',
                     sub: 'お近くの店舗が定期訪問に伺います',
                     done: user.visitSchedules.length > 0,
-                    action: () => handleTabChange('dashboard'),
+                    action: () => handleTabChange('visit-request'),
                     icon: (
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
@@ -1717,6 +1790,178 @@ export default function MyPage() {
                 </Button>
               </form>
             </Card>
+          )}
+
+          {/* ─── Visit Request tab ─── */}
+          {activeTab === 'visit-request' && (
+            <div className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">訪問リクエスト</h2>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">希望日時を送信して訪問を依頼しましょう</p>
+                </div>
+                <div className="flex-shrink-0">
+                  <Button size="sm" onClick={() => { setShowRequestForm(v => !v); setRequestMsg(null) }}>
+                    {showRequestForm ? 'キャンセル' : '+ 新しい訪問リクエスト'}
+                  </Button>
+                </div>
+              </div>
+
+              {requestMsg && (
+                <MessageBanner severity={requestMsg.type} dismissible onDismiss={() => setRequestMsg(null)}>
+                  {requestMsg.text}
+                </MessageBanner>
+              )}
+
+              {/* リクエストフォーム */}
+              {showRequestForm && (
+                <Card variant="elevated" padding="md">
+                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">希望日時を入力</h3>
+                  <form onSubmit={handleSubmitRequest} className="space-y-4">
+                    {[
+                      { n: 1, label: '第1希望' },
+                      { n: 2, label: '第2希望' },
+                      { n: 3, label: '第3希望' },
+                    ].map(({ n, label }) => (
+                      <div key={n}>
+                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">{label}{n === 1 && <span className="text-[var(--md-sys-color-error)]"> *</span>}</p>
+                        <div className="flex gap-2 flex-wrap">
+                          <div className="flex-1 min-w-[130px]">
+                            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">日付</label>
+                            <input
+                              type="date"
+                              required={n === 1}
+                              value={(requestForm as any)[`candidate${n}Date`]}
+                              onChange={e => setRequestForm(prev => ({ ...prev, [`candidate${n}Date`]: e.target.value }))}
+                              className="w-full mt-0.5 px-3 py-2 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
+                            />
+                          </div>
+                          <div className="min-w-[100px]">
+                            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">開始</label>
+                            <input
+                              type="time"
+                              value={(requestForm as any)[`candidate${n}Start`]}
+                              onChange={e => setRequestForm(prev => ({ ...prev, [`candidate${n}Start`]: e.target.value }))}
+                              className="w-full mt-0.5 px-3 py-2 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
+                            />
+                          </div>
+                          <div className="min-w-[100px]">
+                            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">終了</label>
+                            <input
+                              type="time"
+                              value={(requestForm as any)[`candidate${n}End`]}
+                              onChange={e => setRequestForm(prev => ({ ...prev, [`candidate${n}End`]: e.target.value }))}
+                              className="w-full mt-0.5 px-3 py-2 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <TextField
+                      label="備考（任意）"
+                      value={requestForm.customerNote}
+                      onChange={v => setRequestForm(prev => ({ ...prev, customerNote: v }))}
+                      placeholder="希望や注意事項があればご記入ください"
+                      rows={2}
+                    />
+                    <div className="flex gap-3">
+                      <Button type="submit" disabled={requestSubmitting || !requestForm.candidate1Date} loading={requestSubmitting}>
+                        {requestSubmitting ? '送信中...' : 'リクエストを送信'}
+                      </Button>
+                      <Button type="button" variant="tonal" onClick={() => setShowRequestForm(false)}>
+                        キャンセル
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+              )}
+
+              {/* リクエスト一覧 */}
+              {!visitRequestsLoaded ? (
+                <div className="py-8">
+                  <LoadingSpinner size="md" label="読み込み中..." className="justify-center" />
+                </div>
+              ) : visitRequests.length === 0 ? (
+                <EmptyState
+                  icon={
+                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  }
+                  title="訪問リクエストがありません"
+                  description="「新しい訪問リクエスト」から希望日時を送信しましょう"
+                />
+              ) : (
+                <div className="space-y-3">
+                  {visitRequests.map(req => {
+                    const statusMap: Record<string, { color: string; label: string }> = {
+                      pending:            { color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300', label: '待機中' },
+                      approved:           { color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: '承認済み' },
+                      counter_proposed:   { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300', label: '日程変更の提案あり' },
+                      customer_accepted:  { color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: '確定' },
+                      customer_declined:  { color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300', label: '辞退' },
+                      cancelled:          { color: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400', label: 'キャンセル' },
+                    }
+                    const st = statusMap[req.status] || { color: 'bg-gray-100 text-gray-600', label: req.status }
+                    const fmtDate = (d: string | null) => d ? format(new Date(d), 'M/d（E）', { locale: ja }) : '-'
+                    const fmtTime = (s: string | null, e: string | null) => {
+                      if (!s && !e) return ''
+                      return ` ${s || '?'}〜${e || '?'}`
+                    }
+                    return (
+                      <Card key={req.id} variant="outlined" padding="md">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            {format(new Date(req.createdAt), 'yyyy/M/d', { locale: ja })}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          <p><span className="text-[var(--md-sys-color-on-surface-variant)]">第1希望:</span> {fmtDate(req.candidate1Date)}{fmtTime(req.candidate1Start, req.candidate1End)}</p>
+                          {req.candidate2Date && <p><span className="text-[var(--md-sys-color-on-surface-variant)]">第2希望:</span> {fmtDate(req.candidate2Date)}{fmtTime(req.candidate2Start, req.candidate2End)}</p>}
+                          {req.candidate3Date && <p><span className="text-[var(--md-sys-color-on-surface-variant)]">第3希望:</span> {fmtDate(req.candidate3Date)}{fmtTime(req.candidate3Start, req.candidate3End)}</p>}
+                        </div>
+
+                        {/* カウンター提案 */}
+                        {req.status === 'counter_proposed' && req.counterDate && (
+                          <div className="mt-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800">
+                            <p className="text-xs font-bold text-yellow-800 dark:text-yellow-300 mb-1">店舗からの日程提案</p>
+                            <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                              {fmtDate(req.counterDate)}{fmtTime(req.counterStart, req.counterEnd)}
+                            </p>
+                            {req.storeNote && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">{req.storeNote}</p>}
+                            <div className="flex gap-2 mt-3">
+                              <Button size="sm" onClick={() => handleRequestAction(req.id, 'accept_counter')}>承認する</Button>
+                              <Button size="sm" variant="tonal" onClick={() => handleRequestAction(req.id, 'decline_counter')}>辞退する</Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {req.customerNote && (
+                          <p className="mt-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            <span className="font-medium">備考:</span> {req.customerNote}
+                          </p>
+                        )}
+                        {req.storeNote && req.status !== 'counter_proposed' && (
+                          <p className="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            <span className="font-medium">店舗メモ:</span> {req.storeNote}
+                          </p>
+                        )}
+
+                        {/* キャンセルボタン */}
+                        {(req.status === 'pending' || req.status === 'counter_proposed') && (
+                          <div className="mt-3 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                            <Button size="sm" variant="text" onClick={() => { if (confirm('このリクエストをキャンセルしますか？')) handleRequestAction(req.id, 'cancel') }}>
+                              キャンセル
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ─── Visit History tab ─── */}

@@ -59,6 +59,13 @@ export default function StoreSchedulePage() {
   const [formData, setFormData] = useState({ userId: '', visitDate: '', note: '' })
   const [saving, setSaving] = useState(false)
 
+  // 訪問リクエスト
+  const [visitRequests, setVisitRequests] = useState<any[]>([])
+  const [visitRequestsLoading, setVisitRequestsLoading] = useState(true)
+  const [counterModal, setCounterModal] = useState<{requestId:string, customerName:string}|null>(null)
+  const [counterForm, setCounterForm] = useState({date:'', start:'', end:'', note:''})
+  const [counterSubmitting, setCounterSubmitting] = useState(false)
+
   // 訪問ステータス（動的取得）
   const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
   const STATUS_OPTIONS = visitStatuses.length > 0
@@ -101,6 +108,13 @@ export default function StoreSchedulePage() {
   }, [])
 
   useEffect(() => {
+    fetch('/api/visit-requests?status=pending,counter_proposed')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { setVisitRequests(Array.isArray(data) ? data : data.requests || []); setVisitRequestsLoading(false) })
+      .catch(() => setVisitRequestsLoading(false))
+  }, [])
+
+  useEffect(() => {
     if (status === 'authenticated') {
       const storeId = (session.user as any).id
       Promise.all([
@@ -132,6 +146,58 @@ export default function StoreSchedulePage() {
       setSchedulesHasMore(nextPage * SCHEDULES_LIMIT < (data?.total ?? 0))
     } catch { /* ignore */ }
     setLoadingMore(false)
+  }
+
+  async function handleApprove(requestId: string, candidate: any) {
+    const res = await fetch(`/api/visit-requests/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'approve', approvedCandidate: candidate }),
+    })
+    if (res.ok) {
+      setVisitRequests(prev => prev.filter(r => r.id !== requestId))
+      // refresh schedules
+      const storeId = (session?.user as any).id
+      fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}`)
+        .then(r => r.json())
+        .then(schedData => {
+          const schedList = schedData?.schedules ?? (Array.isArray(schedData) ? schedData : [])
+          setSchedules(schedList)
+          setSchedulesTotal(schedData?.total ?? schedList.length)
+          setSchedulesPage(1)
+          setSchedulesHasMore((schedData?.total ?? schedList.length) > SCHEDULES_LIMIT)
+        })
+      setMessage({ type: 'success', text: '訪問リクエストを承認しました' })
+    } else {
+      setMessage({ type: 'error', text: '承認に失敗しました' })
+    }
+  }
+
+  async function handleCounterPropose(e: React.FormEvent) {
+    e.preventDefault()
+    if (!counterModal) return
+    setCounterSubmitting(true)
+    const res = await fetch(`/api/visit-requests/${counterModal.requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'counter_propose',
+        counterDate: counterForm.date,
+        counterStart: counterForm.start,
+        counterEnd: counterForm.end,
+        storeNote: counterForm.note,
+      }),
+    })
+    setCounterSubmitting(false)
+    if (res.ok) {
+      const updated = await res.json()
+      setVisitRequests(prev => prev.map(r => r.id === counterModal.requestId ? { ...r, ...updated, status: 'counter_proposed' } : r))
+      setCounterModal(null)
+      setCounterForm({ date: '', start: '', end: '', note: '' })
+      setMessage({ type: 'success', text: '別の日程を提案しました' })
+    } else {
+      setMessage({ type: 'error', text: '提案に失敗しました' })
+    }
   }
 
   async function handleStatusChange(scheduleId: string, newStatus: string) {
@@ -264,6 +330,72 @@ export default function StoreSchedulePage() {
           >
             {message.text}
           </MessageBanner>
+        )}
+
+        {/* 訪問リクエスト */}
+        {!visitRequestsLoading && visitRequests.length > 0 && (
+          <section className="mb-8">
+            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4 flex items-center gap-2">
+              訪問リクエスト
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold rounded-full bg-[var(--portal-primary)] text-white">
+                {visitRequests.length}
+              </span>
+            </h3>
+            <div className="space-y-3">
+              {visitRequests.map(req => (
+                <Card key={req.id} variant="elevated" padding="none">
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{req.user?.name || req.customerName} 様</p>
+                        {(req.user?.phone || req.customerPhone) && (
+                          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{req.user?.phone || req.customerPhone}</p>
+                        )}
+                        {(req.user?.address || req.customerAddress) && (
+                          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{req.user?.address || req.customerAddress}</p>
+                        )}
+                      </div>
+                      {req.status === 'counter_proposed' && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800">
+                          お客様の返答待ち
+                        </span>
+                      )}
+                    </div>
+                    {req.customerNote && (
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
+                        💬 {req.customerNote}
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      {(req.candidates || []).map((c: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between gap-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
+                          <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                            {format(new Date(c.date), 'M/d（E）', { locale: ja })} {c.startTime}〜{c.endTime}
+                          </span>
+                          {req.status !== 'counter_proposed' && (
+                            <Button size="sm" onClick={() => handleApprove(req.id, c)}>
+                              この日程で承認
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {req.status !== 'counter_proposed' && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          onClick={() => setCounterModal({ requestId: req.id, customerName: req.user?.name || req.customerName })}
+                        >
+                          別の日程を提案
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* 今後の予定 */}
@@ -585,6 +717,57 @@ export default function StoreSchedulePage() {
             </form>
           </>
         )}
+      </Modal>
+
+      {/* 別日程提案モーダル */}
+      <Modal
+        open={!!counterModal}
+        onClose={() => { setCounterModal(null); setCounterForm({ date: '', start: '', end: '', note: '' }) }}
+        title={`別の日程を提案 — ${counterModal?.customerName || ''} 様`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="text" onClick={() => { setCounterModal(null); setCounterForm({ date: '', start: '', end: '', note: '' }) }}>キャンセル</Button>
+            <Button type="submit" loading={counterSubmitting} onClick={() => {
+              const form = document.getElementById('counter-form') as HTMLFormElement
+              form?.requestSubmit()
+            }}>
+              {counterSubmitting ? '送信中...' : '提案する'}
+            </Button>
+          </>
+        }
+      >
+        <form id="counter-form" onSubmit={handleCounterPropose} className="space-y-4">
+          <TextField
+            label="訪問日"
+            type="date"
+            value={counterForm.date}
+            onChange={v => setCounterForm({ ...counterForm, date: v })}
+            required
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <TextField
+              label="開始時間"
+              type="time"
+              value={counterForm.start}
+              onChange={v => setCounterForm({ ...counterForm, start: v })}
+              required
+            />
+            <TextField
+              label="終了時間"
+              type="time"
+              value={counterForm.end}
+              onChange={v => setCounterForm({ ...counterForm, end: v })}
+              required
+            />
+          </div>
+          <TextField
+            label="メモ（任意）"
+            value={counterForm.note}
+            onChange={v => setCounterForm({ ...counterForm, note: v })}
+            placeholder="ご都合が合わず、別日程をご提案します"
+          />
+        </form>
       </Modal>
     </>
   )

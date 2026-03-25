@@ -51,6 +51,7 @@ model User {
   accountNumber  String?
   accountHolder  String?
   visitSchedules VisitSchedule[]
+  visitRequests     VisitRequest[]
   purchaseMemos     PurchaseMemo[]
   deliveryShipments DeliveryShipment[]
   createdAt      DateTime  @default(now())
@@ -82,6 +83,7 @@ model Store {
   lockPin             String?   // 画面ロック暗証番号（4〜6桁）
   customers  User[]
   visitSchedules VisitSchedule[]
+  visitRequests  VisitRequest[]
   members    StoreMember[]
   communityThreads   CommunityThread[]
   communityReplies   CommunityReply[]
@@ -503,4 +505,36 @@ model CommunityReaction {
 
   @@unique([threadId, storeId, emoji])
   @@index([threadId])
+}
+
+// 訪問リクエスト（顧客からの訪問希望）
+model VisitRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id])
+  candidate1Date  DateTime
+  candidate1Start String?
+  candidate1End   String?
+  candidate2Date  DateTime
+  candidate2Start String?
+  candidate2End   String?
+  candidate3Date  DateTime
+  candidate3Start String?
+  candidate3End   String?
+  status          String   @default("pending") // pending, approved, counter_proposed, customer_accepted, customer_declined, cancelled
+  approvedCandidate Int?
+  counterDate     DateTime?
+  counterStart    String?
+  counterEnd      String?
+  storeNote       String?
+  customerNote    String?
+  visitScheduleId String?  @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([storeId])
+  @@index([status])
 }

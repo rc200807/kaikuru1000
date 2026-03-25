@@ -195,6 +195,40 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // マジックリンクログイン（顧客用）
+    CredentialsProvider({
+      id: 'magic-link',
+      name: 'マジックリンク',
+      credentials: {
+        token: { label: 'Token', type: 'text' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token) return null
+
+        const magicLink = await prisma.magicLink.findUnique({
+          where: { token: credentials.token },
+          include: { user: true },
+        })
+
+        if (!magicLink || magicLink.usedAt || magicLink.expiresAt < new Date()) {
+          return null
+        }
+
+        // トークンを使用済みにマーク
+        await prisma.magicLink.update({
+          where: { id: magicLink.id },
+          data: { usedAt: new Date() },
+        })
+
+        return {
+          id: magicLink.user.id,
+          email: magicLink.user.email || '',
+          name: magicLink.user.name,
+          avatar: null,
+          role: 'customer' as const,
+        }
+      },
+    }),
   ],
   callbacks: {
     async jwt({ token, user, trigger, session: updatedSession }) {

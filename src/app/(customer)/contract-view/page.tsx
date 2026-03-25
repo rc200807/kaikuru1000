@@ -451,20 +451,11 @@ function ContractViewContent() {
             マイページでは、契約履歴の確認や各種設定が行えます
           </p>
           <a
-            href={contract.user.email ? '/login' : '#'}
-            onClick={(e) => {
-              if (!contract.user.email) {
-                e.preventDefault()
-                alert('マイページをご利用いただくには、メールアドレスの登録が必要です。ページ上部からご登録ください。')
-              }
-            }}
+            href="/mypage"
             className="inline-block w-full max-w-xs py-3 rounded-full bg-[#B91C1C] text-white font-medium text-sm hover:bg-[#991B1B] transition-colors"
           >
             マイページへ
           </a>
-          {!contract.user.email && (
-            <p className="text-xs text-gray-400 mt-2">※ メールアドレス登録後にご利用いただけます</p>
-          )}
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react'
 import { use } from 'react'
 
 export default function MagicLinkPage({ params }: { params: Promise<{ token: string }> }) {
@@ -13,30 +14,35 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
   useEffect(() => {
     async function verify() {
       try {
-        const res = await fetch('/api/magic-link/verify', {
+        // まずマジックリンクの情報を取得（contractIdなど）
+        const infoRes = await fetch('/api/magic-link/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, peek: true }),
         })
+        const infoData = await infoRes.json()
 
-        const data = await res.json()
-
-        if (!res.ok) {
-          setError(data.error || 'リンクの検証に失敗しました')
+        if (!infoRes.ok) {
+          setError(infoData.error || 'リンクの検証に失敗しました')
           setVerifying(false)
           return
         }
 
-        // Store magic auth in sessionStorage
-        sessionStorage.setItem('magicAuth', JSON.stringify({
-          userId: data.userId,
-          contractId: data.contractId,
-          user: data.user,
-        }))
+        // NextAuthでログイン（本物のセッション作成）
+        const result = await signIn('magic-link', {
+          token,
+          redirect: false,
+        })
 
-        // Redirect to contract view or mypage
-        if (data.contractId) {
-          router.replace(`/contract-view?id=${data.contractId}`)
+        if (result?.error || !result?.ok) {
+          setError('ログインに失敗しました。リンクが期限切れの可能性があります。')
+          setVerifying(false)
+          return
+        }
+
+        // contractIdがある場合は契約書閲覧ページへ、なければマイページへ
+        if (infoData.contractId) {
+          router.replace(`/contract-view?id=${infoData.contractId}`)
         } else {
           router.replace('/mypage')
         }
@@ -54,7 +60,7 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block w-10 h-10 border-4 border-gray-200 border-t-[#B91C1C] rounded-full animate-spin mb-4" />
-          <p className="text-gray-600 text-sm">リンクを確認中...</p>
+          <p className="text-gray-600 text-sm">ログイン中...</p>
         </div>
       </div>
     )

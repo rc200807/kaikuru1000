@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
-    const { token } = await request.json()
+    const { token, peek } = await request.json()
 
     if (!token || typeof token !== 'string') {
       return NextResponse.json({ error: 'token は必須です' }, { status: 400 })
@@ -36,11 +36,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'リンクの有効期限が切れています' }, { status: 400 })
     }
 
-    // 使用済みにする
-    await prisma.magicLink.update({
-      where: { id: magicLink.id },
-      data: { usedAt: new Date() },
-    })
+    // peek=true の場合はトークンを消費せず情報だけ返す
+    if (!peek) {
+      await prisma.magicLink.update({
+        where: { id: magicLink.id },
+        data: { usedAt: new Date() },
+      })
+    }
 
     return NextResponse.json({
       userId: magicLink.userId,

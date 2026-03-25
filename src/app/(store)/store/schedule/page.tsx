@@ -368,18 +368,24 @@ export default function StoreSchedulePage() {
                       </p>
                     )}
                     <div className="space-y-2">
-                      {(req.candidates || []).map((c: any, i: number) => (
-                        <div key={i} className="flex items-center justify-between gap-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
-                          <span className="text-sm text-[var(--md-sys-color-on-surface)]">
-                            {format(new Date(c.date), 'M/d（E）', { locale: ja })} {c.startTime}〜{c.endTime}
-                          </span>
-                          {req.status !== 'counter_proposed' && (
-                            <Button size="sm" onClick={() => handleApprove(req.id, c)}>
-                              この日程で承認
-                            </Button>
-                          )}
-                        </div>
-                      ))}
+                      {[1,2,3].map(n => {
+                        const d = req[`candidate${n}Date`]
+                        const s = req[`candidate${n}Start`]
+                        const e = req[`candidate${n}End`]
+                        if (!d) return null
+                        return (
+                          <div key={n} className="flex items-center justify-between gap-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
+                            <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                              第{n}希望: {format(new Date(d), 'M/d（E）', { locale: ja })} {s}〜{e}
+                            </span>
+                            {req.status !== 'counter_proposed' && (
+                              <Button size="sm" onClick={() => handleApprove(req.id, n)}>
+                                この日程で承認
+                              </Button>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                     {req.status !== 'counter_proposed' && (
                       <div className="mt-3">

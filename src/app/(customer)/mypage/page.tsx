@@ -249,6 +249,14 @@ function MyPageContent() {
     }
   }, [status, session])
 
+  // URL初期タブのデータ取得をトリガー（初回ロード時）
+  useEffect(() => {
+    if (!loading && status === 'authenticated' && activeTab !== 'dashboard') {
+      handleTabChange(activeTab)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, status])
+
   // ダッシュボードタブ表示時に統計をロード
   useEffect(() => {
     if (activeTab === 'dashboard' && !statsLoaded && status === 'authenticated') {

@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-/** マジックリンク経由で契約データを取得する（セッション不要） */
+/** 契約データを取得する（NextAuthセッション or userIdパラメータ） */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const visitId = searchParams.get('visitId')
-  const userId = searchParams.get('userId')
+  let userId = searchParams.get('userId')
+
+  // NextAuthセッションがあればそこからuserIdを取得
+  if (!userId) {
+    const session = await getServerSession(authOptions)
+    const sessionUser = session?.user as any
+    if (sessionUser?.role === 'customer') {
+      userId = sessionUser.id
+    }
+  }
 
   if (!visitId || !userId) {
     return NextResponse.json({ error: 'パラメータが不足しています' }, { status: 400 })

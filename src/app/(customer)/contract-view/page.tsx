@@ -62,9 +62,12 @@ function ContractViewContent() {
   const [emailSuccess, setEmailSuccess] = useState(false)
   const [emailError, setEmailError] = useState('')
 
-  const fetchContract = useCallback(async (vId: string, userId: string) => {
+  const fetchContract = useCallback(async (vId: string, userId?: string) => {
     try {
-      const res = await fetch(`/api/magic-link/contract?visitId=${vId}&userId=${userId}`)
+      const url = userId
+        ? `/api/magic-link/contract?visitId=${vId}&userId=${userId}`
+        : `/api/magic-link/contract?visitId=${vId}`
+      const res = await fetch(url)
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || '契約データの取得に失敗しました')
@@ -79,29 +82,33 @@ function ContractViewContent() {
   }, [])
 
   useEffect(() => {
-    // Check magic auth
-    const stored = sessionStorage.getItem('magicAuth')
-    if (!stored) {
-      router.replace('/login')
+    // まずsessionStorageのmagicAuthを確認
+    const stored = typeof window !== 'undefined' ? sessionStorage.getItem('magicAuth') : null
+    if (stored) {
+      try {
+        const auth = JSON.parse(stored)
+        setMagicAuth(auth)
+        const id = visitId || auth.contractId
+        if (!id) {
+          setError('契約IDが見つかりません')
+          setLoading(false)
+          return
+        }
+        fetchContract(id, auth.userId)
+        return
+      } catch { /* fall through */ }
+    }
+
+    // magicAuthがない場合、visitIdがあればNextAuthセッションで取得
+    if (visitId) {
+      fetchContract(visitId)
       return
     }
 
-    try {
-      const auth = JSON.parse(stored)
-      setMagicAuth(auth)
-
-      const id = visitId || auth.contractId
-      if (!id) {
-        setError('契約IDが指定されていません')
-        setLoading(false)
-        return
-      }
-
-      fetchContract(id, auth.userId)
-    } catch {
-      router.replace('/login')
-    }
-  }, [visitId, router, fetchContract])
+    // どちらもない場合はログインページへ
+    router.replace('/login')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitId])
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault()

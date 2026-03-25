@@ -18,23 +18,52 @@ export const authOptions: NextAuthOptions = {
       id: 'customer',
       name: '顧客',
       credentials: {
-        email: { label: 'メールアドレス', type: 'email' },
+        email: { label: 'メールアドレスまたは電話番号', type: 'text' },
         password: { label: 'パスワード', type: 'password' },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        const key = `customer:${credentials.email}`
+        const loginId = credentials.email.trim()
+        const key = `customer:${loginId}`
         const { blocked, remainingMs } = await isLoginBlocked(key)
         if (blocked) {
           const mins = Math.ceil((remainingMs ?? 0) / 60000)
           throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-          include: { store: true },
-        })
+        // メールアドレスか電話番号かを判定して検索
+        const isEmail = loginId.includes('@')
+        let user: any = null
+        if (isEmail) {
+          user = await prisma.user.findUnique({
+            where: { email: loginId },
+            include: { store: true },
+          })
+        } else {
+          // 電話番号で検索（複数ヒットする場合はパスワード照合で絞り込み）
+          const users = await prisma.user.findMany({
+            where: { phone: loginId },
+            include: { store: true },
+          })
+          for (const u of users) {
+            const valid = await bcrypt.compare(credentials.password, u.password)
+            if (valid) {
+              await resetLoginFailures(key)
+              return {
+                id: u.id,
+                email: u.email || '',
+                name: u.name,
+                avatar: null,
+                role: 'customer' as const,
+              }
+            }
+          }
+          if (users.length > 0) {
+            await recordLoginFailure(key)
+            return null
+          }
+        }
 
         if (!user) {
           await recordLoginFailure(key)
@@ -50,7 +79,7 @@ export const authOptions: NextAuthOptions = {
         await resetLoginFailures(key)
         return {
           id: user.id,
-          email: user.email,
+          email: user.email || '',
           name: user.name,
           avatar: null,
           role: 'customer' as const,

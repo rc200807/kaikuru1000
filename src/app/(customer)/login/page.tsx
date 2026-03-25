@@ -51,7 +51,7 @@ export default function CustomerLoginPage() {
     setLoading(false)
 
     if (result?.error) {
-      setError('メールアドレスまたはパスワードが間違っています')
+      setError('メールアドレス（または電話番号）かパスワードが間違っています')
     } else {
       router.push('/mypage')
     }
@@ -119,12 +119,12 @@ export default function CustomerLoginPage() {
             <>
               <form onSubmit={handleSubmit} className="space-y-5">
                 <TextField
-                  label="メールアドレス"
-                  type="email"
+                  label="メールアドレスまたは電話番号"
+                  type="text"
                   value={email}
                   onChange={setEmail}
                   required
-                  placeholder="example@email.com"
+                  placeholder="example@email.com / 090-1234-5678"
                 />
 
                 <TextField

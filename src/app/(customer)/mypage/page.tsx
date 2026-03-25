@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -1813,67 +1813,15 @@ export default function MyPage() {
                 </MessageBanner>
               )}
 
-              {/* リクエストフォーム */}
+              {/* リクエストフォーム（カレンダー+2時間枠） */}
               {showRequestForm && (
-                <Card variant="elevated" padding="md">
-                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">希望日時を入力</h3>
-                  <form onSubmit={handleSubmitRequest} className="space-y-4">
-                    {[
-                      { n: 1, label: '第1希望' },
-                      { n: 2, label: '第2希望' },
-                      { n: 3, label: '第3希望' },
-                    ].map(({ n, label }) => (
-                      <div key={n}>
-                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">{label}{n === 1 && <span className="text-[var(--md-sys-color-error)]"> *</span>}</p>
-                        <div className="flex gap-2 flex-wrap">
-                          <div className="flex-1 min-w-[130px]">
-                            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">日付</label>
-                            <input
-                              type="date"
-                              required={n === 1}
-                              value={(requestForm as any)[`candidate${n}Date`]}
-                              onChange={e => setRequestForm(prev => ({ ...prev, [`candidate${n}Date`]: e.target.value }))}
-                              className="w-full mt-0.5 px-3 py-2 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
-                            />
-                          </div>
-                          <div className="min-w-[100px]">
-                            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">開始</label>
-                            <input
-                              type="time"
-                              value={(requestForm as any)[`candidate${n}Start`]}
-                              onChange={e => setRequestForm(prev => ({ ...prev, [`candidate${n}Start`]: e.target.value }))}
-                              className="w-full mt-0.5 px-3 py-2 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
-                            />
-                          </div>
-                          <div className="min-w-[100px]">
-                            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">終了</label>
-                            <input
-                              type="time"
-                              value={(requestForm as any)[`candidate${n}End`]}
-                              onChange={e => setRequestForm(prev => ({ ...prev, [`candidate${n}End`]: e.target.value }))}
-                              className="w-full mt-0.5 px-3 py-2 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <TextField
-                      label="備考（任意）"
-                      value={requestForm.customerNote}
-                      onChange={v => setRequestForm(prev => ({ ...prev, customerNote: v }))}
-                      placeholder="希望や注意事項があればご記入ください"
-                      rows={2}
-                    />
-                    <div className="flex gap-3">
-                      <Button type="submit" disabled={requestSubmitting || !requestForm.candidate1Date} loading={requestSubmitting}>
-                        {requestSubmitting ? '送信中...' : 'リクエストを送信'}
-                      </Button>
-                      <Button type="button" variant="tonal" onClick={() => setShowRequestForm(false)}>
-                        キャンセル
-                      </Button>
-                    </div>
-                  </form>
-                </Card>
+                <VisitRequestCalendarForm
+                  requestForm={requestForm}
+                  setRequestForm={setRequestForm}
+                  onSubmit={handleSubmitRequest}
+                  submitting={requestSubmitting}
+                  onCancel={() => setShowRequestForm(false)}
+                />
               )}
 
               {/* リクエスト一覧 */}
@@ -2674,5 +2622,266 @@ function MemoCard({
         </div>
       )}
     </>
+  )
+}
+
+/** カレンダー+2時間枠で訪問リクエストを入力するフォーム */
+function VisitRequestCalendarForm({
+  requestForm, setRequestForm, onSubmit, submitting, onCancel,
+}: {
+  requestForm: any
+  setRequestForm: (fn: (prev: any) => any) => void
+  onSubmit: (e: React.FormEvent) => void
+  submitting: boolean
+  onCancel: () => void
+}) {
+  const [bizHours, setBizHours] = useState({ start: '10:00', end: '19:00', days: [1,2,3,4,5] })
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - d.getDay() + 1) // Monday
+    d.setHours(0,0,0,0)
+    return d
+  })
+  const [activeCandidate, setActiveCandidate] = useState(1)
+
+  // 営業時間を取得
+  useEffect(() => {
+    fetch('/api/store/business-hours')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          let days = [1,2,3,4,5]
+          try { days = JSON.parse(data.businessDays || '[1,2,3,4,5]') } catch {}
+          setBizHours({ start: data.businessHoursStart || '10:00', end: data.businessHoursEnd || '19:00', days })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // 2時間枠を生成
+  const timeSlots = useMemo(() => {
+    const slots: { start: string; end: string; label: string }[] = []
+    const [sh, sm] = bizHours.start.split(':').map(Number)
+    const [eh] = bizHours.end.split(':').map(Number)
+    let h = sh, m = sm || 0
+    while (h + 2 <= eh || (h + 2 === eh && m === 0)) {
+      const startStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+      const endH = h + 2
+      const endStr = `${String(endH).padStart(2,'0')}:${String(m).padStart(2,'0')}`
+      slots.push({ start: startStr, end: endStr, label: `${startStr}〜${endStr}` })
+      h += 2
+    }
+    return slots
+  }, [bizHours])
+
+  // 週の日付配列（7日分）
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(currentWeekStart)
+      d.setDate(d.getDate() + i)
+      return d
+    })
+  }, [currentWeekStart])
+
+  const today = new Date()
+  today.setHours(0,0,0,0)
+
+  const dayLabels = ['日','月','火','水','木','金','土']
+
+  // 選択済みスロットをマッピング
+  const selectedSlots = new Map<string, number>()
+  for (let n = 1; n <= 3; n++) {
+    const d = (requestForm as any)[`candidate${n}Date`]
+    const s = (requestForm as any)[`candidate${n}Start`]
+    if (d && s) selectedSlots.set(`${d}_${s}`, n)
+  }
+
+  function handleSlotClick(dateStr: string, slot: { start: string; end: string }) {
+    const key = `${dateStr}_${slot.start}`
+    // Already selected → deselect
+    const existingN = selectedSlots.get(key)
+    if (existingN) {
+      setRequestForm(prev => ({
+        ...prev,
+        [`candidate${existingN}Date`]: '',
+        [`candidate${existingN}Start`]: '',
+        [`candidate${existingN}End`]: '',
+      }))
+      return
+    }
+    // Set to active candidate
+    setRequestForm(prev => ({
+      ...prev,
+      [`candidate${activeCandidate}Date`]: dateStr,
+      [`candidate${activeCandidate}Start`]: slot.start,
+      [`candidate${activeCandidate}End`]: slot.end,
+    }))
+    // Auto-advance to next empty candidate
+    if (activeCandidate < 3) setActiveCandidate(activeCandidate + 1)
+  }
+
+  function formatDate(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  }
+
+  const candidateColors = ['bg-blue-500', 'bg-green-500', 'bg-orange-500']
+  const candidateLabels = ['第1希望', '第2希望', '第3希望']
+
+  return (
+    <Card variant="elevated" padding="md">
+      <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3">カレンダーから日時を選択</h3>
+
+      {/* 候補タブ */}
+      <div className="flex gap-2 mb-4">
+        {[1,2,3].map(n => {
+          const hasValue = !!(requestForm as any)[`candidate${n}Date`]
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setActiveCandidate(n)}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                ${activeCandidate === n
+                  ? `${candidateColors[n-1]} text-white shadow-sm`
+                  : hasValue
+                    ? `bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] ring-2 ring-offset-1 ${n===1?'ring-blue-400':n===2?'ring-green-400':'ring-orange-400'}`
+                    : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]'
+                }
+              `}
+            >
+              {candidateLabels[n-1]}
+              {hasValue && <span>✓</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 週ナビゲーション */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          onClick={() => setCurrentWeekStart(prev => { const d = new Date(prev); d.setDate(d.getDate() - 7); return d })}
+          className="p-1.5 rounded-full hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+        >
+          <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+          {currentWeekStart.getMonth()+1}月{currentWeekStart.getDate()}日 〜 {weekDays[6].getMonth()+1}月{weekDays[6].getDate()}日
+        </p>
+        <button
+          type="button"
+          onClick={() => setCurrentWeekStart(prev => { const d = new Date(prev); d.setDate(d.getDate() + 7); return d })}
+          className="p-1.5 rounded-full hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+        >
+          <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* カレンダーグリッド */}
+      <div className="overflow-x-auto -mx-4 px-4 pb-2">
+        <div className="grid grid-cols-[60px_repeat(7,minmax(80px,1fr))] gap-px bg-[var(--md-sys-color-outline-variant)] rounded-lg overflow-hidden min-w-[640px]">
+          {/* Header row */}
+          <div className="bg-[var(--md-sys-color-surface-container)] p-2 text-[10px] text-[var(--md-sys-color-on-surface-variant)] font-medium" />
+          {weekDays.map((day, i) => {
+            const isToday = day.getTime() === today.getTime()
+            const dow = day.getDay()
+            const isBusinessDay = bizHours.days.includes(dow)
+            return (
+              <div key={i} className={`bg-[var(--md-sys-color-surface-container)] p-1.5 text-center ${!isBusinessDay ? 'opacity-40' : ''}`}>
+                <p className={`text-[10px] ${dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                  {dayLabels[dow]}
+                </p>
+                <p className={`text-sm font-semibold ${isToday ? 'bg-[var(--portal-primary)] text-white w-7 h-7 rounded-full flex items-center justify-center mx-auto' : 'text-[var(--md-sys-color-on-surface)]'}`}>
+                  {day.getDate()}
+                </p>
+              </div>
+            )
+          })}
+
+          {/* Time slots */}
+          {timeSlots.map(slot => (
+            <Fragment key={slot.start}>
+              <div className="bg-[var(--md-sys-color-surface)] p-1.5 flex items-center justify-center">
+                <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{slot.label}</span>
+              </div>
+              {weekDays.map((day, di) => {
+                const dateStr = formatDate(day)
+                const isPast = day < today
+                const dow = day.getDay()
+                const isBusinessDay = bizHours.days.includes(dow)
+                const isDisabled = isPast || !isBusinessDay
+                const selectedN = selectedSlots.get(`${dateStr}_${slot.start}`)
+
+                return (
+                  <button
+                    key={di}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => !isDisabled && handleSlotClick(dateStr, slot)}
+                    className={`
+                      p-1.5 min-h-[44px] text-center transition-all
+                      ${isDisabled
+                        ? 'bg-[var(--md-sys-color-surface-container)] opacity-30 cursor-not-allowed'
+                        : selectedN
+                          ? `${candidateColors[selectedN-1]} text-white`
+                          : 'bg-[var(--md-sys-color-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer'
+                      }
+                    `}
+                  >
+                    {selectedN && (
+                      <span className="text-[10px] font-bold">{candidateLabels[selectedN-1]}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* 選択済み一覧 */}
+      <div className="mt-4 space-y-1.5">
+        {[1,2,3].map(n => {
+          const d = (requestForm as any)[`candidate${n}Date`]
+          const s = (requestForm as any)[`candidate${n}Start`]
+          const e = (requestForm as any)[`candidate${n}End`]
+          if (!d) return null
+          const dt = new Date(d)
+          return (
+            <div key={n} className="flex items-center gap-2 text-sm text-[var(--md-sys-color-on-surface)]">
+              <span className={`w-2 h-2 rounded-full ${candidateColors[n-1]}`} />
+              <span className="font-medium">{candidateLabels[n-1]}:</span>
+              <span>{dt.getMonth()+1}/{dt.getDate()}（{dayLabels[dt.getDay()]}）{s}〜{e}</span>
+              <button type="button" onClick={() => setRequestForm(prev => ({ ...prev, [`candidate${n}Date`]: '', [`candidate${n}Start`]: '', [`candidate${n}End`]: '' }))}
+                className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] ml-1">✕</button>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 備考 + 送信 */}
+      <form onSubmit={onSubmit} className="mt-4 space-y-3">
+        <TextField
+          label="備考（任意）"
+          value={requestForm.customerNote}
+          onChange={(v: string) => setRequestForm((prev: any) => ({ ...prev, customerNote: v }))}
+          placeholder="希望や注意事項があればご記入ください"
+          rows={2}
+        />
+        <div className="flex gap-3">
+          <Button type="submit" disabled={submitting || !requestForm.candidate1Date} loading={submitting}>
+            {submitting ? '送信中...' : 'リクエストを送信'}
+          </Button>
+          <Button type="button" variant="tonal" onClick={onCancel}>
+            キャンセル
+          </Button>
+        </div>
+      </form>
+    </Card>
   )
 }

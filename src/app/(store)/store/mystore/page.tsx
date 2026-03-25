@@ -77,6 +77,13 @@ function MyStoreContent() {
   const [lockPinLoading, setLockPinLoading] = useState(true)
   const [lockPinSaving, setLockPinSaving] = useState(false)
 
+  // Business hours state
+  const [bizHoursStart, setBizHoursStart] = useState('10:00')
+  const [bizHoursEnd, setBizHoursEnd] = useState('19:00')
+  const [bizDays, setBizDays] = useState<number[]>([1, 2, 3, 4, 5])
+  const [bizHoursLoading, setBizHoursLoading] = useState(true)
+  const [bizHoursSaving, setBizHoursSaving] = useState(false)
+
   // Google Calendar state
   const [gcalConfig, setGcalConfig] = useState<GCalConfig | null>(null)
   const [gcalLoading, setGcalLoading] = useState(true)
@@ -119,6 +126,23 @@ function MyStoreContent() {
       }
     } catch { /* ignore */ }
     finally { setLinkedLoading(false) }
+  }, [])
+
+  const fetchBusinessHours = useCallback(async () => {
+    try {
+      const res = await fetch('/api/store/business-hours')
+      if (res.ok) {
+        const data = await res.json()
+        setBizHoursStart(data.businessHoursStart || '10:00')
+        setBizHoursEnd(data.businessHoursEnd || '19:00')
+        try {
+          setBizDays(JSON.parse(data.businessDays || '[1,2,3,4,5]'))
+        } catch {
+          setBizDays([1, 2, 3, 4, 5])
+        }
+      }
+    } catch { /* ignore */ }
+    finally { setBizHoursLoading(false) }
   }, [])
 
   async function handleLinkAccount() {
@@ -186,6 +210,7 @@ function MyStoreContent() {
         .catch(() => setLoading(false))
       fetchGcalConfig()
       fetchLinkedAccounts()
+      fetchBusinessHours()
       // Lock PIN
       fetch('/api/store/lock-pin')
         .then(r => r.json())
@@ -549,6 +574,133 @@ function MyStoreContent() {
                 </Card>
               )}
             </div>
+            {/* ===== 営業時間設定 ===== */}
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                営業時間設定
+              </h3>
+
+              <Card variant="elevated" padding="md" className="space-y-4">
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  店舗の営業時間と営業曜日を設定します。顧客の訪問リクエスト等に反映されます。
+                </p>
+
+                {bizHoursLoading ? (
+                  <div className="flex justify-center py-4">
+                    <LoadingSpinner size="sm" label="読み込み中..." />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* 営業時間 */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">開始時間</label>
+                        <select
+                          value={bizHoursStart}
+                          onChange={(e) => setBizHoursStart(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                        >
+                          {Array.from({ length: 25 }, (_, i) => {
+                            const h = Math.floor((i * 30 + 540) / 60) // start from 09:00
+                            const m = (i * 30 + 540) % 60
+                            if (h > 21) return null
+                            const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                            return <option key={val} value={val}>{val}</option>
+                          })}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">終了時間</label>
+                        <select
+                          value={bizHoursEnd}
+                          onChange={(e) => setBizHoursEnd(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                        >
+                          {Array.from({ length: 25 }, (_, i) => {
+                            const h = Math.floor((i * 30 + 540) / 60)
+                            const m = (i * 30 + 540) % 60
+                            if (h > 21) return null
+                            const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                            return <option key={val} value={val}>{val}</option>
+                          })}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 営業曜日 */}
+                    <div>
+                      <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-2">営業曜日</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { day: 1, label: '月' },
+                          { day: 2, label: '火' },
+                          { day: 3, label: '水' },
+                          { day: 4, label: '木' },
+                          { day: 5, label: '金' },
+                          { day: 6, label: '土' },
+                          { day: 0, label: '日' },
+                        ].map(({ day, label }) => (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              setBizDays(prev =>
+                                prev.includes(day)
+                                  ? prev.filter(d => d !== day)
+                                  : [...prev, day].sort()
+                              )
+                            }}
+                            className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
+                              bizDays.includes(day)
+                                ? 'bg-[var(--store-primary,#1E3A5F)] text-white'
+                                : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-highest)]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 保存ボタン */}
+                    <Button
+                      size="sm"
+                      disabled={bizHoursSaving}
+                      onClick={async () => {
+                        setBizHoursSaving(true)
+                        try {
+                          const res = await fetch('/api/store/business-hours', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              businessHoursStart: bizHoursStart,
+                              businessHoursEnd: bizHoursEnd,
+                              businessDays: JSON.stringify(bizDays),
+                            }),
+                          })
+                          if (res.ok) {
+                            setMessage({ type: 'success', text: '営業時間を保存しました' })
+                          } else {
+                            const data = await res.json().catch(() => ({}))
+                            setMessage({ type: 'error', text: data.error || '保存に失敗しました' })
+                          }
+                        } catch {
+                          setMessage({ type: 'error', text: '保存に失敗しました' })
+                        } finally {
+                          setBizHoursSaving(false)
+                        }
+                      }}
+                    >
+                      {bizHoursSaving ? '保存中...' : '営業時間を保存'}
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </div>
+
             {/* ===== 画面ロック暗証番号 ===== */}
             <div>
               <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">

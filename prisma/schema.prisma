@@ -81,6 +81,9 @@ model Store {
   invoiceNumber       String?   // インボイス番号
   antiquePermitNumber String?   // 古物営業許可番号
   lockPin             String?   // 画面ロック暗証番号（4〜6桁）
+  businessHoursStart  String?   @default("10:00") // 営業開始時間
+  businessHoursEnd    String?   @default("19:00") // 営業終了時間
+  businessDays        String?   @default("[1,2,3,4,5]") // 営業曜日 JSON配列 (0=日,1=月,...6=土)
   customers  User[]
   visitSchedules VisitSchedule[]
   visitRequests  VisitRequest[]

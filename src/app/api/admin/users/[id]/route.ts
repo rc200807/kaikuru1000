@@ -68,6 +68,16 @@ export async function PATCH(
     return NextResponse.json(updated)
   }
 
+  // OCR誤り報告のクリア
+  if ('idOcrIssueReport' in body && body.idOcrIssueReport === null) {
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { idOcrIssueReport: null },
+      select: { id: true, idOcrIssueReport: true },
+    })
+    return NextResponse.json(updated)
+  }
+
   // OCR情報の編集（idName キーが含まれていればOCR更新とみなす）
   if ('idName' in body) {
     const data: Record<string, unknown> = {

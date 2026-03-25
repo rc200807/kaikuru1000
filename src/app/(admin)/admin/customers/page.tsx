@@ -1176,8 +1176,29 @@ export default function AdminCustomersPage() {
                       {/* OCR誤り報告 */}
                       {detailUser.idOcrIssueReport && (
                         <div className="bg-[var(--md-sys-color-error-container)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
-                          <p className="text-xs font-semibold text-[var(--md-sys-color-on-error-container)] mb-0.5">OCR誤り報告</p>
-                          <p className="text-xs text-[var(--md-sys-color-on-error-container)]">{detailUser.idOcrIssueReport}</p>
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold text-[var(--md-sys-color-on-error-container)] mb-0.5">OCR誤り報告</p>
+                              <p className="text-xs text-[var(--md-sys-color-on-error-container)]">{detailUser.idOcrIssueReport}</p>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                if (!confirm('この誤り報告を解消済みとしてクリアしますか？')) return
+                                const res = await fetch(`/api/admin/users/${detailUser.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ idOcrIssueReport: null }),
+                                })
+                                if (res.ok) {
+                                  setDetailUser({ ...detailUser, idOcrIssueReport: null })
+                                  setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, idOcrIssueReport: null } : u))
+                                }
+                              }}
+                              className="text-[10px] px-2 py-1 rounded bg-white/80 text-[var(--md-sys-color-error)] hover:bg-white transition-colors shrink-0"
+                            >
+                              解消済み
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

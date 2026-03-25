@@ -9,7 +9,7 @@ const registerSchema = z.object({
   name:         z.string().min(1, '氏名は必須です').max(100),
   furigana:     z.string().min(1, 'ふりがなは必須です').max(100),
   email:        z.string().email('有効なメールアドレスを入力してください').optional().or(z.literal('')),
-  phone:        z.string().min(1, '電話番号は必須です').max(20),
+  phone:        z.string().min(1, '電話番号は必須です').max(20).transform(v => v.replace(/[-ー\s]/g, '')),
   address:      z.string().min(1, '住所は必須です').max(200),
   password:     z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional().or(z.literal('')),
   licenseKey:   z.string().optional(),

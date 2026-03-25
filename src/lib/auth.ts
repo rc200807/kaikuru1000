@@ -41,9 +41,10 @@ export const authOptions: NextAuthOptions = {
             include: { store: true },
           })
         } else {
-          // 電話番号で検索（複数ヒットする場合はパスワード照合で絞り込み）
+          // 電話番号で検索（ハイフン除去して統一）
+          const normalizedPhone = loginId.replace(/[-ー\s]/g, '')
           const users = await prisma.user.findMany({
-            where: { phone: loginId },
+            where: { phone: normalizedPhone },
             include: { store: true },
           })
           for (const u of users) {

@@ -39,6 +39,9 @@ model User {
   idLicenseNumber String?             // 免許番号・旅券番号など
   idExpiryDate    String?             // 有効期限（YYYY-MM-DD または テキスト）
   idOcrIssueReport String?  @db.Text  // 顧客によるOCR誤り報告
+  idDocumentBackPath  String?  @db.Text  // 身分証裏面ファイルURL
+  idBackAddress       String?            // 裏面記載の新住所
+  idFacePhotoPath     String?  @db.Text  // 顔写真抽出画像URL
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
   isActive       Boolean   @default(true)

@@ -88,6 +88,50 @@ export async function extractIdDocumentInfo(
   }
 }
 
+/**
+ * 身分証明書の裏面画像から新住所を抽出する
+ *
+ * @param imageBuffer  画像のバイナリデータ
+ * @param mimeType     画像のMIMEタイプ（image/jpeg, image/png など）
+ * @returns 新住所文字列。記載がない場合やエラー時は null
+ */
+export async function extractBackAddress(
+  imageBuffer: Buffer,
+  mimeType: string,
+): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    console.warn('[gemini] GEMINI_API_KEY が未設定のため裏面OCRをスキップします')
+    return null
+  }
+
+  const BACK_PROMPT = `この身分証明書の裏面画像から、新住所（住所変更記載）を読み取ってください。新住所の記載がない場合はnullを返してください。JSON形式で {"newAddress": string | null} を返してください。`
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
+    const result = await model.generateContent([
+      BACK_PROMPT,
+      {
+        inlineData: {
+          mimeType,
+          data: imageBuffer.toString('base64'),
+        },
+      },
+    ])
+
+    const text = result.response.text().trim()
+    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed = JSON.parse(jsonStr)
+
+    return parsed.newAddress ?? null
+  } catch (err) {
+    console.error('[gemini] 裏面OCR失敗:', err)
+    return null
+  }
+}
+
 /* ─── 中古市場 AI 調査 ─── */
 
 export type MarketResearchResult = {

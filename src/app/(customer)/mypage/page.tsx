@@ -109,7 +109,6 @@ function MyPageContent() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const memoImageInputRef = useRef<HTMLInputElement>(null)
   const shipmentImageInputRef = useRef<HTMLInputElement>(null)
 
@@ -185,6 +184,19 @@ function MyPageContent() {
   const [savingReport, setSavingReport] = useState(false)
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(false)
   const [deletingDoc, setDeletingDoc] = useState(false)
+
+  // 身分証ステップアップロード
+  const [idUploadStep, setIdUploadStep] = useState(1)
+  const [selectedDocType, setSelectedDocType] = useState('')
+  const [frontFile, setFrontFile] = useState<File | null>(null)
+  const [frontPreview, setFrontPreview] = useState('')
+  const [backFile, setBackFile] = useState<File | null>(null)
+  const [backPreview, setBackPreview] = useState('')
+  const frontInputRef = useRef<HTMLInputElement>(null)
+  const backInputRef = useRef<HTMLInputElement>(null)
+
+  const docTypesRequiringBack = ['運転免許証', 'マイナンバーカード']
+  const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -286,45 +298,100 @@ function MyPageContent() {
     }
   }
 
-  async function handleUploadIdDocument(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFrontFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const formData = new FormData()
-    formData.append('file', file)
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'ファイルサイズは10MB以下にしてください' })
+      return
+    }
+    setFrontFile(file)
+    setFrontPreview(URL.createObjectURL(file))
+    setMessage(null)
+  }
+
+  function handleBackFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'ファイルサイズは10MB以下にしてください' })
+      return
+    }
+    setBackFile(file)
+    setBackPreview(URL.createObjectURL(file))
+    setMessage(null)
+  }
+
+  function resetIdUpload() {
+    setIdUploadStep(1)
+    setSelectedDocType('')
+    setFrontFile(null)
+    setFrontPreview('')
+    setBackFile(null)
+    setBackPreview('')
+    if (frontInputRef.current) frontInputRef.current.value = ''
+    if (backInputRef.current) backInputRef.current.value = ''
+  }
+
+  async function handleSubmitIdDocument() {
+    if (!frontFile) return
     const userId = (session?.user as any).id
     setMessage(null)
     setUploadingDoc(true)
+
+    // Upload front image
+    const formData = new FormData()
+    formData.append('file', frontFile)
+    formData.append('documentType', selectedDocType)
     const res = await fetch(`/api/users/${userId}/id-document`, {
       method: 'POST',
       body: formData,
     })
-    setUploadingDoc(false)
-    if (res.ok) {
-      const data = await res.json()
-      setUser(prev => {
-        if (!prev) return null
-        return {
-          ...prev,
-          idDocumentPath:   `/api/users/${prev.id}/id-document`,
-          idOcrIssueReport: null,
-          ...(data.ocr && {
-            idDocumentType:  data.ocr.idDocumentType,
-            idName:          data.ocr.idName,
-            idBirthDate:     data.ocr.idBirthDate,
-            idAddress:       data.ocr.idAddress,
-            idLicenseNumber: data.ocr.idLicenseNumber,
-            idExpiryDate:    data.ocr.idExpiryDate,
-          }),
-        }
-      })
-      setShowReportForm(false)
-      setReportText('')
-      const ocrMsg = data.ocr ? '（情報を自動読み取りしました）' : '（自動読み取りに失敗しました。再読み取りをお試しください）'
-      setMessage({ type: 'success', text: `身分証明書をアップロードしました${ocrMsg}` })
-    } else {
+
+    if (!res.ok) {
+      setUploadingDoc(false)
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || 'アップロードに失敗しました' })
+      return
     }
+
+    const data = await res.json()
+
+    // Upload back image if exists
+    if (backFile && needsBackImage) {
+      const backFormData = new FormData()
+      backFormData.append('file', backFile)
+      backFormData.append('documentType', selectedDocType)
+      await fetch(`/api/users/${userId}/id-document/back`, {
+        method: 'POST',
+        body: backFormData,
+      })
+      // back upload failure is non-critical
+    }
+
+    setUploadingDoc(false)
+    setUser(prev => {
+      if (!prev) return null
+      return {
+        ...prev,
+        idDocumentPath:   `/api/users/${prev.id}/id-document`,
+        idOcrIssueReport: null,
+        ...(data.ocr && {
+          idDocumentType:  data.ocr.idDocumentType ?? selectedDocType,
+          idName:          data.ocr.idName,
+          idBirthDate:     data.ocr.idBirthDate,
+          idAddress:       data.ocr.idAddress,
+          idLicenseNumber: data.ocr.idLicenseNumber,
+          idExpiryDate:    data.ocr.idExpiryDate,
+        }),
+        ...(!data.ocr && { idDocumentType: selectedDocType }),
+      }
+    })
+    setShowReportForm(false)
+    setReportText('')
+    resetIdUpload()
+    const ocrMsg = data.ocr ? '（情報を自動読み取りしました）' : '（自動読み取りに失敗しました。再読み取りをお試しください）'
+    setMessage({ type: 'success', text: `身分証明書をアップロードしました${ocrMsg}` })
   }
 
   // 身分証再OCR
@@ -1625,11 +1692,10 @@ function MyPageContent() {
           {activeTab === 'id-document' && (
             <div className="space-y-5">
 
-              {/* OCR読み取り結果セクション（提出済みの場合のみ） */}
-              {user.idDocumentPath && (
+              {/* ── 提出済み：OCR結果 + 再提出ボタン ── */}
+              {user.idDocumentPath ? (
+                <>
                 <Card variant="outlined" padding="md">
-
-                  {/* ── スキャン中アニメーション ── */}
                   {reOcrLoading ? (
                     <OcrScanningAnimation label="再読み取り中..." />
                   ) : (
@@ -1724,6 +1790,20 @@ function MyPageContent() {
                     </div>
                   )}
 
+                  {/* 提出済み画像サムネイル */}
+                  <div className="mb-4">
+                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">提出済みファイル</p>
+                    <div className="w-32 h-20 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface-container)]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/users/${user.id}/id-document`}
+                        alt="提出済み身分証"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                      />
+                    </div>
+                  </div>
+
                   {/* 誤り報告フォーム */}
                   {showReportForm && (
                     <form onSubmit={handleSubmitIssueReport} className="border-t border-[var(--md-sys-color-outline-variant)] pt-4 mt-2 space-y-3">
@@ -1765,66 +1845,353 @@ function MyPageContent() {
                   </>
                   )}
                 </Card>
-              )}
 
-              {/* アップロードセクション */}
-              <Card variant="elevated" padding="md">
-                {/* アップロード＋OCR処理中アニメーション */}
-                {uploadingDoc ? (
-                  <OcrScanningAnimation label="アップロード・読み取り中..." />
-                ) : (
-                <>
-                <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
-                  {user.idDocumentPath ? '身分証明書を再アップロード' : '身分証明書のアップロード'}
-                </h2>
-                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5 leading-relaxed">
-                  運転免許証、マイナンバーカード、パスポートなどをアップロードしてください。<br />
-                  対応形式：JPEG、PNG、WebP、PDF（最大10MB）
-                </p>
-
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="
-                    border-2 border-dashed border-[var(--md-sys-color-outline-variant)]
-                    rounded-[var(--md-sys-shape-medium)] p-10 text-center cursor-pointer
-                    hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)]
-                    transition-colors mb-5
-                  "
-                >
-                  <div className="w-14 h-14 bg-[var(--md-sys-color-surface-container-high)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-7 h-7 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
-                    クリックしてファイルを選択
-                  </p>
-                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
-                    アップロードすると自動で情報を読み取ります
-                  </p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    onChange={handleUploadIdDocument}
-                    className="hidden"
-                  />
+                {/* 再提出ボタン */}
+                <div className="flex justify-center">
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      resetIdUpload()
+                      // 再提出を開始 → 既存表示を隠してステップフローへ
+                      handleDeleteIdDocument()
+                    }}
+                    disabled={deletingDoc}
+                  >
+                    身分証を再提出する
+                  </Button>
                 </div>
-
-                {user.idDocumentPath ? (
-                  <MessageBanner severity="success">
-                    <p className="font-medium">身分証明書が提出されています</p>
-                    <p className="text-xs mt-0.5 opacity-80">新しいファイルをアップロードすると更新・再読み取りされます</p>
-                  </MessageBanner>
-                ) : (
-                  <MessageBanner severity="warning">
-                    <p className="font-medium">身分証明書が未提出です</p>
-                    <p className="text-xs mt-0.5 opacity-80">サービス開始前に提出が必要です</p>
-                  </MessageBanner>
-                )}
                 </>
-                )}
-              </Card>
+              ) : (
+                /* ── 未提出 or 再提出：ステップアップロードフロー ── */
+                <Card variant="elevated" padding="md">
+                  {uploadingDoc ? (
+                    <OcrScanningAnimation label="アップロード・読み取り中..." />
+                  ) : (
+                  <>
+                  {/* ステップインジケーター */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      {[
+                        { num: 1, label: '書類選択' },
+                        { num: 2, label: '表面' },
+                        ...(needsBackImage ? [{ num: 3, label: '裏面' }] : []),
+                        { num: needsBackImage ? 4 : 3, label: '確認' },
+                      ].map((step, i, arr) => (
+                        <Fragment key={step.num}>
+                          <div className="flex flex-col items-center">
+                            <div className={`
+                              w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors
+                              ${idUploadStep >= step.num
+                                ? 'bg-[var(--portal-primary,#B91C1C)] text-white'
+                                : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]'
+                              }
+                            `}>
+                              {idUploadStep > step.num ? (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : step.num}
+                            </div>
+                            <span className="text-[10px] mt-1 text-[var(--md-sys-color-on-surface-variant)]">{step.label}</span>
+                          </div>
+                          {i < arr.length - 1 && (
+                            <div className={`flex-1 h-0.5 mx-2 mb-4 transition-colors ${
+                              idUploadStep > step.num
+                                ? 'bg-[var(--portal-primary,#B91C1C)]'
+                                : 'bg-[var(--md-sys-color-outline-variant)]'
+                            }`} />
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Step 1: 書類種別選択 ── */}
+                  {idUploadStep === 1 && (
+                    <div>
+                      <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
+                        身分証明書の種類を選択
+                      </h2>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5">
+                        提出する身分証明書の種類を選んでください。
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { type: '運転免許証', icon: '🪪' },
+                          { type: 'マイナンバーカード', icon: '💳' },
+                          { type: 'パスポート', icon: '📕' },
+                          { type: '住民基本台帳カード', icon: '🏠' },
+                          { type: '在留カード', icon: '🌏' },
+                        ].map(doc => (
+                          <button
+                            key={doc.type}
+                            onClick={() => {
+                              setSelectedDocType(doc.type)
+                              setIdUploadStep(2)
+                              // 書類変更時に裏面リセット
+                              setBackFile(null)
+                              setBackPreview('')
+                            }}
+                            className={`
+                              flex items-center gap-3 p-4 rounded-[var(--md-sys-shape-medium)] border-2 text-left transition-all
+                              ${selectedDocType === doc.type
+                                ? 'border-[var(--portal-primary,#B91C1C)] bg-red-50'
+                                : 'border-[var(--md-sys-color-outline-variant)] hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)]'
+                              }
+                            `}
+                          >
+                            <span className="text-2xl">{doc.icon}</span>
+                            <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{doc.type}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Step 2: 表面アップロード ── */}
+                  {idUploadStep === 2 && (
+                    <div>
+                      <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
+                        {selectedDocType}の表面をアップロード
+                      </h2>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5">
+                        対応形式：JPEG、PNG、WebP、PDF（最大10MB）
+                      </p>
+
+                      {frontPreview ? (
+                        <div className="mb-5">
+                          <div className="relative inline-block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={frontPreview}
+                              alt="表面プレビュー"
+                              className="max-h-48 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] object-contain"
+                            />
+                            <button
+                              onClick={() => {
+                                setFrontFile(null)
+                                setFrontPreview('')
+                                if (frontInputRef.current) frontInputRef.current.value = ''
+                              }}
+                              className="absolute -top-2 -right-2 w-6 h-6 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs hover:opacity-80"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2">{frontFile?.name}</p>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => frontInputRef.current?.click()}
+                          className="border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] p-10 text-center cursor-pointer hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors mb-5"
+                        >
+                          <div className="w-14 h-14 bg-[var(--md-sys-color-surface-container-high)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center mx-auto mb-3">
+                            <svg className="w-7 h-7 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                          </div>
+                          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                            クリックして表面の画像を選択
+                          </p>
+                        </div>
+                      )}
+
+                      <input
+                        ref={frontInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handleFrontFileSelect}
+                        className="hidden"
+                      />
+
+                      <div className="flex justify-between mt-4">
+                        <button
+                          onClick={() => setIdUploadStep(1)}
+                          className="text-sm px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          戻る
+                        </button>
+                        <Button
+                          disabled={!frontFile}
+                          onClick={() => setIdUploadStep(3)}
+                        >
+                          次へ
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Step 3: 裏面アップロード (免許証・マイナンバーのみ) ── */}
+                  {idUploadStep === 3 && needsBackImage && (
+                    <div>
+                      <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
+                        {selectedDocType}の裏面をアップロード
+                      </h2>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                        対応形式：JPEG、PNG、WebP、PDF（最大10MB）
+                      </p>
+                      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-[var(--md-sys-shape-small)] px-3 py-2 mb-5">
+                        裏面に新住所の記載がある場合は読み取ります
+                      </p>
+
+                      {backPreview ? (
+                        <div className="mb-5">
+                          <div className="relative inline-block">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={backPreview}
+                              alt="裏面プレビュー"
+                              className="max-h-48 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] object-contain"
+                            />
+                            <button
+                              onClick={() => {
+                                setBackFile(null)
+                                setBackPreview('')
+                                if (backInputRef.current) backInputRef.current.value = ''
+                              }}
+                              className="absolute -top-2 -right-2 w-6 h-6 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs hover:opacity-80"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2">{backFile?.name}</p>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => backInputRef.current?.click()}
+                          className="border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] p-10 text-center cursor-pointer hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors mb-5"
+                        >
+                          <div className="w-14 h-14 bg-[var(--md-sys-color-surface-container-high)] rounded-[var(--md-sys-shape-medium)] flex items-center justify-center mx-auto mb-3">
+                            <svg className="w-7 h-7 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                          </div>
+                          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                            クリックして裏面の画像を選択
+                          </p>
+                        </div>
+                      )}
+
+                      <input
+                        ref={backInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        onChange={handleBackFileSelect}
+                        className="hidden"
+                      />
+
+                      <div className="flex justify-between mt-4">
+                        <button
+                          onClick={() => setIdUploadStep(2)}
+                          className="text-sm px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          戻る
+                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setIdUploadStep(4)}
+                            className="text-sm px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                          >
+                            スキップ
+                          </button>
+                          <Button
+                            disabled={!backFile}
+                            onClick={() => setIdUploadStep(4)}
+                          >
+                            次へ
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Step 3 or 4: 確認画面 ── */}
+                  {((idUploadStep === 3 && !needsBackImage) || idUploadStep === 4 || (idUploadStep === 3 && needsBackImage === false)) && (() => {
+                    const isConfirmStep = (idUploadStep === 3 && !needsBackImage) || idUploadStep === 4
+                    return isConfirmStep
+                  })() && (
+                    <div>
+                      <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
+                        アップロード内容の確認
+                      </h2>
+
+                      <div className="space-y-4 mb-6">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-[var(--md-sys-color-on-surface-variant)]">書類種別：</span>
+                          <span className="font-medium text-[var(--md-sys-color-on-surface)]">{selectedDocType}</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* 表面プレビュー */}
+                          <div>
+                            <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">表面</p>
+                            {frontPreview && (
+                              <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface-container)]">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={frontPreview}
+                                  alt="表面"
+                                  className="w-full max-h-40 object-contain"
+                                />
+                              </div>
+                            )}
+                            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1 truncate">{frontFile?.name}</p>
+                          </div>
+
+                          {/* 裏面プレビュー */}
+                          {needsBackImage && (
+                            <div>
+                              <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">裏面</p>
+                              {backPreview ? (
+                                <>
+                                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface-container)]">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={backPreview}
+                                    alt="裏面"
+                                    className="w-full max-h-40 object-contain"
+                                  />
+                                </div>
+                                <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1 truncate">{backFile?.name}</p>
+                                </>
+                              ) : (
+                                <div className="rounded-[var(--md-sys-shape-medium)] border border-dashed border-[var(--md-sys-color-outline-variant)] p-6 text-center bg-[var(--md-sys-color-surface-container)]">
+                                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">裏面なし（スキップ済み）</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <MessageBanner severity="info">
+                        <p className="text-xs">アップロード後、自動で情報を読み取ります。読み取り結果は提出後に確認できます。</p>
+                      </MessageBanner>
+
+                      <div className="flex justify-between mt-6">
+                        <button
+                          onClick={() => setIdUploadStep(needsBackImage ? 3 : 2)}
+                          className="text-sm px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                        >
+                          戻る
+                        </button>
+                        <Button
+                          onClick={handleSubmitIdDocument}
+                          disabled={!frontFile}
+                        >
+                          提出する
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  </>
+                  )}
+                </Card>
+              )}
             </div>
           )}
 

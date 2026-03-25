@@ -38,6 +38,17 @@ type User = {
   accountType:   string | null
   accountNumber: string | null
   accountHolder: string | null
+  // 身分証明書OCR情報
+  idDocumentType:     string | null
+  idName:             string | null
+  idBirthDate:        string | null
+  idAddress:          string | null
+  idLicenseNumber:    string | null
+  idExpiryDate:       string | null
+  idOcrIssueReport:   string | null
+  idDocumentBackPath: string | null
+  idBackAddress:      string | null
+  idFacePhotoPath:    string | null
 }
 
 type Store = {
@@ -818,16 +829,127 @@ export default function AdminCustomersPage() {
                       <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
                     </div>
                   ))}
-                  <div className="flex gap-3">
-                    <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">身分証</dt>
-                    <dd className="text-sm">
-                      {detailUser.idDocumentPath
-                        ? <a href={detailUser.idDocumentPath} target="_blank" rel="noopener noreferrer" className="text-[var(--portal-primary,#374151)] underline">確認する</a>
-                        : <span className="text-[var(--status-pending-text)]">未提出</span>
-                      }
-                    </dd>
-                  </div>
                 </dl>
+
+                {/* 身分証明書セクション */}
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)] flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">身分証明書</span>
+                    {detailUser.idDocumentPath ? (
+                      <span className="text-[10px] font-medium text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] px-2 py-0.5 rounded-full">提出済</span>
+                    ) : (
+                      <span className="text-[10px] font-medium text-[var(--status-pending-text)] bg-[var(--status-pending-bg)] px-2 py-0.5 rounded-full">未提出</span>
+                    )}
+                  </div>
+                  {detailUser.idDocumentPath ? (
+                    <div className="px-4 py-3 space-y-3">
+                      {/* 書類種別 */}
+                      {detailUser.idDocumentType && (
+                        <div className="flex gap-3">
+                          <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">書類種別</dt>
+                          <dd className="text-xs font-medium text-[var(--md-sys-color-on-surface)]">{detailUser.idDocumentType}</dd>
+                        </div>
+                      )}
+
+                      {/* 表面画像 */}
+                      <div>
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">表面</p>
+                        <a
+                          href={`/api/users/${detailUser.id}/id-document`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/users/${detailUser.id}/id-document`}
+                            alt="身分証明書（表面）"
+                            className="max-w-full max-h-48 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                          />
+                        </a>
+                      </div>
+
+                      {/* 裏面画像 */}
+                      {detailUser.idDocumentBackPath && (
+                        <div>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">裏面</p>
+                          <a
+                            href={`/api/users/${detailUser.id}/id-document/back`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/users/${detailUser.id}/id-document/back`}
+                              alt="身分証明書（裏面）"
+                              className="max-w-full max-h-48 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          </a>
+                        </div>
+                      )}
+
+                      {/* 顔写真 */}
+                      {detailUser.idFacePhotoPath && (
+                        <div>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">顔写真</p>
+                          <a
+                            href={detailUser.idFacePhotoPath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={detailUser.idFacePhotoPath}
+                              alt="顔写真"
+                              className="w-20 h-20 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          </a>
+                        </div>
+                      )}
+
+                      {/* OCR抽出データ */}
+                      {(detailUser.idName || detailUser.idBirthDate || detailUser.idAddress || detailUser.idLicenseNumber || detailUser.idExpiryDate) && (
+                        <div>
+                          <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-2 border-t border-[var(--md-sys-color-surface-container-high)] pt-2">OCR読み取りデータ</p>
+                          <dl className="space-y-1.5">
+                            {[
+                              { label: '氏名',     value: detailUser.idName },
+                              { label: '生年月日', value: detailUser.idBirthDate },
+                              { label: '住所',     value: detailUser.idAddress },
+                              { label: '証明書番号', value: detailUser.idLicenseNumber },
+                              { label: '有効期限', value: detailUser.idExpiryDate },
+                            ].filter(item => item.value).map(item => (
+                              <div key={item.label} className="flex gap-3">
+                                <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                                <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      )}
+
+                      {/* 裏面新住所 */}
+                      {detailUser.idBackAddress && (
+                        <div className="flex gap-3 border-t border-[var(--md-sys-color-surface-container-high)] pt-2">
+                          <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">裏面新住所</dt>
+                          <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{detailUser.idBackAddress}</dd>
+                        </div>
+                      )}
+
+                      {/* OCR誤り報告 */}
+                      {detailUser.idOcrIssueReport && (
+                        <div className="bg-[var(--md-sys-color-error-container)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
+                          <p className="text-xs font-semibold text-[var(--md-sys-color-on-error-container)] mb-0.5">OCR誤り報告</p>
+                          <p className="text-xs text-[var(--md-sys-color-on-error-container)]">{detailUser.idOcrIssueReport}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="px-4 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">身分証明書が未提出です</p>
+                  )}
+                </div>
 
                 {/* 顧客タイプ変更 */}
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">

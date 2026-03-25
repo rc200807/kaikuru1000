@@ -4,11 +4,10 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
-import { extractIdDocumentInfo } from '@/lib/gemini'
+import { extractBackAddress } from '@/lib/gemini'
 
 /**
- * 身分証明書を認証プロキシ経由で配信
- * Blob URL をクライアントに露出させず、認証・認可チェック後にコンテンツを返す
+ * 身分証明書の裏面画像を認証プロキシ経由で配信
  */
 export async function GET(
   request: NextRequest,
@@ -33,12 +32,12 @@ export async function GET(
   }
   // admin はすべて閲覧可
 
-  const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentPath: true } })
-  if (!user?.idDocumentPath) {
-    return NextResponse.json({ error: '身分証明書が未提出です' }, { status: 404 })
+  const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentBackPath: true } })
+  if (!user?.idDocumentBackPath) {
+    return NextResponse.json({ error: '身分証明書の裏面が未提出です' }, { status: 404 })
   }
 
-  const blobUrl = user.idDocumentPath
+  const blobUrl = user.idDocumentBackPath
 
   // ローカル開発（/uploads/...）: 静的ファイルにリダイレクト
   if (!blobUrl.startsWith('https://')) {
@@ -62,6 +61,9 @@ export async function GET(
   }
 }
 
+/**
+ * 身分証明書の裏面画像を削除
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -85,46 +87,32 @@ export async function DELETE(
   }
   // admin はすべて操作可
 
-  const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentPath: true } })
-  if (!user?.idDocumentPath) {
-    return NextResponse.json({ error: '身分証明書が未提出です' }, { status: 404 })
+  const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentBackPath: true } })
+  if (!user?.idDocumentBackPath) {
+    return NextResponse.json({ error: '身分証明書の裏面が未提出です' }, { status: 404 })
   }
 
   // Blob ファイルを削除
   try {
-    await deleteFile(user.idDocumentPath)
+    await deleteFile(user.idDocumentBackPath)
   } catch {
-    // ファイル削除失敗はログのみ（DB側のクリアは続行）
-    console.warn('[DELETE id-document] blob delete failed, continuing DB clear')
+    console.warn('[DELETE id-document/back] blob delete failed, continuing DB clear')
   }
 
-  // 裏面画像がある場合も削除
-  const fullUser = await prisma.user.findUnique({ where: { id }, select: { idDocumentBackPath: true } })
-  if (fullUser?.idDocumentBackPath) {
-    try { await deleteFile(fullUser.idDocumentBackPath) } catch { /* ignore */ }
-  }
-
-  // 身分証関連フィールドをすべてクリア
   await prisma.user.update({
     where: { id },
     data: {
-      idDocumentPath:     null,
-      idDocumentType:     null,
-      idName:             null,
-      idBirthDate:        null,
-      idAddress:          null,
-      idLicenseNumber:    null,
-      idExpiryDate:       null,
-      idOcrIssueReport:   null,
       idDocumentBackPath: null,
       idBackAddress:      null,
-      idFacePhotoPath:    null,
     },
   })
 
   return NextResponse.json({ success: true })
 }
 
+/**
+ * 身分証明書の裏面画像をアップロード
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -141,7 +129,6 @@ export async function POST(
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File
-    const documentType = formData.get('documentType') as string | null
 
     if (!file) {
       return NextResponse.json({ error: 'ファイルが選択されていません' }, { status: 400 })
@@ -159,46 +146,33 @@ export async function POST(
     // ファイルアップロード
     const fileUrl = await uploadFile(
       buffer,
-      `id-documents/${id}_${Date.now()}.${validation.ext}`,
-      file.type, // Magic Number 検証済みの MIME タイプ
+      `id-documents/${id}_back_${Date.now()}.${validation.ext}`,
+      file.type,
     )
 
-    // 古いファイルの削除
+    // 古い裏面ファイルの削除
     const existingUser = await prisma.user.findUnique({ where: { id } })
-    if (existingUser?.idDocumentPath) {
-      await deleteFile(existingUser.idDocumentPath)
+    if (existingUser?.idDocumentBackPath) {
+      await deleteFile(existingUser.idDocumentBackPath)
     }
 
-    // Gemini Vision OCR で身分証情報を抽出（失敗しても upload は成功扱い）
-    const ocrResult = await extractIdDocumentInfo(buffer, file.type)
+    // Gemini Vision OCR で裏面新住所を抽出（失敗しても upload は成功扱い）
+    const newAddress = await extractBackAddress(buffer, file.type)
 
     await prisma.user.update({
       where: { id },
       data: {
-        idDocumentPath:   fileUrl,
-        idOcrIssueReport: null, // 再アップロード時は誤り報告をリセット
-        // クライアントから documentType が指定された場合はそれを優先
-        ...(documentType ? { idDocumentType: documentType } : {}),
-        // OCR成功時のみ更新（null なら既存値を上書きしない）
-        ...(ocrResult && {
-          // documentType が明示指定されていなければ OCR 結果を使用
-          ...(!documentType && ocrResult.idDocumentType ? { idDocumentType: ocrResult.idDocumentType } : {}),
-          idName:          ocrResult.idName,
-          idBirthDate:     ocrResult.idBirthDate,
-          idAddress:       ocrResult.idAddress,
-          idLicenseNumber: ocrResult.idLicenseNumber,
-          idExpiryDate:    ocrResult.idExpiryDate,
-        }),
+        idDocumentBackPath: fileUrl,
+        ...(newAddress !== null ? { idBackAddress: newAddress } : {}),
       },
     })
 
     return NextResponse.json({
       path: fileUrl,
-      ocr: ocrResult ?? null,
-      documentType: documentType || ocrResult?.idDocumentType || null,
+      backAddress: newAddress,
     })
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('Back image upload error:', error)
     return NextResponse.json({ error: 'アップロードに失敗しました' }, { status: 500 })
   }
 }

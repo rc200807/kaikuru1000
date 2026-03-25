@@ -579,6 +579,16 @@ function MyPageContent() {
     }
   }
 
+  // Listen for bottom nav tab changes
+  useEffect(() => {
+    function onBottomNavChange(e: Event) {
+      const detail = (e as CustomEvent).detail
+      if (detail) handleTabChange(detail)
+    }
+    window.addEventListener('bottomnav-tab-change', onBottomNavChange)
+    return () => window.removeEventListener('bottomnav-tab-change', onBottomNavChange)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (status === 'loading' || loading) {
     return <LoadingSpinner fullPage size="lg" label="読み込み中..." />
   }
@@ -760,17 +770,7 @@ function MyPageContent() {
   const activeMemos = memos.filter(m => m.status !== 'completed')
   const completedMemos = memos.filter(m => m.status === 'completed')
 
-  // Listen for bottom nav tab changes
-  useEffect(() => {
-    function onBottomNavChange(e: Event) {
-      const detail = (e as CustomEvent).detail
-      if (detail) handleTabChange(detail)
-    }
-    window.addEventListener('bottomnav-tab-change', onBottomNavChange)
-    return () => window.removeEventListener('bottomnav-tab-change', onBottomNavChange)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const customerTypeLabel = user.customerType === 'visit' ? '定期訪問' : user.customerType === 'delivery' ? '定期宅配' : '一般'
+  const customerTypeLabel = user ? (user.customerType === 'visit' ? '定期訪問' : user.customerType === 'delivery' ? '定期宅配' : '一般') : ''
 
   return (
     <div className="min-h-screen bg-gray-50">

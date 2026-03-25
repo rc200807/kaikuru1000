@@ -75,24 +75,27 @@ export const authOptions: NextAuthOptions = {
           throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
         }
 
-        // 店舗アカウントを確認
-        const store = await prisma.store.findFirst({
+        // 店舗アカウントを確認（同一メールで複数店舗の場合、パスワードが一致する店舗にログイン）
+        const stores = await prisma.store.findMany({
           where: { email: credentials.email },
         })
-        if (store) {
+        for (const store of stores) {
           const isValid = await bcrypt.compare(credentials.password, store.password)
-          if (!isValid) {
-            await recordLoginFailure(key)
-            return null
+          if (isValid) {
+            await resetLoginFailures(key)
+            return {
+              id: store.id,
+              email: store.email || '',
+              name: store.name,
+              avatar: store.avatar || null,
+              role: 'store' as const,
+            }
           }
-          await resetLoginFailures(key)
-          return {
-            id: store.id,
-            email: store.email || '',
-            name: store.name,
-            avatar: store.avatar || null,
-            role: 'store' as const,
-          }
+        }
+        if (stores.length > 0) {
+          // メールは見つかったがパスワードが一致しない
+          await recordLoginFailure(key)
+          return null
         }
 
         // 店舗メンバーアカウントを確認

@@ -51,19 +51,17 @@ export async function POST(req: Request) {
 
     // ユーザーのパスワードを更新
     if (resetToken.userType === 'store') {
-      const store = await prisma.store.findFirst({
+      // 同一メールの全店舗のパスワードを更新
+      const result = await prisma.store.updateMany({
         where: { email: resetToken.email, isActive: true },
+        data: { password: hashedPassword },
       })
-      if (!store) {
+      if (result.count === 0) {
         return NextResponse.json(
           { error: 'アカウントが見つかりません' },
           { status: 400 }
         )
       }
-      await prisma.store.update({
-        where: { id: store.id },
-        data: { password: hashedPassword },
-      })
     } else {
       const user = await prisma.user.findFirst({
         where: { email: resetToken.email, isActive: true },

@@ -36,15 +36,10 @@ export async function POST(request: NextRequest) {
 
   const { code, name, email, phone, prefecture, address } = parsed.data
 
-  // 重複チェック
-  const orConditions: any[] = [{ code }]
-  if (email) orConditions.push({ email })
-  const existing = await prisma.store.findFirst({ where: { OR: orConditions } })
+  // 店舗コード重複チェック（メールアドレスの重複は許可）
+  const existing = await prisma.store.findFirst({ where: { code } })
   if (existing) {
-    if (existing.code === code) {
-      return NextResponse.json({ error: '店舗コードが既に使用されています' }, { status: 400 })
-    }
-    return NextResponse.json({ error: 'メールアドレスが既に使用されています' }, { status: 400 })
+    return NextResponse.json({ error: '店舗コードが既に使用されています' }, { status: 400 })
   }
 
   const plainPassword = generatePassword()

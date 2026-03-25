@@ -51,8 +51,8 @@ type VisitRecord = {
   purchaseAmount: number | null
   billingAmount: number | null
   store: { id: string; name: string }
-  purchaseItems: { id: string; itemName: string; category: string; quantity: number; price: number }[]
-  workItems: { id: string; itemName: string; quantity: number; price: number }[]
+  purchaseItems: { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }[]
+  workItems: { id: string; workName: string; quantity: number; unitPrice: number }[]
   salesContract: { id: string; createdAt: string } | null
 }
 
@@ -2722,13 +2722,13 @@ function MyPageContent() {
                                   {visit.purchaseItems.map(item => (
                                     <div key={item.id} className="flex justify-between text-xs text-gray-600">
                                       <span>{item.itemName} <span className="text-gray-400">({item.category})</span> ×{item.quantity}</span>
-                                      <span className="font-medium">¥{(item.price * item.quantity).toLocaleString()}</span>
+                                      <span className="font-medium">¥{(item.purchasePrice * item.quantity).toLocaleString()}</span>
                                     </div>
                                   ))}
                                 </div>
                                 <div className="flex justify-between text-xs font-bold text-gray-800 mt-2 pt-2 border-t border-gray-200">
                                   <span>買取合計</span>
-                                  <span>¥{visit.purchaseItems.reduce((sum, it) => sum + it.price * it.quantity, 0).toLocaleString()}</span>
+                                  <span>¥{visit.purchaseItems.reduce((sum, it) => sum + it.purchasePrice * it.quantity, 0).toLocaleString()}</span>
                                 </div>
                               </div>
 
@@ -2739,14 +2739,14 @@ function MyPageContent() {
                                   <div className="space-y-1">
                                     {visit.workItems.map(item => (
                                       <div key={item.id} className="flex justify-between text-xs text-gray-600">
-                                        <span>{item.itemName} ×{item.quantity}</span>
-                                        <span className="font-medium">¥{(item.price * item.quantity).toLocaleString()}</span>
+                                        <span>{item.workName} ×{item.quantity}</span>
+                                        <span className="font-medium">¥{(item.unitPrice * item.quantity).toLocaleString()}</span>
                                       </div>
                                     ))}
                                   </div>
                                   <div className="flex justify-between text-xs font-bold text-gray-800 mt-2 pt-2 border-t border-gray-200">
                                     <span>作業費合計</span>
-                                    <span>¥{visit.workItems.reduce((sum, it) => sum + it.price * it.quantity, 0).toLocaleString()}</span>
+                                    <span>¥{visit.workItems.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0).toLocaleString()}</span>
                                   </div>
                                 </div>
                               )}

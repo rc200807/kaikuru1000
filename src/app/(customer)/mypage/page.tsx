@@ -2685,6 +2685,8 @@ function VisitRequestCalendarForm({
 
   const today = new Date()
   today.setHours(0,0,0,0)
+  const minDate = new Date(today)
+  minDate.setDate(minDate.getDate() + 2) // 2日後以降のみ選択可能
 
   const dayLabels = ['日','月','火','水','木','金','土']
 
@@ -2812,7 +2814,7 @@ function VisitRequestCalendarForm({
               </div>
               {weekDays.map((day, di) => {
                 const dateStr = formatDate(day)
-                const isPast = day < today
+                const isPast = day < minDate
                 const dow = day.getDay()
                 const isBusinessDay = bizHours.days.includes(dow)
                 const isDisabled = isPast || !isBusinessDay

@@ -589,6 +589,17 @@ function MyPageContent() {
     return () => window.removeEventListener('bottomnav-tab-change', onBottomNavChange)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Listen for browser back/forward to restore tab
+  useEffect(() => {
+    function onPopState() {
+      const params = new URLSearchParams(window.location.search)
+      const tab = params.get('tab') || 'dashboard'
+      setActiveTab(tab)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   if (status === 'loading' || loading) {
     return <LoadingSpinner fullPage size="lg" label="読み込み中..." />
   }
@@ -623,7 +634,7 @@ function MyPageContent() {
     setActiveTab(tabKey)
     const url = new URL(window.location.href)
     url.searchParams.set('tab', tabKey)
-    window.history.replaceState({}, '', url.toString())
+    window.history.pushState({}, '', url.toString())
     setMessage(null)
     if (tabKey === 'history' && !visitsLoaded) {
       setVisitsLoading(true)

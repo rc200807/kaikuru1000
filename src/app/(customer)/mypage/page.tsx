@@ -800,10 +800,10 @@ function MyPageContent() {
         </>
       )}
 
-      <div className="max-w-5xl mx-auto">
+      <div>
         {/* Message banner */}
         {message && (
-          <div className="px-4 sm:px-6 pt-4">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4">
             <MessageBanner
               severity={message.type}
               dismissible
@@ -814,7 +814,7 @@ function MyPageContent() {
           </div>
         )}
 
-        <div className={activeTab === 'dashboard' ? '' : 'px-4 sm:px-6 py-6'}>
+        <div className={activeTab === 'dashboard' ? '' : 'max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-28'}>
           {/* ─── Dashboard tab ─── */}
           {activeTab === 'dashboard' && (
             <div>
@@ -894,7 +894,7 @@ function MyPageContent() {
               </div>
 
               {/* ─── Main Content Area ─── */}
-              <div className="px-4 sm:px-6 -mt-4 relative z-10 space-y-5 pb-8">
+              <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-4 relative z-10 space-y-5 pb-28">
 
                 {/* ─── Quick Action Cards (2x2 grid) ─── */}
                 <div className="grid grid-cols-2 gap-3">

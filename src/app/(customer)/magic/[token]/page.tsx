@@ -1,0 +1,86 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { use } from 'react'
+
+export default function MagicLinkPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params)
+  const router = useRouter()
+  const [error, setError] = useState('')
+  const [verifying, setVerifying] = useState(true)
+
+  useEffect(() => {
+    async function verify() {
+      try {
+        const res = await fetch('/api/magic-link/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          setError(data.error || 'リンクの検証に失敗しました')
+          setVerifying(false)
+          return
+        }
+
+        // Store magic auth in sessionStorage
+        sessionStorage.setItem('magicAuth', JSON.stringify({
+          userId: data.userId,
+          contractId: data.contractId,
+          user: data.user,
+        }))
+
+        // Redirect to contract view or mypage
+        if (data.contractId) {
+          router.replace(`/contract-view?id=${data.contractId}`)
+        } else {
+          router.replace('/mypage')
+        }
+      } catch {
+        setError('通信エラーが発生しました。もう一度お試しください。')
+        setVerifying(false)
+      }
+    }
+
+    verify()
+  }, [token, router])
+
+  if (verifying) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-10 h-10 border-4 border-gray-200 border-t-[#B91C1C] rounded-full animate-spin mb-4" />
+          <p className="text-gray-600 text-sm">リンクを確認中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h1 className="text-lg font-bold text-gray-900 mb-2">リンクが無効です</h1>
+          <p className="text-gray-600 text-sm mb-6">{error}</p>
+          <a
+            href="/login"
+            className="inline-block bg-[#B91C1C] text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-[#991B1B] transition-colors"
+          >
+            ログインページへ
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}

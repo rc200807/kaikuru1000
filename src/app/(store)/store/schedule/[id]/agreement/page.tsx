@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { QRCodeSVG } from 'qrcode.react'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
@@ -265,6 +266,8 @@ export default function AgreementPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [existingContract, setExistingContract] = useState<ExistingContract | null>(null)
+  const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null)
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const contractRef = useRef<HTMLDivElement>(null)
 
   // PIN lock state
@@ -350,6 +353,26 @@ export default function AgreementPage() {
   useEffect(() => {
     if (session) fetchVisit()
   }, [session, fetchVisit])
+
+  const generateMagicLink = useCallback(async () => {
+    if (!visit) return
+    setMagicLinkLoading(true)
+    try {
+      const res = await fetch('/api/magic-link/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: visit.user.id, contractId: scheduleId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMagicLinkUrl(data.url)
+      }
+    } catch (e) {
+      console.error('マジックリンク生成エラー:', e)
+    } finally {
+      setMagicLinkLoading(false)
+    }
+  }, [visit, scheduleId])
 
   const fmtYen = (n: number) => `¥${n.toLocaleString()}`
 
@@ -441,6 +464,9 @@ export default function AgreementPage() {
         setMessage({ type: 'success', text: '売買契約書を保存しました。（メール設定が未構成のためメール送信はスキップされました）' })
       }
 
+      // マジックリンク自動生成
+      generateMagicLink()
+
       // PDFダウンロード
       if (pdfBase64) {
         const link = document.createElement('a')
@@ -530,6 +556,55 @@ export default function AgreementPage() {
 
       {message && (
         <MessageBanner severity={message.type}>{message.text}</MessageBanner>
+      )}
+
+      {/* ──── 顧客用マジックリンク ──── */}
+      {existingContract && (
+        <Card variant="elevated" padding="md">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">お客様用 マイページリンク</h2>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+            このQRコードをお客様に読み取ってもらうと、契約内容をマイページで確認できます
+          </p>
+
+          {magicLinkUrl ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-3 bg-white rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+                <QRCodeSVG value={magicLinkUrl} size={200} />
+              </div>
+              <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] max-w-full break-all text-center select-all px-2">
+                {magicLinkUrl}
+              </p>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  navigator.clipboard.writeText(magicLinkUrl)
+                  setMessage({ type: 'success', text: 'リンクをコピーしました' })
+                }}
+              >
+                リンクをコピー
+              </Button>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                このリンクは72時間有効です
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              {magicLinkLoading ? (
+                <div className="flex items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="w-4 h-4 border-2 border-[var(--portal-primary)] border-t-transparent rounded-full animate-spin" />
+                  マジックリンクを生成中...
+                </div>
+              ) : (
+                <Button
+                  variant="outlined"
+                  onClick={generateMagicLink}
+                >
+                  マジックリンクを生成
+                </Button>
+              )}
+            </div>
+          )}
+        </Card>
       )}
 
       {/* ──── PDF出力対象エリア ──── */}

@@ -60,6 +60,7 @@ model User {
   visitRequests     VisitRequest[]
   purchaseMemos     PurchaseMemo[]
   deliveryShipments DeliveryShipment[]
+  magicLinks        MagicLink[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -354,6 +355,18 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+}
+
+// マジックリンク（顧客契約書閲覧用）
+model MagicLink {
+  id         String    @id @default(cuid())
+  token      String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractId String?   // optional: link to specific contract/visit
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）

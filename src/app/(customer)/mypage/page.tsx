@@ -2729,7 +2729,8 @@ function VisitRequestCalendarForm({
 
   return (
     <Card variant="elevated" padding="md">
-      <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3">カレンダーから日時を選択</h3>
+      <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-1">カレンダーから日時を選択</h3>
+      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">希望の日時枠をタップしてください（最大3つまで）</p>
 
       {/* 候補タブ */}
       <div className="flex gap-2 mb-4">
@@ -2817,6 +2818,7 @@ function VisitRequestCalendarForm({
                 const isDisabled = isPast || !isBusinessDay
                 const selectedN = selectedSlots.get(`${dateStr}_${slot.start}`)
 
+                const activeBorderColor = activeCandidate === 1 ? 'border-blue-400' : activeCandidate === 2 ? 'border-green-400' : 'border-orange-400'
                 return (
                   <button
                     key={di}
@@ -2824,18 +2826,20 @@ function VisitRequestCalendarForm({
                     disabled={isDisabled}
                     onClick={() => !isDisabled && handleSlotClick(dateStr, slot)}
                     className={`
-                      p-1.5 min-h-[44px] text-center transition-all
+                      p-1.5 min-h-[48px] text-center transition-all rounded-md m-0.5
                       ${isDisabled
                         ? 'bg-[var(--md-sys-color-surface-container)] opacity-30 cursor-not-allowed'
                         : selectedN
-                          ? `${candidateColors[selectedN-1]} text-white`
-                          : 'bg-[var(--md-sys-color-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer'
+                          ? `${candidateColors[selectedN-1]} text-white shadow-sm rounded-lg`
+                          : `bg-[var(--md-sys-color-surface-container-low)] border-2 border-dashed ${activeBorderColor} border-opacity-40 hover:border-opacity-100 hover:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer active:scale-95`
                       }
                     `}
                   >
-                    {selectedN && (
+                    {selectedN ? (
                       <span className="text-[10px] font-bold">{candidateLabels[selectedN-1]}</span>
-                    )}
+                    ) : !isDisabled ? (
+                      <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] opacity-50">＋</span>
+                    ) : null}
                   </button>
                 )
               })}

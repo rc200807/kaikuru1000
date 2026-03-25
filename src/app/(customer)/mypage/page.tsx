@@ -1486,6 +1486,7 @@ function MyPageContent() {
               <Card variant="elevated" padding="none">
                 <div className="divide-y divide-gray-100">
                   {[
+                    { key: 'edit-profile', label: 'プロフィール編集', sub: `${user.name}（${user.phone}）`, icon: '✏️', color: 'text-gray-600' },
                     { key: 'id-document', label: '身分証明書', sub: user.idDocumentPath ? '提出済み' : '未提出', icon: '🪪', color: user.idDocumentPath ? 'text-green-600' : 'text-red-500' },
                     { key: 'password', label: 'パスワード変更', sub: 'セキュリティ設定', icon: '🔒', color: 'text-gray-600' },
                     { key: 'bank-account', label: '口座情報', sub: user.bankName ? `${user.bankName} ${user.branchName || ''}` : '未登録', icon: '🏦', color: user.bankName ? 'text-green-600' : 'text-amber-500' },
@@ -1509,10 +1510,15 @@ function MyPageContent() {
                 </div>
               </Card>
 
-              <Card variant="elevated" padding="md">
-                <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
-                  プロフィール編集
-                </h2>
+            </div>
+          )}
+
+          {/* ─── Edit Profile tab ─── */}
+          {activeTab === 'edit-profile' && (
+            <Card variant="elevated" padding="md">
+              <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
+                プロフィール編集
+              </h2>
               <form onSubmit={handleSaveProfile} className="space-y-5 max-w-lg">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <TextField
@@ -1553,12 +1559,14 @@ function MyPageContent() {
                   required
                 />
 
-                <TextField
-                  label="ライセンスキー"
-                  value={user.licenseKey.key}
-                  onChange={() => {}}
-                  disabled
-                />
+                {user.licenseKey && (
+                  <TextField
+                    label="ライセンスキー"
+                    value={user.licenseKey.key}
+                    onChange={() => {}}
+                    disabled
+                  />
+                )}
 
                 <Button
                   type="submit"
@@ -1570,7 +1578,6 @@ function MyPageContent() {
                 </Button>
               </form>
             </Card>
-            </div>
           )}
 
           {/* ─── Password tab ─── */}

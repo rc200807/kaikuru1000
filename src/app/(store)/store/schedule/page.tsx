@@ -108,11 +108,12 @@ export default function StoreSchedulePage() {
   }, [])
 
   useEffect(() => {
+    if (status !== 'authenticated') return
     fetch('/api/visit-requests?status=pending,counter_proposed')
-      .then(r => r.ok ? r.json() : [])
-      .then(data => { setVisitRequests(Array.isArray(data) ? data : data.requests || []); setVisitRequestsLoading(false) })
+      .then(r => r.ok ? r.json() : { requests: [] })
+      .then(data => { setVisitRequests(data.requests || []); setVisitRequestsLoading(false) })
       .catch(() => setVisitRequestsLoading(false))
-  }, [])
+  }, [status])
 
   useEffect(() => {
     if (status === 'authenticated') {

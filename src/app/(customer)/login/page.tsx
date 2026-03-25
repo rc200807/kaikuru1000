@@ -66,9 +66,6 @@ export default function CustomerLoginPage() {
             <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
             <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
           </Link>
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
-            顧客マイページ ログイン
-          </p>
         </div>
 
         {/* Login card */}

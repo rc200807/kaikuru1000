@@ -43,7 +43,7 @@ export async function POST(
     return NextResponse.json({ error: '署名データが必要です' }, { status: 400 })
   }
 
-  const customerEmail = schedule.user.email
+  const customerEmail = schedule.user.email || ''
 
   // 既存の契約書があれば上書き、なければ新規作成
   const contract = await prisma.salesContract.upsert({

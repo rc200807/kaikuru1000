@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       storeName: user.store.name,
       customerName: fullUser.name,
       customerFurigana: fullUser.furigana,
-      customerEmail: fullUser.email,
+      customerEmail: fullUser.email || '',
       customerPhone: fullUser.phone,
       customerAddress: fullUser.address,
       registeredAt: fullUser.createdAt,

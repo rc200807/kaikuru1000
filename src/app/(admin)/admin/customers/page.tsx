@@ -1135,10 +1135,9 @@ export default function AdminCustomersPage() {
             placeholder="やまだ たろう"
           />
           <TextField
-            label="メールアドレス"
+            label="メールアドレス（任意）"
             value={addForm.email}
             onChange={v => setAddForm(prev => ({ ...prev, email: v }))}
-            required
             type="email"
             placeholder="example@mail.com"
           />

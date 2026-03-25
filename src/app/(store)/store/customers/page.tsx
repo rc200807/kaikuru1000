@@ -1092,11 +1092,10 @@ export default function StoreCustomersPage() {
             placeholder="やまだ たろう"
           />
           <TextField
-            label="メールアドレス"
+            label="メールアドレス（任意）"
             type="email"
             value={addCustomerForm.email}
             onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))}
-            required
             placeholder="taro@example.com"
           />
           <TextField

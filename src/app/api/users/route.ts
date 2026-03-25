@@ -8,10 +8,10 @@ const MIN_PASSWORD_LENGTH = 8
 const registerSchema = z.object({
   name:         z.string().min(1, '氏名は必須です').max(100),
   furigana:     z.string().min(1, 'ふりがなは必須です').max(100),
-  email:        z.string().email('有効なメールアドレスを入力してください'),
+  email:        z.string().email('有効なメールアドレスを入力してください').optional().or(z.literal('')),
   phone:        z.string().min(1, '電話番号は必須です').max(20),
   address:      z.string().min(1, '住所は必須です').max(200),
-  password:     z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`),
+  password:     z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional().or(z.literal('')),
   licenseKey:   z.string().optional(),
   customerType: z.enum(['visit', 'delivery', 'regular']).optional(),
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
@@ -39,19 +39,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ライセンスキーは必須です' }, { status: 400 })
     }
 
-    // メールアドレス重複確認
-    const existingUser = await prisma.user.findUnique({ where: { email } })
-    if (existingUser) {
-      return NextResponse.json({ error: 'このメールアドレスは既に登録されています' }, { status: 400 })
+    // メールアドレス重複確認（メールがある場合のみ）
+    if (email) {
+      const existingUser = await prisma.user.findUnique({ where: { email } })
+      if (existingUser) {
+        return NextResponse.json({ error: 'このメールアドレスは既に登録されています' }, { status: 400 })
+      }
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10)
+    // パスワードがない場合はランダム生成（管理者/店舗からの追加時）
+    const actualPassword = password || Math.random().toString(36).slice(-12) + 'A1!'
+    const hashedPassword = await bcrypt.hash(actualPassword, 10)
 
     // ライセンスキーなしで作成（通常買取 or 管理者/店舗からの追加）
     if (isRegular || skipLicenseKey || !licenseKey) {
       const user = await prisma.user.create({
         data: {
-          name, furigana, email, phone, address,
+          name, furigana, email: email || null, phone, address,
           password: hashedPassword,
           customerType: customerType || 'visit',
         },

@@ -77,10 +77,14 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
   // If bankName prop matches a known bank, pre-select it
   useEffect(() => {
     if (bankName && banks.length > 0 && !selectedBank) {
-      const match = banks.find(b => b.name === bankName)
+      const match = banks.find(b =>
+        b.name === bankName ||
+        b.normalize?.name === bankName ||
+        (b.normalize?.name && bankName.includes(b.name))
+      )
       if (match) {
         setSelectedBank(match)
-        setBankQuery(match.name)
+        setBankQuery(match.normalize?.name || match.name)
       }
     }
   }, [bankName, banks, selectedBank])

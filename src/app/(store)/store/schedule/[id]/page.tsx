@@ -824,30 +824,30 @@ export default function VisitDetailPage() {
       </Card>
 
       {/* ────────── 事前同意ボタン ────────── */}
-      <div className="flex items-center gap-3">
+      <Card variant="elevated" padding="md">
         <button
           onClick={() => { if (!visit.preConsentAt) { consentHasDrawnRef.current = false; setShowConsentModal(true) } }}
           className={`
-            flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors
+            w-full flex items-center justify-center gap-3 px-6 py-5 rounded-2xl text-base font-semibold transition-all
             ${visit.preConsentAt
-              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-300 dark:border-green-700'
-              : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+              ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/20'
+              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]'
             }
           `}
         >
           {visit.preConsentAt ? (
-            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
           )}
-          事前同意
+          {visit.preConsentAt ? '事前同意済み' : '事前同意を取得する'}
         </button>
         {visit.preConsentAt && (
-          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+          <p className="text-center text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2">
             {format(new Date(visit.preConsentAt), 'M月d日 HH:mm', { locale: ja })} に同意済み
-          </span>
+          </p>
         )}
-      </div>
+      </Card>
 
       {/* ────────── 事前同意モーダル ────────── */}
       {showConsentModal && (

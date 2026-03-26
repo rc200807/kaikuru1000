@@ -1390,14 +1390,22 @@ function MyPageContent() {
                     >
                       {/* 外側のグロー */}
                       <div className="absolute -inset-3 rounded-full bg-gradient-to-br from-red-300/20 via-pink-200/15 to-rose-300/20 blur-xl animate-pulse" />
-                      {/* 外側のすりガラスリング */}
-                      <div className="absolute inset-0 rounded-full bg-white/20 backdrop-blur-md border border-white/30 shadow-[0_8px_32px_rgba(185,28,28,0.15)]" />
-                      {/* 中間リング */}
-                      <div className="absolute inset-3 rounded-full bg-white/25 backdrop-blur-lg border border-white/40" />
-                      {/* 内側のすりガラス円 */}
-                      <div className="absolute inset-6 rounded-full bg-gradient-to-br from-red-500/80 to-rose-400/80 backdrop-blur-xl border border-white/20 shadow-lg shadow-red-500/20 flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-transform">
+                      {/* 外側のすりガラスリング — 少し透ける */}
+                      <div className="absolute inset-0 rounded-full bg-white/10 backdrop-blur-[2px] border border-white/25 shadow-[0_8px_32px_rgba(185,28,28,0.15)]" />
+                      {/* 中間リング — 透け感を残す */}
+                      <div className="absolute inset-3 rounded-full bg-white/15 backdrop-blur-[4px] border border-white/30" />
+                      {/* 内側のすりガラス円 — 商品が透ける */}
+                      <div className="absolute inset-6 rounded-full bg-gradient-to-br from-red-500/55 to-rose-400/55 backdrop-blur-[5px] border border-white/20 shadow-lg shadow-red-500/20 flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-transform overflow-hidden">
+                        {/* ボタン内を流れる商品イラスト */}
+                        <div className="absolute inset-0 flex items-center overflow-hidden pointer-events-none">
+                          <div className="flex gap-4 animate-[scrollIcons_12s_linear_infinite] whitespace-nowrap opacity-[0.15]">
+                            {[...'👜📱💻📺🪑⌚💍🎸📷🎮👜📱💻📺🪑⌚💍🎸📷🎮'].map((emoji, i) => (
+                              <span key={i} className="text-3xl select-none">{emoji}</span>
+                            ))}
+                          </div>
+                        </div>
                         {/* 光沢オーバーレイ */}
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 via-transparent to-transparent" style={{ clipPath: 'ellipse(80% 40% at 50% 20%)' }} />
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-transparent to-transparent" style={{ clipPath: 'ellipse(80% 40% at 50% 20%)' }} />
                         <div className="text-center relative z-10">
                           <p className="text-white text-2xl font-black tracking-wider drop-shadow-sm">TRY!!</p>
                           <p className="text-white/90 text-[10px] mt-0.5 font-medium">タップで査定開始</p>

@@ -78,6 +78,24 @@ export async function PATCH(
     return NextResponse.json(updated)
   }
 
+  // 口座情報の編集（bankInfo キーが含まれていれば口座更新とみなす）
+  if ('bankInfo' in body) {
+    const data: Record<string, unknown> = {
+      bankName:      typeof body.bankName === 'string' ? body.bankName.trim() || null : null,
+      branchName:    typeof body.branchName === 'string' ? body.branchName.trim() || null : null,
+      accountType:   typeof body.accountType === 'string' ? body.accountType.trim() || null : null,
+      accountNumber: typeof body.accountNumber === 'string' ? body.accountNumber.trim() || null : null,
+      accountHolder: typeof body.accountHolder === 'string' ? body.accountHolder.trim() || null : null,
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true },
+    })
+    return NextResponse.json(updated)
+  }
+
   // OCR情報の編集（idName キーが含まれていればOCR更新とみなす）
   if ('idName' in body) {
     const data: Record<string, unknown> = {

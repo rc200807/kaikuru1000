@@ -16,6 +16,7 @@ import MessageBanner from '@/components/MessageBanner'
 import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
+import BankSearch from '@/components/customer/BankSearch'
 
 type User = {
   id: string
@@ -132,6 +133,11 @@ export default function AdminCustomersPage() {
   const [ocrEditMode, setOcrEditMode] = useState(false)
   const [ocrForm, setOcrForm] = useState({ idName: '', idBirthDate: '', idAddress: '', idLicenseNumber: '', idExpiryDate: '', idBackAddress: '' })
   const [ocrSaving, setOcrSaving] = useState(false)
+
+  // 口座情報編集
+  const [bankEditMode, setBankEditMode] = useState(false)
+  const [bankForm, setBankForm] = useState({ bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' })
+  const [bankSaving, setBankSaving] = useState(false)
 
   // 新規顧客追加モーダル
   const [showAddCustomer, setShowAddCustomer] = useState(false)
@@ -443,12 +449,63 @@ export default function AdminCustomersPage() {
     setOcrSaving(false)
   }
 
+  function startBankEditMode() {
+    if (!detailUser) return
+    setBankForm({
+      bankName: detailUser.bankName || '',
+      branchName: detailUser.branchName || '',
+      accountType: detailUser.accountType || '',
+      accountNumber: detailUser.accountNumber || '',
+      accountHolder: detailUser.accountHolder || '',
+    })
+    setBankEditMode(true)
+  }
+
+  async function handleSaveBank() {
+    if (!detailUser) return
+    setBankSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${detailUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bankInfo: true,
+          bankName: bankForm.bankName || null,
+          branchName: bankForm.branchName || null,
+          accountType: bankForm.accountType || null,
+          accountNumber: bankForm.accountNumber || null,
+          accountHolder: bankForm.accountHolder || null,
+        }),
+      })
+      if (res.ok) {
+        const patch = {
+          bankName: bankForm.bankName || null,
+          branchName: bankForm.branchName || null,
+          accountType: bankForm.accountType || null,
+          accountNumber: bankForm.accountNumber || null,
+          accountHolder: bankForm.accountHolder || null,
+        }
+        setDetailUser(prev => prev ? { ...prev, ...patch } : null)
+        setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, ...patch } : u))
+        setBankEditMode(false)
+        setMessage({ type: 'success', text: '口座情報を更新しました' })
+      } else {
+        const data = await res.json()
+        setMessage({ type: 'error', text: data.error || '口座情報の更新に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: '口座情報の更新に失敗しました' })
+    }
+    setBankSaving(false)
+  }
+
   function closeDetailModal() {
     setDetailUser(null)
     setDetailSchedules([])
     setScheduleMsg(null)
     setEditMode(false)
     setOcrEditMode(false)
+    setBankEditMode(false)
     updateUrlParams({ customer: null, tab: null })
   }
 
@@ -1229,32 +1286,83 @@ export default function AdminCustomersPage() {
                   </div>
                 </div>
 
-                {/* 振込先口座情報（読み取り専用） */}
-                {(detailUser.bankName || detailUser.bankName === null) && (
-                  <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
-                    <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
-                      <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">振込先口座情報</span>
-                    </div>
-                    {detailUser.bankName ? (
-                      <dl className="px-4 py-3 space-y-2">
-                        {[
-                          { label: '銀行名',   value: detailUser.bankName },
-                          { label: '支店名',   value: detailUser.branchName },
-                          { label: '口座種別', value: detailUser.accountType },
-                          { label: '口座番号', value: detailUser.accountNumber },
-                          { label: '口座名義', value: detailUser.accountHolder },
-                        ].filter(item => item.value).map(item => (
-                          <div key={item.label} className="flex gap-3">
-                            <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
-                            <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : (
-                      <p className="px-4 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">未登録</p>
+                {/* 振込先口座情報 */}
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)] flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">振込先口座情報</span>
+                    {!bankEditMode && (
+                      <button
+                        type="button"
+                        onClick={startBankEditMode}
+                        className="text-xs text-[var(--portal-primary)] hover:underline"
+                      >
+                        編集
+                      </button>
                     )}
                   </div>
-                )}
+                  {bankEditMode ? (
+                    <div className="px-4 py-3 space-y-3">
+                      <BankSearch
+                        bankName={bankForm.bankName}
+                        branchName={bankForm.branchName}
+                        onChange={({ bankName, bankCode, branchName, branchCode }) => {
+                          setBankForm(f => ({ ...f, bankName, branchName }))
+                        }}
+                      />
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">口座種別</label>
+                        <select
+                          value={bankForm.accountType}
+                          onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))}
+                          className="w-full text-xs border border-[var(--md-sys-color-outline-variant)] rounded-md px-2.5 py-2 bg-[var(--md-sys-color-surface)] focus:outline-none focus:border-[var(--portal-primary)]"
+                        >
+                          <option value="">選択してください</option>
+                          <option value="普通">普通</option>
+                          <option value="当座">当座</option>
+                        </select>
+                      </div>
+                      <TextField
+                        label="口座番号"
+                        value={bankForm.accountNumber}
+                        onChange={v => setBankForm(f => ({ ...f, accountNumber: v }))}
+                        placeholder="例：1234567"
+
+                      />
+                      <TextField
+                        label="口座名義"
+                        value={bankForm.accountHolder}
+                        onChange={v => setBankForm(f => ({ ...f, accountHolder: v }))}
+                        placeholder="例：ヤマダ タロウ"
+
+                      />
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" onClick={handleSaveBank} disabled={bankSaving} loading={bankSaving}>
+                          {bankSaving ? '保存中...' : '保存'}
+                        </Button>
+                        <Button size="sm" variant="outlined" onClick={() => setBankEditMode(false)}>
+                          キャンセル
+                        </Button>
+                      </div>
+                    </div>
+                  ) : detailUser.bankName ? (
+                    <dl className="px-4 py-3 space-y-2">
+                      {[
+                        { label: '銀行名',   value: detailUser.bankName },
+                        { label: '支店名',   value: detailUser.branchName },
+                        { label: '口座種別', value: detailUser.accountType },
+                        { label: '口座番号', value: detailUser.accountNumber },
+                        { label: '口座名義', value: detailUser.accountHolder },
+                      ].filter(item => item.value).map(item => (
+                        <div key={item.label} className="flex gap-3">
+                          <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                          <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{item.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <p className="px-4 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">未登録</p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1351,7 +1459,7 @@ export default function AdminCustomersPage() {
                           <div className="mt-1.5">
                             <Button
                               variant="text"
-                              size="sm"
+      
                               onClick={() => { closeDetailModal(); router.push(`/admin/visits/${vs.id}`) }}
                             >
                               詳細

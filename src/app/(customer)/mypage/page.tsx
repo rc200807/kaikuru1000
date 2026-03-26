@@ -126,6 +126,7 @@ function MyPageContent() {
     bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '',
   })
   const [savingBank, setSavingBank] = useState(false)
+  const [bankEditing, setBankEditing] = useState(false)
 
   // 訪問履歴
   const [visits, setVisits] = useState<VisitRecord[]>([])
@@ -658,6 +659,7 @@ function MyPageContent() {
     setSavingBank(false)
     if (res.ok) {
       setUser(prev => prev ? { ...prev, ...bankForm } : null)
+      setBankEditing(false)
       setMessage({ type: 'success', text: '口座情報を保存しました' })
     } else {
       setMessage({ type: 'error', text: '口座情報の保存に失敗しました' })
@@ -2513,43 +2515,79 @@ function MyPageContent() {
               <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-6">
                 買取金額のお振込み先をご登録ください。
               </p>
-              <form onSubmit={handleSaveBank} className="space-y-5 max-w-lg">
-                <BankSearch
-                  bankName={bankForm.bankName}
-                  branchName={bankForm.branchName}
-                  onChange={({ bankName, bankCode, branchName, branchCode }) => {
-                    setBankForm(f => ({ ...f, bankName, branchName }))
-                  }}
-                />
-                <div>
-                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">口座種別</label>
-                  <select
-                    value={bankForm.accountType}
-                    onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))}
-                    className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2.5 bg-[var(--md-sys-color-surface)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
-                  >
-                    <option value="">選択してください</option>
-                    <option value="普通">普通</option>
-                    <option value="当座">当座</option>
-                  </select>
+
+              {/* 読み取り専用表示（口座情報があり、編集モードでない場合） */}
+              {!bankEditing && user?.bankName ? (
+                <div className="max-w-lg">
+                  <div className="rounded-2xl border border-[var(--md-sys-color-outline-variant)]/50 bg-white/50 backdrop-blur-sm overflow-hidden">
+                    <dl className="divide-y divide-[var(--md-sys-color-outline-variant)]/30">
+                      {[
+                        { label: '銀行名', value: user.bankName },
+                        { label: '支店名', value: user.branchName },
+                        { label: '口座種別', value: user.accountType },
+                        { label: '口座番号', value: user.accountNumber },
+                        { label: '口座名義', value: user.accountHolder },
+                      ].map(item => (
+                        <div key={item.label} className="flex px-4 py-3">
+                          <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">{item.label}</dt>
+                          <dd className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{item.value || '—'}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                  <div className="mt-4">
+                    <Button variant="outlined" size="md" onClick={() => setBankEditing(true)}>
+                      編集する
+                    </Button>
+                  </div>
                 </div>
-                <TextField
-                  label="口座番号"
-                  value={bankForm.accountNumber}
-                  onChange={v => setBankForm(f => ({ ...f, accountNumber: v }))}
-                  placeholder="例：1234567"
-                  type="text"
-                />
-                <TextField
-                  label="口座名義"
-                  value={bankForm.accountHolder}
-                  onChange={v => setBankForm(f => ({ ...f, accountHolder: v }))}
-                  placeholder="例：ヤマダ タロウ"
-                />
-                <Button type="submit" disabled={savingBank} loading={savingBank} size="lg">
-                  {savingBank ? '保存中...' : '保存する'}
-                </Button>
-              </form>
+              ) : (
+                /* 編集フォーム（口座情報がない場合、または編集モードの場合） */
+                <form onSubmit={handleSaveBank} className="space-y-5 max-w-lg">
+                  <BankSearch
+                    bankName={bankForm.bankName}
+                    branchName={bankForm.branchName}
+                    onChange={({ bankName, bankCode, branchName, branchCode }) => {
+                      setBankForm(f => ({ ...f, bankName, branchName }))
+                    }}
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">口座種別</label>
+                    <select
+                      value={bankForm.accountType}
+                      onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))}
+                      className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2.5 bg-[var(--md-sys-color-surface)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
+                    >
+                      <option value="">選択してください</option>
+                      <option value="普通">普通</option>
+                      <option value="当座">当座</option>
+                    </select>
+                  </div>
+                  <TextField
+                    label="口座番号"
+                    value={bankForm.accountNumber}
+                    onChange={v => setBankForm(f => ({ ...f, accountNumber: v }))}
+                    placeholder="例：1234567"
+                    type="text"
+                  />
+                  <TextField
+                    label="口座名義"
+                    value={bankForm.accountHolder}
+                    onChange={v => setBankForm(f => ({ ...f, accountHolder: v }))}
+                    placeholder="例：ヤマダ タロウ"
+                  />
+                  <div className="flex gap-3">
+                    <Button type="submit" disabled={savingBank} loading={savingBank} size="lg">
+                      {savingBank ? '保存中...' : '保存する'}
+                    </Button>
+                    {bankEditing && (
+                      <Button variant="outlined" size="lg" onClick={() => setBankEditing(false)}>
+                        キャンセル
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              )}
             </Card>
           )}
 

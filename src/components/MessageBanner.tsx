@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 type Severity = 'success' | 'error' | 'warning' | 'info'
 
@@ -11,32 +11,51 @@ type MessageBannerProps = {
   onDismiss?: () => void
   className?: string
   icon?: React.ReactNode
+  /** 自動で消える秒数。0で無効。デフォルト: success=4, info=5, warning=6, error=0(手動) */
+  autoHideSeconds?: number
+  /** フローティング表示（fixed positioned） */
+  floating?: boolean
 }
 
-const severityStyles: Record<Severity, { bg: string; border: string; text: string; iconColor: string }> = {
+const severityConfig: Record<Severity, {
+  gradient: string
+  iconBg: string
+  iconColor: string
+  textColor: string
+  borderColor: string
+  defaultAutoHide: number
+}> = {
   success: {
-    bg: 'bg-[var(--status-completed-bg)]',
-    border: 'border-[var(--status-completed-text)]',
-    text: 'text-[var(--status-completed-text)]',
-    iconColor: 'text-[var(--status-completed-text)]',
+    gradient: 'from-emerald-50 via-green-50/80 to-teal-50/60',
+    iconBg: 'bg-gradient-to-br from-emerald-100 to-green-100',
+    iconColor: 'text-emerald-600',
+    textColor: 'text-emerald-900',
+    borderColor: 'border-emerald-200/60',
+    defaultAutoHide: 4,
   },
   error: {
-    bg: 'bg-[var(--md-sys-color-error-container)]',
-    border: 'border-[var(--md-sys-color-error)]',
-    text: 'text-[var(--md-sys-color-on-error-container)]',
-    iconColor: 'text-[var(--md-sys-color-error)]',
+    gradient: 'from-red-50 via-rose-50/80 to-pink-50/60',
+    iconBg: 'bg-gradient-to-br from-red-100 to-rose-100',
+    iconColor: 'text-red-600',
+    textColor: 'text-red-900',
+    borderColor: 'border-red-200/60',
+    defaultAutoHide: 0,
   },
   warning: {
-    bg: 'bg-[var(--status-pending-bg)]',
-    border: 'border-[var(--status-pending-text)]',
-    text: 'text-[var(--status-pending-text)]',
-    iconColor: 'text-[var(--status-pending-text)]',
+    gradient: 'from-amber-50 via-yellow-50/80 to-orange-50/60',
+    iconBg: 'bg-gradient-to-br from-amber-100 to-yellow-100',
+    iconColor: 'text-amber-600',
+    textColor: 'text-amber-900',
+    borderColor: 'border-amber-200/60',
+    defaultAutoHide: 6,
   },
   info: {
-    bg: 'bg-[var(--status-scheduled-bg)]',
-    border: 'border-[var(--status-scheduled-text)]',
-    text: 'text-[var(--status-scheduled-text)]',
-    iconColor: 'text-[var(--status-scheduled-text)]',
+    gradient: 'from-blue-50 via-sky-50/80 to-indigo-50/60',
+    iconBg: 'bg-gradient-to-br from-blue-100 to-sky-100',
+    iconColor: 'text-blue-600',
+    textColor: 'text-blue-900',
+    borderColor: 'border-blue-200/60',
+    defaultAutoHide: 5,
   },
 }
 
@@ -66,39 +85,72 @@ const defaultIcons: Record<Severity, React.ReactNode> = {
 export default function MessageBanner({
   severity,
   children,
-  dismissible = false,
+  dismissible = true,
   onDismiss,
   className = '',
   icon,
+  autoHideSeconds,
+  floating = false,
 }: MessageBannerProps) {
   const [visible, setVisible] = useState(true)
+  const [exiting, setExiting] = useState(false)
+
+  const config = severityConfig[severity]
+  const hideDelay = autoHideSeconds ?? config.defaultAutoHide
+
+  useEffect(() => {
+    if (hideDelay > 0) {
+      const timer = setTimeout(() => {
+        setExiting(true)
+        setTimeout(() => {
+          setVisible(false)
+          onDismiss?.()
+        }, 300)
+      }, hideDelay * 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [hideDelay, onDismiss])
+
   if (!visible) return null
 
-  const style = severityStyles[severity]
-
   const handleDismiss = () => {
-    setVisible(false)
-    onDismiss?.()
+    setExiting(true)
+    setTimeout(() => {
+      setVisible(false)
+      onDismiss?.()
+    }, 300)
   }
 
-  return (
+  const card = (
     <div
       role="alert"
       className={`
-        flex items-start gap-3 px-4 py-3
-        rounded-[var(--md-sys-shape-small)] border-l-4
-        ${style.bg} ${style.border} ${style.text}
+        flex items-center gap-3 px-4 py-3.5
+        bg-gradient-to-r ${config.gradient}
+        border ${config.borderColor}
+        rounded-2xl shadow-lg shadow-black/5
+        backdrop-blur-sm
+        transition-all duration-300
+        ${exiting ? 'opacity-0 translate-y-[-8px] scale-95' : 'opacity-100 translate-y-0 scale-100'}
         ${className}
       `}
+      style={{ maxWidth: '420px' }}
     >
-      <span className={`flex-shrink-0 mt-0.5 ${style.iconColor}`}>
+      {/* Icon with glass background */}
+      <span className={`flex-shrink-0 w-9 h-9 rounded-xl ${config.iconBg} flex items-center justify-center ${config.iconColor}`}>
         {icon || defaultIcons[severity]}
       </span>
-      <div className="flex-1 text-sm leading-relaxed">{children}</div>
+
+      {/* Text */}
+      <div className={`flex-1 text-sm font-medium leading-snug ${config.textColor}`}>
+        {children}
+      </div>
+
+      {/* Dismiss button */}
       {dismissible && (
         <button
           onClick={handleDismiss}
-          className={`flex-shrink-0 p-0.5 rounded-full hover:bg-black/5 transition-colors ${style.iconColor}`}
+          className="flex-shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors text-gray-400 hover:text-gray-600"
           aria-label="閉じる"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -108,4 +160,14 @@ export default function MessageBanner({
       )}
     </div>
   )
+
+  if (floating) {
+    return (
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] pointer-events-auto animate-[slideDown_0.3s_ease-out]">
+        {card}
+      </div>
+    )
+  }
+
+  return card
 }

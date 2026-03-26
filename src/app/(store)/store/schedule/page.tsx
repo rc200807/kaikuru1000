@@ -339,9 +339,8 @@ export default function StoreSchedulePage() {
         {message && (
           <MessageBanner
             severity={message.type}
-            dismissible
+            floating
             onDismiss={() => setMessage(null)}
-            className="mb-6"
           >
             {message.text}
           </MessageBanner>

@@ -744,7 +744,7 @@ export default function VisitDetailPage() {
       </div>
 
       {message && (
-        <MessageBanner severity={message.type}>
+        <MessageBanner severity={message.type} floating onDismiss={() => setMessage(null)}>
           {message.text}
         </MessageBanner>
       )}

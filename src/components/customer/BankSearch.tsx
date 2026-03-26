@@ -102,10 +102,16 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
         setBranches(data)
         // If branchName prop matches, pre-select
         if (branchName) {
-          const match = data.find((b: BranchItem) => b.name === branchName)
+          const match = data.find((b: BranchItem) =>
+            b.name === branchName ||
+            b.code === branchName ||
+            branchName.includes(b.name)
+          )
           if (match) {
             setSelectedBranch(match)
             setBranchQuery(match.name)
+          } else {
+            setBranchQuery(branchName)
           }
         }
       })

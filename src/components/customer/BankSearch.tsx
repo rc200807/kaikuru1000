@@ -64,7 +64,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
       return
     }
     setLoadingBanks(true)
-    fetch('https://bank.teraren.com/banks.json')
+    fetch('/api/zengin/banks')
       .then(res => res.json())
       .then((data: BankItem[]) => {
         banksCache = data
@@ -92,7 +92,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
       return
     }
     setLoadingBranches(true)
-    fetch(`https://bank.teraren.com/banks/${selectedBank.code}/branches.json`)
+    fetch(`/api/zengin/branches?bankCode=${selectedBank.code}`)
       .then(res => res.json())
       .then((data: BranchItem[]) => {
         setBranches(data)

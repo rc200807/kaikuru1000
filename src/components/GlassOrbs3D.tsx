@@ -125,16 +125,16 @@ export default function GlassOrbs3D() {
 
     // Pastel gradient pairs [topColor, bottomColor]
     const orbConfigs = [
-      { radius: 1.1, top: 0xfdd8e8, bottom: 0xc8e0f8, opacity: 0.88, pos: [-1.8, 0.8, -1.5], speed: 0.25, amp: 0.4 },
-      { radius: 0.9, top: 0xddd0f8, bottom: 0xf0d0e0, opacity: 0.85, pos: [2.0, 1.2, -1.0], speed: 0.35, amp: 0.5 },
-      { radius: 1.0, top: 0xc8f4e0, bottom: 0xd8d0f8, opacity: 0.82, pos: [-0.8, -1.5, -0.5], speed: 0.3, amp: 0.45 },
-      { radius: 0.5, top: 0xffe0d8, bottom: 0xe0f0c8, opacity: 0.9, pos: [0.5, 1.8, 0.5], speed: 0.5, amp: 0.35 },
-      { radius: 0.45, top: 0xc8e0f8, bottom: 0xf0c8e0, opacity: 0.85, pos: [-2.5, -0.5, 0.5], speed: 0.55, amp: 0.3 },
-      { radius: 0.3, top: 0xffd8cc, bottom: 0xd8f0e8, opacity: 0.9, pos: [1.2, -1.0, 1.0], speed: 0.65, amp: 0.25 },
-      { radius: 1.6, top: 0xe8ddf8, bottom: 0xd0e8f8, opacity: 0.4, pos: [1.0, 0.0, -3.5], speed: 0.15, amp: 0.6 },
-      { radius: 0.25, top: 0xc0f4e8, bottom: 0xf4d0e0, opacity: 0.88, pos: [0.3, 2.2, 0.8], speed: 0.7, amp: 0.2 },
-      { radius: 0.7, top: 0xf0d0f4, bottom: 0xc8f0e0, opacity: 0.8, pos: [-1.2, 1.8, 0], speed: 0.4, amp: 0.4 },
-      { radius: 0.35, top: 0xb8d4f8, bottom: 0xf8d0d8, opacity: 0.85, pos: [2.5, -1.5, 0.3], speed: 0.6, amp: 0.3 },
+      { radius: 1.1, top: 0xfeeef4, bottom: 0xe8f0fa, opacity: 0.55, pos: [-1.8, 0.8, -1.5], speed: 0.25, amp: 0.4 },
+      { radius: 0.9, top: 0xf0ecfa, bottom: 0xf8ecf2, opacity: 0.50, pos: [2.0, 1.2, -1.0], speed: 0.35, amp: 0.5 },
+      { radius: 1.0, top: 0xe8faf2, bottom: 0xf0ecfa, opacity: 0.48, pos: [-0.8, -1.5, -0.5], speed: 0.3, amp: 0.45 },
+      { radius: 0.5, top: 0xfff2ee, bottom: 0xf2f8e8, opacity: 0.55, pos: [0.5, 1.8, 0.5], speed: 0.5, amp: 0.35 },
+      { radius: 0.45, top: 0xe8f0fa, bottom: 0xf8e8f2, opacity: 0.50, pos: [-2.5, -0.5, 0.5], speed: 0.55, amp: 0.3 },
+      { radius: 0.3, top: 0xfff0ea, bottom: 0xeef8f2, opacity: 0.55, pos: [1.2, -1.0, 1.0], speed: 0.65, amp: 0.25 },
+      { radius: 1.6, top: 0xf4f0fa, bottom: 0xecf4fa, opacity: 0.25, pos: [1.0, 0.0, -3.5], speed: 0.15, amp: 0.6 },
+      { radius: 0.25, top: 0xe4faf4, bottom: 0xfaecf2, opacity: 0.52, pos: [0.3, 2.2, 0.8], speed: 0.7, amp: 0.2 },
+      { radius: 0.7, top: 0xf8ecfa, bottom: 0xe8f8f2, opacity: 0.45, pos: [-1.2, 1.8, 0], speed: 0.4, amp: 0.4 },
+      { radius: 0.35, top: 0xe4eefa, bottom: 0xfaecee, opacity: 0.50, pos: [2.5, -1.5, 0.3], speed: 0.6, amp: 0.3 },
     ]
 
     const sphereGeo = new THREE.SphereGeometry(1, 64, 64)

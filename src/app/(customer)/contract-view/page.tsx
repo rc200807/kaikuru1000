@@ -2,6 +2,8 @@
 
 import { useEffect, useState, Suspense, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import GlassInput from '@/components/customer/GlassInput'
+import GlassButton from '@/components/customer/GlassButton'
 
 interface ContractData {
   id: string
@@ -139,7 +141,7 @@ function ContractViewContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-b from-pink-50/50 via-white to-purple-50/50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block w-10 h-10 border-4 border-gray-200 border-t-[#B91C1C] rounded-full animate-spin mb-4" />
           <p className="text-gray-600 text-sm">契約書を読み込み中...</p>
@@ -150,8 +152,8 @@ function ContractViewContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-gradient-to-b from-pink-50/50 via-white to-purple-50/50 flex items-center justify-center p-4">
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-8 max-w-md w-full text-center">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -193,31 +195,35 @@ function ContractViewContent() {
   const customerAddress = contract.user.idAddress || contract.user.address
 
   return (
-    <div className="min-h-screen bg-gray-100 py-6 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50/50 via-white to-purple-50/50 p-4 sm:p-8">
       <div className="max-w-2xl mx-auto">
 
         {/* Email registration banner */}
         {!contract.user.email && !emailSuccess && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-amber-200/50 p-5 mb-6">
             <p className="text-amber-800 text-sm font-medium mb-3">
               メールアドレスを登録すると、次回からログインしてマイページをご利用いただけます
             </p>
-            <form onSubmit={handleEmailSubmit} className="flex gap-2">
-              <input
-                type="email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="example@email.com"
-                className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-                required
-              />
-              <button
+            <form onSubmit={handleEmailSubmit} className="flex gap-2 items-end">
+              <div className="flex-1">
+                <GlassInput
+                  label="メールアドレス"
+                  type="email"
+                  value={emailInput}
+                  onChange={setEmailInput}
+                  placeholder="example@email.com"
+                  required
+                />
+              </div>
+              <GlassButton
                 type="submit"
                 disabled={emailSubmitting}
-                className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                loading={emailSubmitting}
+                fullWidth={false}
+                className="px-6"
               >
-                {emailSubmitting ? '登録中...' : '登録'}
-              </button>
+                登録
+              </GlassButton>
             </form>
             {emailError && (
               <p className="text-red-600 text-xs mt-2">{emailError}</p>
@@ -226,7 +232,7 @@ function ContractViewContent() {
         )}
 
         {emailSuccess && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-green-200/50 p-5 mb-6">
             <p className="text-green-800 text-sm font-medium">
               メールアドレスの登録が完了しました。パスワードをメールでお送りしました。
             </p>
@@ -234,17 +240,17 @@ function ContractViewContent() {
         )}
 
         {/* Contract document */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 sm:p-8">
 
           {/* Header */}
-          <div className="bg-gray-900 text-white px-6 py-5 text-center">
+          <div className="bg-gray-900 text-white px-6 py-5 text-center rounded-xl mb-6">
             <h1 className="text-xl font-bold tracking-wider">売買契約書</h1>
             <p className="text-gray-400 text-xs mt-1">
               契約日: {formatDate(contractDate)}
             </p>
           </div>
 
-          <div className="p-6 space-y-6">
+          <div className="space-y-6">
 
             {/* Contract date and visit date */}
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -260,15 +266,14 @@ function ContractViewContent() {
               )}
             </div>
 
-            <hr className="border-gray-200" />
+            <hr className="border-white/60" />
 
             {/* Customer info */}
             <div>
-              <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <span className="w-1 h-4 bg-[#B91C1C] rounded-full inline-block" />
+              <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
                 お客様情報
               </h2>
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+              <div className="bg-white/40 rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex">
                   <span className="text-gray-500 w-20 shrink-0">氏名</span>
                   <span className="text-gray-900 font-medium">{customerName}</span>
@@ -292,11 +297,10 @@ function ContractViewContent() {
 
             {/* Store info */}
             <div>
-              <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <span className="w-1 h-4 bg-[#B91C1C] rounded-full inline-block" />
+              <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
                 買取業者情報
               </h2>
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+              <div className="bg-white/40 rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex">
                   <span className="text-gray-500 w-20 shrink-0">店舗名</span>
                   <span className="text-gray-900 font-medium">{contract.store.name}</span>
@@ -315,14 +319,13 @@ function ContractViewContent() {
             {/* Purchase items */}
             {contract.purchaseItems.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                  <span className="w-1 h-4 bg-[#B91C1C] rounded-full inline-block" />
+                <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
                   買取品目
                 </h2>
-                <div className="overflow-x-auto">
+                <div className="bg-white/40 rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-y border-gray-200">
+                      <tr className="bg-white/30 border-b border-white/60">
                         <th className="text-left px-3 py-2 text-gray-600 font-medium">品名</th>
                         <th className="text-left px-3 py-2 text-gray-600 font-medium">カテゴリ</th>
                         <th className="text-right px-3 py-2 text-gray-600 font-medium">数量</th>
@@ -332,7 +335,7 @@ function ContractViewContent() {
                     </thead>
                     <tbody>
                       {contract.purchaseItems.map((item) => (
-                        <tr key={item.id} className="border-b border-gray-100">
+                        <tr key={item.id} className="border-b border-white/40">
                           <td className="px-3 py-2 text-gray-900">{item.itemName}</td>
                           <td className="px-3 py-2 text-gray-600">{item.category}</td>
                           <td className="px-3 py-2 text-gray-900 text-right">{item.quantity}</td>
@@ -342,7 +345,7 @@ function ContractViewContent() {
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-gray-50 border-t border-gray-200">
+                      <tr className="bg-white/30 border-t border-white/60">
                         <td colSpan={4} className="px-3 py-2 text-right font-bold text-gray-700">買取合計</td>
                         <td className="px-3 py-2 text-right font-bold text-[#B91C1C]">{formatCurrency(purchaseTotal)}円</td>
                       </tr>
@@ -355,14 +358,13 @@ function ContractViewContent() {
             {/* Work items */}
             {contract.workItems.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                  <span className="w-1 h-4 bg-[#B91C1C] rounded-full inline-block" />
+                <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
                   作業品目
                 </h2>
-                <div className="overflow-x-auto">
+                <div className="bg-white/40 rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-y border-gray-200">
+                      <tr className="bg-white/30 border-b border-white/60">
                         <th className="text-left px-3 py-2 text-gray-600 font-medium">作業名</th>
                         <th className="text-right px-3 py-2 text-gray-600 font-medium">数量</th>
                         <th className="text-right px-3 py-2 text-gray-600 font-medium">単価</th>
@@ -371,7 +373,7 @@ function ContractViewContent() {
                     </thead>
                     <tbody>
                       {contract.workItems.map((item) => (
-                        <tr key={item.id} className="border-b border-gray-100">
+                        <tr key={item.id} className="border-b border-white/40">
                           <td className="px-3 py-2 text-gray-900">{item.workName}</td>
                           <td className="px-3 py-2 text-gray-900 text-right">{item.quantity}</td>
                           <td className="px-3 py-2 text-gray-900 text-right">{formatCurrency(item.unitPrice)}円</td>
@@ -380,7 +382,7 @@ function ContractViewContent() {
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-gray-50 border-t border-gray-200">
+                      <tr className="bg-white/30 border-t border-white/60">
                         <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">作業合計</td>
                         <td className="px-3 py-2 text-right font-bold text-gray-700">{formatCurrency(workTotal)}円</td>
                       </tr>
@@ -391,7 +393,7 @@ function ContractViewContent() {
             )}
 
             {/* Final payment */}
-            <div className="bg-[#FFF1F2] border border-[#FECDD3] rounded-xl p-5">
+            <div className="bg-red-50/50 backdrop-blur-sm rounded-xl p-4">
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-gray-600 text-xs mb-1">お支払い金額（買取金額 - 作業費用）</p>
@@ -402,7 +404,7 @@ function ContractViewContent() {
                 </div>
               </div>
               {purchaseTotal > 0 && workTotal > 0 && (
-                <div className="mt-3 pt-3 border-t border-[#FECDD3] text-xs text-gray-600 space-y-1">
+                <div className="mt-3 pt-3 border-t border-red-200/40 text-xs text-gray-600 space-y-1">
                   <div className="flex justify-between">
                     <span>買取合計</span>
                     <span>{formatCurrency(purchaseTotal)}円</span>
@@ -418,11 +420,10 @@ function ContractViewContent() {
             {/* Signature */}
             {contract.salesContract?.signatureData && (
               <div>
-                <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                  <span className="w-1 h-4 bg-[#B91C1C] rounded-full inline-block" />
+                <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
                   署名
                 </h2>
-                <div className="border border-gray-200 rounded-lg p-4 bg-white">
+                <div className="border border-white/60 rounded-xl p-4 bg-white/40">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={contract.salesContract.signatureData}
@@ -434,9 +435,9 @@ function ContractViewContent() {
             )}
 
             {/* Cooling off notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <h3 className="text-sm font-bold text-blue-800 mb-2">クーリング・オフのお知らせ</h3>
-              <p className="text-xs text-blue-700 leading-relaxed">
+            <div className="bg-amber-50/50 backdrop-blur-sm rounded-2xl border border-amber-200/30 p-5 mt-6">
+              <h3 className="text-sm font-bold text-amber-800 mb-2">クーリング・オフのお知らせ</h3>
+              <p className="text-xs text-amber-700 leading-relaxed">
                 本契約は、特定商取引法に基づく訪問購入に該当します。
                 契約書面を受領した日（{formatDate(contractDate)}）から
                 <strong>8日間</strong>（{formatDate(coolingOffDate)}まで）は、
@@ -453,13 +454,13 @@ function ContractViewContent() {
         </div>
 
         {/* マイページへの導線 */}
-        <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
+        <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">
           <p className="text-sm text-gray-600 mb-4">
             マイページでは、契約履歴の確認や各種設定が行えます
           </p>
           <a
             href="/mypage"
-            className="inline-block w-full max-w-xs py-3 rounded-full bg-[#B91C1C] text-white font-medium text-sm hover:bg-[#991B1B] transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold text-sm shadow-lg shadow-red-500/25 hover:shadow-xl transition-all active:scale-[0.98]"
           >
             マイページへ
           </a>
@@ -472,7 +473,7 @@ function ContractViewContent() {
 export default function ContractViewPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-b from-pink-50/50 via-white to-purple-50/50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block w-10 h-10 border-4 border-gray-200 border-t-[#B91C1C] rounded-full animate-spin mb-4" />
           <p className="text-gray-600 text-sm">読み込み中...</p>

@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Button from '@/components/Button'
-import TextField from '@/components/TextField'
-import Card from '@/components/Card'
 import MessageBanner from '@/components/MessageBanner'
+import GlassBackground from '@/components/customer/GlassBackground'
+import GlassInput from '@/components/customer/GlassInput'
+import GlassButton from '@/components/customer/GlassButton'
 
 export default function RegisterRegularPage() {
   const router = useRouter()
@@ -73,163 +73,137 @@ export default function RegisterRegularPage() {
   // 登録完了画面
   if (done) {
     return (
-      <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)] flex items-center justify-center p-4">
-        <div className="w-full max-w-md text-center">
-          <Card variant="elevated" padding="lg">
-            <div className="w-16 h-16 bg-[var(--status-completed-bg,#DCFCE7)] rounded-full flex items-center justify-center mx-auto mb-5">
-              <svg className="w-8 h-8 text-[var(--status-completed-text,#16A34A)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-[var(--md-sys-color-on-surface)] mb-3">
-              登録完了
-            </h2>
-            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-7 leading-relaxed">
-              会員登録が完了しました。<br />
-              担当店舗が決まり次第、ご連絡いたします。
-            </p>
-            <Button
-              onClick={() => router.push('/login')}
-              fullWidth
-              size="lg"
-            >
-              ログインする
-            </Button>
-          </Card>
+      <GlassBackground>
+        <div className="text-center">
+          <div className="w-16 h-16 bg-green-100/80 rounded-full flex items-center justify-center mx-auto mb-5">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-3">
+            登録完了
+          </h2>
+          <p className="text-sm text-gray-500 mb-7 leading-relaxed">
+            会員登録が完了しました。<br />
+            担当店舗が決まり次第、ご連絡いたします。
+          </p>
+          <GlassButton variant="primary" onClick={() => router.push('/login')}>
+            ログインする
+          </GlassButton>
         </div>
-      </div>
+      </GlassBackground>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)] flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        {/* Brand header */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block">
-            <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
-            <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
-          </Link>
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
-            通常会員 新規登録
-          </p>
-        </div>
-
-        {/* Form card */}
-        <Card variant="elevated" padding="lg">
-          {error && (
-            <div className="mb-6">
-              <MessageBanner severity="error">{error}</MessageBanner>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
-                基本情報の入力
-              </h3>
-              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-                ライセンスキーは不要です。以下の情報を入力してください。
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <TextField
-                label="氏名"
-                value={formData.name}
-                onChange={(val) => handleChange('name', val)}
-                required
-                placeholder="山田 太郎"
-              />
-              <TextField
-                label="ふりがな"
-                value={formData.furigana}
-                onChange={(val) => handleChange('furigana', val)}
-                required
-                placeholder="やまだ たろう"
-              />
-            </div>
-
-            <TextField
-              label="メールアドレス"
-              type="email"
-              value={formData.email}
-              onChange={(val) => handleChange('email', val)}
-              required
-              placeholder="example@email.com"
-            />
-
-            <TextField
-              label="電話番号"
-              type="tel"
-              value={formData.phone}
-              onChange={(val) => handleChange('phone', val)}
-              required
-              placeholder="090-0000-0000"
-            />
-
-            <TextField
-              label="住所"
-              value={formData.address}
-              onChange={(val) => handleChange('address', val)}
-              required
-              placeholder="東京都渋谷区..."
-            />
-
-            <TextField
-              label="パスワード"
-              type="password"
-              value={formData.password}
-              onChange={(val) => handleChange('password', val)}
-              required
-              placeholder="8文字以上"
-            />
-
-            <TextField
-              label="パスワード（確認）"
-              type="password"
-              value={formData.passwordConfirm}
-              onChange={(val) => handleChange('passwordConfirm', val)}
-              required
-              placeholder="パスワードを再入力"
-            />
-
-            <div className="pt-2">
-              <Button
-                type="submit"
-                disabled={loading}
-                loading={loading}
-                fullWidth
-                size="lg"
-              >
-                {loading ? '登録中...' : '登録する'}
-              </Button>
-            </div>
-          </form>
-        </Card>
-
-        {/* Links */}
-        <div className="text-center mt-5 space-y-2">
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-            ライセンスキーをお持ちの方は{' '}
-            <Link
-              href="/register"
-              className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
-            >
-              こちら
-            </Link>
-          </p>
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-            すでにアカウントをお持ちの方は{' '}
-            <Link
-              href="/login"
-              className="text-[var(--portal-primary,#B91C1C)] font-medium hover:underline"
-            >
-              ログイン
-            </Link>
-          </p>
-        </div>
+    <GlassBackground maxWidth="max-w-lg">
+      {/* Title */}
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-red-700 to-rose-500 bg-clip-text text-transparent">
+          エコ得BOX
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">通常会員 新規登録</p>
       </div>
-    </div>
+
+      {error && (
+        <div className="mb-6">
+          <MessageBanner severity="error">{error}</MessageBanner>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-gray-700 mb-1">
+            基本情報の入力
+          </h3>
+          <p className="text-sm text-gray-500">
+            ライセンスキーは不要です。以下の情報を入力してください。
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <GlassInput
+            label="氏名"
+            value={formData.name}
+            onChange={(val) => handleChange('name', val)}
+            required
+            placeholder="山田 太郎"
+          />
+          <GlassInput
+            label="ふりがな"
+            value={formData.furigana}
+            onChange={(val) => handleChange('furigana', val)}
+            required
+            placeholder="やまだ たろう"
+          />
+        </div>
+
+        <GlassInput
+          label="メールアドレス"
+          type="email"
+          value={formData.email}
+          onChange={(val) => handleChange('email', val)}
+          required
+          placeholder="example@email.com"
+        />
+
+        <GlassInput
+          label="電話番号"
+          type="tel"
+          value={formData.phone}
+          onChange={(val) => handleChange('phone', val)}
+          required
+          placeholder="090-0000-0000"
+        />
+
+        <GlassInput
+          label="住所"
+          value={formData.address}
+          onChange={(val) => handleChange('address', val)}
+          required
+          placeholder="東京都渋谷区..."
+        />
+
+        <GlassInput
+          label="パスワード"
+          type="password"
+          value={formData.password}
+          onChange={(val) => handleChange('password', val)}
+          required
+          placeholder="8文字以上"
+        />
+
+        <GlassInput
+          label="パスワード（確認）"
+          type="password"
+          value={formData.passwordConfirm}
+          onChange={(val) => handleChange('passwordConfirm', val)}
+          required
+          placeholder="パスワードを再入力"
+        />
+
+        <div className="pt-2">
+          <GlassButton type="submit" variant="primary" disabled={loading} loading={loading}>
+            {loading ? '登録中...' : '登録する'}
+          </GlassButton>
+        </div>
+      </form>
+
+      {/* Links */}
+      <div className="text-center mt-5 space-y-2">
+        <p className="text-sm text-gray-500">
+          ライセンスキーをお持ちの方は{' '}
+          <Link href="/register" className="text-red-500/80 hover:text-red-600 font-medium">
+            こちら
+          </Link>
+        </p>
+        <p className="text-sm text-gray-500">
+          すでにアカウントをお持ちの方は{' '}
+          <Link href="/login" className="text-red-500/80 hover:text-red-600 font-medium">
+            ログイン
+          </Link>
+        </p>
+      </div>
+    </GlassBackground>
   )
 }

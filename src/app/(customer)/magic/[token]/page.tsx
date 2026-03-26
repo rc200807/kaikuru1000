@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { use } from 'react'
+import Link from 'next/link'
+import GlassBackground from '@/components/customer/GlassBackground'
+import GlassButton from '@/components/customer/GlassButton'
 
 export default function MagicLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
@@ -57,34 +60,33 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
 
   if (verifying) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block w-10 h-10 border-4 border-gray-200 border-t-[#B91C1C] rounded-full animate-spin mb-4" />
-          <p className="text-gray-600 text-sm">ログイン中...</p>
+      <GlassBackground>
+        <div className="text-center py-4">
+          <div className="inline-block w-10 h-10 border-4 border-white/40 border-t-red-500 rounded-full animate-spin mb-4" />
+          <p className="text-gray-600 text-sm">認証中...</p>
         </div>
-      </div>
+      </GlassBackground>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 max-w-md w-full text-center">
-          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <GlassBackground>
+        <div className="text-center">
+          <div className="w-14 h-14 bg-red-100/80 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 mb-2">リンクが無効です</h1>
-          <p className="text-gray-600 text-sm mb-6">{error}</p>
-          <a
-            href="/login"
-            className="inline-block bg-[#B91C1C] text-white text-sm font-medium px-6 py-3 rounded-lg hover:bg-[#991B1B] transition-colors"
-          >
-            ログインページへ
-          </a>
+          <h1 className="text-lg font-bold text-gray-800 mb-2">リンクが無効です</h1>
+          <p className="text-gray-500 text-sm mb-6">{error}</p>
+          <Link href="/login">
+            <GlassButton variant="primary">
+              ログインページへ
+            </GlassButton>
+          </Link>
         </div>
-      </div>
+      </GlassBackground>
     )
   }
 

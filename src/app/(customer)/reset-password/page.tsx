@@ -3,10 +3,10 @@
 import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Card from '@/components/Card'
-import TextField from '@/components/TextField'
-import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import GlassBackground from '@/components/customer/GlassBackground'
+import GlassInput from '@/components/customer/GlassInput'
+import GlassButton from '@/components/customer/GlassButton'
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams()
@@ -60,38 +60,28 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <Card variant="elevated" padding="lg">
+      <>
         <MessageBanner severity="error">
           無効なリセットリンクです。もう一度パスワードリセットをリクエストしてください。
         </MessageBanner>
         <div className="text-center mt-4">
-          <Link
-            href="/login"
-            className="text-sm text-[var(--portal-primary,#B91C1C)] hover:underline"
-          >
+          <Link href="/login" className="text-sm text-red-500/80 hover:text-red-600">
             ログインページへ戻る
           </Link>
         </div>
-      </Card>
+      </>
     )
   }
 
   return (
-    <Card variant="elevated" padding="lg">
-      <div className="mb-6">
-        <p className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">パスワードリセット</p>
-      </div>
-
+    <>
       {success ? (
         <div className="space-y-4">
           <MessageBanner severity="success">
             パスワードが正常にリセットされました。3秒後にログインページへ移動します...
           </MessageBanner>
           <div className="text-center">
-            <Link
-              href="/login"
-              className="text-sm text-[var(--portal-primary,#B91C1C)] hover:underline"
-            >
+            <Link href="/login" className="text-sm text-red-500/80 hover:text-red-600">
               今すぐログインページへ
             </Link>
           </div>
@@ -99,13 +89,13 @@ function ResetPasswordForm() {
       ) : (
         <>
           {error && (
-            <MessageBanner severity="error" className="mb-6">
-              {error}
-            </MessageBanner>
+            <div className="mb-6">
+              <MessageBanner severity="error">{error}</MessageBanner>
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <TextField
+            <GlassInput
               label="新しいパスワード"
               type="password"
               value={password}
@@ -113,7 +103,7 @@ function ResetPasswordForm() {
               required
               placeholder="6文字以上"
             />
-            <TextField
+            <GlassInput
               label="新しいパスワード（確認）"
               type="password"
               value={confirmPassword}
@@ -121,48 +111,38 @@ function ResetPasswordForm() {
               required
               placeholder="もう一度入力"
             />
-            <Button
-              type="submit"
-              disabled={loading}
-              loading={loading}
-              fullWidth
-              size="lg"
-            >
+            <GlassButton type="submit" variant="primary" disabled={loading} loading={loading}>
               {loading ? 'リセット中...' : 'パスワードをリセット'}
-            </Button>
+            </GlassButton>
           </form>
         </>
       )}
-    </Card>
+    </>
   )
 }
 
 export default function CustomerResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface,#FFFBFE)] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block">
-            <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
-            <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
-          </Link>
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">パスワードリセット</p>
-        </div>
-
-        <Suspense fallback={
-          <Card variant="elevated" padding="lg">
-            <div className="text-center py-8 text-[var(--md-sys-color-on-surface-variant)]">読み込み中...</div>
-          </Card>
-        }>
-          <ResetPasswordForm />
-        </Suspense>
-
-        <p className="text-center mt-5 text-sm text-[var(--md-sys-color-on-surface-variant)]">
-          <Link href="/login" className="hover:text-[var(--md-sys-color-on-surface)] transition-colors">
-            ← ログインページへ
-          </Link>
-        </p>
+    <GlassBackground>
+      {/* Title */}
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-red-700 to-rose-500 bg-clip-text text-transparent">
+          エコ得BOX
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">パスワード再設定</p>
       </div>
-    </div>
+
+      <Suspense fallback={
+        <div className="text-center py-8 text-gray-500">読み込み中...</div>
+      }>
+        <ResetPasswordForm />
+      </Suspense>
+
+      <div className="text-center mt-5">
+        <Link href="/login" className="text-sm text-red-500/80 hover:text-red-600">
+          ← ログインページへ
+        </Link>
+      </div>
+    </GlassBackground>
   )
 }

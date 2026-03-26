@@ -1366,32 +1366,57 @@ function MyPageContent() {
           {/* ─── 買取トライタブ ─── */}
           {activeTab === 'memos' && (
             <div className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">
-                    買取トライ
-                  </h2>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-                    買取を検討しているものをメモしておきましょう
-                  </p>
-                  {aiAppraisalRemaining !== null && (
-                    <div className="mt-1.5 inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                      </svg>
-                      AI査定: 今月あと{aiAppraisalRemaining}回利用可能
+              {/* TRY!! ヒーローセクション */}
+              {!showMemoForm && (
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-50 via-white to-pink-50 border border-white/60 shadow-sm">
+                  {/* 横スクロールイラストバンド */}
+                  <div className="absolute inset-0 flex items-center overflow-hidden pointer-events-none">
+                    <div className="flex gap-8 animate-[scrollIcons_20s_linear_infinite] whitespace-nowrap opacity-[0.08]">
+                      {[...[
+                        '👜', '📱', '💻', '📺', '🪑', '⌚', '💍', '🎸', '📷', '🎮',
+                        '👜', '📱', '💻', '📺', '🪑', '⌚', '💍', '🎸', '📷', '🎮',
+                      ]].map((emoji, i) => (
+                        <span key={i} className="text-6xl select-none">{emoji}</span>
+                      ))}
                     </div>
-                  )}
+                  </div>
+
+                  {/* メインコンテンツ */}
+                  <div className="relative z-10 flex flex-col items-center py-8 px-4">
+                    {/* 円形グラフィック */}
+                    <button
+                      onClick={() => { setShowMemoForm(true); setMessage(null) }}
+                      className="group relative w-40 h-40 mb-4"
+                    >
+                      {/* 外側のリング */}
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-red-400/20 to-rose-300/20 animate-pulse" />
+                      <div className="absolute inset-2 rounded-full bg-gradient-to-br from-red-100/60 to-pink-100/60 backdrop-blur-sm border border-white/40" />
+                      {/* 内側の円 */}
+                      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-red-500 to-rose-400 shadow-lg shadow-red-500/30 flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-transform">
+                        <div className="text-center">
+                          <p className="text-white text-2xl font-black tracking-wider">TRY!!</p>
+                          <p className="text-white/80 text-[10px] mt-0.5">タップで査定開始</p>
+                        </div>
+                      </div>
+                      {/* キラキラ装飾 */}
+                      <div className="absolute top-2 right-4 w-2 h-2 rounded-full bg-red-300 animate-ping" />
+                      <div className="absolute bottom-6 left-2 w-1.5 h-1.5 rounded-full bg-pink-300 animate-ping" style={{ animationDelay: '0.5s' }} />
+                    </button>
+
+                    <p className="text-sm font-semibold text-gray-700 mb-1">写真を撮って、AI査定してみよう！</p>
+                    <p className="text-xs text-gray-400">お手持ちのアイテムの買取価格がすぐわかります</p>
+
+                    {aiAppraisalRemaining !== null && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        AI査定: 今月あと{aiAppraisalRemaining}回利用可能
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-shrink-0">
-                  <Button
-                    size="sm"
-                    onClick={() => { setShowMemoForm(v => !v); setMessage(null) }}
-                  >
-                    {showMemoForm ? 'キャンセル' : '+ メモを追加'}
-                  </Button>
-                </div>
-              </div>
+              )}
 
               {/* メモ作成フォーム */}
               {showMemoForm && (

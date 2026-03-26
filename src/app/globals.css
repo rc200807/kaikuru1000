@@ -231,5 +231,11 @@ body {
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
+/* ── 買取トライ アイコンスクロール ─────────────────────── */
+@keyframes scrollIcons {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 /* ── Safe area (mobile bottom nav) ───────────────────── */
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }

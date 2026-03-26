@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
+import BankSearch from '@/components/customer/BankSearch'
 
 type UserData = {
   id: string
@@ -2513,20 +2514,13 @@ function MyPageContent() {
                 買取金額のお振込み先をご登録ください。
               </p>
               <form onSubmit={handleSaveBank} className="space-y-5 max-w-lg">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <TextField
-                    label="銀行名"
-                    value={bankForm.bankName}
-                    onChange={v => setBankForm(f => ({ ...f, bankName: v }))}
-                    placeholder="例：〇〇銀行"
-                  />
-                  <TextField
-                    label="支店名"
-                    value={bankForm.branchName}
-                    onChange={v => setBankForm(f => ({ ...f, branchName: v }))}
-                    placeholder="例：〇〇支店"
-                  />
-                </div>
+                <BankSearch
+                  bankName={bankForm.bankName}
+                  branchName={bankForm.branchName}
+                  onChange={({ bankName, bankCode, branchName, branchCode }) => {
+                    setBankForm(f => ({ ...f, bankName, branchName }))
+                  }}
+                />
                 <div>
                   <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">口座種別</label>
                   <select

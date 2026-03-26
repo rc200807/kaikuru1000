@@ -1053,7 +1053,10 @@ export default function VisitDetailPage() {
                 バーコード
               </button>
               <Button size="sm" onClick={() => { resetPurchaseForm(); setShowPurchaseForm(true) }}>
-                + 品目を追加
+                <span className="flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                  品目を追加
+                </span>
               </Button>
             </div>
           )}
@@ -1311,7 +1314,10 @@ export default function VisitDetailPage() {
           </div>
           {!showWorkForm && (
             <Button size="sm" onClick={() => { resetWorkForm(); setShowWorkForm(true) }}>
-              + 作業を追加
+              <span className="flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                作業を追加
+              </span>
             </Button>
           )}
         </div>

@@ -966,12 +966,12 @@ function MyPageContent() {
   const customerTypeLabel = user ? (user.customerType === 'visit' ? '定期訪問' : user.customerType === 'delivery' ? '定期宅配' : '一般') : ''
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-b from-red-50 via-white to-blue-50">
       {/* ─── Hidden Tabs for non-dashboard tabs on desktop ─── */}
       {activeTab !== 'dashboard' && (
         <>
           {/* Compact top bar for non-dashboard tabs */}
-          <div className="bg-white border-b border-gray-100 sticky top-0 z-40">
+          <div className="bg-white/70 backdrop-blur-xl border-b border-white/50 sticky top-0 z-40">
             <div className="max-w-5xl mx-auto px-4 sm:px-6">
               <div className="flex items-center justify-between h-14">
                 <button
@@ -1013,9 +1013,11 @@ function MyPageContent() {
             <div>
               {/* ─── Gradient Header ─── */}
               <div className="bg-gradient-to-br from-[#B91C1C] to-[#991B1B] px-5 pt-6 pb-8 relative overflow-hidden">
-                {/* Decorative circles */}
-                <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/4" />
+                {/* Decorative circles with blur for depth */}
+                <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/4 blur-2xl" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/4 blur-xl" />
+                <div className="absolute top-1/2 right-1/4 w-32 h-32 bg-white/5 rounded-full blur-2xl" />
+                <div className="absolute -top-8 left-1/3 w-20 h-20 bg-white/8 rounded-full blur-lg" />
 
                 {/* Top bar */}
                 <div className="flex items-center justify-between mb-6 relative z-10">
@@ -1049,7 +1051,7 @@ function MyPageContent() {
                         registered: '登録済み', shipped: '発送済み', received: '受取済み', appraised: '査定完了',
                       }
                       return (
-                        <div className="mt-2 bg-white/10 rounded-xl px-4 py-3">
+                        <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
                           <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">今月の送付状況</p>
                           {thisMonthShipment ? (
                             <p className="text-white text-xl font-bold">{shipStatusLabel[thisMonthShipment.status] ?? thisMonthShipment.status}</p>
@@ -1060,7 +1062,7 @@ function MyPageContent() {
                       )
                     })()
                   ) : nextVisit ? (
-                    <div className="mt-2 bg-white/10 rounded-xl px-4 py-3">
+                    <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
                       <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定日</p>
                       <p className="text-white text-xl font-bold">
                         {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
@@ -1070,7 +1072,7 @@ function MyPageContent() {
                       )}
                     </div>
                   ) : (
-                    <div className="mt-2 bg-white/10 rounded-xl px-4 py-3">
+                    <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
                       <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定日</p>
                       <p className="text-white/80 text-sm">未定</p>
                     </div>
@@ -1137,7 +1139,7 @@ function MyPageContent() {
                     <button
                       key={item.tab}
                       onClick={() => handleTabChange(item.tab)}
-                      className="bg-white rounded-2xl p-5 text-left shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98]"
+                      className="bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 hover:shadow-lg hover:bg-white/80 transition-all active:scale-[0.98] cursor-pointer"
                     >
                       <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${item.gradient} shadow-lg overflow-hidden`}>
                         {/* Glass overlay */}
@@ -1160,7 +1162,7 @@ function MyPageContent() {
                 {!user.idDocumentPath && (
                   <button
                     onClick={() => handleTabChange('id-document')}
-                    className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-left hover:bg-amber-100 transition-colors"
+                    className="w-full bg-amber-500/10 backdrop-blur-sm border border-amber-300/30 rounded-2xl p-4 flex items-center gap-3 text-left hover:bg-amber-500/15 transition-colors"
                   >
                     <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1179,7 +1181,7 @@ function MyPageContent() {
 
                 {/* ─── Stats Section ─── */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                  <div className="bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm">
                     <p className="text-[11px] font-medium text-gray-500 mb-1">累計買取金額</p>
                     <p className="text-xl font-bold text-gray-900">
                       {stats
@@ -1188,7 +1190,7 @@ function MyPageContent() {
                       }
                     </p>
                   </div>
-                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                  <div className="bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm">
                     <p className="text-[11px] font-medium text-gray-500 mb-1">買取回数</p>
                     <p className="text-xl font-bold text-gray-900">
                       {stats
@@ -1201,7 +1203,7 @@ function MyPageContent() {
 
                 {/* ─── Monthly bar chart ─── */}
                 {stats && stats.totalPurchaseAmount > 0 && (
-                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                  <div className="bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm">
                     <h3 className="text-sm font-bold text-gray-900 mb-4">月次買取金額推移</h3>
                     <div className="flex items-end gap-1 h-28">
                       {stats.monthlyStats.map((m, i) => {
@@ -1301,7 +1303,7 @@ function MyPageContent() {
                           <button
                             key={task.key}
                             onClick={task.action}
-                            className="flex-shrink-0 w-40 bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left snap-start hover:shadow-md transition-all active:scale-[0.98]"
+                            className="flex-shrink-0 w-40 bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm text-left snap-start hover:shadow-md transition-all active:scale-[0.98]"
                           >
                             <div className="w-10 h-10 bg-[#B91C1C] rounded-xl flex items-center justify-center mb-3">
                               <span className="text-white">{task.icon}</span>
@@ -1316,9 +1318,9 @@ function MyPageContent() {
                 })()}
 
                 {/* ─── Info Cards ─── */}
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="p-4 border-b border-gray-50">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">基本情報</h3>
+                <div className="bg-white/70 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/50 shadow-sm">
+                  <div className="p-4 border-b border-white/30">
+                    <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider px-1 pt-0 pb-1 mb-3">基本情報</h3>
                     <dl className="space-y-2.5">
                       <div className="flex justify-between gap-3">
                         <dt className="text-sm text-gray-500">氏名</dt>
@@ -1341,7 +1343,7 @@ function MyPageContent() {
                     </dl>
                   </div>
                   <div className="p-4">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">契約情報</h3>
+                    <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider px-1 pt-0 pb-1 mb-3">契約情報</h3>
                     <dl className="space-y-2.5">
                       <div className="flex justify-between gap-3">
                         <dt className="text-sm text-gray-500">ライセンスキー</dt>
@@ -1393,7 +1395,7 @@ function MyPageContent() {
 
               {/* メモ作成フォーム */}
               {showMemoForm && (
-                <Card variant="elevated" padding="md">
+                <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                   <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
                     新しい買取トライ
                   </h3>
@@ -1571,7 +1573,7 @@ function MyPageContent() {
 
               {/* 送付登録フォーム */}
               {showShipmentForm && (
-                <Card variant="elevated" padding="md">
+                <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                   <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">今月の送付を登録</h3>
                   <form onSubmit={handleSubmitShipment} className="space-y-4">
                     <TextField
@@ -1669,8 +1671,8 @@ function MyPageContent() {
           {activeTab === 'profile' && (
             <div className="space-y-4">
               {/* メニューカード */}
-              <Card variant="elevated" padding="none">
-                <div className="divide-y divide-gray-100">
+              <div className="bg-white/70 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/50 shadow-sm">
+                <div className="divide-y divide-white/50">
                   {[
                     { key: 'edit-profile', label: 'プロフィール編集', sub: `${user.name}（${user.phone}）`, gradient: 'from-amber-400 to-orange-500', statusColor: 'text-gray-500',
                       svg: <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /> },
@@ -1686,7 +1688,7 @@ function MyPageContent() {
                     <button
                       key={item.key}
                       onClick={() => item.key === '_logout' ? (confirm('ログアウトしますか？') && signOut({ callbackUrl: '/login' })) : handleTabChange(item.key)}
-                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left active:bg-gray-100"
+                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/40 transition-colors text-left active:bg-white/60"
                     >
                       <div className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${item.gradient} shadow-md overflow-hidden shrink-0`}>
                         <div className="absolute inset-0 bg-white/20" />
@@ -1706,14 +1708,14 @@ function MyPageContent() {
                     </button>
                   ))}
                 </div>
-              </Card>
+              </div>
 
             </div>
           )}
 
           {/* ─── Edit Profile tab ─── */}
           {activeTab === 'edit-profile' && (
-            <Card variant="elevated" padding="md">
+            <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
                 プロフィール編集
               </h2>
@@ -1780,7 +1782,7 @@ function MyPageContent() {
 
           {/* ─── Password tab ─── */}
           {activeTab === 'password' && (
-            <Card variant="elevated" padding="md">
+            <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-6">
                 パスワード変更
               </h2>
@@ -1826,7 +1828,7 @@ function MyPageContent() {
               {/* ── 提出済み：OCR結果 + 再提出ボタン ── */}
               {user.idDocumentPath ? (
                 <>
-                <Card variant="outlined" padding="md">
+                <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                   {reOcrLoading ? (
                     <OcrScanningAnimation label="再読み取り中..." />
                   ) : (
@@ -1978,7 +1980,7 @@ function MyPageContent() {
                 </Card>
 
                 {/* ── 本人確認（顔照合） ── */}
-                <Card variant="outlined" padding="md">
+                <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                   <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-1 flex items-center gap-2">
                     <span className="text-base">🤳</span>
                     本人確認（顔照合）
@@ -2132,7 +2134,7 @@ function MyPageContent() {
                 </>
               ) : (
                 /* ── 未提出 or 再提出：ステップアップロードフロー ── */
-                <Card variant="elevated" padding="md">
+                <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                   {uploadingDoc ? (
                     <OcrScanningAnimation label="アップロード・読み取り中..." />
                   ) : (
@@ -2466,7 +2468,7 @@ function MyPageContent() {
 
           {/* ─── 口座情報タブ ─── */}
           {activeTab === 'bank-account' && (
-            <Card variant="elevated" padding="md">
+            <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-2">振込先口座情報</h2>
               <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-6">
                 買取金額のお振込み先をご登録ください。
@@ -2583,7 +2585,7 @@ function MyPageContent() {
                       return ` ${s || '?'}〜${e || '?'}`
                     }
                     return (
-                      <Card key={req.id} variant="outlined" padding="md">
+                      <Card key={req.id} variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
                           <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
@@ -2640,7 +2642,7 @@ function MyPageContent() {
 
           {/* ─── Visit History tab ─── */}
           {activeTab === 'history' && (
-            <Card variant="elevated" padding="md">
+            <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
               <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">
                 訪問履歴
               </h2>
@@ -3010,7 +3012,7 @@ function ShipmentCard({
 
   return (
     <>
-    <Card variant="outlined" padding="md">
+    <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">
           {shipment.shipmentNumber}
@@ -3199,7 +3201,7 @@ function MemoCard({
 
   return (
     <>
-      <Card variant="outlined" padding="md">
+      <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -3533,7 +3535,7 @@ function VisitRequestCalendarForm({
   const candidateLabels = ['第1希望', '第2希望', '第3希望']
 
   return (
-    <Card variant="elevated" padding="md">
+    <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
       <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-1">カレンダーから日時を選択</h3>
       <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">希望の日時枠をタップしてください（最大3つまで）</p>
 

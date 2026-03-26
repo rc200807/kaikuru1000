@@ -210,7 +210,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
   }, [])
 
   const inputClass =
-    'w-full px-4 py-3.5 bg-white/50 backdrop-blur-lg rounded-2xl border border-white/60 shadow-inner shadow-white/30 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-red-300/60 focus:bg-white/60 transition-all disabled:opacity-50'
+    'w-full px-4 py-3.5 bg-white/50 backdrop-blur-lg rounded-2xl border border-gray-300/70 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-red-400/70 focus:ring-2 focus:ring-red-200/40 focus:bg-white/60 transition-all disabled:opacity-50'
 
   const dropdownClass =
     'absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-white/80 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg shadow-black/5'

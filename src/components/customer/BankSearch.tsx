@@ -8,6 +8,7 @@ interface BankItem {
   kana: string
   hira: string
   roma: string
+  normalize?: { name?: string; kana?: string; hira?: string; roma?: string }
 }
 
 interface BranchItem {
@@ -129,8 +130,11 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
         const results = banks.filter(
           b =>
             b.name.includes(q) ||
+            b.normalize?.name?.includes(q) ||
             b.kana?.toLowerCase().includes(lower) ||
             b.hira?.toLowerCase().includes(lower) ||
+            b.normalize?.kana?.toLowerCase().includes(lower) ||
+            b.normalize?.hira?.toLowerCase().includes(lower) ||
             b.code.includes(q)
         )
         setFilteredBanks(results.slice(0, 30))
@@ -170,7 +174,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
   // Select bank
   const selectBank = (bank: BankItem) => {
     setSelectedBank(bank)
-    setBankQuery(bank.name)
+    setBankQuery(bank.normalize?.name || bank.name)
     setShowBankDropdown(false)
     setSelectedBranch(null)
     setBranchQuery('')
@@ -183,7 +187,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
     setShowBranchDropdown(false)
     if (selectedBank) {
       onChange({
-        bankName: selectedBank.name,
+        bankName: selectedBank.normalize?.name || selectedBank.name,
         bankCode: selectedBank.code,
         branchName: branch.name,
         branchCode: branch.code,
@@ -255,7 +259,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
                   onClick={() => selectBank(bank)}
                   className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50/60 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
                 >
-                  <span className="font-medium">{bank.name}</span>
+                  <span className="font-medium">{bank.normalize?.name || bank.name}</span>
                   <span className="ml-2 text-xs text-gray-400">({bank.code})</span>
                 </button>
               ))

@@ -1088,10 +1088,9 @@ function MyPageContent() {
                       label: '買取トライ',
                       sub: '写真で事前査定',
                       tab: 'memos',
-                      color: 'text-[#B91C1C]',
-                      bgColor: 'bg-red-50',
+                      gradient: 'from-red-400 to-orange-500',
                       icon: (
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                         </svg>
@@ -1101,10 +1100,9 @@ function MyPageContent() {
                       label: '訪問リクエスト',
                       sub: '日時を予約',
                       tab: 'visit-request',
-                      color: 'text-blue-600',
-                      bgColor: 'bg-blue-50',
+                      gradient: 'from-blue-400 to-indigo-500',
                       icon: (
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                         </svg>
                       ),
@@ -1113,10 +1111,9 @@ function MyPageContent() {
                       label: '訪問履歴',
                       sub: '過去の訪問一覧',
                       tab: 'history',
-                      color: 'text-emerald-600',
-                      bgColor: 'bg-emerald-50',
+                      gradient: 'from-emerald-400 to-teal-500',
                       icon: (
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       ),
@@ -1125,10 +1122,9 @@ function MyPageContent() {
                       label: 'プロフィール',
                       sub: '設定・口座情報',
                       tab: 'profile',
-                      color: 'text-purple-600',
-                      bgColor: 'bg-purple-50',
+                      gradient: 'from-purple-400 to-pink-500',
                       icon: (
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                         </svg>
                       ),
@@ -1141,13 +1137,21 @@ function MyPageContent() {
                     <button
                       key={item.tab}
                       onClick={() => handleTabChange(item.tab)}
-                      className="bg-white rounded-2xl p-4 text-left shadow-sm hover:shadow-md transition-all active:scale-[0.98] border border-gray-100"
+                      className="bg-white rounded-2xl p-5 text-left shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98]"
                     >
-                      <div className={`w-12 h-12 ${item.bgColor} rounded-xl flex items-center justify-center mb-3`}>
-                        <span className={item.color}>{item.icon}</span>
+                      <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${item.gradient} shadow-lg overflow-hidden`}>
+                        {/* Glass overlay */}
+                        <div className="absolute inset-0 bg-white/20" />
+                        {/* Decorative circles for depth */}
+                        <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-white/20 blur-sm" />
+                        <div className="absolute -bottom-1 -left-1 w-8 h-8 rounded-full bg-white/10" />
+                        {/* Icon */}
+                        <div className="relative flex items-center justify-center w-full h-full">
+                          {item.icon}
+                        </div>
                       </div>
-                      <p className="text-sm font-bold text-gray-900">{item.label}</p>
-                      <p className="text-[11px] text-gray-500 mt-0.5">{item.sub}</p>
+                      <p className="text-sm font-bold text-gray-800 mt-3">{item.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{item.sub}</p>
                     </button>
                   ))}
                 </div>

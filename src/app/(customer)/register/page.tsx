@@ -161,7 +161,7 @@ export default function RegisterPage() {
         <div className="space-y-5">
           <div>
             <h3 className="text-base font-semibold text-gray-700 mb-1">
-              ライセンスキーの確認
+              エコ得BOX ライセンスキーの確認
             </h3>
             <p className="text-sm text-gray-500">
               担当者からお渡しされたライセンスキーを入力してください。

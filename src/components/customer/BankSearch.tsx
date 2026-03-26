@@ -48,6 +48,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
 
   const [showBankDropdown, setShowBankDropdown] = useState(false)
   const [showBranchDropdown, setShowBranchDropdown] = useState(false)
+  const [userCleared, setUserCleared] = useState(false) // ユーザーが手動でクリアした場合、pre-selectを無効化
 
   const [filteredBanks, setFilteredBanks] = useState<BankItem[]>([])
   const [filteredBranches, setFilteredBranches] = useState<BranchItem[]>([])
@@ -76,7 +77,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
 
   // If bankName prop matches a known bank, pre-select it
   useEffect(() => {
-    if (bankName && banks.length > 0 && !selectedBank) {
+    if (bankName && banks.length > 0 && !selectedBank && !userCleared) {
       const match = banks.find(b =>
         b.name === bankName ||
         b.normalize?.name === bankName ||
@@ -87,7 +88,8 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
         setBankQuery(match.normalize?.name || match.name)
       }
     }
-  }, [bankName, banks, selectedBank])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bankName, banks])
 
   // Fetch branches when bank is selected
   useEffect(() => {
@@ -124,6 +126,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
     (q: string) => {
       setBankQuery(q)
       setShowBankDropdown(true)
+      setUserCleared(true) // ユーザーが入力を変更したのでpre-selectを無効化
       if (selectedBank) {
         setSelectedBank(null)
         setSelectedBranch(null)
@@ -188,6 +191,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
     setShowBankDropdown(false)
     setSelectedBranch(null)
     setBranchQuery('')
+    setUserCleared(false) // 新しい銀行を選択したのでフラグリセット
   }
 
   // Select branch

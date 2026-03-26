@@ -23,6 +23,10 @@ type Schedule = {
   note: string | null
   purchaseAmount: number | null
   billingAmount: number | null
+  revisitDate: string | null
+  revisitStart: string | null
+  revisitEnd: string | null
+  revisitNote: string | null
   user: { id: string; name: string; address: string; phone: string }
   store: { id: string; name: string }
   salesContract: { id: string } | null
@@ -41,6 +45,7 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'rescheduled', label: 'リスケ' },
   { value: 'absent',      label: '不在' },
   { value: 'cancelled',   label: 'キャンセル' },
+  { value: 'revisit',     label: '後日引取' },
 ]
 
 function fmt(n: number | null | undefined) {
@@ -303,6 +308,10 @@ export default function StoreSchedulePage() {
   const upcoming = schedules.filter(s =>
     new Date(s.visitDate) >= today && !['completed', 'cancelled', 'absent'].includes(s.status)
   )
+  // 再訪問日が未来のスケジュール（完了済みでも再訪問予定として表示）
+  const upcomingRevisits = schedules.filter(s =>
+    s.revisitDate && new Date(s.revisitDate) >= today && s.status !== 'cancelled'
+  )
   const past = schedules
     .filter(s =>
       new Date(s.visitDate) < today || ['completed', 'cancelled', 'absent'].includes(s.status)
@@ -410,7 +419,7 @@ export default function StoreSchedulePage() {
           <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4">
             今後の訪問予定
           </h3>
-          {upcoming.length === 0 ? (
+          {upcoming.length === 0 && upcomingRevisits.length === 0 ? (
             <Card variant="outlined" padding="none">
               <EmptyState
                 title="スケジュールがありません"
@@ -476,6 +485,56 @@ export default function StoreSchedulePage() {
                   </div>
                 </Card>
               ))}
+              {/* 再訪問（後日引取）カード */}
+              {upcomingRevisits.map(schedule => (
+                <Card key={`revisit-${schedule.id}`} variant="elevated" padding="none">
+                  <div className="flex items-start gap-4 p-4">
+                    <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-[var(--md-sys-shape-medium)] p-3 text-center min-w-16 flex-shrink-0">
+                      <div className="text-xs font-medium">{format(new Date(schedule.revisitDate!), 'M月', { locale: ja })}</div>
+                      <div className="text-2xl font-bold leading-none">{format(new Date(schedule.revisitDate!), 'd', { locale: ja })}</div>
+                      <div className="text-xs">{format(new Date(schedule.revisitDate!), '（E）', { locale: ja })}</div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700">
+                          後日引取
+                        </span>
+                      </div>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{schedule.user.address}</p>
+                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{schedule.user.phone}</p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                        査定日: {format(new Date(schedule.visitDate), 'M/d', { locale: ja })}
+                        {schedule.revisitStart && schedule.revisitEnd && (
+                          <span className="ml-2">引取時間: {schedule.revisitStart}〜{schedule.revisitEnd}</span>
+                        )}
+                      </p>
+                      {schedule.revisitNote && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{schedule.revisitNote}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          onClick={() => window.open(
+                            `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(schedule.user.address)}&travelmode=driving`,
+                            '_blank'
+                          )}
+                        >
+                          ルートを検索
+                        </Button>
+                        <Button
+                          variant="filled"
+                          size="sm"
+                          onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                        >
+                          詳細
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
           )}
         </section>
@@ -497,6 +556,7 @@ export default function StoreSchedulePage() {
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">ステータス</th>
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">買取金額</th>
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">請求金額</th>
+                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden lg:table-cell">再訪問日</th>
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden lg:table-cell">メモ</th>
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">契約書</th>
                       <th className="px-3 py-3"></th>
@@ -523,6 +583,14 @@ export default function StoreSchedulePage() {
                         </td>
                         <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.purchaseAmount)}</td>
                         <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.billingAmount)}</td>
+                        <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap hidden lg:table-cell">
+                          {schedule.revisitDate ? (
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                              {format(new Date(schedule.revisitDate), 'M/d', { locale: ja })}
+                            </span>
+                          ) : '—'}
+                        </td>
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-32 truncate hidden lg:table-cell">{schedule.note || '—'}</td>
                         <td className="px-3 py-3">
                           {schedule.salesContract ? (

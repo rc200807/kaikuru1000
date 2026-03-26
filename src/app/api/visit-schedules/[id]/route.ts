@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 
-const VALID_STATUSES = ['scheduled', 'pending', 'completed', 'rescheduled', 'absent', 'cancelled']
+const VALID_STATUSES = ['scheduled', 'pending', 'completed', 'rescheduled', 'absent', 'cancelled', 'revisit']
 
 /** 訪問詳細取得（買取品目・作業品目含む） */
 export async function GET(
@@ -83,7 +83,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName } = body
+  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote } = body
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -109,6 +109,10 @@ export async function PATCH(
     updateData.preConsentAt = new Date()
   }
   if (staffName !== undefined) updateData.staffName = staffName
+  if (revisitDate !== undefined) updateData.revisitDate = revisitDate ? new Date(revisitDate) : null
+  if (revisitStart !== undefined) updateData.revisitStart = revisitStart || null
+  if (revisitEnd !== undefined) updateData.revisitEnd = revisitEnd || null
+  if (revisitNote !== undefined) updateData.revisitNote = revisitNote || null
 
   const updated = await prisma.visitSchedule.update({
     where: { id },

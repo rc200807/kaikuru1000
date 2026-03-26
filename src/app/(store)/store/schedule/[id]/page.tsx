@@ -66,6 +66,10 @@ type VisitDetail = {
   preConsentSignature: string | null
   preConsentAt: string | null
   staffName: string | null
+  revisitDate: string | null
+  revisitStart: string | null
+  revisitEnd: string | null
+  revisitNote: string | null
   user: { id: string; name: string; address: string; phone: string; customerType: string }
   store: { id: string; name: string; address?: string; phone?: string }
   purchaseItems: PurchaseItem[]
@@ -79,6 +83,7 @@ const STATUS_LABELS: Record<string, string> = {
   rescheduled: 'リスケ',
   absent: '不在',
   cancelled: 'キャンセル',
+  revisit: '後日引取',
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -88,6 +93,7 @@ const STATUS_STYLES: Record<string, string> = {
   rescheduled: 'bg-[var(--status-rescheduled-bg)] text-[var(--status-rescheduled-text)]',
   absent: 'bg-[var(--status-absent-bg)] text-[var(--status-absent-text)]',
   cancelled: 'bg-[var(--status-cancelled-bg)] text-[var(--status-cancelled-text)]',
+  revisit: 'bg-orange-100 text-orange-700',
 }
 
 /* ─── メイン ─── */
@@ -142,6 +148,11 @@ export default function VisitDetailPage() {
   // メモ編集
   const [editNote, setEditNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+
+  // 再訪問日
+  const [showRevisitForm, setShowRevisitForm] = useState(false)
+  const [revisitForm, setRevisitForm] = useState({ date: '', start: '', end: '', note: '' })
+  const [savingRevisit, setSavingRevisit] = useState(false)
 
   const fetchVisit = useCallback(async () => {
     const res = await fetch(`/api/visit-schedules/${scheduleId}`)
@@ -435,6 +446,45 @@ export default function VisitDetailPage() {
     setSavingNote(false)
     fetchVisit()
     setMessage({ type: 'success', text: 'メモを保存しました' })
+  }
+
+  /* ─── 再訪問日保存 ─── */
+  async function saveRevisit() {
+    if (!revisitForm.date) return
+    setSavingRevisit(true)
+    await fetch(`/api/visit-schedules/${scheduleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        revisitDate: revisitForm.date,
+        revisitStart: revisitForm.start || null,
+        revisitEnd: revisitForm.end || null,
+        revisitNote: revisitForm.note || null,
+      }),
+    })
+    setSavingRevisit(false)
+    setShowRevisitForm(false)
+    fetchVisit()
+    setMessage({ type: 'success', text: '再訪問日を設定しました' })
+  }
+
+  async function deleteRevisit() {
+    setSavingRevisit(true)
+    await fetch(`/api/visit-schedules/${scheduleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        revisitDate: null,
+        revisitStart: null,
+        revisitEnd: null,
+        revisitNote: null,
+      }),
+    })
+    setSavingRevisit(false)
+    setShowRevisitForm(false)
+    setRevisitForm({ date: '', start: '', end: '', note: '' })
+    fetchVisit()
+    setMessage({ type: 'success', text: '再訪問日を削除しました' })
   }
 
   /* ─── ステータス変更 ─── */
@@ -862,6 +912,115 @@ export default function VisitDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ────────── 再訪問日セクション ────────── */}
+      <Card variant="elevated" padding="md">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">再訪問日（後日引取）</h3>
+          </div>
+
+          {visit.revisitDate && !showRevisitForm ? (
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                    {format(new Date(visit.revisitDate), 'yyyy年M月d日（E）', { locale: ja })}
+                    {visit.revisitStart && visit.revisitEnd && (
+                      <span className="ml-2 text-orange-600 dark:text-orange-400">{visit.revisitStart}〜{visit.revisitEnd}</span>
+                    )}
+                  </p>
+                  {visit.revisitNote && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400">{visit.revisitNote}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={() => {
+                      setRevisitForm({
+                        date: visit.revisitDate ? new Date(visit.revisitDate).toISOString().split('T')[0] : '',
+                        start: visit.revisitStart || '',
+                        end: visit.revisitEnd || '',
+                        note: visit.revisitNote || '',
+                      })
+                      setShowRevisitForm(true)
+                    }}
+                  >
+                    編集
+                  </Button>
+                  <Button
+                    variant="text"
+                    size="sm"
+                    onClick={deleteRevisit}
+                    disabled={savingRevisit}
+                  >
+                    削除
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : showRevisitForm ? (
+            <div className="space-y-3 bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3">
+              <div>
+                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">再訪問日 *</label>
+                <input
+                  type="date"
+                  className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2"
+                  value={revisitForm.date}
+                  onChange={e => setRevisitForm({ ...revisitForm, date: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">開始時間</label>
+                  <input
+                    type="time"
+                    className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2"
+                    value={revisitForm.start}
+                    onChange={e => setRevisitForm({ ...revisitForm, start: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">終了時間</label>
+                  <input
+                    type="time"
+                    className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2"
+                    value={revisitForm.end}
+                    onChange={e => setRevisitForm({ ...revisitForm, end: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">メモ</label>
+                <textarea
+                  className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2 min-h-[50px] resize-y"
+                  value={revisitForm.note}
+                  onChange={e => setRevisitForm({ ...revisitForm, note: e.target.value })}
+                  placeholder="例: 大型家具の引取、要トラック"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="text" size="sm" onClick={() => { setShowRevisitForm(false); setRevisitForm({ date: '', start: '', end: '', note: '' }) }}>
+                  キャンセル
+                </Button>
+                <Button variant="filled" size="sm" onClick={saveRevisit} disabled={savingRevisit || !revisitForm.date} loading={savingRevisit}>
+                  {savingRevisit ? '保存中...' : '保存'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="tonal"
+              size="sm"
+              onClick={() => setShowRevisitForm(true)}
+            >
+              再訪問日を設定
+            </Button>
+          )}
+        </div>
+      </Card>
 
       {/* ────────── 買取品目セクション ────────── */}
       <Card variant="elevated" padding="md">

@@ -169,6 +169,10 @@ model VisitSchedule {
   preConsentSignature   String?  @db.Text  // 事前同意の署名画像（base64）
   preConsentAt          DateTime?           // 事前同意日時
   staffName             String?             // 担当者名
+  revisitDate           DateTime?           // 再訪問予定日
+  revisitStart          String?             // 再訪問開始時間 (HH:MM)
+  revisitEnd            String?             // 再訪問終了時間 (HH:MM)
+  revisitNote           String?             // 再訪問メモ
   purchaseItems  PurchaseItem[]
   workItems      WorkItem[]
   salesContract  SalesContract?

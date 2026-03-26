@@ -1672,23 +1672,35 @@ function MyPageContent() {
               <Card variant="elevated" padding="none">
                 <div className="divide-y divide-gray-100">
                   {[
-                    { key: 'edit-profile', label: 'プロフィール編集', sub: `${user.name}（${user.phone}）`, icon: '✏️', color: 'text-gray-600' },
-                    { key: 'id-document', label: '身分証明書', sub: user.idDocumentPath ? '提出済み' : '未提出', icon: '🪪', color: user.idDocumentPath ? 'text-green-600' : 'text-red-500' },
-                    { key: 'password', label: 'パスワード変更', sub: 'セキュリティ設定', icon: '🔒', color: 'text-gray-600' },
-                    { key: 'bank-account', label: '口座情報', sub: user.bankName ? `${user.bankName} ${user.branchName || ''}` : '未登録', icon: '🏦', color: user.bankName ? 'text-green-600' : 'text-amber-500' },
-                    { key: '_logout', label: 'ログアウト', sub: '', icon: '🚪', color: 'text-gray-400' },
+                    { key: 'edit-profile', label: 'プロフィール編集', sub: `${user.name}（${user.phone}）`, gradient: 'from-amber-400 to-orange-500', statusColor: 'text-gray-500',
+                      svg: <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /> },
+                    { key: 'id-document', label: '身分証明書', sub: user.idDocumentPath ? '提出済み' : '未提出', gradient: 'from-blue-400 to-cyan-500', statusColor: user.idDocumentPath ? 'text-green-600' : 'text-red-500',
+                      svg: <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" /> },
+                    { key: 'password', label: 'パスワード変更', sub: 'セキュリティ設定', gradient: 'from-green-400 to-emerald-500', statusColor: 'text-gray-500',
+                      svg: <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /> },
+                    { key: 'bank-account', label: '口座情報', sub: user.bankName ? `${user.bankName} ${user.branchName || ''}` : '未登録', gradient: 'from-violet-400 to-purple-500', statusColor: user.bankName ? 'text-green-600' : 'text-amber-500',
+                      svg: <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" /> },
+                    { key: '_logout', label: 'ログアウト', sub: '', gradient: 'from-gray-400 to-gray-500', statusColor: 'text-gray-400',
+                      svg: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /> },
                   ].map(item => (
                     <button
                       key={item.key}
                       onClick={() => item.key === '_logout' ? (confirm('ログアウトしますか？') && signOut({ callbackUrl: '/login' })) : handleTabChange(item.key)}
-                      className={`w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left ${item.key === '_logout' ? 'text-red-500' : ''}`}
+                      className="w-full flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors text-left active:bg-gray-100"
                     >
-                      <span className="text-2xl">{item.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                        <p className={`text-xs ${item.color}`}>{item.sub}</p>
+                      <div className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${item.gradient} shadow-md overflow-hidden shrink-0`}>
+                        <div className="absolute inset-0 bg-white/20" />
+                        <div className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-white/20 blur-sm" />
+                        <div className="absolute -bottom-1 -left-1 w-5 h-5 rounded-full bg-white/10" />
+                        <div className="relative flex items-center justify-center w-full h-full">
+                          <svg className="w-5 h-5 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>{item.svg}</svg>
+                        </div>
                       </div>
-                      <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${item.key === '_logout' ? 'text-red-500' : 'text-gray-900'}`}>{item.label}</p>
+                        {item.sub && <p className={`text-xs ${item.statusColor}`}>{item.sub}</p>}
+                      </div>
+                      <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>

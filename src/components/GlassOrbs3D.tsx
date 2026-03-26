@@ -38,8 +38,8 @@ export default function GlassOrbs3D() {
     composer.addPass(renderPass)
 
     const bokehPass = new BokehPass(scene, camera, {
-      focus: 5.5,
-      aperture: 0.025,
+      focus: 4.0,
+      aperture: 0.06,
       maxblur: 0.025,
     })
     composer.addPass(bokehPass)

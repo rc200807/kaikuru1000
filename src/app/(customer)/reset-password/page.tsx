@@ -126,9 +126,7 @@ export default function CustomerResetPasswordPage() {
     <GlassBackground>
       {/* Title */}
       <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-red-700 to-rose-500 bg-clip-text text-transparent">
-          エコ得BOX
-        </h1>
+        <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
         <p className="text-sm text-gray-500 mt-1">パスワード再設定</p>
       </div>
 

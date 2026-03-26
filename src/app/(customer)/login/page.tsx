@@ -70,9 +70,7 @@ export default function CustomerLoginPage() {
         <div className="bg-white/40 backdrop-blur-2xl rounded-3xl shadow-2xl shadow-red-900/5 border border-white/60 p-8 sm:p-10">
           {/* Logo / Title */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-red-700 to-rose-500 bg-clip-text text-transparent">
-              エコ得BOX
-            </h1>
+            <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
             <p className="text-sm text-gray-500 mt-1">アカウントにログイン</p>
           </div>
 

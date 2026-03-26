@@ -1386,21 +1386,27 @@ function MyPageContent() {
                     {/* 円形グラフィック */}
                     <button
                       onClick={() => { setShowMemoForm(true); setMessage(null) }}
-                      className="group relative w-40 h-40 mb-4"
+                      className="group relative w-44 h-44 mb-4"
                     >
-                      {/* 外側のリング */}
-                      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-red-400/20 to-rose-300/20 animate-pulse" />
-                      <div className="absolute inset-2 rounded-full bg-gradient-to-br from-red-100/60 to-pink-100/60 backdrop-blur-sm border border-white/40" />
-                      {/* 内側の円 */}
-                      <div className="absolute inset-4 rounded-full bg-gradient-to-br from-red-500 to-rose-400 shadow-lg shadow-red-500/30 flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-transform">
-                        <div className="text-center">
-                          <p className="text-white text-2xl font-black tracking-wider">TRY!!</p>
-                          <p className="text-white/80 text-[10px] mt-0.5">タップで査定開始</p>
+                      {/* 外側のグロー */}
+                      <div className="absolute -inset-3 rounded-full bg-gradient-to-br from-red-300/20 via-pink-200/15 to-rose-300/20 blur-xl animate-pulse" />
+                      {/* 外側のすりガラスリング */}
+                      <div className="absolute inset-0 rounded-full bg-white/20 backdrop-blur-md border border-white/30 shadow-[0_8px_32px_rgba(185,28,28,0.15)]" />
+                      {/* 中間リング */}
+                      <div className="absolute inset-3 rounded-full bg-white/25 backdrop-blur-lg border border-white/40" />
+                      {/* 内側のすりガラス円 */}
+                      <div className="absolute inset-6 rounded-full bg-gradient-to-br from-red-500/80 to-rose-400/80 backdrop-blur-xl border border-white/20 shadow-lg shadow-red-500/20 flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-transform">
+                        {/* 光沢オーバーレイ */}
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 via-transparent to-transparent" style={{ clipPath: 'ellipse(80% 40% at 50% 20%)' }} />
+                        <div className="text-center relative z-10">
+                          <p className="text-white text-2xl font-black tracking-wider drop-shadow-sm">TRY!!</p>
+                          <p className="text-white/90 text-[10px] mt-0.5 font-medium">タップで査定開始</p>
                         </div>
                       </div>
                       {/* キラキラ装飾 */}
-                      <div className="absolute top-2 right-4 w-2 h-2 rounded-full bg-red-300 animate-ping" />
-                      <div className="absolute bottom-6 left-2 w-1.5 h-1.5 rounded-full bg-pink-300 animate-ping" style={{ animationDelay: '0.5s' }} />
+                      <div className="absolute top-1 right-5 w-2.5 h-2.5 rounded-full bg-white/60 animate-ping" />
+                      <div className="absolute bottom-5 left-1 w-2 h-2 rounded-full bg-pink-200/60 animate-ping" style={{ animationDelay: '0.7s' }} />
+                      <div className="absolute top-8 left-0 w-1.5 h-1.5 rounded-full bg-red-200/50 animate-ping" style={{ animationDelay: '1.2s' }} />
                     </button>
 
                     <p className="text-sm font-semibold text-gray-700 mb-1">写真を撮って、AI査定してみよう！</p>

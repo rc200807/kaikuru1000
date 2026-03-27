@@ -294,7 +294,7 @@ export default function AdminDashboardPage() {
 
         {/* 直近30日訪問数 */}
         <ChartCard>
-          <SectionHeading color="#60A5FA">訪問件数（直近30日）</SectionHeading>
+          <SectionHeading color="#E8927C">訪問件数（直近30日）</SectionHeading>
           <div className="h-44 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dailyVisits} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
@@ -302,7 +302,7 @@ export default function AdminDashboardPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} interval={4} />
                 <YAxis tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
-                <Bar dataKey="count" fill="#60A5FA" radius={[4, 4, 0, 0]} opacity={0.85} />
+                <Bar dataKey="count" fill="#E8927C" radius={[4, 4, 0, 0]} opacity={0.85} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-1.5">
                       <div
                         className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${(store.amount / maxPurchaseAmount) * 100}%`, background: 'linear-gradient(90deg, #E8927C, #7C3AED)' }}
+                        style={{ width: `${(store.amount / maxPurchaseAmount) * 100}%`, background: 'linear-gradient(90deg, #E8927C, #d4826e)' }}
                       />
                     </div>
                     <span className="text-xs font-bold text-[var(--md-sys-color-on-surface)] w-16 text-right flex-shrink-0">
@@ -355,7 +355,7 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-1.5">
                       <div
                         className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${(store.count / maxStoreCount) * 100}%`, background: 'linear-gradient(90deg, #E8927C, #BE185D)' }}
+                        style={{ width: `${(store.count / maxStoreCount) * 100}%`, background: 'linear-gradient(90deg, #E8927C, #d4826e)' }}
                       />
                     </div>
                     <span className="text-xs font-bold text-[var(--md-sys-color-on-surface)] w-8 text-right flex-shrink-0">

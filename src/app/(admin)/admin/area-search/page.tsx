@@ -410,7 +410,7 @@ export default function AdminAreaSearchPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">○</div>
+              <div className="w-10 h-10 rounded-lg bg-[#E8927C] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">○</div>
               <div>
                 <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同一都道府県</p>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">同じ都道府県内にある店舗</p>

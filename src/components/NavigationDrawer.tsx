@@ -145,7 +145,7 @@ export default function NavigationDrawer() {
               className={`
                 flex items-center gap-3 px-3 py-2.5 rounded-[var(--md-sys-shape-full)] text-sm transition-colors
                 ${active
-                  ? 'bg-[var(--admin-primary-container)] text-[var(--admin-on-primary-container)] font-medium'
+                  ? 'bg-[#E8927C]/15 text-[#E8927C] font-medium'
                   : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
                 }
               `}

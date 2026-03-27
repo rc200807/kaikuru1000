@@ -40,11 +40,11 @@
   --store-tertiary:                 #6B5778;
   --store-tertiary-container:       #F2DAFF;
 
-  /* ── Admin Portal (Dark seed) ───────────────────────── */
-  --admin-primary:                  #374151;
+  /* ── Admin Portal (Warm Coral seed) ─────────────────── */
+  --admin-primary:                  #E8927C;
   --admin-on-primary:               #FFFFFF;
-  --admin-primary-container:        #D5E3FF;
-  --admin-on-primary-container:     #001B3D;
+  --admin-primary-container:        #3D2420;
+  --admin-on-primary-container:     #F4C4B8;
   --admin-secondary:                #565E71;
   --admin-secondary-container:      #DAE2F9;
   --admin-tertiary:                 #6E5676;
@@ -107,11 +107,11 @@ body {
   --portal-on-primary-container:  var(--store-on-primary-container);
 }
 [data-portal="admin"] {
-  /* ── Portal accent ────────────────────────────────── */
-  --portal-primary:                 #6B7FD4;
-  --portal-on-primary:              #0D1340;
-  --portal-primary-container:       #2A3260;
-  --portal-on-primary-container:    #BFC8F4;
+  /* ── Portal accent (Warm Coral) ───────────────────── */
+  --portal-primary:                 #E8927C;
+  --portal-on-primary:              #FFFFFF;
+  --portal-primary-container:       #3D2420;
+  --portal-on-primary-container:    #F4C4B8;
 
   /* ── Dark surface tokens ──────────────────────────── */
   --md-sys-color-surface:                  #0F1117;

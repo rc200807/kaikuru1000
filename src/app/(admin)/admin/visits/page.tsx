@@ -340,17 +340,17 @@ export default function AdminVisitsPage() {
               label="該当件数"
               value={total.toLocaleString()}
               unit="件"
-              accentColor="bg-blue-600"
+              accentColor="bg-[#E8927C]"
             />
             <SummaryCard
               label={`買取金額合計（対応完了 ${completedCount}件）`}
               value={`¥${totalPurchase.toLocaleString()}`}
-              accentColor="bg-emerald-600"
+              accentColor="bg-[#E8927C]/70"
             />
             <SummaryCard
               label="請求金額合計（表示分）"
               value={`¥${totalBilling.toLocaleString()}`}
-              accentColor="bg-purple-600"
+              accentColor="bg-[#E8927C]/50"
             />
           </div>
         )}

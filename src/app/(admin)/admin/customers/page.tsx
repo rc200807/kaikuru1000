@@ -784,9 +784,9 @@ export default function AdminCustomersPage() {
       hideOnMobile: true,
       render: (user) => {
         const typeMap: Record<string, {label:string, cls:string}> = {
-          delivery: { label: '定期宅配', cls: 'bg-blue-100 text-blue-700' },
-          regular:  { label: '通常買取', cls: 'bg-purple-100 text-purple-700' },
-          visit:    { label: '定期訪問', cls: 'bg-green-100 text-green-700' },
+          delivery: { label: '定期宅配', cls: 'bg-[#E8927C]/15 text-[#E8927C]' },
+          regular:  { label: '通常買取', cls: 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]' },
+          visit:    { label: '定期訪問', cls: 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]' },
         }
         const t = typeMap[user.customerType] ?? typeMap.visit
         return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
@@ -852,7 +852,7 @@ export default function AdminCustomersPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* 統計 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <SummaryCard label="登録顧客数" value={users.length} accentColor="bg-blue-600" />
+          <SummaryCard label="登録顧客数" value={users.length} accentColor="bg-[#E8927C]" />
           <SummaryCard label="未割り当て" value={unassignedCount} accentColor={unassignedCount > 0 ? 'bg-orange-500' : 'bg-[var(--md-sys-color-outline)]'} />
           <SummaryCard label="担当店舗数" value={stores.length} accentColor="bg-green-600" />
           <SummaryCard label="身分証未提出" value={users.filter(u => !u.idDocumentPath).length} accentColor="bg-red-500" />
@@ -1270,7 +1270,7 @@ export default function AdminCustomersPage() {
                     <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">顧客タイプ</span>
                   </div>
                   <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
-                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-blue-100 text-blue-700' : detailUser.customerType === 'regular' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-[#E8927C]/15 text-[#E8927C]' : detailUser.customerType === 'regular' ? 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]' : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]'}`}>
                       {detailUser.customerType === 'delivery' ? '定期宅配' : detailUser.customerType === 'regular' ? '通常買取' : '定期訪問'}
                     </span>
                     <select

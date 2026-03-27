@@ -538,7 +538,7 @@ function AdminAnnouncementsContent() {
                               ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 ring-2 ring-offset-1 ring-red-500'
                               : opt.value === 'high'
                                 ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 ring-2 ring-offset-1 ring-orange-400'
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 ring-2 ring-offset-1 ring-blue-400'
+                                : 'bg-[#E8927C]/15 text-[#E8927C] ring-2 ring-offset-1 ring-[#E8927C]'
                             : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
                         }`}
                       >

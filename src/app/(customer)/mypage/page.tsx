@@ -159,6 +159,17 @@ function MyPageContent() {
   const [aiAppraisalRemaining, setAiAppraisalRemaining] = useState<number | null>(null)
   const [apprasingMemoId, setApprasingMemoId] = useState<string | null>(null)
 
+  // 買取トライ モーダル
+  const [tryModalOpen, setTryModalOpen] = useState(false)
+  const [tryStep, setTryStep] = useState(1)
+  const [tryPhoto, setTryPhoto] = useState<File | null>(null)
+  const [tryPhotoPreview, setTryPhotoPreview] = useState('')
+  const [tryItemName, setTryItemName] = useState('')
+  const [tryAppraisalResult, setTryAppraisalResult] = useState<AiAppraisalResult | null>(null)
+  const [trySaving, setTrySaving] = useState(false)
+  const [tryError, setTryError] = useState('')
+  const [trySavedMemoId, setTrySavedMemoId] = useState<string | null>(null)
+
   // 訪問リクエスト
   const [visitRequests, setVisitRequests] = useState<any[]>([])
   const [visitRequestsLoaded, setVisitRequestsLoaded] = useState(false)
@@ -762,6 +773,97 @@ function MyPageContent() {
     } finally {
       setApprasingMemoId(null)
     }
+  }
+
+  // 買取トライ モーダル — 写真選択
+  function handleTryPhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setTryPhoto(file)
+    const reader = new FileReader()
+    reader.onload = () => setTryPhotoPreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  // 買取トライ モーダル — ステートリセット
+  function resetTryState() {
+    setTryStep(1)
+    setTryPhoto(null)
+    setTryPhotoPreview('')
+    setTryItemName('')
+    setTryAppraisalResult(null)
+    setTrySaving(false)
+    setTryError('')
+    setTrySavedMemoId(null)
+  }
+
+  // 買取トライ モーダル — 写真アップロード → メモ作成 → AI査定
+  async function handleTryAppraisal() {
+    if (!tryPhoto || !tryItemName.trim()) return
+    setTryStep(3)
+    setTryError('')
+    try {
+      // 1. 写真アップロード
+      const formData = new FormData()
+      formData.append('file', tryPhoto)
+      const uploadRes = await fetch('/api/purchase-memos/images', { method: 'POST', body: formData })
+      if (!uploadRes.ok) {
+        const d = await uploadRes.json()
+        throw new Error(d.error || '画像のアップロードに失敗しました')
+      }
+      const { url: photoUrl } = await uploadRes.json()
+
+      // 2. メモ作成
+      const memoRes = await fetch('/api/purchase-memos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: tryItemName.trim(), imageUrls: [photoUrl] }),
+      })
+      if (!memoRes.ok) {
+        throw new Error('メモの登録に失敗しました')
+      }
+      const createdMemo = await memoRes.json()
+      setTrySavedMemoId(createdMemo.id)
+
+      // 3. AI査定
+      const aiRes = await fetch(`/api/purchase-memos/${createdMemo.id}/ai-appraisal`, { method: 'POST' })
+      const aiData = await aiRes.json()
+      if (aiRes.ok) {
+        setTryAppraisalResult(aiData.appraisal)
+        if (aiData.remaining !== undefined) setAiAppraisalRemaining(aiData.remaining)
+        setTryStep(4)
+      } else {
+        // AI査定失敗でもメモは保存済み — 結果なしで表示
+        setTryError(aiData.error || 'AI査定に失敗しましたが、メモは保存されました')
+        setTryStep(4)
+      }
+    } catch (err: any) {
+      setTryError(err.message || 'エラーが発生しました')
+      setTryStep(4)
+    }
+  }
+
+  // 買取トライ モーダル — 保存（閉じる）
+  function handleTrySave() {
+    setTrySaving(true)
+    // メモは既にステップ3で作成済み。一覧をリフレッシュして閉じる
+    fetch('/api/purchase-memos?limit=1&page=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.memos?.length) {
+          const newMemo = data.memos[0]
+          setMemos(prev => {
+            const exists = prev.some(m => m.id === newMemo.id)
+            return exists ? prev.map(m => m.id === newMemo.id ? newMemo : m) : [newMemo, ...prev]
+          })
+        }
+      })
+      .finally(() => {
+        setTrySaving(false)
+        setTryModalOpen(false)
+        resetTryState()
+        setMessage({ type: 'success', text: '買取トライを登録しました' })
+      })
   }
 
   // Listen for bottom nav tab changes
@@ -1370,7 +1472,7 @@ function MyPageContent() {
           {activeTab === 'memos' && (
             <div className="space-y-4">
               {/* TRY!! ヒーローセクション */}
-              {!showMemoForm && (
+              {!tryModalOpen && (
                 <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-50 via-white to-pink-50 border border-white/60 shadow-sm">
                   {/* 横スクロールイラストバンド */}
                   <div className="absolute inset-0 flex items-center overflow-hidden pointer-events-none">
@@ -1388,7 +1490,7 @@ function MyPageContent() {
                   <div className="relative z-10 flex flex-col items-center py-8 px-4">
                     {/* 円形グラフィック */}
                     <button
-                      onClick={() => { setShowMemoForm(true); setMessage(null) }}
+                      onClick={() => { setTryModalOpen(true); setTryStep(1); setMessage(null) }}
                       className="group relative w-44 h-44 mb-4"
                     >
                       {/* 外側のグロー */}
@@ -1435,101 +1537,178 @@ function MyPageContent() {
                 </div>
               )}
 
-              {/* メモ作成フォーム */}
-              {showMemoForm && (
-                <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">
-                    新しい買取トライ
-                  </h3>
-                  <form onSubmit={handleSubmitMemo} className="space-y-4">
-                    <TextField
-                      label="タイトル"
-                      value={memoForm.title}
-                      onChange={v => setMemoForm({ ...memoForm, title: v })}
-                      required
-                      placeholder="例：ブランドバッグ、古い時計など"
-                    />
-                    <TextField
-                      label="詳細メモ（任意）"
-                      value={memoForm.description}
-                      onChange={v => setMemoForm({ ...memoForm, description: v })}
-                      placeholder="状態、年代、ブランド名など詳細をメモ..."
-                      rows={3}
-                    />
+              {/* 買取トライ モーダル */}
+              {tryModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                      <h3 className="font-bold text-lg text-gray-900">買取トライ</h3>
+                      <button
+                        onClick={() => { setTryModalOpen(false); resetTryState() }}
+                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
 
-                    {/* 画像アップロード */}
-                    <div>
-                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                        写真（JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚）
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {memoImages.map((url, i) => (
-                          <div key={i} className="relative w-20 h-20">
-                            <img
-                              src={url}
-                              alt=""
-                              className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]"
-                            />
+                    {/* Step indicator */}
+                    <div className="flex gap-2 px-6 pt-4">
+                      {[1, 2, 3, 4].map(s => (
+                        <div key={s} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${tryStep >= s ? 'bg-gradient-to-r from-red-500 to-rose-400' : 'bg-gray-200'}`} />
+                      ))}
+                    </div>
+
+                    {/* Step 1: Photo */}
+                    {tryStep === 1 && (
+                      <div className="p-6 text-center">
+                        <p className="font-semibold text-gray-800 mb-1">アイテムの写真を撮影</p>
+                        <p className="text-xs text-gray-400 mb-5">JPEG・PNG・WebP・HEIC対応</p>
+                        {tryPhotoPreview ? (
+                          <div className="relative inline-block">
+                            <img src={tryPhotoPreview} alt="プレビュー" className="w-64 h-64 object-cover rounded-2xl shadow-md" />
                             <button
-                              type="button"
-                              onClick={() => setMemoImages(prev => prev.filter((_, j) => j !== i))}
-                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                              onClick={() => { setTryPhoto(null); setTryPhotoPreview('') }}
+                              className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
                             >
-                              ×
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
                             </button>
                           </div>
-                        ))}
-                        {memoImages.length < 5 && (
-                          <button
-                            type="button"
-                            onClick={() => memoImageInputRef.current?.click()}
-                            disabled={uploadingImage}
-                            className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
-                          >
-                            {uploadingImage ? (
-                              <LoadingSpinner size="sm" />
-                            ) : (
-                              <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span className="text-xs mt-1">追加</span>
-                              </>
-                            )}
-                          </button>
+                        ) : (
+                          <label className="block w-64 h-64 mx-auto border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-red-400 transition-colors">
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment" className="hidden" onChange={handleTryPhotoSelect} />
+                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                              <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <p className="text-sm font-medium">タップして撮影</p>
+                              <p className="text-xs mt-1">またはギャラリーから選択</p>
+                            </div>
+                          </label>
                         )}
-                        <input
-                          ref={memoImageInputRef}
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/heic"
-                          onChange={handleMemoImageUpload}
-                          className="hidden"
-                        />
+                        <button
+                          onClick={() => tryPhoto && setTryStep(2)}
+                          disabled={!tryPhoto}
+                          className="mt-6 w-full py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold disabled:opacity-40 transition-opacity shadow-lg shadow-red-500/25"
+                        >
+                          次へ
+                        </button>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="flex gap-3">
-                      <Button
-                        type="submit"
-                        disabled={submittingMemo || !memoForm.title}
-                        loading={submittingMemo}
-                      >
-                        {submittingMemo ? '登録中...' : '登録する'}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="tonal"
-                        onClick={() => {
-                          setShowMemoForm(false)
-                          setMemoForm({ title: '', description: '' })
-                          setMemoImages([])
-                        }}
-                      >
-                        キャンセル
-                      </Button>
-                    </div>
-                  </form>
-                </Card>
+                    {/* Step 2: Item name */}
+                    {tryStep === 2 && (
+                      <div className="p-6">
+                        <p className="font-semibold text-gray-800 mb-1 text-center">アイテム名を入力</p>
+                        <p className="text-xs text-gray-400 mb-5 text-center">ブランド名・商品名を入力してください</p>
+                        <img src={tryPhotoPreview} alt="プレビュー" className="w-24 h-24 object-cover rounded-xl mx-auto mb-5 shadow-md" />
+                        <input
+                          value={tryItemName}
+                          onChange={e => setTryItemName(e.target.value)}
+                          placeholder="例: ルイヴィトン バッグ"
+                          className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                          autoFocus
+                        />
+                        <div className="flex gap-3 mt-6">
+                          <button
+                            onClick={() => setTryStep(1)}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl font-semibold hover:bg-gray-200 transition-colors"
+                          >
+                            戻る
+                          </button>
+                          <button
+                            onClick={handleTryAppraisal}
+                            disabled={!tryItemName.trim()}
+                            className="flex-[2] py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold disabled:opacity-40 transition-opacity shadow-lg shadow-red-500/25"
+                          >
+                            AI査定を実行
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Appraising (loading) */}
+                    {tryStep === 3 && (
+                      <div className="p-6 text-center py-16">
+                        <div className="relative w-20 h-20 mx-auto mb-6">
+                          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-red-100 to-rose-100 animate-pulse" />
+                          <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
+                            <div className="w-10 h-10 border-[3px] border-red-500 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        </div>
+                        <p className="font-bold text-lg text-gray-800">AI査定中...</p>
+                        <p className="text-sm text-gray-500 mt-2">写真を分析しています</p>
+                        <p className="text-xs text-gray-400 mt-1">しばらくお待ちください</p>
+                      </div>
+                    )}
+
+                    {/* Step 4: Result */}
+                    {tryStep === 4 && (
+                      <div className="p-6">
+                        {/* 成功アイコン */}
+                        <div className="text-center mb-5">
+                          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                          <p className="font-bold text-lg text-gray-900">査定完了!</p>
+                        </div>
+
+                        {/* 写真と名前 */}
+                        <img src={tryPhotoPreview} alt="アイテム" className="w-32 h-32 object-cover rounded-xl mx-auto mb-3 shadow-md" />
+                        <p className="text-center font-medium text-gray-800 mb-4">{tryItemName}</p>
+
+                        {/* AI結果表示 */}
+                        {tryAppraisalResult && (
+                          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-4 mb-4 border border-purple-100/50">
+                            <div className="flex items-center gap-2 mb-3">
+                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                              </svg>
+                              <p className="text-sm font-bold text-purple-700">AI査定結果</p>
+                            </div>
+                            {tryAppraisalResult.offerPrice && (
+                              <p className="text-2xl font-bold text-center text-purple-600 mb-3">{tryAppraisalResult.offerPrice}</p>
+                            )}
+                            {tryAppraisalResult.productDetail && (
+                              <p className="text-sm text-gray-700 mb-1"><span className="font-medium text-gray-900">商品:</span> {tryAppraisalResult.productDetail}</p>
+                            )}
+                            {tryAppraisalResult.marketPriceHigh && tryAppraisalResult.marketPriceLow && (
+                              <p className="text-sm text-gray-700 mb-1"><span className="font-medium text-gray-900">相場:</span> {tryAppraisalResult.marketPriceLow} 〜 {tryAppraisalResult.marketPriceHigh}</p>
+                            )}
+                            {tryAppraisalResult.offerReason && (
+                              <p className="text-sm text-gray-600 mt-2">{tryAppraisalResult.offerReason}</p>
+                            )}
+                            {tryAppraisalResult.supplement && (
+                              <p className="text-xs text-gray-500 mt-2 leading-relaxed">{tryAppraisalResult.supplement}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* エラー表示 */}
+                        {tryError && (
+                          <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4">
+                            <p className="text-red-600 text-sm">{tryError}</p>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={handleTrySave}
+                          disabled={trySaving}
+                          className="w-full py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold disabled:opacity-60 transition-opacity shadow-lg shadow-red-500/25"
+                        >
+                          {trySaving ? '保存中...' : '保存する'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {/* メモ一覧 */}

@@ -87,8 +87,29 @@ function BottomNav() {
     },
   ]
 
-  // 定期宅配の場合は買取トライを非表示
-  const navItems = isDelivery ? allNavItems.filter(i => i.key !== 'memos') : allNavItems
+  // 定期宅配の場合は買取トライ・訪問リクエストを非表示、送付登録を追加
+  const deliveryNavItems = [
+    allNavItems[0], // ホーム
+    {
+      key: 'shipments',
+      label: '送付登録',
+      href: '/mypage?tab=shipments',
+      activeGradient: 'from-red-500 to-red-600',
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+        </svg>
+      ),
+      iconFilled: (
+        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M3.375 4.5C2.339 4.5 1.5 5.34 1.5 6.375V13.5h12V6.375c0-1.036-.84-1.875-1.875-1.875h-8.25zM13.5 15h-12v2.625c0 1.035.84 1.875 1.875 1.875h.375a3 3 0 116 0h3a3 3 0 116 0h.375c1.035 0 1.875-.84 1.875-1.875V15h-7.5z" />
+          <path d="M8.25 19.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0zM15.75 6.75a.75.75 0 00-.75.75v5.25c0 .414.336.75.75.75h5.25a.75.75 0 00.623-.333 13.42 13.42 0 00-1.893-5.567.75.75 0 00-.563-.35l-3.417-.5zM17.25 19.5a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0z" />
+        </svg>
+      ),
+    },
+    allNavItems[allNavItems.length - 1], // マイページ
+  ]
+  const navItems = isDelivery ? deliveryNavItems : allNavItems
 
   function handleNavClick(item: typeof navItems[number]) {
     // Update URL and trigger tab change via searchParams

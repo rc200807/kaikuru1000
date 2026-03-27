@@ -141,7 +141,12 @@ export default function AdminAreaSearchPage() {
     }
   }
 
-  function handleQuickAddress(addr: string) {
+  async function handleQuickAddress(addr: string) {
+    // テキスト検索モードに切り替えて即検索
+    setSearchMode('simple')
+    setSimpleAddress(addr)
+
+    // 詳細モードの値も設定しておく
     const prefMatch = addr.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
     if (prefMatch) {
       const pref = prefMatch[1]
@@ -150,9 +155,25 @@ export default function AdminAreaSearchPage() {
       setCityInput(rest)
       setDetail('')
       fetchCities(pref)
-    } else {
-      setPrefecture('')
-      setCityInput(addr)
+    }
+
+    // 即座に検索実行
+    setSearching(true)
+    setError(null)
+    setResult(null)
+    try {
+      const res = await fetch(`/api/stores/search?address=${encodeURIComponent(addr)}&limit=5`)
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || '検索に失敗しました')
+      } else {
+        const data: SearchResponse = await res.json()
+        setResult(data)
+      }
+    } catch {
+      setError('検索中にエラーが発生しました')
+    } finally {
+      setSearching(false)
     }
   }
 

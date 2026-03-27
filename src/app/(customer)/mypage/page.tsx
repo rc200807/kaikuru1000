@@ -1445,6 +1445,12 @@ function MyPageContent() {
                           )}
                         </dd>
                       </div>
+                      {user.address && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-sm text-gray-500 shrink-0">{user.customerType === 'delivery' ? '送付先住所' : '住所'}</dt>
+                          <dd className="text-sm font-medium text-gray-900 text-right">{user.address}</dd>
+                        </div>
+                      )}
                     </dl>
                   </div>
                   <div className="p-4">

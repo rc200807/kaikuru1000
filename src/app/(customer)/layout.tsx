@@ -1,19 +1,23 @@
 'use client'
 
 import { usePathname, useSearchParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Suspense } from 'react'
 
 function BottomNav() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { data: session } = useSession()
+  const user = session?.user as any
 
   // Only show bottom nav on mypage
   const isMypage = pathname === '/mypage'
   if (!isMypage) return null
 
   const currentTab = searchParams.get('tab') || 'dashboard'
+  const isDelivery = user?.customerType === 'delivery'
 
-  const navItems = [
+  const allNavItems = [
     {
       key: 'dashboard',
       label: 'ホーム',
@@ -82,6 +86,9 @@ function BottomNav() {
       ),
     },
   ]
+
+  // 定期宅配の場合は買取トライを非表示
+  const navItems = isDelivery ? allNavItems.filter(i => i.key !== 'memos') : allNavItems
 
   function handleNavClick(item: typeof navItems[number]) {
     // Update URL and trigger tab change via searchParams

@@ -52,29 +52,20 @@ type KpiProps = {
   icon: React.ReactNode
 }
 
-function KpiCard({ label, value, unit, sub, color, gradFrom, gradTo, icon }: KpiProps) {
+function KpiCard({ label, value, unit, sub, color, icon }: KpiProps) {
   return (
-    <div
-      className="relative rounded-3xl p-4 overflow-hidden"
-      style={{
-        background: `linear-gradient(135deg, ${gradFrom} 0%, ${gradTo} 100%)`,
-        border: `1px solid ${color}33`,
-      }}
-    >
-      {/* glow */}
-      <div
-        className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-20 blur-2xl pointer-events-none"
-        style={{ background: color }}
-      />
+    <div className="relative rounded-2xl p-4 overflow-hidden bg-[var(--md-sys-color-surface-container,#1e1e2e)] border border-[var(--md-sys-color-outline-variant,#333)]">
       <div className="flex items-start justify-between mb-3">
-        <span className="text-xs font-medium opacity-70 text-white">{label}</span>
-        <span className="opacity-50 text-white">{icon}</span>
+        <span className="text-[11px] font-medium text-[var(--md-sys-color-on-surface-variant,#999)]">{label}</span>
+        <span style={{ color }} className="opacity-70">{icon}</span>
       </div>
       <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-black text-white tracking-tight">{value}</span>
-        {unit && <span className="text-xs text-white/70">{unit}</span>}
+        <span className="text-2xl font-black text-[var(--md-sys-color-on-surface,#eee)] tracking-tight">{value}</span>
+        {unit && <span className="text-xs text-[var(--md-sys-color-on-surface-variant,#888)]">{unit}</span>}
       </div>
-      {sub && <p className="text-[11px] text-white/60 mt-1">{sub}</p>}
+      {sub && <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant,#777)] mt-1.5">{sub}</p>}
+      {/* 下部のアクセントライン */}
+      <div className="absolute bottom-0 left-4 right-4 h-[2px] rounded-full opacity-60" style={{ background: color }} />
     </div>
   )
 }
@@ -142,15 +133,15 @@ export default function AdminDashboardPage() {
   const maxStoreCount = Math.max(...storeRanking.map(s => s.count), 1)
   const maxPurchaseAmount = Math.max(...storePurchaseRanking.map(s => s.amount), 1)
 
+  const accent = '#E8927C' // warm coral accent
   const kpiCards: KpiProps[] = [
     {
       label: '総顧客数',
       value: summary.totalCustomers.toLocaleString(),
       unit: '名',
       sub: `当月新規 +${summary.currentMonthCustomers}名`,
-      color: '#3B82F6',
-      gradFrom: 'rgba(59,130,246,0.7)',
-      gradTo: 'rgba(37,99,235,0.4)',
+      color: accent,
+      gradFrom: '', gradTo: '',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
@@ -161,9 +152,8 @@ export default function AdminDashboardPage() {
       label: '当月新規顧客',
       value: summary.currentMonthCustomers.toLocaleString(),
       unit: '名',
-      color: '#EC4899',
-      gradFrom: 'rgba(236,72,153,0.7)',
-      gradTo: 'rgba(190,24,93,0.4)',
+      color: accent,
+      gradFrom: '', gradTo: '',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109z" />
@@ -175,9 +165,8 @@ export default function AdminDashboardPage() {
       value: summary.totalVisitsCount.toLocaleString(),
       unit: '件',
       sub: `当月 ${summary.currentMonthVisits}件`,
-      color: '#10B981',
-      gradFrom: 'rgba(16,185,129,0.7)',
-      gradTo: 'rgba(5,150,105,0.4)',
+      color: accent,
+      gradFrom: '', gradTo: '',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
@@ -188,9 +177,8 @@ export default function AdminDashboardPage() {
       label: '当月訪問数',
       value: summary.currentMonthVisits.toLocaleString(),
       unit: '件',
-      color: '#F59E0B',
-      gradFrom: 'rgba(245,158,11,0.7)',
-      gradTo: 'rgba(217,119,6,0.4)',
+      color: accent,
+      gradFrom: '', gradTo: '',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -201,9 +189,8 @@ export default function AdminDashboardPage() {
     {
       label: '総買取金額',
       value: fmtYen(summary.totalPurchaseAmount),
-      color: '#A78BFA',
-      gradFrom: 'rgba(167,139,250,0.7)',
-      gradTo: 'rgba(124,58,237,0.4)',
+      color: accent,
+      gradFrom: '', gradTo: '',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
@@ -213,9 +200,8 @@ export default function AdminDashboardPage() {
     {
       label: '当月買取金額',
       value: fmtYen(summary.currentMonthPurchaseAmount),
-      color: '#F472B6',
-      gradFrom: 'rgba(244,114,182,0.7)',
-      gradTo: 'rgba(219,39,119,0.4)',
+      color: accent,
+      gradFrom: '', gradTo: '',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -237,7 +223,7 @@ export default function AdminDashboardPage() {
 
         {/* 買取金額推移 — Gradient Area Chart */}
         <ChartCard>
-          <SectionHeading color="#A78BFA">買取金額の推移（月次・直近12ヶ月）</SectionHeading>
+          <SectionHeading color="#E8927C">買取金額の推移（月次・直近12ヶ月）</SectionHeading>
           {monthlyPurchaseAmount.every(d => d.amount === 0) ? (
             <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-12">買取実績がありません</p>
           ) : (
@@ -246,15 +232,15 @@ export default function AdminDashboardPage() {
                 <AreaChart data={monthlyPurchaseAmount} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="purchaseGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#A78BFA" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#A78BFA" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#E8927C" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#E8927C" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant,#333)" opacity={0.4} vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} tickFormatter={yenAxis} width={46} />
                   <Tooltip content={<ChartTooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />} />
-                  <Area type="monotone" dataKey="amount" stroke="#A78BFA" strokeWidth={2.5} fill="url(#purchaseGrad)" dot={false} activeDot={{ r: 5, fill: '#A78BFA', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="amount" stroke="#E8927C" strokeWidth={2.5} fill="url(#purchaseGrad)" dot={false} activeDot={{ r: 5, fill: '#E8927C', strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -264,42 +250,42 @@ export default function AdminDashboardPage() {
         {/* 新規顧客 + 月次訪問数 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard>
-            <SectionHeading color="#EC4899">新規顧客獲得数（月次）</SectionHeading>
+            <SectionHeading color="#E8927C">新規顧客獲得数（月次）</SectionHeading>
             <div className="h-44 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthlyNewCustomers} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="custGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#EC4899" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#EC4899" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#E8927C" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#E8927C" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant,#333)" opacity={0.4} vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                   <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}名`} />} />
-                  <Area type="monotone" dataKey="count" stroke="#EC4899" strokeWidth={2.5} fill="url(#custGrad)" dot={false} activeDot={{ r: 5, fill: '#EC4899', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="count" stroke="#E8927C" strokeWidth={2.5} fill="url(#custGrad)" dot={false} activeDot={{ r: 5, fill: '#E8927C', strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </ChartCard>
 
           <ChartCard>
-            <SectionHeading color="#10B981">訪問件数の推移（月次）</SectionHeading>
+            <SectionHeading color="#E8927C">訪問件数の推移（月次）</SectionHeading>
             <div className="h-44 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthlyVisits} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="visitGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#E8927C" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#E8927C" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant,#333)" opacity={0.4} vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#aaa)' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                   <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
-                  <Area type="monotone" dataKey="count" stroke="#10B981" strokeWidth={2.5} fill="url(#visitGrad)" dot={false} activeDot={{ r: 5, fill: '#10B981', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="count" stroke="#E8927C" strokeWidth={2.5} fill="url(#visitGrad)" dot={false} activeDot={{ r: 5, fill: '#E8927C', strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -327,7 +313,7 @@ export default function AdminDashboardPage() {
 
           {/* 店舗別買取金額 */}
           <ChartCard>
-            <SectionHeading color="#A78BFA">店舗別買取金額（全期間 TOP10）</SectionHeading>
+            <SectionHeading color="#E8927C">店舗別買取金額（全期間 TOP10）</SectionHeading>
             {storePurchaseRanking.length === 0 ? (
               <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-8">買取実績がありません</p>
             ) : (
@@ -341,7 +327,7 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-1.5">
                       <div
                         className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${(store.amount / maxPurchaseAmount) * 100}%`, background: 'linear-gradient(90deg, #A78BFA, #7C3AED)' }}
+                        style={{ width: `${(store.amount / maxPurchaseAmount) * 100}%`, background: 'linear-gradient(90deg, #E8927C, #7C3AED)' }}
                       />
                     </div>
                     <span className="text-xs font-bold text-[var(--md-sys-color-on-surface)] w-16 text-right flex-shrink-0">
@@ -355,7 +341,7 @@ export default function AdminDashboardPage() {
 
           {/* 店舗別顧客数 */}
           <ChartCard>
-            <SectionHeading color="#EC4899">店舗別顧客数（当月 TOP10）</SectionHeading>
+            <SectionHeading color="#E8927C">店舗別顧客数（当月 TOP10）</SectionHeading>
             {storeRanking.length === 0 ? (
               <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-8">当月のデータがありません</p>
             ) : (
@@ -369,7 +355,7 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-1.5">
                       <div
                         className="h-1.5 rounded-full transition-all"
-                        style={{ width: `${(store.count / maxStoreCount) * 100}%`, background: 'linear-gradient(90deg, #EC4899, #BE185D)' }}
+                        style={{ width: `${(store.count / maxStoreCount) * 100}%`, background: 'linear-gradient(90deg, #E8927C, #BE185D)' }}
                       />
                     </div>
                     <span className="text-xs font-bold text-[var(--md-sys-color-on-surface)] w-8 text-right flex-shrink-0">

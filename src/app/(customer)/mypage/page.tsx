@@ -14,6 +14,7 @@ import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import BankSearch from '@/components/customer/BankSearch'
+import { convertToJpegIfNeeded, createPreviewUrl } from '@/lib/image-utils'
 
 type UserData = {
   id: string
@@ -426,27 +427,29 @@ function MyPageContent() {
     }
   }
 
-  function handleFrontFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFrontFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 10 * 1024 * 1024) {
       setMessage({ type: 'error', text: 'ファイルサイズは10MB以下にしてください' })
       return
     }
-    setFrontFile(file)
-    setFrontPreview(URL.createObjectURL(file))
+    const converted = await convertToJpegIfNeeded(file)
+    setFrontFile(converted)
+    setFrontPreview(URL.createObjectURL(converted))
     setMessage(null)
   }
 
-  function handleBackFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleBackFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 10 * 1024 * 1024) {
       setMessage({ type: 'error', text: 'ファイルサイズは10MB以下にしてください' })
       return
     }
-    setBackFile(file)
-    setBackPreview(URL.createObjectURL(file))
+    const converted = await convertToJpegIfNeeded(file)
+    setBackFile(converted)
+    setBackPreview(URL.createObjectURL(converted))
     setMessage(null)
   }
 
@@ -776,13 +779,13 @@ function MyPageContent() {
   }
 
   // 買取トライ モーダル — 写真選択
-  function handleTryPhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleTryPhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setTryPhoto(file)
-    const reader = new FileReader()
-    reader.onload = () => setTryPhotoPreview(reader.result as string)
-    reader.readAsDataURL(file)
+    const converted = await convertToJpegIfNeeded(file)
+    setTryPhoto(converted)
+    const preview = await createPreviewUrl(converted)
+    setTryPhotoPreview(preview)
   }
 
   // 買取トライ モーダル — ステートリセット
@@ -1237,8 +1240,8 @@ function MyPageContent() {
                       ),
                     },
                   ].filter(item => {
-                    // Hide visit-request and history for delivery customers
-                    if (isDelivery && (item.tab === 'visit-request' || item.tab === 'history')) return false
+                    // Hide memos, visit-request and history for delivery customers
+                    if (isDelivery && (item.tab === 'memos' || item.tab === 'visit-request' || item.tab === 'history')) return false
                     return true
                   }).map(item => (
                     <button
@@ -1359,7 +1362,7 @@ function MyPageContent() {
                         </svg>
                       ),
                     },
-                    {
+                    ...(!isDelivery ? [{
                       key: 'memo',
                       label: '買取トライで事前査定',
                       sub: '写真で簡単に買取価格をチェック',
@@ -1370,7 +1373,7 @@ function MyPageContent() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
                       ),
-                    },
+                    }] : []),
                     ...(user.customerType !== 'delivery' ? [{
                       key: 'visit',
                       label: '定期訪問の予約',

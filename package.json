@@ -29,6 +29,7 @@
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
     "googleapis": "^171.4.0",
+    "heic2any": "^0.0.4",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.0",

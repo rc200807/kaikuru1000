@@ -27,7 +27,7 @@ export default function AdminMembersPage() {
   const [members, setMembers] = useState<AdminMember[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '' })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -70,9 +70,12 @@ export default function AdminMembersPage() {
     if (res.ok) {
       const created = await res.json()
       setMembers(prev => [...prev, created])
-      setMessage({ type: 'success', text: `${form.name} さんのアカウントを作成しました` })
+      const emailMsg = created.emailSent
+        ? `招待メールを ${form.email} に送信しました`
+        : '（メール送信に失敗しました。メール設定を確認してください）'
+      setMessage({ type: 'success', text: `${form.name} さんのアカウントを作成しました。${emailMsg}` })
       setShowForm(false)
-      setForm({ name: '', email: '', password: '' })
+      setForm({ name: '', email: '' })
     } else {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || 'アカウントの作成に失敗しました' })
@@ -208,14 +211,14 @@ export default function AdminMembersPage() {
       {/* メンバー追加モーダル */}
       <Modal
         open={showForm}
-        onClose={() => { setShowForm(false); setForm({ name: '', email: '', password: '' }) }}
+        onClose={() => { setShowForm(false); setForm({ name: '', email: '' }) }}
         title="メンバー追加"
         size="sm"
         footer={
           <>
             <Button
               variant="text"
-              onClick={() => { setShowForm(false); setForm({ name: '', email: '', password: '' }) }}
+              onClick={() => { setShowForm(false); setForm({ name: '', email: '' }) }}
             >
               キャンセル
             </Button>
@@ -228,7 +231,7 @@ export default function AdminMembersPage() {
                 handleAdd(fakeEvent)
               }}
             >
-              アカウント作成
+              招待メールを送信
             </Button>
           </>
         }
@@ -249,15 +252,14 @@ export default function AdminMembersPage() {
             required
             placeholder="例：tanaka@kaikuru.jp"
           />
-          <TextField
-            label="パスワード"
-            value={form.password}
-            onChange={(v) => setForm({ ...form, password: v })}
-            type="password"
-            required
-            placeholder="6文字以上"
-            helper="このパスワードをメンバーに伝えてください"
-          />
+          <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3 flex gap-3 items-start">
+            <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+              パスワードは自動生成され、入力されたメールアドレスにログイン情報が送信されます。
+            </p>
+          </div>
         </form>
       </Modal>
 

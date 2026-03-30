@@ -1823,13 +1823,71 @@ function MyPageContent() {
                       label="内容メモ（任意）"
                       value={shipmentForm.description}
                       onChange={v => setShipmentForm({ description: v })}
-                      placeholder="例：ブランドバッグ2点、時計1点など"
+                      placeholder="例：古い携帯電話1台、着なくなった服5着など"
                       rows={3}
                     />
-                    {/* 画像アップロード */}
+
+                    {/* 発送伝票の写真 */}
                     <div>
-                      <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                        写真（JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚）
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
+                        発送伝票の写真
+                      </p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                        伝票の控えを撮影してください（追跡番号の確認に使用します）
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {(shipmentForm as any).trackingImages?.map((url: string, i: number) => (
+                          <div key={`tracking-${i}`} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const imgs = [...((shipmentForm as any).trackingImages || [])]
+                                imgs.splice(i, 1)
+                                setShipmentForm(prev => ({ ...prev, trackingImages: imgs } as any))
+                              }}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                            >×</button>
+                          </div>
+                        )) ?? null}
+                        {((shipmentForm as any).trackingImages?.length ?? 0) < 2 && (
+                          <label className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span className="text-xs mt-1">追加</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/heic"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                const fd = new FormData()
+                                fd.append('file', file)
+                                const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: fd })
+                                if (res.ok) {
+                                  const { url } = await res.json()
+                                  setShipmentForm(prev => ({
+                                    ...prev,
+                                    trackingImages: [...((prev as any).trackingImages || []), url],
+                                  } as any))
+                                }
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 箱の中の写真 */}
+                    <div>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
+                        箱の中の写真
+                      </p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                        JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {shipmentImages.map((url, i) => (

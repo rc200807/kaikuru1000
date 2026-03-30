@@ -57,6 +57,7 @@ export const authOptions: NextAuthOptions = {
                 name: u.name,
                 avatar: null,
                 role: 'customer' as const,
+                customerType: u.customerType,
               }
             }
           }
@@ -84,6 +85,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           avatar: null,
           role: 'customer' as const,
+          customerType: user.customerType,
         }
       },
     }),
@@ -226,6 +228,7 @@ export const authOptions: NextAuthOptions = {
           name: magicLink.user.name,
           avatar: null,
           role: 'customer' as const,
+          customerType: (magicLink.user as any).customerType,
         }
       },
     }),
@@ -236,6 +239,7 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role
         token.id = user.id
         token.avatar = (user as any).avatar ?? null
+        token.customerType = (user as any).customerType ?? null
       }
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
@@ -255,6 +259,7 @@ export const authOptions: NextAuthOptions = {
         if (updatedSession.name !== undefined) token.name = updatedSession.name
         if (updatedSession.email !== undefined) token.email = updatedSession.email
         if (updatedSession.avatar !== undefined) token.avatar = updatedSession.avatar
+        if (updatedSession.customerType !== undefined) token.customerType = updatedSession.customerType
       }
       return token
     },
@@ -263,6 +268,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role
         ;(session.user as any).id = token.id
         ;(session.user as any).avatar = token.avatar ?? null
+        ;(session.user as any).customerType = token.customerType ?? null
         if (token.name) session.user.name = token.name as string
         if (token.email) session.user.email = token.email as string
       }

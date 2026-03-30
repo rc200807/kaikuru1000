@@ -108,7 +108,7 @@ export default function MyPage() {
 }
 
 function MyPageContent() {
-  const { data: session, status } = useSession()
+  const { data: session, status, update: updateSession } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<UserData | null>(null)
@@ -249,6 +249,10 @@ function MyPageContent() {
         .then(data => {
           if (!data || data.error) { setLoading(false); return }
           setUser(data)
+          // セッションのcustomerTypeをDBの最新値と同期
+          if (data.customerType && data.customerType !== (session?.user as any)?.customerType) {
+            updateSession({ customerType: data.customerType })
+          }
           setEditForm({ name: data.name, furigana: data.furigana, phone: data.phone, address: data.address })
           setBankForm({
             bankName:      data.bankName      ?? '',

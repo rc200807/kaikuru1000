@@ -388,14 +388,14 @@ export async function sendPasswordResetEmail(params: {
   to: string
   name: string
   resetUrl: string
-  userType: 'store' | 'customer'
+  userType: 'store' | 'customer' | 'admin'
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
 
   const { transporter, from } = result
 
-  const portalLabel = params.userType === 'store' ? '店舗ポータル' : '顧客マイページ'
+  const portalLabel = params.userType === 'admin' ? '管理ポータル' : params.userType === 'store' ? '店舗ポータル' : '顧客マイページ'
 
   const html = `
 <!DOCTYPE html>

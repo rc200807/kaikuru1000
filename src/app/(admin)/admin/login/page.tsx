@@ -86,6 +86,15 @@ export default function AdminLoginPage() {
               {loading ? 'ログイン中...' : 'ログイン'}
             </Button>
           </form>
+
+          <div className="text-center mt-4 pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
+            <Link
+              href="/admin/forgot-password"
+              className="text-sm text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            >
+              パスワードを忘れた方はこちら
+            </Link>
+          </div>
         </Card>
 
         <p className="text-center mt-5 text-sm text-[var(--md-sys-color-on-surface-variant)]">

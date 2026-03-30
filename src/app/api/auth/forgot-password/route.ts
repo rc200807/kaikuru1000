@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   try {
     const { email, userType } = await req.json()
 
-    if (!email || !userType || !['store', 'customer'].includes(userType)) {
+    if (!email || !userType || !['store', 'customer', 'admin'].includes(userType)) {
       return NextResponse.json(
         { error: 'メールアドレスとユーザー種別は必須です' },
         { status: 400 }
@@ -17,7 +17,13 @@ export async function POST(req: Request) {
     // ユーザーを検索（存在しなくても200を返してメールの有無を漏らさない）
     let userName: string | null = null
 
-    if (userType === 'store') {
+    if (userType === 'admin') {
+      const admin = await prisma.admin.findUnique({
+        where: { email },
+        select: { name: true },
+      })
+      userName = admin?.name ?? null
+    } else if (userType === 'store') {
       const store = await prisma.store.findFirst({
         where: { email, isActive: true },
         select: { name: true },
@@ -53,7 +59,7 @@ export async function POST(req: Request) {
 
     // リセットURLを生成
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
-    const resetPath = userType === 'store' ? '/store/reset-password' : '/reset-password'
+    const resetPath = userType === 'admin' ? '/admin/reset-password' : userType === 'store' ? '/store/reset-password' : '/reset-password'
     const resetUrl = `${baseUrl}${resetPath}?token=${token}`
 
     // メール送信

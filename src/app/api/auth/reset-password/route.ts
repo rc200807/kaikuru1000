@@ -50,7 +50,21 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(password, 10)
 
     // ユーザーのパスワードを更新
-    if (resetToken.userType === 'store') {
+    if (resetToken.userType === 'admin') {
+      const admin = await prisma.admin.findUnique({
+        where: { email: resetToken.email },
+      })
+      if (!admin) {
+        return NextResponse.json(
+          { error: 'アカウントが見つかりません' },
+          { status: 400 }
+        )
+      }
+      await prisma.admin.update({
+        where: { id: admin.id },
+        data: { password: hashedPassword },
+      })
+    } else if (resetToken.userType === 'store') {
       // 同一メールの全店舗のパスワードを更新
       const result = await prisma.store.updateMany({
         where: { email: resetToken.email, isActive: true },

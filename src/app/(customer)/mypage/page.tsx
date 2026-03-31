@@ -2205,134 +2205,156 @@ function MyPageContent() {
 
               {/* 送付登録フォーム */}
               {showShipmentForm && (
-                <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-                  {/* 発送ID */}
-                  {reservedShipmentNumber && (
-                    <div className="mb-4 bg-gradient-to-r from-[#B91C1C] to-rose-500 rounded-2xl p-4 text-center">
-                      <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの発送ID</p>
-                      <p className="text-white text-2xl font-black tracking-widest">{reservedShipmentNumber}</p>
-                      <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
+                <form onSubmit={handleSubmitShipment} className="space-y-4">
+                  {/* Section 1: 箱の中身に関する情報 */}
+                  <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                    <div className="flex items-center gap-2.5 mb-1">
+                      <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-[#B91C1C] to-rose-500 text-white text-sm font-bold flex items-center justify-center">1</span>
+                      <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">箱の中身に関する情報</h3>
                     </div>
-                  )}
-                  <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">今月の送付を登録</h3>
-                  <form onSubmit={handleSubmitShipment} className="space-y-4">
-                    <TextField
-                      label="内容メモ（任意）"
-                      value={shipmentForm.description}
-                      onChange={v => setShipmentForm({ description: v })}
-                      placeholder="例：古い携帯電話1台、着なくなった服5着など"
-                      rows={3}
-                    />
+                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4 ml-[38px]">送る品物の内容と写真を登録してください</p>
 
-                    {/* 発送伝票の写真 */}
-                    <div>
-                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
-                        発送伝票の写真
-                      </p>
-                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                        伝票の控えを撮影してください（追跡番号の確認に使用します）
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {(shipmentForm as any).trackingImages?.map((url: string, i: number) => (
-                          <div key={`tracking-${i}`} className="relative w-20 h-20">
-                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                    <div className="space-y-4">
+                      <TextField
+                        label="内容メモ（任意）"
+                        value={shipmentForm.description}
+                        onChange={v => setShipmentForm({ description: v })}
+                        placeholder="例：古い携帯電話1台、着なくなった服5着など"
+                        rows={3}
+                      />
+
+                      {/* 箱の中の写真 */}
+                      <div>
+                        <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
+                          箱の中の写真
+                        </p>
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                          JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {shipmentImages.map((url, i) => (
+                            <div key={i} className="relative w-20 h-20">
+                              <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                              <button
+                                type="button"
+                                onClick={() => setShipmentImages(prev => prev.filter((_, j) => j !== i))}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                              >×</button>
+                            </div>
+                          ))}
+                          {shipmentImages.length < 5 && (
                             <button
                               type="button"
-                              onClick={() => {
-                                const imgs = [...((shipmentForm as any).trackingImages || [])]
-                                imgs.splice(i, 1)
-                                setShipmentForm(prev => ({ ...prev, trackingImages: imgs } as any))
-                              }}
-                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
-                            >×</button>
-                          </div>
-                        )) ?? null}
-                        {((shipmentForm as any).trackingImages?.length ?? 0) < 2 && (
-                          <label className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                            </svg>
-                            <span className="text-xs mt-1">追加</span>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/webp,image/heic"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0]
-                                if (!file) return
-                                const fd = new FormData()
-                                fd.append('file', file)
-                                const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: fd })
-                                if (res.ok) {
-                                  const { url } = await res.json()
-                                  setShipmentForm(prev => ({
-                                    ...prev,
-                                    trackingImages: [...((prev as any).trackingImages || []), url],
-                                  } as any))
-                                }
-                                e.target.value = ''
-                              }}
-                            />
-                          </label>
-                        )}
+                              onClick={() => shipmentImageInputRef.current?.click()}
+                              disabled={uploadingShipmentImage}
+                              className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
+                            >
+                              {uploadingShipmentImage ? <LoadingSpinner size="sm" /> : (
+                                <>
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  <span className="text-xs mt-1">追加</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <input
+                            ref={shipmentImageInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/heic"
+                            onChange={handleShipmentImageUpload}
+                            className="hidden"
+                          />
+                        </div>
                       </div>
                     </div>
+                  </Card>
 
-                    {/* 箱の中の写真 */}
-                    <div>
-                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
-                        箱の中の写真
-                      </p>
-                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                        JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {shipmentImages.map((url, i) => (
-                          <div key={i} className="relative w-20 h-20">
-                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
-                            <button
-                              type="button"
-                              onClick={() => setShipmentImages(prev => prev.filter((_, j) => j !== i))}
-                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
-                            >×</button>
-                          </div>
-                        ))}
-                        {shipmentImages.length < 5 && (
-                          <button
-                            type="button"
-                            onClick={() => shipmentImageInputRef.current?.click()}
-                            disabled={uploadingShipmentImage}
-                            className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
-                          >
-                            {uploadingShipmentImage ? <LoadingSpinner size="sm" /> : (
-                              <>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span className="text-xs mt-1">追加</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                        <input
-                          ref={shipmentImageInputRef}
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/heic"
-                          onChange={handleShipmentImageUpload}
-                          className="hidden"
-                        />
+                  {/* Section 2: 送付に関する情報 */}
+                  <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                    <div className="flex items-center gap-2.5 mb-1">
+                      <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-[#B91C1C] to-rose-500 text-white text-sm font-bold flex items-center justify-center">2</span>
+                      <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">送付に関する情報</h3>
+                    </div>
+                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4 ml-[38px]">発送IDを伝票に記入し、伝票の写真を登録してください</p>
+
+                    <div className="space-y-4">
+                      {/* 発送ID */}
+                      {reservedShipmentNumber && (
+                        <div className="bg-gradient-to-r from-[#B91C1C] to-rose-500 rounded-2xl p-4 text-center">
+                          <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの発送ID</p>
+                          <p className="text-white text-2xl font-black tracking-widest">{reservedShipmentNumber}</p>
+                          <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
+                        </div>
+                      )}
+
+                      {/* 発送伝票の写真 */}
+                      <div>
+                        <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
+                          発送伝票の写真
+                        </p>
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                          伝票の控えを撮影してください（追跡番号の確認に使用します）
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {(shipmentForm as any).trackingImages?.map((url: string, i: number) => (
+                            <div key={`tracking-${i}`} className="relative w-20 h-20">
+                              <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const imgs = [...((shipmentForm as any).trackingImages || [])]
+                                  imgs.splice(i, 1)
+                                  setShipmentForm(prev => ({ ...prev, trackingImages: imgs } as any))
+                                }}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                              >×</button>
+                            </div>
+                          )) ?? null}
+                          {((shipmentForm as any).trackingImages?.length ?? 0) < 2 && (
+                            <label className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span className="text-xs mt-1">追加</span>
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/heic"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  const fd = new FormData()
+                                  fd.append('file', file)
+                                  const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: fd })
+                                  if (res.ok) {
+                                    const { url } = await res.json()
+                                    setShipmentForm(prev => ({
+                                      ...prev,
+                                      trackingImages: [...((prev as any).trackingImages || []), url],
+                                    } as any))
+                                  }
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-3">
-                      <Button type="submit" disabled={submittingShipment} loading={submittingShipment}>
-                        {submittingShipment ? '登録中...' : '登録する'}
-                      </Button>
-                      <Button type="button" variant="tonal" onClick={() => { setShowShipmentForm(false); setShipmentForm({ description: '' }); setShipmentImages([]) }}>
-                        キャンセル
-                      </Button>
-                    </div>
-                  </form>
-                </Card>
+                  </Card>
+
+                  {/* Submit buttons */}
+                  <div className="flex gap-3">
+                    <Button type="submit" disabled={submittingShipment} loading={submittingShipment}>
+                      {submittingShipment ? '登録中...' : '登録する'}
+                    </Button>
+                    <Button type="button" variant="tonal" onClick={() => { setShowShipmentForm(false); setShipmentForm({ description: '' }); setShipmentImages([]) }}>
+                      キャンセル
+                    </Button>
+                  </div>
+                </form>
               )}
 
               {/* 送付一覧 */}

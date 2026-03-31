@@ -251,6 +251,33 @@ export async function deleteCalendarEvent(
 }
 
 /**
+ * Googleカレンダーに新しいカレンダーを作成
+ * 店舗専用カレンダーの作成に使用
+ */
+export async function createCalendar(storeId: string, calendarName: string): Promise<{ id: string; name: string } | null> {
+  try {
+    const auth = await getOAuth2Client(storeId)
+    if (!auth) return null
+
+    const calendar = google.calendar({ version: 'v3', auth })
+    const result = await calendar.calendars.insert({
+      requestBody: {
+        summary: calendarName,
+        timeZone: 'Asia/Tokyo',
+      },
+    })
+
+    if (result.data.id) {
+      return { id: result.data.id, name: result.data.summary || calendarName }
+    }
+    return null
+  } catch (error) {
+    console.error(`[GoogleCalendar] カレンダー作成失敗 (storeId: ${storeId}):`, error)
+    return null
+  }
+}
+
+/**
  * 連携済みGoogleアカウントのカレンダー一覧を取得
  * カレンダー選択UIで使用
  */

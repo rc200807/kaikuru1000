@@ -91,6 +91,8 @@ function MyStoreContent() {
   const [calendarListLoading, setCalendarListLoading] = useState(false)
   const [showCalendarPicker, setShowCalendarPicker] = useState(false)
   const [gcalDisconnecting, setGcalDisconnecting] = useState(false)
+  const [newCalendarName, setNewCalendarName] = useState('買いクル 訪問スケジュール')
+  const [creatingCalendar, setCreatingCalendar] = useState(false)
 
   const fetchGcalConfig = useCallback(async () => {
     try {
@@ -288,6 +290,31 @@ function MyStoreContent() {
       }
     } catch {
       setMessage({ type: 'error', text: 'カレンダーの設定に失敗しました' })
+    }
+  }
+
+  async function handleCreateCalendar() {
+    const name = newCalendarName.trim()
+    if (!name) return
+    setCreatingCalendar(true)
+    try {
+      const res = await fetch('/api/store/google-calendar-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendarName: name }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setGcalConfig(prev => prev ? { ...prev, calendarId: data.id, calendarName: data.name } : prev)
+        setShowCalendarPicker(false)
+        setMessage({ type: 'success', text: `カレンダー「${data.name}」を作成しました` })
+      } else {
+        setMessage({ type: 'error', text: data.error || 'カレンダーの作成に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'カレンダーの作成に失敗しました' })
+    } finally {
+      setCreatingCalendar(false)
     }
   }
 
@@ -518,6 +545,33 @@ function MyStoreContent() {
                           ))}
                         </div>
                       )}
+
+                      {/* 新しいカレンダー作成セクション */}
+                      <div className="border-t border-[var(--md-sys-color-outline-variant)]">
+                        <div className="px-4 py-2.5">
+                          <p className="text-[10px] text-center text-[var(--md-sys-color-on-surface-variant)] tracking-wider">── または ──</p>
+                        </div>
+                        <div className="px-4 pb-4">
+                          <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)] mb-2">新しいカレンダーを作成</p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newCalendarName}
+                              onChange={(e) => setNewCalendarName(e.target.value)}
+                              placeholder="カレンダー名"
+                              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--store-primary,#1E3A5F)]/30 focus:border-[var(--store-primary,#1E3A5F)]"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleCreateCalendar}
+                              disabled={creatingCalendar || !newCalendarName.trim()}
+                              className="px-4 py-2 text-sm font-medium text-white bg-[var(--store-primary,#1E3A5F)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
+                            >
+                              {creatingCalendar ? '作成中...' : '作成'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
 

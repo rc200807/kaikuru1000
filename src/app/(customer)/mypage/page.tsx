@@ -798,7 +798,7 @@ function MyPageContent() {
       setShipmentForm({ description: '' })
       setShipmentImages([])
       setShowShipmentForm(false)
-      setMessage({ type: 'success', text: `送付を登録しました。定期宅配番号: ${created.shipmentNumber}` })
+      setMessage({ type: 'success', text: `送付を登録しました。発送ID: ${created.shipmentNumber}` })
     } else {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || '送付登録に失敗しました' })
@@ -2206,10 +2206,10 @@ function MyPageContent() {
               {/* 送付登録フォーム */}
               {showShipmentForm && (
                 <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-                  {/* 送付番号 */}
+                  {/* 発送ID */}
                   {reservedShipmentNumber && (
                     <div className="mb-4 bg-gradient-to-r from-[#B91C1C] to-rose-500 rounded-2xl p-4 text-center">
-                      <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの送付番号</p>
+                      <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの発送ID</p>
                       <p className="text-white text-2xl font-black tracking-widest">{reservedShipmentNumber}</p>
                       <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
                     </div>

@@ -924,6 +924,55 @@ function MyPageContent() {
 
   if (!user) return null
 
+  // 担当店舗が未割り当ての場合はロック画面を表示
+  if (!user.storeId && user.licenseKey) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-pink-50/50 via-white to-purple-50/50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md text-center">
+          <div className="bg-white/70 backdrop-blur-xl rounded-3xl border border-white/50 shadow-sm p-8 sm:p-10">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+              <svg className="w-10 h-10 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">担当店舗 割り当て中</h1>
+            <p className="text-sm text-gray-500 leading-relaxed mb-6">
+              現在、担当店舗の割り当てを行っております。<br />
+              割り当てが完了すると、マイページの全機能がご利用いただけます。
+            </p>
+            <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200/50 mb-6">
+              <p className="text-xs text-amber-700 leading-relaxed">
+                買取方法（定期訪問または定期宅配）は、担当店舗の割り当て後に決定されます。しばらくお待ちください。
+              </p>
+            </div>
+            <div className="space-y-2 text-left bg-white/50 rounded-xl p-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">お名前</span>
+                <span className="font-medium text-gray-900">{user.name}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">電話番号</span>
+                <span className="font-medium text-gray-900">{user.phone}</span>
+              </div>
+              {user.licenseKey && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">ライセンスキー</span>
+                  <span className="font-mono text-xs text-gray-900">{user.licenseKey.key}</span>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => { if (confirm('ログアウトしますか？')) signOut({ callbackUrl: '/login' }) }}
+              className="mt-6 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              ログアウト
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const nextVisit = user.visitSchedules?.[0]
 
   const isDelivery = user.customerType === 'delivery'

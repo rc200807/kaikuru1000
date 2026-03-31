@@ -189,6 +189,7 @@ function MyPageContent() {
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
   const [shipmentsLoading, setShipmentsLoading] = useState(false)
   const [showShipmentForm, setShowShipmentForm] = useState(false)
+  const [reservedShipmentNumber, setReservedShipmentNumber] = useState<string | null>(null)
   const [shipmentForm, setShipmentForm] = useState({ description: '' })
   const [shipmentImages, setShipmentImages] = useState<string[]>([])
   const [uploadingShipmentImage, setUploadingShipmentImage] = useState(false)
@@ -1896,7 +1897,23 @@ function MyPageContent() {
                   const alreadyRegistered = shipments.some(s => s.shipmentMonth === currentMonth)
                   return !alreadyRegistered && (
                     <div className="flex-shrink-0">
-                      <Button size="sm" onClick={() => { setShowShipmentForm(v => !v); setMessage(null) }}>
+                      <Button size="sm" onClick={async () => {
+                        if (showShipmentForm) {
+                          setShowShipmentForm(false)
+                          setReservedShipmentNumber(null)
+                        } else {
+                          // 番号を事前予約
+                          try {
+                            const res = await fetch('/api/delivery-shipments/reserve', { method: 'POST' })
+                            if (res.ok) {
+                              const data = await res.json()
+                              setReservedShipmentNumber(data.shipmentNumber)
+                            }
+                          } catch { /* ignore */ }
+                          setShowShipmentForm(true)
+                          setMessage(null)
+                        }
+                      }}>
                         {showShipmentForm ? 'キャンセル' : '今月の送付を登録'}
                       </Button>
                     </div>
@@ -1956,6 +1973,14 @@ function MyPageContent() {
               {/* 送付登録フォーム */}
               {showShipmentForm && (
                 <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                  {/* 送付番号 */}
+                  {reservedShipmentNumber && (
+                    <div className="mb-4 bg-gradient-to-r from-[#B91C1C] to-rose-500 rounded-2xl p-4 text-center">
+                      <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの送付番号</p>
+                      <p className="text-white text-2xl font-black tracking-widest">{reservedShipmentNumber}</p>
+                      <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
+                    </div>
+                  )}
                   <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">今月の送付を登録</h3>
                   <form onSubmit={handleSubmitShipment} className="space-y-4">
                     <TextField

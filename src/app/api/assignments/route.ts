@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendAssignmentNotification } from '@/lib/mailer'
+import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/lib/mailer'
 
 // 顧客を店舗に割り当て（管理者のみ）
 export async function POST(request: NextRequest) {
@@ -53,6 +53,20 @@ export async function POST(request: NextRequest) {
       registeredAt: fullUser.createdAt,
     }).catch((err) => {
       console.error('[Assignment] メール通知の送信に失敗しました:', err.message)
+    })
+  }
+
+  // 顧客にも割り当て完了メールを送信
+  if (fullUser?.email && user.store) {
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+    sendStoreAssignmentNotification({
+      to: fullUser.email,
+      name: fullUser.name,
+      storeName: user.store.name,
+      customerType: user.customerType,
+      loginUrl: `${baseUrl}/login`,
+    }).catch((err) => {
+      console.error('[Assignment] 顧客通知メールの送信に失敗しました:', err.message)
     })
   }
 

@@ -821,3 +821,98 @@ export async function sendTestEmail(toEmail: string) {
     text: '買いクル管理システムのメール送信テストです。この受信を確認できれば設定は完了しています。',
   })
 }
+
+/** 担当店舗割り当て完了通知メールを顧客に送信する */
+export async function sendStoreAssignmentNotification(params: {
+  to: string
+  name: string
+  storeName: string
+  customerType: string
+  loginUrl: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+
+  const { transporter, from } = result
+
+  const typeLabel = params.customerType === 'delivery' ? '定期宅配' : params.customerType === 'visit' ? '定期訪問' : '通常買取'
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr><td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+          <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル</p>
+          <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">担当店舗が決定しました</h1>
+        </td></tr>
+        <tr><td style="background-color:#ffffff;padding:32px;">
+          <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+            ${params.name} 様<br><br>
+            お待たせいたしました。担当店舗の割り当てが完了しましたのでお知らせいたします。
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;overflow:hidden;margin-bottom:24px;">
+            <tr><td style="padding:20px;text-align:center;">
+              <p style="margin:0 0 4px;color:#166534;font-size:12px;font-weight:600;">担当店舗</p>
+              <p style="margin:0 0 12px;color:#14532d;font-size:18px;font-weight:700;">${params.storeName}</p>
+              <p style="margin:0;color:#166534;font-size:12px;">買取方法: <strong>${typeLabel}</strong></p>
+            </td></tr>
+          </table>
+
+          <p style="margin:0 0 16px;color:#374151;font-size:14px;line-height:1.7;">
+            マイページからは以下の機能がご利用いただけます：
+          </p>
+          <ul style="margin:0 0 24px;padding-left:20px;color:#374151;font-size:13px;line-height:2;">
+            <li><strong>買取トライ</strong> — 写真からAI簡易査定</li>
+            <li><strong>訪問リクエスト</strong> — 希望日時を送信して訪問予約</li>
+            <li><strong>身分証明書の登録</strong></li>
+            <li><strong>口座情報の登録</strong></li>
+          </ul>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr><td align="center">
+              <a href="${params.loginUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
+                マイページにログイン
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.7;">
+            ご不明な点がございましたら、担当店舗までお気軽にお問い合わせください。
+          </p>
+        </td></tr>
+        <tr><td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;">
+          <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
+            このメールは買いクル管理システムから自動送信されています
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+`
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: '【買いクル】担当店舗が決定しました',
+    html,
+    text: [
+      `${params.name} 様`,
+      '',
+      '担当店舗の割り当てが完了しました。',
+      '',
+      `担当店舗: ${params.storeName}`,
+      `買取方法: ${typeLabel}`,
+      '',
+      'マイページから身分証明書の登録や買取トライなどをお試しください。',
+      `ログインURL: ${params.loginUrl}`,
+    ].join('\n'),
+  })
+  return true
+}

@@ -207,7 +207,8 @@ export default function InquiryPage() {
           type="email"
           value={email}
           onChange={setEmail}
-          placeholder="example@email.com（任意）"
+          required
+          placeholder="example@email.com"
         />
 
         <div>
@@ -219,7 +220,8 @@ export default function InquiryPage() {
               const cleaned = v.replace(/[-ー\s]/g, '')
               if (cleaned.length === 7) lookupAddress(cleaned)
             }}
-            placeholder="1234567（任意）"
+            required
+            placeholder="1234567"
           />
           {postalLoading && (
             <p className="text-xs text-gray-400 mt-1 ml-1">住所を検索中...</p>
@@ -281,7 +283,7 @@ export default function InquiryPage() {
         />
 
         <div className="pt-2">
-          <GlassButton type="submit" variant="primary" loading={loading} disabled={loading}>
+          <GlassButton type="submit" variant="primary" loading={loading} disabled={loading || !name.trim() || !furigana.trim() || !phone.trim() || !email.trim() || !postalCode.trim() || !address.trim()}>
             {loading ? '送信中...' : 'お問い合わせを送信'}
           </GlassButton>
         </div>

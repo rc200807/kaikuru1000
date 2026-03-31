@@ -24,8 +24,6 @@ function normalizeAddress(addr: string): string {
     .replace(/(\d+)号/g, '$1')
     // 「の」を数字間のハイフンに
     .replace(/(\d+)の(\d+)/g, '$1-$2')
-    // 建物名以降を除去（マンション名等の揺れを無視）
-    .replace(/([\d-]+)([\u3000\s]*[A-Za-zぁ-ん].*)?$/, '$1')
     // 末尾ハイフンを除去
     .replace(/-+$/, '')
     // 連続ハイフンを1つに

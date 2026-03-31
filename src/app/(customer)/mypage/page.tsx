@@ -1180,7 +1180,7 @@ function MyPageContent() {
   const activeMemos = memos.filter(m => m.status !== 'completed')
   const completedMemos = memos.filter(m => m.status === 'completed')
 
-  const customerTypeLabel = user ? (user.customerType === 'visit' ? '定期訪問' : user.customerType === 'delivery' ? '定期宅配' : '一般') : ''
+  const customerTypeLabel = user ? (user.customerType === 'visit' ? '訪問型' : user.customerType === 'delivery' ? '宅配型' : '一般') : ''
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-red-50 via-white to-blue-50">
@@ -1246,10 +1246,7 @@ function MyPageContent() {
 
                 {/* User info */}
                 <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                      <span className="text-white text-lg font-bold">{user.name.charAt(0)}</span>
-                    </div>
+                  <div className="mb-3">
                     <div>
                       <p className="text-white text-lg font-bold">{user.name} 様</p>
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/20 text-white">

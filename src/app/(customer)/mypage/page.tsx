@@ -1895,6 +1895,19 @@ function MyPageContent() {
                   const now = new Date()
                   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
                   const alreadyRegistered = shipments.some(s => s.shipmentMonth === currentMonth)
+                  const missingIdDoc = !user.idDocumentPath
+                  const missingBank = !user.bankName || !user.accountNumber
+
+                  if (!alreadyRegistered && (missingIdDoc || missingBank)) {
+                    return (
+                      <div className="flex-shrink-0">
+                        <Button size="sm" disabled className="opacity-50 cursor-not-allowed">
+                          今月の送付を登録
+                        </Button>
+                      </div>
+                    )
+                  }
+
                   return !alreadyRegistered && (
                     <div className="flex-shrink-0">
                       <Button size="sm" onClick={async () => {
@@ -1920,6 +1933,36 @@ function MyPageContent() {
                   )
                 })()}
               </div>
+
+              {/* 未登録項目の警告 */}
+              {(!user.idDocumentPath || !user.bankName || !user.accountNumber) && (
+                <Card variant="elevated" padding="md" className="!bg-red-50/70 backdrop-blur-xl !border border-red-200/50 !shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-red-800 mb-1">送付登録には以下の登録が必要です</p>
+                      <ul className="text-xs text-red-700 space-y-1">
+                        {!user.idDocumentPath && (
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            <button onClick={() => handleTabChange('id-document')} className="underline hover:text-red-900">身分証明書の提出</button>
+                          </li>
+                        )}
+                        {(!user.bankName || !user.accountNumber) && (
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            <button onClick={() => handleTabChange('bank-account')} className="underline hover:text-red-900">振込先口座情報の登録</button>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {/* 送付手順ガイド */}
               <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">

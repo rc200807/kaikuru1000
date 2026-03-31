@@ -97,6 +97,7 @@ type DeliveryShipment = {
   status: string  // registered | shipped | received | appraised
   storeNote: string | null
   createdAt: string
+  updatedAt: string
 }
 
 export default function MyPage() {
@@ -1183,7 +1184,7 @@ function MyPageContent() {
                       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
                       const thisMonthShipment = shipments.find(s => s.shipmentMonth === currentMonth)
                       const shipStatusLabel: Record<string, string> = {
-                        registered: '登録済み', shipped: '発送済み', received: '受取済み', appraised: '査定完了',
+                        registered: '登録済み', shipped: '発送済み', received: '受取済み・査定中', appraised: '査定完了',
                       }
                       return (
                         <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
@@ -1348,6 +1349,36 @@ function MyPageContent() {
                     </p>
                   </div>
                 </div>
+
+                {/* ─── Recent Appraisal Summary (delivery customers) ─── */}
+                {isDelivery && (() => {
+                  const now = new Date()
+                  const lastMonth = `${now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()}-${String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, '0')}`
+                  const recentAppraised = shipments.filter(s => s.status === 'appraised' && s.purchaseAmount !== null && s.shipmentMonth === lastMonth)
+                  const totalAmount = recentAppraised.reduce((sum, s) => sum + (s.purchaseAmount ?? 0), 0)
+                  if (recentAppraised.length === 0) return null
+                  return (
+                    <button
+                      onClick={() => handleTabChange('shipments')}
+                      className="w-full bg-gradient-to-br from-emerald-50 to-teal-50 backdrop-blur-lg rounded-2xl p-4 border border-emerald-200/40 shadow-sm text-left hover:shadow-md transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-medium text-emerald-600 mb-0.5">先月の査定結果</p>
+                          <p className="text-xl font-bold text-emerald-700">¥{totalAmount.toLocaleString()}</p>
+                        </div>
+                        <svg className="w-5 h-5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                  )
+                })()}
 
                 {/* ─── Monthly bar chart ─── */}
                 {stats && stats.totalPurchaseAmount > 0 && (
@@ -3552,15 +3583,15 @@ const MEMO_STATUS_STYLE: Record<string, string> = {
 const SHIPMENT_STATUS_LABEL: Record<string, string> = {
   registered: '登録済み',
   shipped:    '発送済み',
-  received:   '受取済み',
+  received:   '受取済み・査定中',
   appraised:  '査定完了',
 }
 
 const SHIPMENT_STATUS_STYLE: Record<string, string> = {
   registered: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
   shipped:    'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
-  received:   'bg-[var(--status-scheduled-bg,#DBEAFE)] text-[var(--status-scheduled-text,#1D4ED8)]',
-  appraised:  'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
+  received:   'bg-amber-100 text-amber-700',
+  appraised:  'bg-emerald-100 text-emerald-700',
 }
 
 function ShipmentCard({
@@ -3613,12 +3644,59 @@ function ShipmentCard({
             {shipment.description}
           </p>
         )}
-        {shipment.purchaseAmount !== null && (
+
+        {/* Appraisal result (appraised status) */}
+        {shipment.status === 'appraised' && shipment.purchaseAmount !== null && (
+          <div className="mt-3 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/60 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="text-sm font-bold text-emerald-800">査定結果</p>
+            </div>
+            <p className="text-2xl font-bold text-emerald-700 ml-9">
+              ¥{shipment.purchaseAmount.toLocaleString()}
+            </p>
+            {shipment.storeNote && (
+              <div className="mt-3 ml-9 px-3 py-2 bg-white/60 backdrop-blur-sm rounded-xl border border-emerald-100">
+                <p className="text-xs font-medium text-emerald-600 mb-0.5">店舗からのコメント</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{shipment.storeNote}</p>
+              </div>
+            )}
+            {shipment.updatedAt && (
+              <p className="text-xs text-emerald-500 mt-2 ml-9">
+                査定日: {new Date(shipment.updatedAt).toLocaleDateString('ja-JP')}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Non-appraised purchaseAmount (fallback) */}
+        {shipment.status !== 'appraised' && shipment.purchaseAmount !== null && (
           <p className="text-sm font-semibold text-[var(--portal-primary,#B91C1C)] mt-1">
             査定額: ¥{shipment.purchaseAmount.toLocaleString()}
           </p>
         )}
-        {shipment.storeNote && (
+
+        {/* Received status -- awaiting appraisal */}
+        {shipment.status === 'received' && (
+          <div className="mt-3 bg-amber-50 border border-amber-200/60 rounded-2xl px-4 py-3 flex items-start gap-3">
+            <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-800">査定中</p>
+              <p className="text-xs text-amber-600 mt-0.5">店舗で査定中です。結果をお待ちください。</p>
+            </div>
+          </div>
+        )}
+
+        {/* Store note for non-appraised statuses */}
+        {shipment.status !== 'appraised' && shipment.storeNote && (
           <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
             <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">店舗からのメモ</p>
             <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{shipment.storeNote}</p>

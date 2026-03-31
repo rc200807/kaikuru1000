@@ -151,6 +151,9 @@ export default function StoreCustomerDetailPage() {
   const [shipmentEdits, setShipmentEdits] = useState<Record<string, { purchaseAmount: string; storeNote: string; status: string }>>({})
   const [savingShipment, setSavingShipment] = useState<string | null>(null)
 
+  // 査定フォーム表示管理
+  const [appraisalOpen, setAppraisalOpen] = useState<Record<string, boolean>>({})
+
   // 身分証削除
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(false)
   const [deletingDoc, setDeletingDoc] = useState(false)
@@ -866,8 +869,14 @@ export default function StoreCustomerDetailPage() {
               <div className="space-y-4">
                 {shipmentsList.map(s => {
                   const edit = shipmentEdits[s.id] ?? { purchaseAmount: '', storeNote: '', status: s.status }
+                  const isFormOpen = appraisalOpen[s.id] ?? false
+                  const canAppraise = s.status === 'shipped' || s.status === 'received'
+                  const isAppraised = s.status === 'appraised'
+                  const statusLabel = SHIPMENT_STATUS_OPTIONS.find(o => o.value === s.status)?.label ?? s.status
+
                   return (
                     <Card key={s.id} variant="outlined">
+                      {/* ヘッダー: 伝票番号・月・ステータス */}
                       <div className="flex items-center gap-2 flex-wrap mb-2">
                         <span className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">
                           {s.shipmentNumber}
@@ -875,10 +884,24 @@ export default function StoreCustomerDetailPage() {
                         <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
                           {s.shipmentMonth.replace('-', '年')}月
                         </span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          isAppraised
+                            ? 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]'
+                            : s.status === 'received'
+                              ? 'bg-blue-100 text-blue-700'
+                              : s.status === 'shipped'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {statusLabel}
+                        </span>
                       </div>
+
                       {s.description && (
                         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2 whitespace-pre-wrap">{s.description}</p>
                       )}
+
+                      {/* 画像サムネイル */}
                       {s.imageUrls.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-3">
                           {s.imageUrls.map((url, i) => (
@@ -888,50 +911,147 @@ export default function StoreCustomerDetailPage() {
                           ))}
                         </div>
                       )}
-                      {/* 編集フィールド */}
-                      <div className="space-y-2 mt-2">
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-20 flex-shrink-0">ステータス</label>
-                          <select
-                            value={edit.status}
-                            onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, status: e.target.value } }))}
-                            className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)]"
-                          >
-                            {SHIPMENT_STATUS_OPTIONS.map(opt => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-20 flex-shrink-0">査定金額（円）</label>
-                          <input
-                            type="number"
-                            value={edit.purchaseAmount}
-                            onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, purchaseAmount: e.target.value } }))}
-                            placeholder="0"
-                            className="flex-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1 block">店舗メモ（顧客に表示）</label>
-                          <textarea
-                            value={edit.storeNote}
-                            onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
-                            rows={2}
-                            placeholder="査定結果や連絡事項など..."
-                            className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
-                          />
-                          <div className="flex justify-end mt-1.5">
+
+                      {/* 査定完了時: 査定結果表示 */}
+                      {isAppraised && !isFormOpen && (
+                        <div className="mt-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-lg font-bold text-green-700 dark:text-green-300">
+                                {s.purchaseAmount !== null ? `¥${s.purchaseAmount.toLocaleString()}` : '金額未入力'}
+                              </span>
+                            </div>
                             <button
-                              onClick={() => handleSaveShipment(s.id)}
-                              disabled={savingShipment === s.id}
-                              className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#1E3A5F)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
+                              onClick={() => {
+                                setShipmentEdits(prev => ({
+                                  ...prev,
+                                  [s.id]: {
+                                    purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '',
+                                    storeNote: s.storeNote ?? '',
+                                    status: s.status,
+                                  },
+                                }))
+                                setAppraisalOpen(prev => ({ ...prev, [s.id]: true }))
+                              }}
+                              className="text-xs px-3 py-1 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 rounded-[var(--md-sys-shape-small)] hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
                             >
-                              {savingShipment === s.id ? '保存中...' : '保存する'}
+                              再査定
                             </button>
                           </div>
+                          {s.storeNote && (
+                            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2 whitespace-pre-wrap">{s.storeNote}</p>
+                          )}
                         </div>
-                      </div>
+                      )}
+
+                      {/* 受取済み/発送済み: 査定するボタン */}
+                      {canAppraise && !isFormOpen && (
+                        <div className="mt-3">
+                          <Button
+                            variant="filled"
+                            size="sm"
+                            onClick={() => {
+                              setShipmentEdits(prev => ({
+                                ...prev,
+                                [s.id]: {
+                                  purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '',
+                                  storeNote: s.storeNote ?? '',
+                                  status: 'appraised',
+                                },
+                              }))
+                              setAppraisalOpen(prev => ({ ...prev, [s.id]: true }))
+                            }}
+                          >
+                            査定する
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* 査定入力フォーム（インライン展開） */}
+                      {isFormOpen && (
+                        <div className="mt-3 p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low,#f7f7f7)]">
+                          <h4 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3">査定入力</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">査定金額（円）</label>
+                              <input
+                                type="number"
+                                value={edit.purchaseAmount}
+                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, purchaseAmount: e.target.value } }))}
+                                placeholder="例: 5000"
+                                min="0"
+                                className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">店舗メモ（顧客に表示されます）</label>
+                              <textarea
+                                value={edit.storeNote}
+                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
+                                rows={3}
+                                placeholder="査定結果の詳細や連絡事項など..."
+                                className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={() => setAppraisalOpen(prev => ({ ...prev, [s.id]: false }))}
+                                className="text-xs px-4 py-1.5 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] rounded-[var(--md-sys-shape-small)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                              >
+                                キャンセル
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  // 査定完了として保存
+                                  const finalEdit = { ...edit, status: 'appraised' }
+                                  setShipmentEdits(prev => ({ ...prev, [s.id]: finalEdit }))
+                                  setSavingShipment(s.id)
+                                  const res = await fetch(`/api/delivery-shipments/${s.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      status: 'appraised',
+                                      purchaseAmount: edit.purchaseAmount !== '' ? Number(edit.purchaseAmount) : null,
+                                      storeNote: edit.storeNote || null,
+                                    }),
+                                  })
+                                  setSavingShipment(null)
+                                  if (res.ok) {
+                                    const updated = await res.json()
+                                    setShipmentsList(prev => prev.map(item => item.id === s.id ? updated : item))
+                                    setShipmentEdits(prev => ({
+                                      ...prev,
+                                      [s.id]: {
+                                        purchaseAmount: updated.purchaseAmount !== null ? String(updated.purchaseAmount) : '',
+                                        storeNote: updated.storeNote ?? '',
+                                        status: updated.status,
+                                      },
+                                    }))
+                                    setAppraisalOpen(prev => ({ ...prev, [s.id]: false }))
+                                    setMsg({ type: 'success', text: '査定が完了しました' })
+                                  } else {
+                                    setMsg({ type: 'error', text: '査定の保存に失敗しました' })
+                                  }
+                                }}
+                                disabled={savingShipment === s.id}
+                                className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#1E3A5F)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50 font-medium"
+                              >
+                                {savingShipment === s.id ? '保存中...' : '査定完了'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 登録済みステータスの場合は簡易表示のみ */}
+                      {s.status === 'registered' && (
+                        <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
+                          顧客が発送すると査定が可能になります
+                        </p>
+                      )}
                     </Card>
                   )
                 })}

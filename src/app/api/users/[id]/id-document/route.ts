@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { extractIdDocumentInfo } from '@/lib/gemini'
+import { isAddressMatch } from '@/lib/address-utils'
 
 /**
  * 身分証明書を認証プロキシ経由で配信
@@ -172,6 +173,16 @@ export async function POST(
     // Gemini Vision OCR で身分証情報を抽出（失敗しても upload は成功扱い）
     const ocrResult = await extractIdDocumentInfo(buffer, file.type)
 
+    // 住所一致判定（OCRで住所が取得できた場合）
+    const currentUser = await prisma.user.findUnique({ where: { id }, select: { address: true } })
+    let addressMismatchFlag = false
+    let addressVerifiedFlag = false
+    if (ocrResult?.idAddress && currentUser?.address) {
+      const matched = isAddressMatch(currentUser.address, ocrResult.idAddress)
+      addressMismatchFlag = !matched
+      addressVerifiedFlag = matched
+    }
+
     await prisma.user.update({
       where: { id },
       data: {
@@ -189,6 +200,11 @@ export async function POST(
           idLicenseNumber: ocrResult.idLicenseNumber,
           idExpiryDate:    ocrResult.idExpiryDate,
         }),
+        // 住所一致判定結果
+        ...(ocrResult?.idAddress ? {
+          addressMismatch: addressMismatchFlag,
+          addressVerified: addressVerifiedFlag,
+        } : {}),
       },
     })
 
@@ -196,6 +212,7 @@ export async function POST(
       path: fileUrl,
       ocr: ocrResult ?? null,
       documentType: documentType || ocrResult?.idDocumentType || null,
+      addressMismatch: addressMismatchFlag,
     })
   } catch (error) {
     console.error('Upload error:', error)

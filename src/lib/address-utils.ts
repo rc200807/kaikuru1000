@@ -1,6 +1,98 @@
 /**
- * 住所ユーティリティ — 都道府県・市区町村の抽出＆近接スコアリング
+ * 住所ユーティリティ — 都道府県・市区町村の抽出＆近接スコアリング＆住所照合
  */
+
+/**
+ * 全角数字→半角数字、全角ハイフン→半角ハイフン、スペース除去などの正規化
+ */
+function normalizeAddress(addr: string): string {
+  return addr
+    // 全角数字→半角
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFF10 + 0x30))
+    // 全角ハイフン系→半角ハイフン
+    .replace(/[ー－—–‐―]/g, '-')
+    // 全角英字→半角
+    .replace(/[Ａ-Ｚａ-ｚ]/g, ch =>
+      String.fromCharCode(ch.charCodeAt(0) - 0xFF21 + (ch >= 'ａ' ? 0x61 : 0x41))
+    )
+    // スペース除去
+    .replace(/[\s\u3000]+/g, '')
+    // 「丁目」「番地」「号」を正規化（数字のみにする）
+    .replace(/(\d+)丁目/g, '$1-')
+    .replace(/(\d+)番地?/g, '$1-')
+    .replace(/(\d+)号/g, '$1')
+    // 末尾ハイフンを除去
+    .replace(/-+$/, '')
+    // 連続ハイフンを1つに
+    .replace(/-{2,}/g, '-')
+}
+
+/**
+ * 2つの文字列の類似度を0〜1で返す（レーベンシュタイン距離ベース）
+ */
+function similarity(a: string, b: string): number {
+  if (a === b) return 1
+  const lenA = a.length
+  const lenB = b.length
+  if (lenA === 0 || lenB === 0) return 0
+
+  const matrix: number[][] = []
+  for (let i = 0; i <= lenA; i++) {
+    matrix[i] = [i]
+  }
+  for (let j = 0; j <= lenB; j++) {
+    matrix[0][j] = j
+  }
+  for (let i = 1; i <= lenA; i++) {
+    for (let j = 1; j <= lenB; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      )
+    }
+  }
+  const maxLen = Math.max(lenA, lenB)
+  return 1 - matrix[lenA][lenB] / maxLen
+}
+
+/**
+ * 登録住所と身分証住所の一致判定（ファジーマッチ）
+ *
+ * 判定基準:
+ * 1. 正規化後の完全一致 → true
+ * 2. 都道府県 + 市区町村が一致 → true
+ * 3. 正規化後の類似度が70%以上 → true
+ */
+export function isAddressMatch(registered: string, idAddress: string): boolean {
+  if (!registered || !idAddress) return false
+
+  const normReg = normalizeAddress(registered)
+  const normId = normalizeAddress(idAddress)
+
+  // 完全一致
+  if (normReg === normId) return true
+
+  // 一方が他方を含む（短縮表記の場合）
+  if (normReg.includes(normId) || normId.includes(normReg)) return true
+
+  // 都道府県 + 市区町村の一致判定
+  const regParts = extractAddressParts(registered)
+  const idParts = extractAddressParts(idAddress)
+
+  if (regParts.prefecture && idParts.prefecture) {
+    // 都道府県が一致、かつ市区町村が一致 → OK
+    if (regParts.prefecture === idParts.prefecture && regParts.city && idParts.city && regParts.city === idParts.city) {
+      return true
+    }
+  }
+
+  // ファジーマッチ: 正規化後の類似度70%以上
+  if (similarity(normReg, normId) >= 0.7) return true
+
+  return false
+}
 
 export function extractAddressParts(address: string): { prefecture: string; city: string } {
   const prefMatch = address.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)

@@ -68,6 +68,20 @@ export async function PATCH(
     return NextResponse.json(updated)
   }
 
+  // 住所確認の承認・却下
+  if ('addressVerified' in body || 'proofDocumentStatus' in body) {
+    const data: Record<string, unknown> = {}
+    if (typeof body.addressVerified === 'boolean') data.addressVerified = body.addressVerified
+    if (typeof body.proofDocumentStatus === 'string') data.proofDocumentStatus = body.proofDocumentStatus
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, addressVerified: true, proofDocumentStatus: true },
+    })
+    return NextResponse.json(updated)
+  }
+
   // OCR誤り報告のクリア
   if ('idOcrIssueReport' in body && body.idOcrIssueReport === null) {
     const updated = await prisma.user.update({

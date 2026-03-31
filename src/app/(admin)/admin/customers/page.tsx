@@ -50,6 +50,12 @@ type User = {
   idDocumentBackPath: string | null
   idBackAddress:      string | null
   idFacePhotoPath:    string | null
+  // 住所確認関連
+  addressVerified: boolean
+  addressMismatch: boolean
+  proofDocumentPath: string | null
+  proofDocumentType: string | null
+  proofDocumentStatus: string | null
 }
 
 type Store = {
@@ -1363,6 +1369,103 @@ export default function AdminCustomersPage() {
                     <p className="px-4 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">未登録</p>
                   )}
                 </div>
+
+                {/* 住所確認セクション */}
+                {detailUser.addressMismatch && (
+                  <div className="rounded-[var(--md-sys-shape-medium)] border border-red-300 overflow-hidden">
+                    <div className="px-4 py-2 bg-red-50 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-red-800">住所不一致 - 確認が必要</span>
+                      {detailUser.addressVerified ? (
+                        <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">承認済み</span>
+                      ) : detailUser.proofDocumentStatus === 'pending' ? (
+                        <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">審査待ち</span>
+                      ) : detailUser.proofDocumentStatus === 'rejected' ? (
+                        <span className="text-[10px] font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full">却下済み</span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">書類未提出</span>
+                      )}
+                    </div>
+                    <div className="px-4 py-3 space-y-3">
+                      {/* 住所比較 */}
+                      <dl className="space-y-1.5">
+                        <div className="flex gap-3">
+                          <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">登録住所</dt>
+                          <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{detailUser.address}</dd>
+                        </div>
+                        <div className="flex gap-3">
+                          <dt className="w-20 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">証明書住所</dt>
+                          <dd className="text-xs text-[var(--md-sys-color-on-surface)] break-all min-w-0">{detailUser.idAddress || '---'}</dd>
+                        </div>
+                      </dl>
+
+                      {/* 住所証明書類 */}
+                      {detailUser.proofDocumentPath && (
+                        <div>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                            住所証明書類（{detailUser.proofDocumentType || '種別不明'}）
+                          </p>
+                          <a
+                            href={`/api/users/${detailUser.id}/proof-document`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/users/${detailUser.id}/proof-document`}
+                              alt="住所証明書類"
+                              className="max-w-full max-h-48 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          </a>
+                        </div>
+                      )}
+
+                      {/* 承認・却下ボタン */}
+                      {!detailUser.addressVerified && detailUser.proofDocumentPath && (
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              const res = await fetch(`/api/admin/users/${detailUser.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ addressVerified: true, proofDocumentStatus: 'approved' }),
+                              })
+                              if (res.ok) {
+                                setDetailUser({ ...detailUser, addressVerified: true, proofDocumentStatus: 'approved' })
+                                setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, addressVerified: true, proofDocumentStatus: 'approved' } : u))
+                                setMessage({ type: 'success', text: '住所確認を承認しました' })
+                              }
+                            }}
+                          >
+                            承認
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outlined"
+                            onClick={async () => {
+                              const reason = prompt('却下理由を入力してください')
+                              if (!reason) return
+                              const res = await fetch(`/api/admin/users/${detailUser.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ proofDocumentStatus: 'rejected' }),
+                              })
+                              if (res.ok) {
+                                setDetailUser({ ...detailUser, proofDocumentStatus: 'rejected' })
+                                setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, proofDocumentStatus: 'rejected' } : u))
+                                setMessage({ type: 'success', text: '住所証明書類を却下しました' })
+                              }
+                            }}
+                            className="!text-red-600 !border-red-300 hover:!bg-red-50"
+                          >
+                            却下
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

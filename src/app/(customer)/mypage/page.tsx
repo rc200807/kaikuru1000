@@ -32,6 +32,12 @@ type UserData = {
   idLicenseNumber:  string | null
   idExpiryDate:     string | null
   idOcrIssueReport: string | null
+  // 住所確認関連
+  addressVerified: boolean
+  addressMismatch: boolean
+  proofDocumentPath: string | null
+  proofDocumentType: string | null
+  proofDocumentStatus: string | null
   licenseKey: { key: string }
   store: { name: string; phone: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
@@ -233,6 +239,13 @@ function MyPageContent() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const selfieVideoRef = useRef<HTMLVideoElement>(null)
   const selfieStreamRef = useRef<MediaStream | null>(null)
+
+  // 住所証明書類
+  const [proofDocType, setProofDocType] = useState('')
+  const [proofFile, setProofFile] = useState<File | null>(null)
+  const [proofPreview, setProofPreview] = useState('')
+  const [uploadingProof, setUploadingProof] = useState(false)
+  const proofInputRef = useRef<HTMLInputElement>(null)
 
   // オンボーディングモーダル
   const [showOnboardingModal, setShowOnboardingModal] = useState(false)
@@ -637,6 +650,41 @@ function MyPageContent() {
     } else {
       setMessage({ type: 'error', text: '報告に失敗しました' })
     }
+  }
+
+  // 住所証明書類アップロード
+  async function handleUploadProofDocument() {
+    if (!proofFile || !proofDocType) return
+    const userId = (session?.user as any).id
+    setUploadingProof(true)
+    try {
+      const converted = await convertToJpegIfNeeded(proofFile)
+      const formData = new FormData()
+      formData.append('file', converted)
+      formData.append('documentType', proofDocType)
+      const res = await fetch(`/api/users/${userId}/proof-document`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (res.ok) {
+        setUser(prev => prev ? {
+          ...prev,
+          proofDocumentPath: `/api/users/${prev.id}/proof-document`,
+          proofDocumentType: proofDocType,
+          proofDocumentStatus: 'pending',
+        } : null)
+        setProofFile(null)
+        setProofPreview('')
+        setProofDocType('')
+        setMessage({ type: 'success', text: '住所証明書類をアップロードしました。審査をお待ちください。' })
+      } else {
+        const d = await res.json()
+        setMessage({ type: 'error', text: d.error || 'アップロードに失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'アップロードに失敗しました' })
+    }
+    setUploadingProof(false)
   }
 
   // メモ画像アップロード
@@ -2044,7 +2092,7 @@ function MyPageContent() {
               </div>
 
               {/* 未登録項目の警告 */}
-              {(!user.idDocumentPath || !user.bankName || !user.accountNumber) && (
+              {(!user.idDocumentPath || !user.bankName || !user.accountNumber || (user.addressMismatch && !user.addressVerified)) && (
                 <Card variant="elevated" padding="md" className="!bg-red-50/70 backdrop-blur-xl !border border-red-200/50 !shadow-sm">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -2065,6 +2113,12 @@ function MyPageContent() {
                           <li className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
                             <button onClick={() => handleTabChange('bank-account')} className="underline hover:text-red-900">振込先口座情報の登録</button>
+                          </li>
+                        )}
+                        {user.addressMismatch && !user.addressVerified && (
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            <button onClick={() => handleTabChange('id-document')} className="underline hover:text-red-900">住所確認が完了していません</button>
                           </li>
                         )}
                       </ul>
@@ -2641,6 +2695,136 @@ function MyPageContent() {
                   </>
                   )}
                 </Card>
+
+                {/* ── 住所不一致警告 ── */}
+                {user.addressMismatch && !user.addressVerified && (
+                  <Card variant="elevated" padding="md" className="!bg-red-50/70 backdrop-blur-xl !border border-red-200/50 !shadow-sm">
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-red-800 mb-1">登録住所と身分証明書の住所が一致しません</p>
+                        <p className="text-xs text-red-600">住所証明書類をアップロードしてください。</p>
+                      </div>
+                    </div>
+
+                    {/* 住所比較表示 */}
+                    <div className="mb-4 space-y-2 bg-white/50 rounded-lg p-3">
+                      <div className="flex gap-3">
+                        <dt className="w-20 text-xs text-gray-500 flex-shrink-0">登録住所</dt>
+                        <dd className="text-xs text-gray-800">{user.address}</dd>
+                      </div>
+                      <div className="flex gap-3">
+                        <dt className="w-20 text-xs text-gray-500 flex-shrink-0">証明書住所</dt>
+                        <dd className="text-xs text-gray-800">{user.idAddress || '---'}</dd>
+                      </div>
+                    </div>
+
+                    {/* 審査中 / 承認済み / 却下 バッジ */}
+                    {user.proofDocumentStatus === 'pending' && (
+                      <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                        <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs font-medium text-amber-800">審査中 - 住所証明書類を確認しています</span>
+                      </div>
+                    )}
+
+                    {user.proofDocumentStatus === 'approved' && (
+                      <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
+                        <svg className="w-4 h-4 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-xs font-medium text-emerald-800">確認済み</span>
+                      </div>
+                    )}
+
+                    {user.proofDocumentStatus === 'rejected' && (
+                      <div className="mb-4">
+                        <div className="flex items-center gap-2 p-3 bg-red-100 border border-red-300 rounded-lg">
+                          <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-xs font-medium text-red-800">却下 - 書類を再アップロードしてください</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* アップロードフォーム（pending/approvedでないとき） */}
+                    {user.proofDocumentStatus !== 'pending' && user.proofDocumentStatus !== 'approved' && (
+                      <div className="space-y-4">
+                        <p className="text-xs font-semibold text-red-800">住所証明書類のアップロード</p>
+                        <div className="space-y-2">
+                          {[
+                            '公共料金の領収証',
+                            '賃貸借契約書',
+                            '3か月以内に発行された住民票の写し',
+                            '国税地方税の領収書',
+                            '印鑑登録証明書',
+                          ].map(type => (
+                            <label key={type} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="proofDocType"
+                                value={type}
+                                checked={proofDocType === type}
+                                onChange={e => setProofDocType(e.target.value)}
+                                className="accent-red-600"
+                              />
+                              <span className="text-xs text-gray-700">{type}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        {/* ファイル選択 */}
+                        <input
+                          ref={proofInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0]
+                            if (!f) return
+                            setProofFile(f)
+                            setProofPreview(await createPreviewUrl(f))
+                            e.target.value = ''
+                          }}
+                        />
+                        {proofPreview ? (
+                          <div className="flex items-center gap-3">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={proofPreview} alt="プレビュー" className="w-24 h-16 object-cover rounded border border-gray-200" />
+                            <button
+                              onClick={() => { setProofFile(null); setProofPreview('') }}
+                              className="text-xs text-red-600 underline"
+                            >
+                              取り消し
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => proofInputRef.current?.click()}
+                            className="w-full py-3 border-2 border-dashed border-red-300 rounded-lg text-xs text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            ファイルを選択
+                          </button>
+                        )}
+
+                        <Button
+                          onClick={handleUploadProofDocument}
+                          disabled={!proofFile || !proofDocType || uploadingProof}
+                          loading={uploadingProof}
+                          className="w-full"
+                        >
+                          {uploadingProof ? 'アップロード中...' : '住所証明書類を提出'}
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                )}
 
                 {/* ── 本人確認（顔照合） ── */}
                 <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">

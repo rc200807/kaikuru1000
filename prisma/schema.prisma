@@ -45,6 +45,12 @@ model User {
   selfieImagePath     String?  @db.Text  // セルフィー画像URL（本人確認用）
   faceVerificationResult String?         // 顔照合結果（JSON文字列）
   faceVerificationAt  DateTime?          // 顔照合実行日時
+  // 住所確認関連
+  addressVerified       Boolean  @default(false)  // 住所確認済み（管理者が承認）
+  addressMismatch       Boolean  @default(false)  // 住所不一致フラグ
+  proofDocumentPath     String?  @db.Text          // 住所証明書類URL
+  proofDocumentType     String?                     // 書類種別
+  proofDocumentStatus   String?                     // pending/approved/rejected
   storeId        String?   // 担当店舗ID（本部が割り当て）
   store          Store?    @relation(fields: [storeId], references: [id])
   isActive       Boolean   @default(true)

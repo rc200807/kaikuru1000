@@ -64,12 +64,16 @@ export default function StoreSchedulePage() {
   const [formData, setFormData] = useState({ userId: '', visitDate: '', note: '' })
   const [saving, setSaving] = useState(false)
 
-  // 訪問リクエスト
+  // 訪問リクエスト（顧客からの）
   const [visitRequests, setVisitRequests] = useState<any[]>([])
   const [visitRequestsLoading, setVisitRequestsLoading] = useState(true)
   const [counterModal, setCounterModal] = useState<{requestId:string, customerName:string}|null>(null)
   const [counterForm, setCounterForm] = useState({date:'', start:'', end:'', note:''})
   const [counterSubmitting, setCounterSubmitting] = useState(false)
+
+  // 店舗からの訪問提案
+  const [storeProposals, setStoreProposals] = useState<any[]>([])
+  const [storeProposalsLoading, setStoreProposalsLoading] = useState(true)
 
   // 訪問ステータス（動的取得）
   const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
@@ -114,10 +118,16 @@ export default function StoreSchedulePage() {
 
   useEffect(() => {
     if (status !== 'authenticated') return
-    fetch('/api/visit-requests?status=pending,counter_proposed')
+    // 顧客からの訪問リクエスト
+    fetch('/api/visit-requests?status=pending,counter_proposed&requestedBy=customer')
       .then(r => r.ok ? r.json() : { requests: [] })
       .then(data => { setVisitRequests(data.requests || []); setVisitRequestsLoading(false) })
       .catch(() => setVisitRequestsLoading(false))
+    // 店舗からの訪問提案
+    fetch('/api/visit-requests?requestedBy=store')
+      .then(r => r.ok ? r.json() : { requests: [] })
+      .then(data => { setStoreProposals(data.requests || []); setStoreProposalsLoading(false) })
+      .catch(() => setStoreProposalsLoading(false))
   }, [status])
 
   useEffect(() => {
@@ -414,6 +424,67 @@ export default function StoreSchedulePage() {
                   </div>
                 </Card>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* 店舗からの訪問提案（ステータス表示） */}
+        {!storeProposalsLoading && storeProposals.length > 0 && (
+          <section className="mb-8">
+            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4 flex items-center gap-2">
+              店舗からの訪問提案
+              <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 text-xs font-bold rounded-full bg-purple-600 text-white">
+                {storeProposals.length}
+              </span>
+            </h3>
+            <div className="space-y-3">
+              {storeProposals.map(req => {
+                const statusMap: Record<string, { color: string; label: string }> = {
+                  pending:            { color: 'bg-blue-100 text-blue-800', label: 'お客様の返答待ち' },
+                  approved:           { color: 'bg-green-100 text-green-800', label: '承認済み' },
+                  customer_declined:  { color: 'bg-red-100 text-red-800', label: 'お客様が辞退' },
+                  cancelled:          { color: 'bg-gray-100 text-gray-600', label: 'キャンセル' },
+                }
+                const st = statusMap[req.status] || { color: 'bg-gray-100 text-gray-600', label: req.status }
+                return (
+                  <Card key={req.id} variant="elevated" padding="none">
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{req.user?.name} 様</p>
+                          {req.user?.phone && (
+                            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{req.user.phone}</p>
+                          )}
+                        </div>
+                        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${st.color}`}>
+                          {st.label}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {[1, 2, 3].map(n => {
+                          const d = req[`candidate${n}Date`]
+                          const s = req[`candidate${n}Start`]
+                          const e = req[`candidate${n}End`]
+                          if (!d) return null
+                          return (
+                            <div key={n} className="bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] px-3 py-2">
+                              <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                                第{n}候補: {format(new Date(d), 'M/d（E）', { locale: ja })} {s}~{e}
+                              </span>
+                              {req.status === 'approved' && req.approvedCandidate === n && (
+                                <span className="ml-2 text-xs text-green-600 font-medium">承認</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {req.storeNote && (
+                        <p className="mt-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">メモ: {req.storeNote}</p>
+                      )}
+                    </div>
+                  </Card>
+                )
+              })}
             </div>
           </section>
         )}

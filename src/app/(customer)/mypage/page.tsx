@@ -185,6 +185,10 @@ function MyPageContent() {
   const [requestSubmitting, setRequestSubmitting] = useState(false)
   const [requestMsg, setRequestMsg] = useState<{type:'success'|'error',text:string}|null>(null)
 
+  // 店舗からの訪問提案
+  const [storeProposals, setStoreProposals] = useState<any[]>([])
+  const [storeProposalsLoaded, setStoreProposalsLoaded] = useState(false)
+
   // 宅配送付履歴
   const [shipments, setShipments] = useState<DeliveryShipment[]>([])
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
@@ -925,7 +929,7 @@ function MyPageContent() {
   if (!user) return null
 
   // 担当店舗が未割り当ての場合はロック画面を表示
-  if (!user.storeId && user.licenseKey) {
+  if (!user.store && user.licenseKey) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-pink-50/50 via-white to-purple-50/50 flex items-center justify-center p-4">
         <div className="w-full max-w-md text-center">
@@ -1040,10 +1044,16 @@ function MyPageContent() {
         .catch(() => {})
     }
     if (tabKey === 'visit-request' && !visitRequestsLoaded) {
-      fetch('/api/visit-requests')
+      fetch('/api/visit-requests?requestedBy=customer')
         .then(r => r.ok ? r.json() : { requests: [] })
         .then(data => { setVisitRequests(Array.isArray(data) ? data : data.requests || []); setVisitRequestsLoaded(true) })
         .catch(() => setVisitRequestsLoaded(true))
+    }
+    if (tabKey === 'visit-request' && !storeProposalsLoaded) {
+      fetch('/api/visit-requests?requestedBy=store')
+        .then(r => r.ok ? r.json() : { requests: [] })
+        .then(data => { setStoreProposals(Array.isArray(data) ? data : data.requests || []); setStoreProposalsLoaded(true) })
+        .catch(() => setStoreProposalsLoaded(true))
     }
     if (tabKey === 'shipments' && !shipmentsLoaded) {
       setShipmentsLoading(true)
@@ -1132,6 +1142,28 @@ function MyPageContent() {
         const updated = await res.json()
         setVisitRequests(prev => prev.map(r => r.id === id ? updated : r))
         setRequestMsg({ type: 'success', text: action === 'cancel' ? 'キャンセルしました' : action === 'accept_counter' ? '日程を承認しました' : '日程を辞退しました' })
+      } else {
+        setRequestMsg({ type: 'error', text: '操作に失敗しました' })
+      }
+    } catch {
+      setRequestMsg({ type: 'error', text: '操作に失敗しました' })
+    }
+  }
+
+  // 店舗提案アクション（approve_store_proposal, decline_store_proposal）
+  async function handleStoreProposalAction(id: string, action: string, approvedCandidate?: number) {
+    try {
+      const body: any = { action }
+      if (approvedCandidate) body.approvedCandidate = approvedCandidate
+      const res = await fetch(`/api/visit-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setStoreProposals(prev => prev.map(r => r.id === id ? updated : r))
+        setRequestMsg({ type: 'success', text: action === 'approve_store_proposal' ? '日程を承認しました' : '提案を辞退しました' })
       } else {
         setRequestMsg({ type: 'error', text: '操作に失敗しました' })
       }
@@ -3300,6 +3332,99 @@ function MyPageContent() {
                   })}
                 </div>
               )}
+
+              {/* ===== 店舗からの訪問提案 ===== */}
+              <div className="mt-8">
+                <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">店舗からの訪問提案</h2>
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-4">担当店舗から提案された訪問日程です</p>
+
+                {!storeProposalsLoaded ? (
+                  <div className="py-4">
+                    <LoadingSpinner size="md" label="読み込み中..." className="justify-center" />
+                  </div>
+                ) : storeProposals.length === 0 ? (
+                  <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                    <p className="text-sm text-center text-[var(--md-sys-color-on-surface-variant)] py-4">店舗からの訪問提案はありません</p>
+                  </Card>
+                ) : (
+                  <div className="space-y-3">
+                    {storeProposals.map(req => {
+                      const statusMap: Record<string, { color: string; label: string }> = {
+                        pending:            { color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300', label: '提案あり' },
+                        approved:           { color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300', label: '承認済み' },
+                        customer_declined:  { color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300', label: '辞退済み' },
+                        cancelled:          { color: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400', label: 'キャンセル' },
+                      }
+                      const st = statusMap[req.status] || { color: 'bg-gray-100 text-gray-600', label: req.status }
+                      const fmtDate = (d: string | null) => d ? format(new Date(d), 'M/d（E）', { locale: ja }) : '-'
+                      const fmtTime = (s: string | null, e: string | null) => {
+                        if (!s && !e) return ''
+                        return ` ${s || '?'}~${e || '?'}`
+                      }
+                      return (
+                        <Card key={req.id} variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-purple-200/50 !shadow-sm">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                              {format(new Date(req.createdAt), 'yyyy/M/d', { locale: ja })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                            {req.store?.name || '担当店舗'}からの提案
+                          </p>
+
+                          {/* 候補日一覧 */}
+                          {req.status === 'pending' ? (
+                            <div className="space-y-2">
+                              {[1, 2, 3].map(n => {
+                                const d = req[`candidate${n}Date`]
+                                if (!d) return null
+                                return (
+                                  <div key={n} className="flex items-center justify-between gap-2 bg-[var(--md-sys-color-surface-container-low)] rounded-lg px-3 py-2">
+                                    <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                                      第{n}候補: {fmtDate(d)}{fmtTime(req[`candidate${n}Start`], req[`candidate${n}End`])}
+                                    </span>
+                                    <Button size="sm" onClick={() => handleStoreProposalAction(req.id, 'approve_store_proposal', n)}>
+                                      この日程で承認
+                                    </Button>
+                                  </div>
+                                )
+                              })}
+                              <div className="mt-2">
+                                <Button size="sm" variant="tonal" onClick={() => { if (confirm('この提案を辞退しますか？')) handleStoreProposalAction(req.id, 'decline_store_proposal') }}>
+                                  辞退する
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1 text-sm">
+                              {[1, 2, 3].map(n => {
+                                const d = req[`candidate${n}Date`]
+                                if (!d) return null
+                                return (
+                                  <p key={n}>
+                                    <span className="text-[var(--md-sys-color-on-surface-variant)]">第{n}候補:</span>{' '}
+                                    {fmtDate(d)}{fmtTime(req[`candidate${n}Start`], req[`candidate${n}End`])}
+                                    {req.status === 'approved' && req.approvedCandidate === n && (
+                                      <span className="ml-1 text-xs text-green-600 font-medium">-- 承認</span>
+                                    )}
+                                  </p>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {req.storeNote && (
+                            <p className="mt-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                              <span className="font-medium">店舗メモ:</span> {req.storeNote}
+                            </p>
+                          )}
+                        </Card>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

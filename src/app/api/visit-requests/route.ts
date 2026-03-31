@@ -11,14 +11,20 @@ export async function GET(request: NextRequest) {
   const sessionUser = session.user as any
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
+  const requestedBy = searchParams.get('requestedBy')
 
   const where: any = {}
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
-  if (sessionUser.role === 'store') where.storeId = sessionUser.id
+  if (sessionUser.role === 'store') {
+    where.storeId = sessionUser.id
+    const userId = searchParams.get('userId')
+    if (userId) where.userId = userId
+  }
   if (status) {
     const statuses = status.split(',').map(s => s.trim())
     where.status = statuses.length === 1 ? statuses[0] : { in: statuses }
   }
+  if (requestedBy) where.requestedBy = requestedBy
 
   const requests = await prisma.visitRequest.findMany({
     where,
@@ -32,23 +38,57 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ requests })
 }
 
-// 訪問リクエスト作成（顧客のみ）
+// 訪問リクエスト作成（顧客 or 店舗）
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const sessionUser = session.user as any
-  if (sessionUser.role !== 'customer') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   const body = await request.json()
   const {
     candidate1Date, candidate1Start, candidate1End,
     candidate2Date, candidate2Start, candidate2End,
     candidate3Date, candidate3Start, candidate3End,
-    customerNote,
+    customerNote, storeNote,
   } = body
+
+  // 店舗からの訪問提案
+  if (sessionUser.role === 'store') {
+    const { userId } = body
+    if (!userId) {
+      return NextResponse.json({ error: '顧客IDが指定されていません' }, { status: 400 })
+    }
+
+    const visitRequest = await prisma.visitRequest.create({
+      data: {
+        userId,
+        storeId: sessionUser.id,
+        requestedBy: 'store',
+        candidate1Date: new Date(candidate1Date),
+        candidate1Start: candidate1Start || null,
+        candidate1End: candidate1End || null,
+        candidate2Date: new Date(candidate2Date),
+        candidate2Start: candidate2Start || null,
+        candidate2End: candidate2End || null,
+        candidate3Date: new Date(candidate3Date),
+        candidate3Start: candidate3Start || null,
+        candidate3End: candidate3End || null,
+        storeNote: storeNote || null,
+        status: 'pending',
+      },
+      include: {
+        user: { select: { name: true, email: true, phone: true, address: true, customerType: true } },
+        store: { select: { name: true } },
+      },
+    })
+
+    return NextResponse.json(visitRequest, { status: 201 })
+  }
+
+  // 顧客からの訪問リクエスト
+  if (sessionUser.role !== 'customer') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   // 顧客の担当店舗を取得
   const user = await prisma.user.findUnique({
@@ -64,6 +104,7 @@ export async function POST(request: NextRequest) {
     data: {
       userId: sessionUser.id,
       storeId: user.storeId,
+      requestedBy: 'customer',
       candidate1Date: new Date(candidate1Date),
       candidate1Start: candidate1Start || null,
       candidate1End: candidate1End || null,

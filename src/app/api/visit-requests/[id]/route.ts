@@ -257,5 +257,104 @@ export async function PATCH(
     return NextResponse.json(updated)
   }
 
+  // 顧客アクション: 店舗提案を承認（requestedBy='store'のリクエストに対して）
+  if (action === 'approve_store_proposal' && sessionUser.role === 'customer') {
+    if (visitRequest.status !== 'pending' || !('requestedBy' in visitRequest) ) {
+      return NextResponse.json({ error: 'この提案は承認できません' }, { status: 400 })
+    }
+
+    const { approvedCandidate } = body as { approvedCandidate: 1 | 2 | 3 }
+
+    let visitDate: Date
+    let startTime: string | null
+    let endTime: string | null
+
+    if (approvedCandidate === 1) {
+      visitDate = visitRequest.candidate1Date
+      startTime = visitRequest.candidate1Start
+      endTime = visitRequest.candidate1End
+    } else if (approvedCandidate === 2) {
+      visitDate = visitRequest.candidate2Date
+      startTime = visitRequest.candidate2Start
+      endTime = visitRequest.candidate2End
+    } else {
+      visitDate = visitRequest.candidate3Date
+      startTime = visitRequest.candidate3Start
+      endTime = visitRequest.candidate3End
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const schedule = await tx.visitSchedule.create({
+        data: {
+          userId: visitRequest.userId,
+          storeId: visitRequest.storeId,
+          visitDate,
+          startTime,
+          endTime,
+          status: 'scheduled',
+          note: '店舗からの訪問提案より作成',
+        },
+      })
+
+      const updated = await tx.visitRequest.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          approvedCandidate,
+          visitScheduleId: schedule.id,
+        },
+        include: {
+          user: { select: { name: true, email: true, phone: true, address: true, customerType: true } },
+          store: { select: { name: true } },
+        },
+      })
+
+      return { schedule, updated }
+    })
+
+    // Googleカレンダー同期
+    try {
+      const eventId = await createCalendarEvent(visitRequest.storeId, {
+        visitDate,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+        note: '店舗からの訪問提案より作成',
+        customerType: visitRequest.user.customerType ?? undefined,
+        user: {
+          name: visitRequest.user.name,
+          address: visitRequest.user.address ?? '',
+        },
+      })
+      if (eventId) {
+        await prisma.visitSchedule.update({
+          where: { id: result.schedule.id },
+          data: { googleCalendarEventId: eventId },
+        })
+      }
+    } catch (err) {
+      console.error('[GoogleCalendar] 店舗提案承認時のカレンダー同期に失敗:', err)
+    }
+
+    return NextResponse.json(result.updated)
+  }
+
+  // 顧客アクション: 店舗提案を辞退
+  if (action === 'decline_store_proposal' && sessionUser.role === 'customer') {
+    if (visitRequest.status !== 'pending') {
+      return NextResponse.json({ error: 'この提案は辞退できません' }, { status: 400 })
+    }
+
+    const updated = await prisma.visitRequest.update({
+      where: { id },
+      data: { status: 'customer_declined' },
+      include: {
+        user: { select: { name: true, email: true, phone: true, address: true, customerType: true } },
+        store: { select: { name: true } },
+      },
+    })
+
+    return NextResponse.json(updated)
+  }
+
   return NextResponse.json({ error: '不正なアクションです' }, { status: 400 })
 }

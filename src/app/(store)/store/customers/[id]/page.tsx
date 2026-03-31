@@ -151,6 +151,19 @@ export default function StoreCustomerDetailPage() {
   const [shipmentEdits, setShipmentEdits] = useState<Record<string, { purchaseAmount: string; storeNote: string; status: string }>>({})
   const [savingShipment, setSavingShipment] = useState<string | null>(null)
 
+  // 訪問日程提案
+  const [proposalForm, setProposalForm] = useState({
+    candidate1Date: '', candidate1Start: '', candidate1End: '',
+    candidate2Date: '', candidate2Start: '', candidate2End: '',
+    candidate3Date: '', candidate3Start: '', candidate3End: '',
+    storeNote: '',
+  })
+  const [proposalSubmitting, setProposalSubmitting] = useState(false)
+  const [proposalMsg, setProposalMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showProposalForm, setShowProposalForm] = useState(false)
+  const [storeProposals, setStoreProposals] = useState<any[]>([])
+  const [storeProposalsLoaded, setStoreProposalsLoaded] = useState(false)
+
   // 査定フォーム表示管理
   const [appraisalOpen, setAppraisalOpen] = useState<Record<string, boolean>>({})
 
@@ -196,6 +209,9 @@ export default function StoreCustomerDetailPage() {
 
     if (tab === 'history' && !schedulesLoaded && customer) {
       loadSchedules()
+    }
+    if (tab === 'add' && !storeProposalsLoaded && customer) {
+      loadStoreProposals()
     }
     if (tab === 'memos' && !memosLoaded && customer) {
       loadMemos()
@@ -265,6 +281,7 @@ export default function StoreCustomerDetailPage() {
     if (tabFromUrl === 'history' && !schedulesLoaded) loadSchedules()
     if (tabFromUrl === 'memos' && !memosLoaded) loadMemos()
     if (tabFromUrl === 'shipments' && !shipmentsLoaded) loadShipments()
+    if (tabFromUrl === 'add' && !storeProposalsLoaded) loadStoreProposals()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer])
 
@@ -392,6 +409,54 @@ export default function StoreCustomerDetailPage() {
     } finally {
       setDeletingDoc(false)
     }
+  }
+
+  function loadStoreProposals() {
+    if (!customer) return
+    fetch(`/api/visit-requests?requestedBy=store&userId=${customer.id}`)
+      .then(r => r.json())
+      .then(data => {
+        // Filter to only this customer's proposals (API returns all for store)
+        const list = (data?.requests || []).filter((r: any) => r.userId === customer.id)
+        setStoreProposals(list)
+        setStoreProposalsLoaded(true)
+      })
+      .catch(() => setStoreProposalsLoaded(true))
+  }
+
+  async function handleSubmitProposal(e: React.FormEvent) {
+    e.preventDefault()
+    if (!customer || !proposalForm.candidate1Date) return
+    setProposalSubmitting(true)
+    setProposalMsg(null)
+    try {
+      const res = await fetch('/api/visit-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: customer.id,
+          ...proposalForm,
+        }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setStoreProposals(prev => [created, ...prev])
+        setProposalForm({
+          candidate1Date: '', candidate1Start: '', candidate1End: '',
+          candidate2Date: '', candidate2Start: '', candidate2End: '',
+          candidate3Date: '', candidate3Start: '', candidate3End: '',
+          storeNote: '',
+        })
+        setShowProposalForm(false)
+        setProposalMsg({ type: 'success', text: '訪問日程を提案しました' })
+      } else {
+        const d = await res.json()
+        setProposalMsg({ type: 'error', text: d.error || '送信に失敗しました' })
+      }
+    } catch {
+      setProposalMsg({ type: 'error', text: '送信に失敗しました' })
+    }
+    setProposalSubmitting(false)
   }
 
   if (authStatus === 'loading' || loading) {
@@ -740,47 +805,165 @@ export default function StoreCustomerDetailPage() {
 
         {/* ===== スケジュール追加タブ ===== */}
         {activeTab === 'add' && (
-          <Card>
-            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">訪問スケジュール追加</h2>
-            <form onSubmit={handleAddSchedule} className="space-y-4">
-              <TextField
-                label="訪問日"
-                type="date"
-                value={addForm.visitDate}
-                onChange={v => setAddForm({ ...addForm, visitDate: v })}
-                required
-              />
-              <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-6">
+            <Card>
+              <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">訪問スケジュール追加</h2>
+              <form onSubmit={handleAddSchedule} className="space-y-4">
                 <TextField
-                  label="開始時間"
-                  type="time"
-                  value={addForm.startTime}
-                  onChange={v => setAddForm({ ...addForm, startTime: v })}
+                  label="訪問日"
+                  type="date"
+                  value={addForm.visitDate}
+                  onChange={v => setAddForm({ ...addForm, visitDate: v })}
+                  required
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <TextField
+                    label="開始時間"
+                    type="time"
+                    value={addForm.startTime}
+                    onChange={v => setAddForm({ ...addForm, startTime: v })}
+                  />
+                  <TextField
+                    label="終了時間"
+                    type="time"
+                    value={addForm.endTime}
+                    onChange={v => setAddForm({ ...addForm, endTime: v })}
+                  />
+                </div>
                 <TextField
-                  label="終了時間"
-                  type="time"
-                  value={addForm.endTime}
-                  onChange={v => setAddForm({ ...addForm, endTime: v })}
+                  label="メモ（任意）"
+                  value={addForm.note}
+                  onChange={v => setAddForm({ ...addForm, note: v })}
+                  placeholder="訪問に関するメモを入力..."
+                  rows={3}
                 />
+                <Button
+                  type="submit"
+                  disabled={submitting || !addForm.visitDate}
+                  loading={submitting}
+                  fullWidth
+                >
+                  {submitting ? '追加中...' : 'スケジュールを追加'}
+                </Button>
+              </form>
+            </Card>
+
+            {/* 訪問日程を提案 */}
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">訪問日程を提案</h2>
+                <Button size="sm" variant={showProposalForm ? 'tonal' : 'filled'} onClick={() => { setShowProposalForm(v => !v); setProposalMsg(null) }}>
+                  {showProposalForm ? 'キャンセル' : '+ 日程を提案する'}
+                </Button>
               </div>
-              <TextField
-                label="メモ（任意）"
-                value={addForm.note}
-                onChange={v => setAddForm({ ...addForm, note: v })}
-                placeholder="訪問に関するメモを入力..."
-                rows={3}
-              />
-              <Button
-                type="submit"
-                disabled={submitting || !addForm.visitDate}
-                loading={submitting}
-                fullWidth
-              >
-                {submitting ? '追加中...' : 'スケジュールを追加'}
-              </Button>
-            </form>
-          </Card>
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+                お客様に訪問候補日を3つまで提案できます。お客様がいずれかを承認するとスケジュールが作成されます。
+              </p>
+
+              {proposalMsg && (
+                <MessageBanner severity={proposalMsg.type} dismissible onDismiss={() => setProposalMsg(null)}>
+                  {proposalMsg.text}
+                </MessageBanner>
+              )}
+
+              {showProposalForm && (
+                <form onSubmit={handleSubmitProposal} className="space-y-4 mt-4">
+                  {[1, 2, 3].map(n => (
+                    <div key={n} className="p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
+                      <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                        第{n}候補 {n === 1 && <span className="text-red-500">*</span>}
+                      </p>
+                      <TextField
+                        label="日付"
+                        type="date"
+                        value={(proposalForm as any)[`candidate${n}Date`]}
+                        onChange={v => setProposalForm(prev => ({ ...prev, [`candidate${n}Date`]: v }))}
+                        required={n === 1}
+                      />
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        <TextField
+                          label="開始"
+                          type="time"
+                          value={(proposalForm as any)[`candidate${n}Start`]}
+                          onChange={v => setProposalForm(prev => ({ ...prev, [`candidate${n}Start`]: v }))}
+                        />
+                        <TextField
+                          label="終了"
+                          type="time"
+                          value={(proposalForm as any)[`candidate${n}End`]}
+                          onChange={v => setProposalForm(prev => ({ ...prev, [`candidate${n}End`]: v }))}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <TextField
+                    label="メモ（任意）"
+                    value={proposalForm.storeNote}
+                    onChange={v => setProposalForm(prev => ({ ...prev, storeNote: v }))}
+                    placeholder="提案に関するメモ..."
+                    rows={2}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={proposalSubmitting || !proposalForm.candidate1Date}
+                    loading={proposalSubmitting}
+                    fullWidth
+                  >
+                    {proposalSubmitting ? '送信中...' : '日程を提案する'}
+                  </Button>
+                </form>
+              )}
+
+              {/* 提案済みリスト */}
+              {storeProposalsLoaded && storeProposals.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">提案済みの日程</p>
+                  {storeProposals.map(req => {
+                    const statusMap: Record<string, { color: string; label: string }> = {
+                      pending:            { color: 'bg-blue-100 text-blue-800', label: 'お客様の返答待ち' },
+                      approved:           { color: 'bg-green-100 text-green-800', label: '承認済み' },
+                      customer_declined:  { color: 'bg-red-100 text-red-800', label: '辞退' },
+                      cancelled:          { color: 'bg-gray-100 text-gray-600', label: 'キャンセル' },
+                    }
+                    const st = statusMap[req.status] || { color: 'bg-gray-100 text-gray-600', label: req.status }
+                    const fmtDate = (d: string | null) => d ? format(new Date(d), 'M/d（E）', { locale: ja }) : '-'
+                    const fmtTime = (s: string | null, e: string | null) => {
+                      if (!s && !e) return ''
+                      return ` ${s || '?'}~${e || '?'}`
+                    }
+                    return (
+                      <div key={req.id} className="p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)]">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            {format(new Date(req.createdAt), 'yyyy/M/d', { locale: ja })}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm">
+                          {[1, 2, 3].map(n => {
+                            const d = req[`candidate${n}Date`]
+                            if (!d) return null
+                            return (
+                              <p key={n}>
+                                <span className="text-[var(--md-sys-color-on-surface-variant)]">第{n}候補:</span>{' '}
+                                {fmtDate(d)}{fmtTime(req[`candidate${n}Start`], req[`candidate${n}End`])}
+                                {req.status === 'approved' && req.approvedCandidate === n && (
+                                  <span className="ml-1 text-xs text-green-600 font-medium">-- 承認</span>
+                                )}
+                              </p>
+                            )
+                          })}
+                        </div>
+                        {req.storeNote && (
+                          <p className="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">メモ: {req.storeNote}</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
         )}
 
         {/* ===== 訪問履歴タブ ===== */}

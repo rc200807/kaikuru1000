@@ -565,6 +565,7 @@ model VisitRequest {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   storeId         String
   store           Store    @relation(fields: [storeId], references: [id])
+  requestedBy     String   @default("customer") // "customer" | "store"
   candidate1Date  DateTime
   candidate1Start String?
   candidate1End   String?

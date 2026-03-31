@@ -58,12 +58,14 @@ export default function CustomerLoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+    <div className="relative min-h-screen flex items-center justify-center p-4">
 
-      {/* WebGL 3D Glass Orbs Background */}
-      <Suspense fallback={null}>
-        <GlassOrbs3D />
-      </Suspense>
+      {/* WebGL 3D Glass Orbs Background (fixed) */}
+      <div className="fixed inset-0 z-0">
+        <Suspense fallback={null}>
+          <GlassOrbs3D />
+        </Suspense>
+      </div>
 
       {/* Glass login card */}
       <div className="relative w-full max-w-md z-10">

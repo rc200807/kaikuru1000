@@ -61,6 +61,7 @@ model User {
   purchaseMemos     PurchaseMemo[]
   deliveryShipments DeliveryShipment[]
   magicLinks        MagicLink[]
+  inquiries         Inquiry[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -102,6 +103,7 @@ model Store {
   storeLinksFrom StoreLink[] @relation("StoreLinkFrom")
   storeLinksTo   StoreLink[] @relation("StoreLinkTo")
   announcementReads AnnouncementRead[]
+  inquiries  Inquiry[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -371,6 +373,29 @@ model MagicLink {
   expiresAt  DateTime
   usedAt     DateTime?
   createdAt  DateTime  @default(now())
+}
+
+// 店舗お問い合わせ
+model Inquiry {
+  id              String   @id @default(cuid())
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id])
+  name            String   // 氏名
+  furigana        String   // フリガナ
+  phone           String   // 電話番号
+  email           String?  // メールアドレス
+  postalCode      String?  // 郵便番号
+  address         String   // 住所
+  inquiryType     String   // 申込み内容: assessment/purchase/estate/other
+  details         String?  @db.Text // 相談内容詳細
+  userId          String?  // 自動作成された顧客のID
+  user            User?    @relation(fields: [userId], references: [id])
+  status          String   @default("new") // new/contacted/completed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([status])
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）

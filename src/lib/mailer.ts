@@ -620,6 +620,165 @@ export async function sendWelcomeWithPasswordEmail(params: {
   return true
 }
 
+/** お問い合わせ自動返信メールを送信する */
+export async function sendInquiryAutoReply(params: {
+  to: string
+  name: string
+  storeName: string
+  inquiryType: string
+  isExisting: boolean
+  setupUrl?: string  // 新規ユーザー用
+  loginUrl?: string  // 既存ユーザー用
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+
+  const { transporter, from } = result
+
+  const inquiryTypeLabels: Record<string, string> = {
+    assessment: '査定のお申込み',
+    purchase: '買取のお申込み',
+    estate: '遺品整理のご相談',
+    other: 'その他のお問い合わせ',
+  }
+  const typeLabel = inquiryTypeLabels[params.inquiryType] || params.inquiryType
+
+  const actionSection = params.isExisting
+    ? `
+              <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">
+                すでにマイページがございます。<br>
+                ログインして買取トライやお取引状況をご確認ください。
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <a href="${params.loginUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
+                      マイページにログイン
+                    </a>
+                  </td>
+                </tr>
+              </table>`
+    : `
+              <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">
+                マイページが発行されました。<br>
+                下記のボタンからパスワードを設定してご利用ください。<br>
+                <strong>買取トライでAI簡易査定もできます。</strong>
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td align="center">
+                    <a href="${params.setupUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
+                      パスワードを設定する
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 24px;color:#6b7280;font-size:13px;line-height:1.7;">
+                ボタンが機能しない場合は、以下のURLをブラウザに貼り付けてください：
+              </p>
+              <p style="margin:0 0 24px;word-break:break-all;">
+                <a href="${params.setupUrl}" style="color:#991b1b;font-size:12px;">${params.setupUrl}</a>
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border-radius:10px;border:1px solid #fcd34d;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;color:#92400e;font-size:12px;line-height:1.7;">
+                      このリンクは<strong>7日間</strong>有効です。
+                    </p>
+                  </td>
+                </tr>
+              </table>`
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お問い合わせありがとうございます</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+          <!-- ヘッダー -->
+          <tr>
+            <td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル ${params.storeName}</p>
+              <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">お問い合わせありがとうございます</h1>
+            </td>
+          </tr>
+
+          <!-- 本文 -->
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;">
+              <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+                ${params.name} 様<br><br>
+                このたびは ${params.storeName} へお問い合わせいただき、誠にありがとうございます。<br>
+                <strong>「${typeLabel}」</strong>のご依頼を承りました。<br>
+                担当者より改めてご連絡いたしますので、しばらくお待ちください。
+              </p>
+
+              ${actionSection}
+
+              <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
+                ご不明な点がございましたら、${params.storeName}までお気軽にお問い合わせください。
+              </p>
+            </td>
+          </tr>
+
+          <!-- フッター -->
+          <tr>
+            <td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;">
+              <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
+                このメールは買いクル管理システムから自動送信されています
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`
+
+  const actionText = params.isExisting
+    ? [
+        'すでにマイページがございます。',
+        `ログインURL: ${params.loginUrl}`,
+      ]
+    : [
+        'マイページが発行されました。',
+        `パスワード設定URL: ${params.setupUrl}`,
+        '（7日間有効）',
+        '',
+        '買取トライでAI簡易査定もできます。',
+      ]
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: '【買いクル】お問い合わせありがとうございます',
+    html,
+    text: [
+      `${params.name} 様`,
+      '',
+      `${params.storeName}へお問い合わせいただきありがとうございます。`,
+      `「${typeLabel}」のご依頼を承りました。`,
+      '担当者より改めてご連絡いたします。',
+      '',
+      ...actionText,
+      '',
+      `ご不明な点は${params.storeName}までお問い合わせください。`,
+    ].join('\n'),
+  })
+  return true
+}
+
 /** テストメールを送信する */
 export async function sendTestEmail(toEmail: string) {
   const result = await createTransporter()

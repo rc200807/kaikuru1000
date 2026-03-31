@@ -4534,7 +4534,7 @@ function VisitRequestCalendarForm({
   const today = new Date()
   today.setHours(0,0,0,0)
   const minDate = new Date(today)
-  minDate.setDate(minDate.getDate() + 2) // 2日後以降のみ選択可能
+  minDate.setDate(minDate.getDate() + 7) // 1週間以上先のみ選択可能
 
   const dayLabels = ['日','月','火','水','木','金','土']
 

@@ -1500,7 +1500,7 @@ function MyPageContent() {
                     <dl className="space-y-2.5">
                       <div className="flex justify-between gap-3">
                         <dt className="text-sm text-gray-500">ライセンスキー</dt>
-                        <dd className="text-xs font-mono font-medium text-gray-900 text-right break-all">{user.licenseKey.key}</dd>
+                        <dd className="text-xs font-mono font-medium text-gray-900 text-right break-all">{user.licenseKey?.key ?? '未設定'}</dd>
                       </div>
                       <div className="flex justify-between gap-3">
                         <dt className="text-sm text-gray-500">身分証</dt>

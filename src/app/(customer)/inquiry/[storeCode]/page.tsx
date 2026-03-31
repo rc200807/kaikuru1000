@@ -41,6 +41,23 @@ export default function InquiryPage() {
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [hadEmail, setHadEmail] = useState(false)
+  const [postalLoading, setPostalLoading] = useState(false)
+
+  // 郵便番号から住所を自動入力
+  async function lookupAddress(code: string) {
+    const cleaned = code.replace(/[-ー\s]/g, '')
+    if (cleaned.length !== 7) return
+    setPostalLoading(true)
+    try {
+      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${cleaned}`)
+      const data = await res.json()
+      if (data.results && data.results.length > 0) {
+        const r = data.results[0]
+        setAddress(`${r.address1}${r.address2}${r.address3}`)
+      }
+    } catch { /* ignore */ }
+    finally { setPostalLoading(false) }
+  }
 
   useEffect(() => {
     async function fetchStore() {
@@ -194,12 +211,21 @@ export default function InquiryPage() {
           placeholder="example@email.com（任意）"
         />
 
-        <GlassInput
-          label="郵便番号"
-          value={postalCode}
-          onChange={setPostalCode}
-          placeholder="123-4567（任意）"
-        />
+        <div>
+          <GlassInput
+            label="郵便番号"
+            value={postalCode}
+            onChange={(v: string) => {
+              setPostalCode(v)
+              const cleaned = v.replace(/[-ー\s]/g, '')
+              if (cleaned.length === 7) lookupAddress(cleaned)
+            }}
+            placeholder="1234567（任意）"
+          />
+          {postalLoading && (
+            <p className="text-xs text-gray-400 mt-1 ml-1">住所を検索中...</p>
+          )}
+        </div>
 
         <GlassInput
           label="住所"

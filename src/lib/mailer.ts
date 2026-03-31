@@ -629,6 +629,7 @@ export async function sendInquiryAutoReply(params: {
   isExisting: boolean
   setupUrl?: string  // 新規ユーザー用
   loginUrl?: string  // 既存ユーザー用
+  itemCount?: number // 買取トライ登録件数
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
@@ -722,6 +723,19 @@ export async function sendInquiryAutoReply(params: {
               </p>
 
               ${actionSection}
+              ${params.itemCount && params.itemCount > 0 ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ecfdf5;border-radius:10px;border:1px solid #6ee7b7;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;color:#065f46;font-size:14px;line-height:1.7;font-weight:600;">
+                      ${params.itemCount}件の商品が買取トライに登録されました
+                    </p>
+                    <p style="margin:4px 0 0;color:#047857;font-size:12px;line-height:1.7;">
+                      マイページからAI簡易査定を実行できます
+                    </p>
+                  </td>
+                </tr>
+              </table>` : ''}
 
               <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
                 ご不明な点がございましたら、${params.storeName}までお気軽にお問い合わせください。
@@ -773,6 +787,13 @@ export async function sendInquiryAutoReply(params: {
       '',
       ...actionText,
       '',
+      ...(params.itemCount && params.itemCount > 0
+        ? [
+            `${params.itemCount}件の商品が買取トライに登録されました。`,
+            'マイページからAI簡易査定を実行できます。',
+            '',
+          ]
+        : []),
       `ご不明な点は${params.storeName}までお問い合わせください。`,
     ].join('\n'),
   })

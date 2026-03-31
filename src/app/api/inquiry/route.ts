@@ -12,7 +12,7 @@ function getBaseUrl() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { storeCode, name, furigana, phone, email, postalCode, address, inquiryType, details } = body
+    const { storeCode, name, furigana, phone, email, postalCode, address, inquiryType, details, items } = body
 
     // --- バリデーション ---
     const missing: string[] = []
@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
           inquiryType,
           isExisting: false,
           setupUrl,
+          itemCount: Array.isArray(items) ? items.filter((i: any) => i.title).length : 0,
         }).catch(() => {}) // メール送信失敗は握りつぶす
       }
 
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
           inquiryType,
           isExisting: true,
           loginUrl,
+          itemCount: Array.isArray(items) ? items.filter((i: any) => i.title).length : 0,
         }).catch(() => {})
       }
     }
@@ -123,10 +125,28 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // --- 買取トライ（PurchaseMemo）作成 ---
+    let itemCount = 0
+    if (userId && Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        if (!item.title || typeof item.title !== 'string') continue
+        await prisma.purchaseMemo.create({
+          data: {
+            userId,
+            title: item.title,
+            imageUrls: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
+            status: 'pending',
+          },
+        })
+        itemCount++
+      }
+    }
+
     return NextResponse.json({
       success: true,
       inquiryId: inquiry.id,
       isExisting,
+      itemCount,
     })
   } catch (error) {
     console.error('Inquiry POST error:', error)

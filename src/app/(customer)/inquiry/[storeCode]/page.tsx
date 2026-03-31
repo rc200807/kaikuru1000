@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
 import MessageBanner from '@/components/MessageBanner'
+import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
 const INQUIRY_TYPES = [
   { value: '査定申し込み', label: '査定申し込み' },
@@ -14,10 +15,19 @@ const INQUIRY_TYPES = [
   { value: 'その他', label: 'その他' },
 ] as const
 
+const ITEM_TYPES = ['査定申し込み', '出張買取']
+const MAX_ITEMS = 5
+
 type StoreInfo = {
   name: string
   address: string | null
   phone: string | null
+}
+
+type ItemEntry = {
+  file: File | null
+  preview: string
+  title: string
 }
 
 export default function InquiryPage() {
@@ -37,11 +47,18 @@ export default function InquiryPage() {
   const [inquiryType, setInquiryType] = useState('査定申し込み')
   const [details, setDetails] = useState('')
 
+  // Item entries for 査定申し込み / 出張買取
+  const [items, setItems] = useState<ItemEntry[]>([])
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([])
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [hadEmail, setHadEmail] = useState(false)
+  const [registeredItemCount, setRegisteredItemCount] = useState(0)
   const [postalLoading, setPostalLoading] = useState(false)
+
+  const showItemSection = ITEM_TYPES.includes(inquiryType)
 
   // 郵便番号から住所を自動入力（サーバーサイドプロキシ経由）
   async function lookupAddress(code: string) {
@@ -75,6 +92,90 @@ export default function InquiryPage() {
     if (storeCode) fetchStore()
   }, [storeCode])
 
+  // Clear items when switching away from item-supporting types
+  useEffect(() => {
+    if (!showItemSection) {
+      // Revoke preview URLs
+      items.forEach((item) => {
+        if (item.preview) URL.revokeObjectURL(item.preview)
+      })
+      setItems([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showItemSection])
+
+  function addItem() {
+    if (items.length >= MAX_ITEMS) return
+    setItems((prev) => [...prev, { file: null, preview: '', title: '' }])
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => {
+      const removed = prev[index]
+      if (removed.preview) URL.revokeObjectURL(removed.preview)
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
+  function updateItemTitle(index: number, title: string) {
+    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, title } : item)))
+  }
+
+  async function handleFileChange(index: number, file: File | null) {
+    if (!file) return
+    try {
+      const converted = await convertToJpegIfNeeded(file)
+      const preview = URL.createObjectURL(converted)
+      setItems((prev) =>
+        prev.map((item, i) => {
+          if (i === index) {
+            if (item.preview) URL.revokeObjectURL(item.preview)
+            return { ...item, file: converted, preview }
+          }
+          return item
+        })
+      )
+    } catch {
+      // fallback: use original file
+      const preview = URL.createObjectURL(file)
+      setItems((prev) =>
+        prev.map((item, i) => {
+          if (i === index) {
+            if (item.preview) URL.revokeObjectURL(item.preview)
+            return { ...item, file, preview }
+          }
+          return item
+        })
+      )
+    }
+  }
+
+  async function uploadItemImages(): Promise<Array<{ title: string; imageUrl: string }>> {
+    const results: Array<{ title: string; imageUrl: string }> = []
+    for (const item of items) {
+      if (!item.title.trim()) continue
+      let imageUrl = ''
+      if (item.file) {
+        const formData = new FormData()
+        formData.append('file', item.file)
+        try {
+          const res = await fetch('/api/inquiry/images', {
+            method: 'POST',
+            body: formData,
+          })
+          if (res.ok) {
+            const data = await res.json()
+            imageUrl = data.url
+          }
+        } catch {
+          // Image upload failed, continue without image
+        }
+      }
+      results.push({ title: item.title.trim(), imageUrl })
+    }
+    return results
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -86,6 +187,12 @@ export default function InquiryPage() {
     const cleanPostalCode = postalCode.replace(/[-\s]/g, '')
 
     try {
+      // Upload item images first
+      let uploadedItems: Array<{ title: string; imageUrl: string }> = []
+      if (showItemSection && items.length > 0) {
+        uploadedItems = await uploadItemImages()
+      }
+
       const res = await fetch('/api/inquiry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,6 +206,7 @@ export default function InquiryPage() {
           address,
           inquiryType,
           details: details || undefined,
+          items: uploadedItems.length > 0 ? uploadedItems : undefined,
         }),
       })
 
@@ -109,6 +217,7 @@ export default function InquiryPage() {
       }
 
       setHadEmail(!!email)
+      setRegisteredItemCount(uploadedItems.length)
       setSubmitted(true)
     } catch {
       setError('サーバーエラーが発生しました。もう一度お試しください')
@@ -137,6 +246,11 @@ export default function InquiryPage() {
                 ? 'メールアドレスにご案内をお送りしました'
                 : '担当店舗よりご連絡させていただきます'}
             </p>
+            {registeredItemCount > 0 && (
+              <p className="text-sm text-emerald-600 mt-2 font-medium">
+                {registeredItemCount}件の商品が買取トライに登録されました
+              </p>
+            )}
           </div>
 
           {storeInfo && (
@@ -273,6 +387,120 @@ export default function InquiryPage() {
             ))}
           </div>
         </div>
+
+        {/* Item input section for 査定申し込み / 出張買取 */}
+        {showItemSection && (
+          <div className="bg-white/50 rounded-2xl p-4 border border-white/60 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700">
+                買取希望品を登録（写真とアイテム名）
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                写真を撮って登録すると、マイページでAI簡易査定ができます
+              </p>
+            </div>
+
+            {items.map((item, index) => (
+              <div
+                key={index}
+                className="flex items-start gap-3 bg-white/60 rounded-xl p-3 border border-white/70"
+              >
+                {/* Photo upload */}
+                <div className="flex-shrink-0">
+                  <input
+                    ref={(el) => { fileInputRefs.current[index] = el }}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    className="sr-only"
+                    onChange={(e) => handleFileChange(index, e.target.files?.[0] || null)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRefs.current[index]?.click()}
+                    className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-red-300 transition-colors bg-gray-50/50"
+                  >
+                    {item.preview ? (
+                      <img
+                        src={item.preview}
+                        alt="プレビュー"
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <svg
+                        className="w-6 h-6 text-gray-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        strokeWidth={1.5}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                        />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+
+                {/* Title input + remove */}
+                <div className="flex-1 min-w-0">
+                  <input
+                    type="text"
+                    value={item.title}
+                    onChange={(e) => updateItemTitle(index, e.target.value)}
+                    placeholder="品名（例: ルイヴィトン バッグ）"
+                    className="w-full text-sm bg-transparent border-b border-gray-200 focus:border-red-400 outline-none py-1.5 text-gray-700 placeholder:text-gray-300 transition-colors"
+                  />
+                  <p className="text-[10px] text-gray-300 mt-1">
+                    {item.file ? '写真あり' : '写真未選択（タップで追加）'}
+                  </p>
+                </div>
+
+                {/* Remove button */}
+                <button
+                  type="button"
+                  onClick={() => removeItem(index)}
+                  className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-100 hover:bg-red-100 flex items-center justify-center transition-colors group"
+                >
+                  <svg
+                    className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-500 transition-colors"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+
+            {items.length < MAX_ITEMS && (
+              <button
+                type="button"
+                onClick={addItem}
+                className="w-full py-2.5 rounded-xl border-2 border-dashed border-gray-200 hover:border-red-300 text-sm text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                アイテムを追加
+              </button>
+            )}
+
+            {items.length >= MAX_ITEMS && (
+              <p className="text-xs text-gray-400 text-center">
+                最大{MAX_ITEMS}件まで登録できます
+              </p>
+            )}
+          </div>
+        )}
 
         <GlassInput
           label="相談内容詳細"

@@ -228,6 +228,10 @@ function MyPageContent() {
   const selfieVideoRef = useRef<HTMLVideoElement>(null)
   const selfieStreamRef = useRef<MediaStream | null>(null)
 
+  // オンボーディングモーダル
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false)
+  const [pendingMemoCount, setPendingMemoCount] = useState(0)
+
   const docTypesRequiringBack = ['運転免許証', 'マイナンバーカード']
   const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
@@ -294,6 +298,23 @@ function MyPageContent() {
         .catch(() => setShipmentsLoaded(true))
     }
   }, [activeTab, shipmentsLoaded, status, user?.customerType])
+
+  // オンボーディングモーダル: 未査定メモがあればダッシュボード表示時にモーダルを出す
+  useEffect(() => {
+    if (user && activeTab === 'dashboard') {
+      fetch('/api/purchase-memos?limit=50')
+        .then(r => r.json())
+        .then(data => {
+          const list = data?.memos ?? (Array.isArray(data) ? data : [])
+          const pending = list.filter((m: any) => !m.aiAppraisalAt)
+          if (pending.length > 0 && !sessionStorage.getItem('onboarding-dismissed')) {
+            setPendingMemoCount(pending.length)
+            setTimeout(() => setShowOnboardingModal(true), 1000)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [user, activeTab])
 
   // カメラストリームのクリーンアップ
   useEffect(() => {
@@ -1491,6 +1512,70 @@ function MyPageContent() {
                 </div>
 
               </div>
+
+              {/* ─── オンボーディングモーダル ─── */}
+              {showOnboardingModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  {/* Overlay */}
+                  <div
+                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                    onClick={() => {
+                      setShowOnboardingModal(false)
+                      sessionStorage.setItem('onboarding-dismissed', '1')
+                    }}
+                  />
+                  {/* Card */}
+                  <div className="relative bg-white rounded-3xl shadow-2xl p-8 max-w-sm mx-auto animate-in fade-in zoom-in duration-300">
+                    {/* Icon */}
+                    <div className="flex justify-center mb-5">
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-rose-400 flex items-center justify-center shadow-lg">
+                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+                        </svg>
+                      </div>
+                    </div>
+                    {/* Title */}
+                    <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                      あなたの商品を簡易査定しましょう！
+                    </h2>
+                    {/* Description */}
+                    <p className="text-sm text-gray-600 text-center mb-4 leading-relaxed">
+                      登録いただいた商品の写真からAIが自動で買取価格を査定します。査定は無料で、数秒で結果がわかります。
+                    </p>
+                    {/* Pending count badge */}
+                    <div className="flex justify-center mb-6">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-600 text-xs font-semibold">
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
+                        </svg>
+                        未査定の商品が {pendingMemoCount} 件あります
+                      </span>
+                    </div>
+                    {/* Primary button */}
+                    <button
+                      onClick={() => {
+                        setShowOnboardingModal(false)
+                        sessionStorage.setItem('onboarding-dismissed', '1')
+                        setActiveTab('memos')
+                      }}
+                      className="w-full bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl py-3 font-semibold text-sm shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                    >
+                      買取トライで査定する
+                    </button>
+                    {/* Secondary button */}
+                    <button
+                      onClick={() => {
+                        setShowOnboardingModal(false)
+                        sessionStorage.setItem('onboarding-dismissed', '1')
+                      }}
+                      className="w-full mt-3 text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
+                    >
+                      あとで
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
 

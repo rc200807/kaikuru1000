@@ -228,7 +228,7 @@ export default function GlassOrbs3D() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0"
+      className="w-full h-full"
       style={{ zIndex: 0 }}
     />
   )

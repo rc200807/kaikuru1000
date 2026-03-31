@@ -230,6 +230,7 @@ function MyPageContent() {
 
   // オンボーディングモーダル
   const [showOnboardingModal, setShowOnboardingModal] = useState(false)
+  const [showWorthlessModal, setShowWorthlessModal] = useState(false)
   const [pendingMemoCount, setPendingMemoCount] = useState(0)
 
   const docTypesRequiringBack = ['運転免許証', 'マイナンバーカード']
@@ -1903,6 +1904,55 @@ function MyPageContent() {
                 })()}
               </div>
 
+              {/* 送付手順ガイド */}
+              <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-[#B91C1C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+                  </svg>
+                  送付までの手順
+                </h3>
+                <ol className="space-y-3 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                  <li className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">1</span>
+                    <span>買取希望の商品を箱に入れる<br /><span className="text-xs text-gray-400">箱のサイズは120サイズまで（縦・横・高さの合計が120cm以内）</span></span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">2</span>
+                    <span>箱の中の写真を撮って添付する</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">3</span>
+                    <span>伝票に品名欄に内容物を記載し発送番号を記入、伝票の写真を撮る</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">4</span>
+                    <span>写真の保存が完了したら登録</span>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">5</span>
+                    <span>発送作業が完了したら送付履歴の「<strong>発送完了を報告する</strong>」をタップ</span>
+                  </li>
+                </ol>
+              </Card>
+
+              {/* 注意事項 */}
+              <Card variant="elevated" padding="md" className="!bg-amber-50/70 backdrop-blur-xl !border border-amber-200/50 !shadow-sm">
+                <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                  注意事項
+                </h3>
+                <p className="text-xs text-amber-700 mb-2">以下のようなものは箱に入れていただくことができません。</p>
+                <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                  <li>当社規定の「<button type="button" onClick={() => setShowWorthlessModal(true)} className="text-[#B91C1C] underline font-medium hover:text-red-700">無価値</button>」となる商品</li>
+                  <li>行政に出せるゴミ</li>
+                  <li>粗大ゴミ</li>
+                  <li>毒物／劇物／法律違反となるもの</li>
+                </ul>
+              </Card>
+
               {/* 送付登録フォーム */}
               {showShipmentForm && (
                 <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
@@ -2052,6 +2102,52 @@ function MyPageContent() {
                       onMarkShipped={handleMarkShipped}
                     />
                   ))}
+                </div>
+              )}
+
+              {/* 「無価値」モーダル */}
+              {showWorthlessModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowWorthlessModal(false)}>
+                  <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto p-6 sm:p-8" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-base font-bold text-gray-900">買取で無価値（査定0円）になりやすい主な品物</h3>
+                      <button onClick={() => setShowWorthlessModal(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+                      <div className="bg-red-50 rounded-xl p-3">
+                        <p className="font-semibold text-red-700 mb-1">著しい破損・汚れ・ニオイ</p>
+                        <p className="text-xs text-red-600">カビ、ベタつき、タバコ・香水の臭い、著しいソールの減りや破れがある靴やバッグ。</p>
+                      </div>
+                      <div className="bg-orange-50 rounded-xl p-3">
+                        <p className="font-semibold text-orange-700 mb-1">需要がない・流行遅れ</p>
+                        <p className="text-xs text-orange-600">トレンドが過ぎたノーブランドの洋服や、数十年前の家具・家電。</p>
+                      </div>
+                      <div className="bg-amber-50 rounded-xl p-3">
+                        <p className="font-semibold text-amber-700 mb-1">故障・不完全な家電</p>
+                        <p className="text-xs text-amber-600">動作しない家電、部品が欠損しているもの。</p>
+                      </div>
+                      <div className="bg-yellow-50 rounded-xl p-3">
+                        <p className="font-semibold text-yellow-700 mb-1">レンタル落ち商品</p>
+                        <p className="text-xs text-yellow-600">CDやDVDなど。</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-3">
+                        <p className="font-semibold text-gray-700 mb-1">飲食物・開封済みの品</p>
+                        <p className="text-xs text-gray-600">お酒は未開封であれば買取可能だが、開封済みは不可。</p>
+                      </div>
+                      <div className="bg-gray-100 rounded-xl p-3">
+                        <p className="font-semibold text-gray-800 mb-1">安全・法律に関わる物</p>
+                        <p className="text-xs text-gray-600">危険物、許可証のない銃刀法該当品、盗品など。</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowWorthlessModal(false)}
+                      className="w-full mt-5 py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold text-sm"
+                    >
+                      閉じる
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

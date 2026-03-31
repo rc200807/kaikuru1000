@@ -43,17 +43,16 @@ export default function InquiryPage() {
   const [hadEmail, setHadEmail] = useState(false)
   const [postalLoading, setPostalLoading] = useState(false)
 
-  // 郵便番号から住所を自動入力
+  // 郵便番号から住所を自動入力（サーバーサイドプロキシ経由）
   async function lookupAddress(code: string) {
     const cleaned = code.replace(/[-ー\s]/g, '')
     if (cleaned.length !== 7) return
     setPostalLoading(true)
     try {
-      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${cleaned}`)
+      const res = await fetch(`/api/postal-lookup?zipcode=${cleaned}`)
       const data = await res.json()
-      if (data.results && data.results.length > 0) {
-        const r = data.results[0]
-        setAddress(`${r.address1}${r.address2}${r.address3}`)
+      if (data.address) {
+        setAddress(data.address)
       }
     } catch { /* ignore */ }
     finally { setPostalLoading(false) }

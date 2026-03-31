@@ -63,12 +63,32 @@ function similarity(a: string, b: string): number {
 }
 
 /**
- * 登録住所と身分証住所の一致判定（ファジーマッチ）
+ * 住所から「番地部分」までを抽出する
+ * 例: "東京都渋谷区神宮前1-2-3 ○○マンション301" → "東京都渋谷区神宮前1-2-3"
+ * 番地以降のマンション名・号室は除去して比較に使う
+ */
+function extractUpToBanchi(normalizedAddr: string): string {
+  // 最後の数字+ハイフンの連続部分の末尾を見つける
+  // 例: "渋谷区神宮前1-2-3○○マンション301" → 番地末尾は "3" の位置
+  const match = normalizedAddr.match(/^(.*?\d[\d-]*\d)/)
+  if (match) return match[1]
+  // 数字が1つしかない場合
+  const singleNum = normalizedAddr.match(/^(.*?\d+)/)
+  if (singleNum) return singleNum[1]
+  return normalizedAddr
+}
+
+/**
+ * 登録住所と身分証住所の一致判定
  *
- * 判定基準:
+ * 判定ロジック:
  * 1. 正規化後の完全一致 → true
- * 2. 都道府県 + 市区町村が一致 → true
- * 3. 正規化後の類似度が70%以上 → true
+ * 2. 一方が他方を含む → true
+ * 3. 番地部分までが一致（マンション名の有無・表記揺れを許容） → true
+ * 4. 都道府県+市区町村+番地の類似度が高い → true
+ *
+ * マンション名は免許証で省略されるケースがあるため、
+ * 番地部分まで一致していれば一致とみなす。
  */
 export function isAddressMatch(registered: string, idAddress: string): boolean {
   if (!registered || !idAddress) return false
@@ -79,22 +99,36 @@ export function isAddressMatch(registered: string, idAddress: string): boolean {
   // 完全一致
   if (normReg === normId) return true
 
-  // 一方が他方を含む（短縮表記の場合）
+  // 一方が他方を含む（短縮表記 or マンション名省略の場合）
   if (normReg.includes(normId) || normId.includes(normReg)) return true
 
-  // 都道府県 + 市区町村の一致判定
+  // 番地部分までを抽出して比較（マンション名の有無を無視）
+  const banchiReg = extractUpToBanchi(normReg)
+  const banchiId = extractUpToBanchi(normId)
+
+  if (banchiReg && banchiId) {
+    // 番地部分が完全一致
+    if (banchiReg === banchiId) return true
+    // 一方が他方を含む
+    if (banchiReg.includes(banchiId) || banchiId.includes(banchiReg)) return true
+    // 番地部分の類似度が90%以上（微妙な表記揺れを許容）
+    if (similarity(banchiReg, banchiId) >= 0.9) return true
+  }
+
+  // 都道府県 + 市区町村の一致判定（番地以下が読み取れなかった場合のフォールバック）
   const regParts = extractAddressParts(registered)
   const idParts = extractAddressParts(idAddress)
 
-  if (regParts.prefecture && idParts.prefecture) {
-    // 都道府県が一致、かつ市区町村が一致 → OK
-    if (regParts.prefecture === idParts.prefecture && regParts.city && idParts.city && regParts.city === idParts.city) {
-      return true
-    }
+  if (regParts.prefecture && idParts.prefecture &&
+      regParts.prefecture === idParts.prefecture &&
+      regParts.city && idParts.city &&
+      regParts.city === idParts.city) {
+    // 都道府県+市区町村が一致し、全体の類似度が65%以上
+    if (similarity(normReg, normId) >= 0.65) return true
   }
 
-  // ファジーマッチ: 正規化後の類似度65%以上
-  if (similarity(normReg, normId) >= 0.65) return true
+  // 全体のファジーマッチ: 正規化後の類似度80%以上
+  if (similarity(normReg, normId) >= 0.8) return true
 
   return false
 }

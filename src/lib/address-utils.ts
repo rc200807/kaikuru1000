@@ -10,21 +10,28 @@ function normalizeAddress(addr: string): string {
     // 全角数字→半角
     .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFF10 + 0x30))
     // 全角ハイフン系→半角ハイフン
-    .replace(/[ー－—–‐―]/g, '-')
+    .replace(/[ー－—–‐―〜~]/g, '-')
     // 全角英字→半角
     .replace(/[Ａ-Ｚａ-ｚ]/g, ch =>
       String.fromCharCode(ch.charCodeAt(0) - 0xFF21 + (ch >= 'ａ' ? 0x61 : 0x41))
     )
     // スペース除去
     .replace(/[\s\u3000]+/g, '')
-    // 「丁目」「番地」「号」を正規化（数字のみにする）
+    // 「丁目」「番地」「号」を正規化
     .replace(/(\d+)丁目/g, '$1-')
     .replace(/(\d+)番地?/g, '$1-')
+    .replace(/(\d+)号室?/g, '$1')
     .replace(/(\d+)号/g, '$1')
+    // 「の」を数字間のハイフンに
+    .replace(/(\d+)の(\d+)/g, '$1-$2')
+    // 建物名以降を除去（マンション名等の揺れを無視）
+    .replace(/([\d-]+)([\u3000\s]*[A-Za-zぁ-ん].*)?$/, '$1')
     // 末尾ハイフンを除去
     .replace(/-+$/, '')
     // 連続ハイフンを1つに
     .replace(/-{2,}/g, '-')
+    // 先頭ハイフンを除去
+    .replace(/^-+/, '')
 }
 
 /**
@@ -88,8 +95,8 @@ export function isAddressMatch(registered: string, idAddress: string): boolean {
     }
   }
 
-  // ファジーマッチ: 正規化後の類似度70%以上
-  if (similarity(normReg, normId) >= 0.7) return true
+  // ファジーマッチ: 正規化後の類似度65%以上
+  if (similarity(normReg, normId) >= 0.65) return true
 
   return false
 }

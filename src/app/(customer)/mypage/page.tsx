@@ -3538,6 +3538,30 @@ function MyPageContent() {
                           </div>
                         )}
 
+                        {/* 承認された日程を表示 */}
+                        {req.status === 'approved' && req.approvedCandidate && (
+                          <div className="mt-3 p-3 rounded-lg bg-green-50 border border-green-200">
+                            <p className="text-xs font-bold text-green-800 mb-1">確定した訪問日程</p>
+                            <p className="text-sm font-semibold text-green-900">
+                              {req.approvedCandidate === 1 && <>{fmtDate(req.candidate1Date)}{fmtTime(req.candidate1Start, req.candidate1End)}</>}
+                              {req.approvedCandidate === 2 && <>{fmtDate(req.candidate2Date)}{fmtTime(req.candidate2Start, req.candidate2End)}</>}
+                              {req.approvedCandidate === 3 && <>{fmtDate(req.candidate3Date)}{fmtTime(req.candidate3Start, req.candidate3End)}</>}
+                              <span className="text-xs font-normal text-green-600 ml-2">（第{req.approvedCandidate}希望）</span>
+                            </p>
+                          </div>
+                        )}
+
+                        {/* カウンター承認で確定 */}
+                        {req.status === 'customer_accepted' && req.counterDate && (
+                          <div className="mt-3 p-3 rounded-lg bg-green-50 border border-green-200">
+                            <p className="text-xs font-bold text-green-800 mb-1">確定した訪問日程</p>
+                            <p className="text-sm font-semibold text-green-900">
+                              {fmtDate(req.counterDate)}{fmtTime(req.counterStart, req.counterEnd)}
+                              <span className="text-xs font-normal text-green-600 ml-2">（店舗提案）</span>
+                            </p>
+                          </div>
+                        )}
+
                         {req.customerNote && (
                           <p className="mt-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                             <span className="font-medium">備考:</span> {req.customerNote}

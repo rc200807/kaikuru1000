@@ -1454,6 +1454,33 @@ function MyPageContent() {
                   </button>
                 )}
 
+                {/* ─── 住所不一致バナー ─── */}
+                {user.addressMismatch && !user.addressVerified && (
+                  <button
+                    onClick={() => handleTabChange('id-document')}
+                    className="w-full bg-red-500/10 backdrop-blur-sm border border-red-300/30 rounded-2xl p-4 flex items-center gap-3 text-left hover:bg-red-500/15 transition-colors"
+                  >
+                    <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-red-800">住所の確認が必要です</p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        {user.proofDocumentStatus === 'pending'
+                          ? '書類を審査中です。しばらくお待ちください。'
+                          : user.proofDocumentStatus === 'rejected'
+                            ? '書類が却下されました。再提出してください。'
+                            : '登録住所と身分証の住所が一致しません。証明書類を提出してください。'}
+                      </p>
+                    </div>
+                    <svg className="w-5 h-5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+
                 {/* ─── Stats Section ─── */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm">

@@ -4287,17 +4287,30 @@ function ShipmentCard({
 
                 {/* Step 3 action: 発送完了を報告する (index=2, status=registered) */}
                 {!isDraft && active && idx === 2 && shipment.status === 'registered' && (
-                  <div className="mt-2">
+                  <div className="mt-3 space-y-3">
+                    {/* 注意喚起 */}
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                      <div className="flex gap-2">
+                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div>
+                          <p className="text-xs font-bold text-amber-800">発送後は必ずこのボタンを押してください</p>
+                          <p className="text-xs text-amber-700 mt-0.5">ボタンを押さないと店舗側で荷物の到着確認ができません。発送が完了したら忘れずにタップしてください。</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* 大きな発送完了ボタン */}
                     <button
                       onClick={() => onMarkShipped(shipment.id)}
                       disabled={updating}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                      className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-[#B91C1C] to-rose-500 text-white text-base font-bold shadow-lg shadow-red-500/25 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:shadow-none"
                     >
                       {updating ? (
                         <LoadingSpinner size="sm" />
                       ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M10 12v4m4-4v4" />
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
                       {updating ? '更新中...' : '発送完了を報告する'}

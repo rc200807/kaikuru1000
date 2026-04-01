@@ -715,53 +715,106 @@ export default function AgreementPage() {
           </div>
         </Card>
 
-        {/* ──── クーリングオフについて ──── */}
+        {/* ──── 特商法書面・クーリングオフ全文 ──── */}
         <Card variant="elevated" padding="md">
-          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-4">クーリングオフについて</h2>
-          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-4 leading-relaxed">
-            <p>
-              お客様が、訪問買取でご契約された場合、<strong className="text-[var(--md-sys-color-on-surface)]">法律で決められている書類を受け取った日から、8日間の間</strong>はクーリングオフ（契約の解除）ができます。
-            </p>
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-4">特定商取引法に基づく書面</h2>
+          <div className="space-y-4">
 
-            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
-              <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-2">クーリングオフの要点</p>
-              <ul className="list-disc list-inside space-y-1.5">
-                <li>訪問購入に係る売買契約で、直接物品の引渡しを行う時は、クーリングオフ期間中は、お客様は<strong className="text-red-600 dark:text-red-400">物品の引渡しの拒絶が可能</strong>です。（物品の引渡拒絶についての規定）</li>
-                <li>クーリングオフをした場合、物品を既に引き渡していた際には<strong className="text-red-600 dark:text-red-400">物品が返却</strong>されます。</li>
-                <li>契約書に「キャンセル料」や「違約金」について書かれていても、これらを<strong className="text-red-600 dark:text-red-400">一切支払う必要がありません。</strong></li>
-                <li>訪問購入の場合、受け取った代金を返還する際にかかる費用は、<strong className="text-red-600 dark:text-red-400">事業者の負担</strong>となります。</li>
-              </ul>
-            </div>
-
-            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
-              <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-2">期間を過ぎてもクーリングオフができる場合</p>
-              <p className="mb-1.5">期間を過ぎた場合は原則クーリングオフができませんが、下記の場合は期間を過ぎてもクーリングオフができます。</p>
-              <ul className="list-disc list-inside space-y-1.5">
-                <li>受け取った書類が、法律で決められている通りにクーリングオフについての注意書きをしていないなどの<strong className="text-red-600 dark:text-red-400">不備がある場合。</strong></li>
-                <li>事業者が、「クーリングオフはできない」と嘘を言ったために、できないものと誤解をして期間が過ぎた場合や、クーリングオフをさせないよう<strong className="text-red-600 dark:text-red-400">威迫</strong>したために、困惑してしまって期間を過ぎた場合。</li>
-              </ul>
-            </div>
-
-            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
-              <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-1">クーリングオフ期間</p>
-              <p>
-                本契約書面の受領日（{today}）から <strong className="text-red-600 dark:text-red-400">{coolingOffEnd}</strong> まで
+            {/* 冒頭（赤文字） */}
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-red-50">
+              <p className="text-xs text-red-700 leading-relaxed">
+                本書面は、特定商取引法（以下「特商法」といいます。）第58条の8に基づき交付する書面です。重要な内容が記載されておりますので、内容を十分にお読みください。また、本件の個人情報については、個人情報保護法及び買いクルのプライバシーポリシーに従って取り扱います。
               </p>
             </div>
 
+            {/* 個人情報保護方針 */}
             <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
-              <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-2">クーリングオフの書き方</p>
-              <p className="mb-2">必ず<strong className="text-red-600 dark:text-red-400">ハガキ等の書面</strong>で行います（書面で行うことが法律で決められています）。</p>
-              <ol className="list-decimal list-inside space-y-1.5">
-                <li>お客様（受取人）の住所、氏名と契約（申込）日、事業者名、担当者名、商品名、契約金額を書いて、<strong className="text-red-600 dark:text-red-400">この契約を解除する</strong>という旨を記載。</li>
-                <li>ハガキを書いたら、<strong className="text-red-600 dark:text-red-400">両面コピー</strong>を取ります（証拠を残すため）。</li>
-                <li>ハガキは郵便局の窓口で、<strong className="text-red-600 dark:text-red-400">簡易書留等</strong>の「出した日付」が分かる方法で出す（クーリングオフは書面を出した瞬間に有効になるため、仮に事業者が「受け取っていない」と言っても、クーリングオフは成立します）。</li>
-                <li>両面コピーと簡易書留等の証明郵便の紙を<strong className="text-red-600 dark:text-red-400">保存する</strong>（この2つが、クーリングオフをしたことの証明になります）。</li>
-              </ol>
+              <p className="text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-2">■個人情報保護方針</p>
+              <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-2 leading-relaxed">
+                <p>収集する個人情報について、個人情報保護方針に即して必要な対策を講じて適切に管理致します。</p>
+                <div>
+                  <p className="font-semibold text-[var(--md-sys-color-on-surface)]">1. 取得する個人情報</p>
+                  <p>当社は、後記「2. 個人情報の利用目的」に定める目的のため、本売買契約のご契約者様（以下「お客様」といいます。）に関して以下に定める個人情報を取得致します。</p>
+                  <ul className="mt-1 space-y-0.5 pl-2">
+                    <li>・お客様の氏名、住所、生年月日、連絡先、メールアドレス、ご職業、本人確認書類の写し</li>
+                    <li>・本売買契約における品名、品目数、単価、金額、売買契約の締結日時</li>
+                    <li>・お客様から当社へのお問合せ、ご連絡等に関する情報</li>
+                    <li>・その他本売買契約の記載事項</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-semibold text-[var(--md-sys-color-on-surface)]">2. 利用目的</p>
+                  <p>当社は、取得した個人情報を以下の目的の範囲内で利用致します。なお、以下の目的に関連する目的についても含まれるものとします。</p>
+                  <ul className="mt-1 space-y-0.5 pl-2">
+                    <li>・商品の配送及び発送並びにアフターサービスに関するご連絡</li>
+                    <li>・買取商品に関するご連絡</li>
+                    <li>・新商品のご提案やサービスのご案内に関するご連絡</li>
+                    <li>・法令に基づき開示することが必要である場合</li>
+                  </ul>
+                </div>
+                <p>3. 当社では取得した個人情報を、上記「2. 利用目的」の範囲内において、株式会社RC または「買いクル」フランチャイズ加盟店に提供する場合がございます。</p>
+                <p>4. 当社は、事業運営上、お客様により良いサービスを提供するために業務の一部を外部に委託しています。その一環として、業務委託先に対し、上記「2. 利用目的」の達成に必要な範囲内において個人情報を提供することがあります。この場合、個人情報を適切に取り扱っていると認められる委託先を選定し、契約等において個人情報の適正管理・機密保持などによりお客様の個人情報の漏洩防止に必要な事項を取決め、適切な管理を実施させます。</p>
+              </div>
             </div>
 
-            <p>
-              クーリングオフに関するご不明な点は、最寄りの消費生活センター（局番なし<strong>188</strong>）にご相談ください。
+            {/* クーリング・オフについて（赤文字） */}
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-red-50">
+              <p className="text-xs font-bold text-red-700 mb-2">■クーリング・オフについて</p>
+              <div className="text-xs text-red-700 space-y-2 leading-relaxed">
+                <p>1. お客様が、訪問買取で本売買契約をご契約された場合、本書面を受け取った日から8日を経過するまでの間は書面または電磁的方法により本売買契約のクーリング・オフ（契約の解除）ができます。ただし、当該売買契約の相手方の利益を損なうおそれがないと認められる物品または特商法の適用を受けることとされた場合に流通が著しく害されるおそれがあると認められる物品であって、政令で定める物品（自動車・家庭用電気機械器具（携行が容易なものを除く。）・家具・書籍・有価証券・レコード、CD、ゲームソフト等）は対象外になります。</p>
+                <p>2. クーリング・オフの効力は、書面または電磁的記録による通知を発信したとき（郵便消印日付など）から発生し、第三者に対しても対抗することができます。ただし、第三者がクーリング・オフにつき善意であり、かつ、過失がないときは、クーリング・オフの効力を当該第三者に対抗することはできません。</p>
+                <p>3. お客様がクーリング・オフをした場合で、お客様が本売買契約の目的物である物品を購入業者（購入店舗）に既に引き渡していた場合には、速やかに物品を返却致します。</p>
+                <p>4. お客様がクーリング・オフをした場合、契約書に「キャンセル料」や「違約金」について書かれていても、お客様が損害賠償及び違約金の支払を請求されることは一切ありません。</p>
+                <p>5. 訪問購入の場合、お客様が購入業者（購入店舗）から受け取った代金を返還する際にかかる費用は、購入業者（購入店舗）の負担となります。</p>
+                <p>6. お客様のクーリング・オフの行使を妨げるために購入業者が不実のことを告げ、そのためお客様が誤解し、または脅迫によりクーリング・オフを行わなかった場合には、当該購入業者（購入店舗）が交付したクーリング・オフ妨害の解消のための書面を受領した日から8日が経過するまでは、書面または電磁的記録によりクーリング・オフをすることができます。</p>
+                <p className="font-semibold mt-1">本書面受領日（{today}）からクーリング・オフ期限: <strong>{coolingOffEnd}</strong></p>
+              </div>
+            </div>
+
+            {/* クーリング・オフの書き方 */}
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
+              <p className="text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-2">■クーリング・オフの書き方</p>
+              <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-1.5 leading-relaxed">
+                <p>1. ハガキ等の書面または電子メール等の電磁的記録で行います。</p>
+                <p>2. 下記の項目を記載してください。</p>
+                <ul className="pl-4 space-y-0.5">
+                  <li>(1) お客様（受取人）の住所及び氏名</li>
+                  <li>(2) 契約（申込）日</li>
+                  <li>(3) 購入業者名（購入店舗）及びその住所</li>
+                  <li>(4) 担当者名</li>
+                  <li>(5) 物品名</li>
+                  <li>(6) 契約金額</li>
+                  <li>(7) 契約を解除する旨</li>
+                </ul>
+                <p>3. ハガキ等の書面による方法の場合、そのコピーを作成いただくことを推奨致します。</p>
+                <p>4. ハガキ等の書面による方法の場合、郵便局の窓口で、簡易書留等の「出した日付」がわかる方法で購入業者（購入店舗宛）に提出いただくことが確実です。</p>
+                <p>5. ハガキ等の書面による方法の場合、コピーや簡易書留のお問合せ番号等を保存することを推奨致します（この2つがクーリング・オフをしたことの証拠になります）。また、電磁的記録による場合、当該電磁的記録を保存することを推奨致します。</p>
+              </div>
+            </div>
+
+            {/* 物品の引渡拒絶についての規定（赤文字） */}
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-red-50">
+              <p className="text-xs font-bold text-red-700 mb-2">■物品の引渡拒絶についての規定</p>
+              <p className="text-xs text-red-700 leading-relaxed">
+                お客様が、訪問買取で本売買契約をご契約された場合で、後日物品の引き渡しを行うときには、上記「■クーリング・オフについて」のうち「1.」または「6.」に定めるいわゆるクーリング・オフ期間の間は、物品の引き渡しの拒絶が可能です。
+              </p>
+            </div>
+
+            {/* 買取時の確認事項 */}
+            <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-high)]">
+              <p className="text-xs font-bold text-[var(--md-sys-color-on-surface)] mb-2">■買取時の確認事項</p>
+              <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-1.5 leading-relaxed">
+                <p>1. 申込時の電話案内にて特定された品種以外の不意打ち的な勧誘行為を受けておりません。</p>
+                <p>2. 今回の商談で、しつこい押し買い行為、虚偽言動、強制的な売買の勧誘といった迷惑を覚えるような勧誘を受けていません。</p>
+                <p>3. 搬出時、無償での作業支援で発生した物品や建物への破損、損害については一切の責任を負いかねることに同意します。</p>
+                <p>4. 特商法58条の17に規定する事由にあたる場合（お客様による来訪請求の場合、お客様がお住まいから退去する場合など）、クーリング・オフ適用外取引となりますので、一切の返品はできないことを認識しました。</p>
+                <p>5. 買取または引取をした物品が故障・破損している場合（当該物品の部品が足りていない場合を含む。）、買取時にお客様から事実と異なる虚偽の申告があった場合、または当該物品が贋作であることが判明した場合には、購入業者が物品を返品の上、お客様に買取代金をご返金いただくことを認識しました。</p>
+                <p>6. 反社会勢力ではないことの誓約<br />私は、暴力団、暴力団員、暴力団準構成員、暴力団関係企業、総会屋、社会運動標榜ゴロまたは特殊知能暴力団等、その他これに準ずる者（以下「反社会的勢力」といいます。）のいずれでもなく、また、反社会勢力が経営に実質的に関与している法人等に属する者ではないことを表明し、かつ将来にわたっても該当しないことを誓約します。私が、反社会勢力に該当すると認められるときは、何らの通知・催告をすることなしに、本件売買契約を解除されること及び私に損害が生じたとしても賠償請求できないことを了承します。</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] text-center">
+              本書面は、買取申込書と一体として、売買契約書になるものです。大事に保管下さい。
             </p>
           </div>
         </Card>

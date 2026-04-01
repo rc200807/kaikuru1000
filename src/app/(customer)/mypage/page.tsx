@@ -2982,6 +2982,17 @@ function MyPageContent() {
                           ))}
                         </div>
 
+                        {/* 住民票に関する注意事項 */}
+                        {proofDocType === '3か月以内に発行された住民票の写し' && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p className="text-xs font-semibold text-amber-800 mb-1">⚠ 住民票に関する注意</p>
+                            <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                              <li><strong>個人番号（マイナンバー）が記載されていないもの</strong>をアップロードしてください。</li>
+                              <li>記載がある場合は、<strong>個人番号の部分を付箋等で隠した状態</strong>で撮影してください。</li>
+                            </ul>
+                          </div>
+                        )}
+
                         {/* ファイル選択 */}
                         <input
                           ref={proofInputRef}

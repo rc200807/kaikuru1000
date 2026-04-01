@@ -39,7 +39,7 @@ type UserData = {
   proofDocumentType: string | null
   proofDocumentStatus: string | null
   licenseKey: { key: string }
-  store: { name: string; phone: string | null } | null
+  store: { name: string; phone: string | null; address: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
   // 顧客タイプ
   customerType: string  // "visit" | "delivery" | "regular"
@@ -2362,6 +2362,20 @@ function MyPageContent() {
                           <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの発送ID</p>
                           <p className="text-white text-2xl font-black tracking-widest">{reservedShipmentNumber}</p>
                           <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
+                        </div>
+                      )}
+
+                      {/* 送付先住所 */}
+                      {user.store && (
+                        <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">送付先</p>
+                          <p className="text-sm font-bold text-gray-900 mb-1">{user.store.name}</p>
+                          {user.store.address && (
+                            <p className="text-sm text-gray-700">{user.store.address}</p>
+                          )}
+                          {user.store.phone && (
+                            <p className="text-xs text-gray-500 mt-1">TEL: {user.store.phone}</p>
+                          )}
                         </div>
                       )}
 

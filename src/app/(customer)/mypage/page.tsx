@@ -2520,20 +2520,6 @@ function MyPageContent() {
                     </div>
                   )}
 
-                  {/* 提出済み画像サムネイル */}
-                  <div className="mb-4">
-                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">提出済みファイル</p>
-                    <div className="w-32 h-20 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface-container)]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/users/${user.id}/id-document`}
-                        alt="提出済み身分証"
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                      />
-                    </div>
-                  </div>
-
                   {/* 誤り報告フォーム */}
                   {showReportForm && (
                     <form onSubmit={handleSubmitIssueReport} className="border-t border-[var(--md-sys-color-outline-variant)] pt-4 mt-2 space-y-3">

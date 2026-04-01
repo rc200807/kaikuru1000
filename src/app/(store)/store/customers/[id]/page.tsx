@@ -857,7 +857,7 @@ export default function StoreCustomerDetailPage() {
                 </Button>
               </div>
               <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
-                お客様に訪問候補日を3つまで提案できます。お客様がいずれかを承認するとスケジュールが作成されます。
+                お客様に訪問日程を提案できます。お客様が承認するとスケジュールが作成されます。
               </p>
 
               {proposalMsg && (
@@ -868,34 +868,32 @@ export default function StoreCustomerDetailPage() {
 
               {showProposalForm && (
                 <form onSubmit={handleSubmitProposal} className="space-y-4 mt-4">
-                  {[1, 2, 3].map(n => (
-                    <div key={n} className="p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
-                      <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                        第{n}候補 {n === 1 && <span className="text-red-500">*</span>}
-                      </p>
+                  <div className="p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
+                    <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                      訪問日程 <span className="text-red-500">*</span>
+                    </p>
+                    <TextField
+                      label="日付"
+                      type="date"
+                      value={proposalForm.candidate1Date}
+                      onChange={v => setProposalForm(prev => ({ ...prev, candidate1Date: v }))}
+                      required
+                    />
+                    <div className="grid grid-cols-2 gap-3 mt-2">
                       <TextField
-                        label="日付"
-                        type="date"
-                        value={(proposalForm as any)[`candidate${n}Date`]}
-                        onChange={v => setProposalForm(prev => ({ ...prev, [`candidate${n}Date`]: v }))}
-                        required={n === 1}
+                        label="開始"
+                        type="time"
+                        value={proposalForm.candidate1Start}
+                        onChange={v => setProposalForm(prev => ({ ...prev, candidate1Start: v }))}
                       />
-                      <div className="grid grid-cols-2 gap-3 mt-2">
-                        <TextField
-                          label="開始"
-                          type="time"
-                          value={(proposalForm as any)[`candidate${n}Start`]}
-                          onChange={v => setProposalForm(prev => ({ ...prev, [`candidate${n}Start`]: v }))}
-                        />
-                        <TextField
-                          label="終了"
-                          type="time"
-                          value={(proposalForm as any)[`candidate${n}End`]}
-                          onChange={v => setProposalForm(prev => ({ ...prev, [`candidate${n}End`]: v }))}
-                        />
-                      </div>
+                      <TextField
+                        label="終了"
+                        type="time"
+                        value={proposalForm.candidate1End}
+                        onChange={v => setProposalForm(prev => ({ ...prev, candidate1End: v }))}
+                      />
                     </div>
-                  ))}
+                  </div>
                   <TextField
                     label="メモ（任意）"
                     value={proposalForm.storeNote}

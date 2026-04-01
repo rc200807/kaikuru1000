@@ -3854,9 +3854,9 @@ const SHIPMENT_STATUS_LABEL: Record<string, string> = {
   draft:       '下書き',
   registered:  '登録済み',
   shipped:     '発送済み',
-  received:    '受取済み',
-  appraised:   '査定完了',
-  transferred: '振込済み',
+  received:    '査定中',
+  appraised:   '振込準備中',
+  transferred: '振込完了',
 }
 
 const SHIPMENT_STATUS_STYLE: Record<string, string> = {
@@ -3872,11 +3872,28 @@ const SHIPMENT_STATUS_STYLE: Record<string, string> = {
 const DELIVERY_STEPS = [
   { label: '発送準備', desc: '商品を梱包して写真を記録' },
   { label: '発送前準備', desc: '伝票を記入して写真を記録' },
-  { label: '発送済み', desc: '発送完了を店舗に報告' },
-  { label: '店舗受取済み', desc: '店舗が荷物を受け取り' },
-  { label: '店舗査定済み', desc: '査定が完了' },
-  { label: '振込済み', desc: '代金のお振り込みが完了' },
+  { label: '発送', desc: '発送完了を店舗に報告' },
+  { label: '店舗受取確認', desc: '店舗が荷物を受け取り' },
+  { label: '査定', desc: '査定が完了' },
+  { label: '振込', desc: '代金のお振り込みが完了' },
 ]
+
+// ステップ3〜6のサブステータスラベル
+function getStepSubStatus(stepIdx: number, shipmentStatus: string): { text: string; color: string } | null {
+  if (stepIdx === 3) { // 店舗受取確認
+    if (shipmentStatus === 'shipped') return { text: '受取前', color: 'text-amber-600 bg-amber-50 border-amber-200' }
+    if (['received', 'appraised', 'transferred'].includes(shipmentStatus)) return { text: '受取完了', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+  }
+  if (stepIdx === 4) { // 査定
+    if (shipmentStatus === 'received') return { text: '査定中', color: 'text-amber-600 bg-amber-50 border-amber-200' }
+    if (['appraised', 'transferred'].includes(shipmentStatus)) return { text: '査定完了', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+  }
+  if (stepIdx === 5) { // 振込
+    if (shipmentStatus === 'appraised') return { text: '振込準備中', color: 'text-amber-600 bg-amber-50 border-amber-200' }
+    if (shipmentStatus === 'transferred') return { text: '振込完了', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+  }
+  return null
+}
 
 function getDeliveryStepsDone(status: string): number {
   switch (status) {
@@ -4145,15 +4162,16 @@ function ShipmentCard({
                     )}
                   </div>
 
-                  {/* Right-side: status badge or edit link */}
-                  {!isDraft && !isEditing && active && (
-                    <span className="text-xs font-medium text-[var(--portal-primary,#B91C1C)] flex-shrink-0 mt-0.5">
-                      {shipment.status === 'registered' ? '発送待ち...' :
-                       shipment.status === 'shipped' ? '受取待ち...' :
-                       shipment.status === 'received' ? '査定中...' :
-                       shipment.status === 'appraised' ? '振込待ち...' : ''}
-                    </span>
-                  )}
+                  {/* Right-side: sub-status badge or edit link */}
+                  {!isDraft && !isEditing && (() => {
+                    const sub = getStepSubStatus(idx, shipment.status)
+                    if (!sub) return null
+                    return (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 mt-0.5 ${sub.color}`}>
+                        {sub.text}
+                      </span>
+                    )
+                  })()}
                   {/* registered状態のステップ1・2に「編集」リンク */}
                   {isRegistered && !isEditing && done && (idx === 0 || idx === 1) && (
                     <button

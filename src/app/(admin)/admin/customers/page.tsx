@@ -712,8 +712,11 @@ export default function AdminCustomersPage() {
       .map(s => s.id)
   }
 
-  // おすすめ店舗IDリスト（assigningが変わるたびに再計算）
-  const recommendedStoreIds = assigning ? getRecommendedStoreIds(assigning.address) : []
+  // おすすめ店舗IDリスト（assigningが変わるたびに再計算）+ 買いクル本部は常に含める
+  const HQ_STORE_ID = '905b89bc'
+  const recommendedStoreIds = assigning
+    ? [...new Set([...getRecommendedStoreIds(assigning.address), HQ_STORE_ID])]
+    : []
 
   const filtered = users.filter(u => {
     const matchSearch = !search || u.name.includes(search) || u.furigana.includes(search) || u.email.includes(search)

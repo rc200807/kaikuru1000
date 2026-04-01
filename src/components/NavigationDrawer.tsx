@@ -34,6 +34,15 @@ const navItems = [
     ),
   },
   {
+    href: '/admin/deliveries',
+    label: '宅配買取',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/visits',
     label: '訪問記録',
     icon: (

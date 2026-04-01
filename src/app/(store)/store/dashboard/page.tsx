@@ -155,6 +155,7 @@ export default function StoreDashboardPage() {
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [shippedCount, setShippedCount] = useState(0)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -168,6 +169,11 @@ export default function StoreDashboardPage() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
+    // 発送済み件数を取得
+    fetch('/api/store/delivery-shipments?status=shipped')
+      .then(r => r.json())
+      .then(d => { if (d.shippedCount) setShippedCount(d.shippedCount) })
+      .catch(() => {})
   }, [status, session, router])
 
   if (loading || !data) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
@@ -215,6 +221,27 @@ export default function StoreDashboardPage() {
       <AppBar title="ダッシュボード" subtitle={storeName} />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {/* 発送通知バナー */}
+        {shippedCount > 0 && (
+          <div
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:bg-amber-100 transition-colors"
+            onClick={() => router.push('/store/deliveries?status=shipped')}
+          >
+            <div className="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-800">{shippedCount}件の荷物が発送されました</p>
+              <p className="text-xs text-amber-600">受取確認をしてください</p>
+            </div>
+            <svg className="w-5 h-5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        )}
 
         {/* ── ランク + KPI ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

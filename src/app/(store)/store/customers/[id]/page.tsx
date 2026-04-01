@@ -103,18 +103,18 @@ const STATUS_OPTIONS = [
 const SHIPMENT_STATUS_OPTIONS = [
   { value: 'registered', label: '登録済み' },
   { value: 'shipped', label: '発送済み' },
-  { value: 'received', label: '受取済み' },
-  { value: 'appraised', label: '査定完了' },
-  { value: 'transferred', label: '振込済み' },
+  { value: 'received', label: '査定中' },
+  { value: 'appraised', label: '振込準備中' },
+  { value: 'transferred', label: '振込完了' },
 ]
 
 const STORE_DELIVERY_STEPS = [
   { label: '発送準備' },
   { label: '発送前準備' },
-  { label: '発送済み' },
-  { label: '受取済み' },
-  { label: '査定完了' },
-  { label: '振込済み' },
+  { label: '発送' },
+  { label: '店舗受取確認' },
+  { label: '査定' },
+  { label: '振込' },
 ]
 
 function getStoreStepsDone(status: string): number {

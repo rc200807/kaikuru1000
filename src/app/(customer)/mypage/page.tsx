@@ -4174,19 +4174,43 @@ const MEMO_STATUS_STYLE: Record<string, string> = {
 }
 
 const SHIPMENT_STATUS_LABEL: Record<string, string> = {
-  draft:      '下書き',
-  registered: '登録済み',
-  shipped:    '発送済み',
-  received:   '受取済み・査定中',
-  appraised:  '査定完了',
+  draft:       '下書き',
+  registered:  '登録済み',
+  shipped:     '発送済み',
+  received:    '受取済み',
+  appraised:   '査定完了',
+  transferred: '振込済み',
 }
 
 const SHIPMENT_STATUS_STYLE: Record<string, string> = {
-  draft:      'bg-gray-100 text-gray-600',
-  registered: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
-  shipped:    'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
-  received:   'bg-amber-100 text-amber-700',
-  appraised:  'bg-emerald-100 text-emerald-700',
+  draft:       'bg-gray-100 text-gray-600',
+  registered:  'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
+  shipped:     'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
+  received:    'bg-blue-100 text-blue-700',
+  appraised:   'bg-emerald-100 text-emerald-700',
+  transferred: 'bg-emerald-100 text-emerald-700',
+}
+
+// 6-step delivery progress
+const DELIVERY_STEPS = [
+  { label: '発送準備', desc: '商品を梱包して写真を記録' },
+  { label: '発送前準備', desc: '伝票を記入して写真を記録' },
+  { label: '発送済み', desc: '発送完了を店舗に報告' },
+  { label: '店舗受取済み', desc: '店舗が荷物を受け取り' },
+  { label: '店舗査定済み', desc: '査定が完了' },
+  { label: '振込済み', desc: '代金のお振り込みが完了' },
+]
+
+function getDeliveryStepsDone(status: string): number {
+  switch (status) {
+    case 'draft': return 0
+    case 'registered': return 2
+    case 'shipped': return 3
+    case 'received': return 4
+    case 'appraised': return 5
+    case 'transferred': return 6
+    default: return 0
+  }
 }
 
 function ShipmentCard({
@@ -4223,137 +4247,214 @@ function ShipmentCard({
     return () => { document.body.style.overflow = '' }
   }, [lightboxIndex])
 
+  const stepsDone = getDeliveryStepsDone(shipment.status)
+  const isDraft = shipment.status === 'draft'
+  const isTransferred = shipment.status === 'transferred'
+
   return (
     <>
     <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-      <div className="flex items-center gap-2 flex-wrap">
+
+      {/* Header */}
+      <div className="flex items-center gap-2 flex-wrap mb-4">
         <span className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">
           {shipment.shipmentNumber}
-        </span>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${SHIPMENT_STATUS_STYLE[shipment.status] ?? ''}`}>
-          {SHIPMENT_STATUS_LABEL[shipment.status] ?? shipment.status}
         </span>
         <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
           {shipment.shipmentMonth.replace('-', '年')}月
         </span>
-      </div>
-      <div className="mt-1.5">
-        {shipment.description && (
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap">
-            {shipment.description}
-          </p>
+        {isTransferred && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">完了</span>
         )}
+      </div>
 
-        {/* Appraisal result (appraised status) */}
-        {shipment.status === 'appraised' && shipment.purchaseAmount !== null && (
-          <div className="mt-3 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/60 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      {shipment.description && (
+        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap mb-4">
+          {shipment.description}
+        </p>
+      )}
+
+      {/* Draft: resume/delete buttons */}
+      {isDraft && (
+        <div className="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-2">登録がまだ完了していません</p>
+          <div className="flex items-center gap-2">
+            {onResumeDraft && (
+              <button
+                onClick={onResumeDraft}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--portal-primary,#B91C1C)] text-white text-xs font-medium hover:opacity-90 transition-opacity"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-              </div>
-              <p className="text-sm font-bold text-emerald-800">査定結果</p>
-            </div>
-            <p className="text-2xl font-bold text-emerald-700 ml-9">
-              ¥{shipment.purchaseAmount.toLocaleString()}
-            </p>
-            {shipment.storeNote && (
-              <div className="mt-3 ml-9 px-3 py-2 bg-white/60 backdrop-blur-sm rounded-xl border border-emerald-100">
-                <p className="text-xs font-medium text-emerald-600 mb-0.5">店舗からのコメント</p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{shipment.storeNote}</p>
-              </div>
+                下書きを続ける
+              </button>
             )}
-            {shipment.updatedAt && (
-              <p className="text-xs text-emerald-500 mt-2 ml-9">
-                査定日: {new Date(shipment.updatedAt).toLocaleDateString('ja-JP')}
-              </p>
+            {onDeleteDraft && (
+              <button
+                onClick={() => onDeleteDraft(shipment.id)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-gray-500 text-xs font-medium hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                削除
+              </button>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Non-appraised purchaseAmount (fallback) */}
-        {shipment.status !== 'appraised' && shipment.purchaseAmount !== null && (
-          <p className="text-sm font-semibold text-[var(--portal-primary,#B91C1C)] mt-1">
-            査定額: ¥{shipment.purchaseAmount.toLocaleString()}
-          </p>
-        )}
+      {/* 6-step vertical timeline */}
+      <div>
+        {DELIVERY_STEPS.map((step, idx) => {
+          const done = idx < stepsDone
+          const active = idx === stepsDone && stepsDone < 6
+          const isLast = idx === DELIVERY_STEPS.length - 1
 
-        {/* Received status -- awaiting appraisal */}
-        {shipment.status === 'received' && (
-          <div className="mt-3 bg-amber-50 border border-amber-200/60 rounded-2xl px-4 py-3 flex items-start gap-3">
-            <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+          return (
+            <div key={idx} className="flex gap-3">
+              {/* Circle + connector line */}
+              <div className="flex flex-col items-center flex-shrink-0">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${
+                  done
+                    ? 'bg-emerald-500 text-white'
+                    : active
+                    ? 'bg-white border-2 border-[var(--portal-primary,#B91C1C)] text-[var(--portal-primary,#B91C1C)]'
+                    : 'bg-gray-100 border-2 border-gray-200 text-gray-400'
+                }`}>
+                  {done ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="text-xs">{idx + 1}</span>
+                  )}
+                </div>
+                {!isLast && (
+                  <div className={`w-0.5 flex-1 min-h-[20px] my-0.5 ${done ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                )}
+              </div>
+
+              {/* Step content */}
+              <div className={`flex-1 ${isLast ? 'pb-0' : 'pb-4'}`}>
+                <div className="flex items-start justify-between gap-2 pt-1">
+                  <div>
+                    <p className={`text-sm font-semibold leading-tight ${
+                      done ? 'text-emerald-700' : active ? 'text-[var(--md-sys-color-on-surface)]' : 'text-gray-400'
+                    }`}>
+                      {step.label}
+                    </p>
+                    {(done || active) && (
+                      <p className={`text-xs mt-0.5 ${done ? 'text-emerald-600' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                        {step.desc}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Right-side status badge */}
+                  {active && (
+                    <span className="text-xs font-medium text-[var(--portal-primary,#B91C1C)] flex-shrink-0 mt-0.5">
+                      {shipment.status === 'registered' ? '発送待ち...' :
+                       shipment.status === 'shipped' ? '受取待ち...' :
+                       shipment.status === 'received' ? '査定中...' :
+                       shipment.status === 'appraised' ? '振込待ち...' : ''}
+                    </span>
+                  )}
+                </div>
+
+                {/* Step 3 action: 発送完了を報告する (index=2, status=registered) */}
+                {active && idx === 2 && shipment.status === 'registered' && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => onMarkShipped(shipment.id)}
+                      disabled={updating}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                      {updating ? (
+                        <LoadingSpinner size="sm" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M10 12v4m4-4v4" />
+                        </svg>
+                      )}
+                      {updating ? '更新中...' : '発送完了を報告する'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Step 4 waiting (index=3, status=shipped) */}
+                {active && idx === 3 && (
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1.5">店舗からの受取確認をお待ちください</p>
+                )}
+
+                {/* Step 5 waiting: 査定中 (index=4, status=received) */}
+                {active && idx === 4 && (
+                  <div className="mt-2 p-3 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2">
+                    <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-amber-800">査定中</p>
+                      <p className="text-xs text-amber-600 mt-0.5">店舗が査定中です。結果をお待ちください。</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 5 completed: show appraisal result (index=4, done) */}
+                {done && idx === 4 && shipment.purchaseAmount !== null && (
+                  <div className="mt-2 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <p className="text-xs font-medium text-emerald-700 mb-1">査定結果</p>
+                    <p className="text-xl font-bold text-emerald-700">¥{shipment.purchaseAmount.toLocaleString()}</p>
+                    {shipment.storeNote && (
+                      <p className="text-xs text-emerald-600 mt-1">{shipment.storeNote}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 6 waiting: show amount + waiting (index=5, active, status=appraised) */}
+                {active && idx === 5 && (
+                  <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    {shipment.purchaseAmount !== null && (
+                      <>
+                        <p className="text-xs font-medium text-blue-700 mb-1">確定査定金額</p>
+                        <p className="text-xl font-bold text-blue-700">¥{shipment.purchaseAmount.toLocaleString()}</p>
+                      </>
+                    )}
+                    <p className="text-xs text-blue-600 mt-1">振込処理中です。しばらくお待ちください。</p>
+                    {shipment.storeNote && (
+                      <p className="text-xs text-blue-500 mt-1">{shipment.storeNote}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 6 completed: transfer done (index=5, done) */}
+                {done && idx === 5 && (
+                  <div className="mt-2 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-sm font-bold text-emerald-700">
+                        {shipment.purchaseAmount !== null ? `¥${shipment.purchaseAmount.toLocaleString()} ` : ''}振込が完了しました
+                      </p>
+                    </div>
+                    {shipment.storeNote && (
+                      <p className="text-xs text-emerald-600 mt-1 ml-7">{shipment.storeNote}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-amber-800">査定中</p>
-              <p className="text-xs text-amber-600 mt-0.5">店舗で査定中です。結果をお待ちください。</p>
-            </div>
-          </div>
-        )}
-
-        {/* Store note for non-appraised statuses */}
-        {shipment.status !== 'appraised' && shipment.storeNote && (
-          <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
-            <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">店舗からのメモ</p>
-            <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{shipment.storeNote}</p>
-          </div>
-        )}
+          )
+        })}
       </div>
 
-      {shipment.status === 'draft' && (
-        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-2">
-          {onResumeDraft && (
-            <button
-              onClick={onResumeDraft}
-              className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              下書きを続ける
-            </button>
-          )}
-          {onDeleteDraft && (
-            <button
-              onClick={() => onDeleteDraft(shipment.id)}
-              className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-gray-300 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors"
-            >
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              削除
-            </button>
-          )}
-        </div>
-      )}
-
-      {shipment.status === 'registered' && (
-        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
-          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
-            段ボールを発送したら、店舗へ報告してください
-          </p>
-          <button
-            onClick={() => onMarkShipped(shipment.id)}
-            disabled={updating}
-            className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {updating ? (
-              <LoadingSpinner size="sm" />
-            ) : (
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M10 12v4m4-4v4" />
-              </svg>
-            )}
-            {updating ? '更新中...' : '発送完了を報告する'}
-          </button>
-        </div>
-      )}
-
+      {/* Image viewer */}
       {total > 0 && (
-        <div className="mt-3">
+        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
           <button
             onClick={() => setShowImages(v => !v)}
             className="text-xs text-[var(--portal-primary)] hover:underline"

@@ -337,8 +337,9 @@ model DeliveryShipment {
   imageUrls      String   @default("[]")        // 箱の中の写真
   trackingImageUrls String @default("[]")       // 発送伝票の写真
   purchaseAmount Int?     // 査定金額（店舗が更新）
-  status         String   @default("draft")     // draft|registered|shipped|received|appraised
+  status         String   @default("draft")     // draft|registered|shipped|received|appraised|transferred
   storeNote      String?
+  transferredAt  DateTime? // 振込済み日時（店舗が更新）
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

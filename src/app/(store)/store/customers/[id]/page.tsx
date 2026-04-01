@@ -105,7 +105,29 @@ const SHIPMENT_STATUS_OPTIONS = [
   { value: 'shipped', label: '発送済み' },
   { value: 'received', label: '受取済み' },
   { value: 'appraised', label: '査定完了' },
+  { value: 'transferred', label: '振込済み' },
 ]
+
+const STORE_DELIVERY_STEPS = [
+  { label: '発送準備' },
+  { label: '発送前準備' },
+  { label: '発送済み' },
+  { label: '受取済み' },
+  { label: '査定完了' },
+  { label: '振込済み' },
+]
+
+function getStoreStepsDone(status: string): number {
+  switch (status) {
+    case 'draft': return 0
+    case 'registered': return 2
+    case 'shipped': return 3
+    case 'received': return 4
+    case 'appraised': return 5
+    case 'transferred': return 6
+    default: return 0
+  }
+}
 
 const TYPE_MAP: Record<string, { label: string; cls: string }> = {
   delivery: { label: '定期宅配', cls: 'bg-blue-100 text-blue-700' },
@@ -1051,187 +1073,249 @@ export default function StoreCustomerDetailPage() {
                 {shipmentsList.map(s => {
                   const edit = shipmentEdits[s.id] ?? { purchaseAmount: '', storeNote: '', status: s.status }
                   const isFormOpen = appraisalOpen[s.id] ?? false
-                  const canAppraise = s.status === 'shipped' || s.status === 'received'
+                  const stepsDone = getStoreStepsDone(s.status)
+                  const isTransferred = s.status === 'transferred'
                   const isAppraised = s.status === 'appraised'
-                  const statusLabel = SHIPMENT_STATUS_OPTIONS.find(o => o.value === s.status)?.label ?? s.status
+
+                  // Helper: update status via API
+                  const updateStatus = async (newStatus: string, extra?: { purchaseAmount?: string; storeNote?: string }) => {
+                    setSavingShipment(s.id)
+                    const body: Record<string, unknown> = { status: newStatus }
+                    if (extra?.purchaseAmount !== undefined) body.purchaseAmount = extra.purchaseAmount !== '' ? Number(extra.purchaseAmount) : null
+                    if (extra?.storeNote !== undefined) body.storeNote = extra.storeNote || null
+                    const res = await fetch(`/api/delivery-shipments/${s.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(body),
+                    })
+                    setSavingShipment(null)
+                    if (res.ok) {
+                      const updated = await res.json()
+                      setShipmentsList(prev => prev.map(item => item.id === s.id ? updated : item))
+                      setShipmentEdits(prev => ({
+                        ...prev,
+                        [s.id]: { purchaseAmount: updated.purchaseAmount !== null ? String(updated.purchaseAmount) : '', storeNote: updated.storeNote ?? '', status: updated.status },
+                      }))
+                      setAppraisalOpen(prev => ({ ...prev, [s.id]: false }))
+                      const labels: Record<string, string> = { received: '受取完了を記録しました', appraised: '査定が完了しました', transferred: '振込完了を記録しました' }
+                      setMsg({ type: 'success', text: labels[newStatus] ?? '更新しました' })
+                    } else {
+                      setMsg({ type: 'error', text: '更新に失敗しました' })
+                    }
+                  }
 
                   return (
-                    <Card key={s.id} variant="outlined">
-                      {/* ヘッダー: 伝票番号・月・ステータス */}
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <span className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">
-                          {s.shipmentNumber}
-                        </span>
-                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                          {s.shipmentMonth.replace('-', '年')}月
-                        </span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          isAppraised
-                            ? 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]'
-                            : s.status === 'received'
-                              ? 'bg-blue-100 text-blue-700'
-                              : s.status === 'shipped'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-gray-100 text-gray-600'
+                    <Card key={s.id} variant="outlined" className="overflow-hidden">
+                      {/* ─── Header ─── */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-mono font-bold text-[var(--md-sys-color-on-surface)]">
+                            {s.shipmentNumber}
+                          </span>
+                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            {s.shipmentMonth.replace('-', '年')}月
+                          </span>
+                        </div>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          isTransferred ? 'bg-emerald-100 text-emerald-700' :
+                          isAppraised   ? 'bg-green-100 text-green-700' :
+                          s.status === 'received' ? 'bg-blue-100 text-blue-700' :
+                          s.status === 'shipped'  ? 'bg-amber-100 text-amber-700' :
+                          s.status === 'registered' ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-100 text-gray-500'
                         }`}>
-                          {statusLabel}
+                          {SHIPMENT_STATUS_OPTIONS.find(o => o.value === s.status)?.label ?? s.status}
                         </span>
                       </div>
 
                       {s.description && (
-                        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-2 whitespace-pre-wrap">{s.description}</p>
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 whitespace-pre-wrap">{s.description}</p>
                       )}
 
-                      {/* 画像サムネイル */}
+                      {/* ─── Progress stepper (compact horizontal) ─── */}
+                      <div className="flex items-center gap-0 mb-4 overflow-x-auto pb-1">
+                        {STORE_DELIVERY_STEPS.map((step, idx) => {
+                          const done = idx < stepsDone
+                          const active = idx === stepsDone && stepsDone < 6
+                          return (
+                            <div key={idx} className="flex items-center flex-shrink-0">
+                              <div className="flex flex-col items-center gap-0.5" style={{ minWidth: '52px' }}>
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
+                                  done   ? 'bg-emerald-500 text-white' :
+                                  active ? 'bg-[var(--portal-primary,#1E3A5F)] text-white ring-2 ring-[var(--portal-primary,#1E3A5F)] ring-offset-1' :
+                                           'bg-gray-100 border border-gray-300 text-gray-400'
+                                }`}>
+                                  {done ? (
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  ) : idx + 1}
+                                </div>
+                                <span className={`text-[9px] leading-tight text-center ${done ? 'text-emerald-600' : active ? 'text-[var(--portal-primary)]' : 'text-gray-400'}`}>
+                                  {step.label}
+                                </span>
+                              </div>
+                              {idx < STORE_DELIVERY_STEPS.length - 1 && (
+                                <div className={`h-0.5 w-3 flex-shrink-0 -mt-3 ${idx < stepsDone - 1 ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* ─── Images ─── */}
                       {s.imageUrls.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-3">
-                          {s.imageUrls.map((url, i) => (
+                          {s.imageUrls.slice(0, 4).map((url, i) => (
                             <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                              <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity" />
+                              <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg hover:opacity-80 transition-opacity" />
                             </a>
                           ))}
-                        </div>
-                      )}
-
-                      {/* 査定完了時: 査定結果表示 */}
-                      {isAppraised && !isFormOpen && (
-                        <div className="mt-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="text-lg font-bold text-green-700 dark:text-green-300">
-                                {s.purchaseAmount !== null ? `¥${s.purchaseAmount.toLocaleString()}` : '金額未入力'}
-                              </span>
+                          {s.imageUrls.length > 4 && (
+                            <div className="w-16 h-16 rounded-lg bg-[var(--md-sys-color-surface-container)] flex items-center justify-center text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                              +{s.imageUrls.length - 4}
                             </div>
-                            <button
-                              onClick={() => {
-                                setShipmentEdits(prev => ({
-                                  ...prev,
-                                  [s.id]: {
-                                    purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '',
-                                    storeNote: s.storeNote ?? '',
-                                    status: s.status,
-                                  },
-                                }))
-                                setAppraisalOpen(prev => ({ ...prev, [s.id]: true }))
-                              }}
-                              className="text-xs px-3 py-1 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 rounded-[var(--md-sys-shape-small)] hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
-                            >
-                              再査定
-                            </button>
-                          </div>
-                          {s.storeNote && (
-                            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2 whitespace-pre-wrap">{s.storeNote}</p>
                           )}
                         </div>
                       )}
 
-                      {/* 受取済み/発送済み: 査定するボタン */}
-                      {canAppraise && !isFormOpen && (
-                        <div className="mt-3">
-                          <Button
-                            variant="filled"
-                            size="sm"
-                            onClick={() => {
-                              setShipmentEdits(prev => ({
-                                ...prev,
-                                [s.id]: {
-                                  purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '',
-                                  storeNote: s.storeNote ?? '',
-                                  status: 'appraised',
-                                },
-                              }))
-                              setAppraisalOpen(prev => ({ ...prev, [s.id]: true }))
-                            }}
-                          >
-                            査定する
-                          </Button>
+                      {/* ─── Action zone ─── */}
+
+                      {/* registered: waiting for customer to ship */}
+                      {s.status === 'registered' && (
+                        <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 text-xs text-orange-700">
+                          顧客が発送報告をするとアクションが可能になります
                         </div>
                       )}
 
-                      {/* 査定入力フォーム（インライン展開） */}
-                      {isFormOpen && (
-                        <div className="mt-3 p-3 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low,#f7f7f7)]">
-                          <h4 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3">査定入力</h4>
-                          <div className="space-y-3">
-                            <div>
-                              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">査定金額（円）</label>
-                              <input
-                                type="number"
-                                value={edit.purchaseAmount}
-                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, purchaseAmount: e.target.value } }))}
-                                placeholder="例: 5000"
-                                min="0"
-                                className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">店舗メモ（顧客に表示されます）</label>
-                              <textarea
-                                value={edit.storeNote}
-                                onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
-                                rows={3}
-                                placeholder="査定結果の詳細や連絡事項など..."
-                                className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2 justify-end">
+                      {/* shipped: confirm receipt */}
+                      {s.status === 'shipped' && !isFormOpen && (
+                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold text-amber-800">荷物が発送されました</p>
+                            <p className="text-xs text-amber-600 mt-0.5">受け取りが完了したら記録してください</p>
+                          </div>
+                          <button
+                            onClick={() => updateStatus('received')}
+                            disabled={savingShipment === s.id}
+                            className="flex-shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors disabled:opacity-50"
+                          >
+                            {savingShipment === s.id ? '処理中...' : '受取完了'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* received: appraise */}
+                      {s.status === 'received' && !isFormOpen && (
+                        <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold text-blue-800">荷物を受け取りました</p>
+                            <p className="text-xs text-blue-600 mt-0.5">査定が完了したら金額を入力してください</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, status: 'appraised' } }))
+                              setAppraisalOpen(prev => ({ ...prev, [s.id]: true }))
+                            }}
+                            className="flex-shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                          >
+                            査定する
+                          </button>
+                        </div>
+                      )}
+
+                      {/* appraised: show result + transfer button */}
+                      {isAppraised && !isFormOpen && (
+                        <div className="space-y-2">
+                          <div className="p-3 rounded-xl bg-green-50 border border-green-200">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div>
+                                <p className="text-xs font-medium text-green-700">査定結果</p>
+                                <p className="text-lg font-bold text-green-700 mt-0.5">
+                                  {s.purchaseAmount !== null ? `¥${s.purchaseAmount.toLocaleString()}` : '金額未入力'}
+                                </p>
+                                {s.storeNote && <p className="text-xs text-green-600 mt-1 whitespace-pre-wrap">{s.storeNote}</p>}
+                              </div>
                               <button
-                                onClick={() => setAppraisalOpen(prev => ({ ...prev, [s.id]: false }))}
-                                className="text-xs px-4 py-1.5 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] rounded-[var(--md-sys-shape-small)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
-                              >
-                                キャンセル
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  // 査定完了として保存
-                                  const finalEdit = { ...edit, status: 'appraised' }
-                                  setShipmentEdits(prev => ({ ...prev, [s.id]: finalEdit }))
-                                  setSavingShipment(s.id)
-                                  const res = await fetch(`/api/delivery-shipments/${s.id}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      status: 'appraised',
-                                      purchaseAmount: edit.purchaseAmount !== '' ? Number(edit.purchaseAmount) : null,
-                                      storeNote: edit.storeNote || null,
-                                    }),
-                                  })
-                                  setSavingShipment(null)
-                                  if (res.ok) {
-                                    const updated = await res.json()
-                                    setShipmentsList(prev => prev.map(item => item.id === s.id ? updated : item))
-                                    setShipmentEdits(prev => ({
-                                      ...prev,
-                                      [s.id]: {
-                                        purchaseAmount: updated.purchaseAmount !== null ? String(updated.purchaseAmount) : '',
-                                        storeNote: updated.storeNote ?? '',
-                                        status: updated.status,
-                                      },
-                                    }))
-                                    setAppraisalOpen(prev => ({ ...prev, [s.id]: false }))
-                                    setMsg({ type: 'success', text: '査定が完了しました' })
-                                  } else {
-                                    setMsg({ type: 'error', text: '査定の保存に失敗しました' })
-                                  }
+                                onClick={() => {
+                                  setShipmentEdits(prev => ({ ...prev, [s.id]: { purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '', storeNote: s.storeNote ?? '', status: 'appraised' } }))
+                                  setAppraisalOpen(prev => ({ ...prev, [s.id]: true }))
                                 }}
-                                disabled={savingShipment === s.id}
-                                className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#1E3A5F)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50 font-medium"
+                                className="text-xs px-2 py-1 border border-green-300 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
                               >
-                                {savingShipment === s.id ? '保存中...' : '査定完了'}
+                                修正
                               </button>
                             </div>
+                          </div>
+                          <button
+                            onClick={() => updateStatus('transferred', { storeNote: s.storeNote ?? undefined })}
+                            disabled={savingShipment === s.id}
+                            className="w-full py-2 text-sm font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            {savingShipment === s.id ? '処理中...' : '振込完了を記録する'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* transferred: complete */}
+                      {isTransferred && (
+                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-800">振込完了</p>
+                            {s.purchaseAmount !== null && (
+                              <p className="text-sm font-bold text-emerald-700">¥{s.purchaseAmount.toLocaleString()}</p>
+                            )}
                           </div>
                         </div>
                       )}
 
-                      {/* 登録済みステータスの場合は簡易表示のみ */}
-                      {s.status === 'registered' && (
-                        <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
-                          顧客が発送すると査定が可能になります
-                        </p>
+                      {/* Appraisal form (inline) */}
+                      {isFormOpen && (
+                        <div className="p-4 rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low,#f7f7f7)] space-y-3">
+                          <h4 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">査定入力</h4>
+                          <div>
+                            <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">査定金額（円）</label>
+                            <input
+                              type="number"
+                              value={edit.purchaseAmount}
+                              onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, purchaseAmount: e.target.value } }))}
+                              placeholder="例: 5000"
+                              min="0"
+                              className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">メモ（顧客に表示されます）</label>
+                            <textarea
+                              value={edit.storeNote}
+                              onChange={e => setShipmentEdits(prev => ({ ...prev, [s.id]: { ...edit, storeNote: e.target.value } }))}
+                              rows={3}
+                              placeholder="査定結果の詳細や連絡事項など..."
+                              className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)] resize-none text-[var(--md-sys-color-on-surface)]"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => setAppraisalOpen(prev => ({ ...prev, [s.id]: false }))}
+                              className="text-xs px-4 py-1.5 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] rounded-lg hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                            >
+                              キャンセル
+                            </button>
+                            <button
+                              onClick={() => updateStatus('appraised', { purchaseAmount: edit.purchaseAmount, storeNote: edit.storeNote })}
+                              disabled={savingShipment === s.id}
+                              className="text-xs px-4 py-1.5 bg-[var(--portal-primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-semibold"
+                            >
+                              {savingShipment === s.id ? '保存中...' : '査定完了'}
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </Card>
                   )

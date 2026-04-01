@@ -65,12 +65,15 @@ export async function PATCH(
     }
 
     const updateData: any = {}
-    const validStatuses = ['registered', 'shipped', 'received', 'appraised']
+    const validStatuses = ['registered', 'shipped', 'received', 'appraised', 'transferred']
     if (body.status !== undefined) {
       if (!validStatuses.includes(body.status)) {
         return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
       }
       updateData.status = body.status
+      if (body.status === 'transferred') {
+        updateData.transferredAt = new Date()
+      }
     }
     if (body.purchaseAmount !== undefined) {
       updateData.purchaseAmount = body.purchaseAmount === null ? null : Number(body.purchaseAmount)
@@ -84,12 +87,15 @@ export async function PATCH(
 
   } else if (sessionUser.role === 'admin') {
     const updateData: any = {}
-    const validStatuses = ['registered', 'shipped', 'received', 'appraised']
+    const validStatuses = ['registered', 'shipped', 'received', 'appraised', 'transferred']
     if (body.status !== undefined) {
       if (!validStatuses.includes(body.status)) {
         return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
       }
       updateData.status = body.status
+      if (body.status === 'transferred') {
+        updateData.transferredAt = new Date()
+      }
     }
     if (body.purchaseAmount !== undefined) {
       updateData.purchaseAmount = body.purchaseAmount === null ? null : Number(body.purchaseAmount)

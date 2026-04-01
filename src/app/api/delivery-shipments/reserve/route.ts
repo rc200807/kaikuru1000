@@ -26,11 +26,21 @@ export async function POST() {
     })
   }
 
-  // 番号を生成
-  const count = await prisma.deliveryShipment.count({ where: { shipmentMonth } })
-  const seq = String(count + 1).padStart(4, '0')
+  // ランダム4桁で番号を生成（重複回避）
   const monthStr = shipmentMonth.replace('-', '')
-  const shipmentNumber = `HD-${monthStr}-${seq}`
+  let shipmentNumber = ''
+  for (let i = 0; i < 20; i++) {
+    const rand = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+    const candidate = `HD-${monthStr}-${rand}`
+    const dup = await prisma.deliveryShipment.findFirst({
+      where: { shipmentNumber: candidate },
+      select: { id: true },
+    })
+    if (!dup) { shipmentNumber = candidate; break }
+  }
+  if (!shipmentNumber) {
+    shipmentNumber = `HD-${monthStr}-${String(Date.now() % 10000).padStart(4, '0')}`
+  }
 
   return NextResponse.json({ shipmentNumber, shipmentMonth })
 }

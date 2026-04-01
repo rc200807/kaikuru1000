@@ -16,14 +16,21 @@ function toClientShipment(s: any) {
   }
 }
 
-/** 定期宅配番号を生成: HD-YYYYMM-NNNN */
+/** 定期宅配番号を生成: HD-YYYYMM-NNNN（ランダム4桁、重複回避） */
 async function generateShipmentNumber(shipmentMonth: string): Promise<string> {
-  const count = await prisma.deliveryShipment.count({
-    where: { shipmentMonth },
-  })
-  const seq = String(count + 1).padStart(4, '0')
-  const monthStr = shipmentMonth.replace('-', '') // "202603"
-  return `HD-${monthStr}-${seq}`
+  const monthStr = shipmentMonth.replace('-', '')
+  for (let i = 0; i < 20; i++) {
+    const rand = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+    const num = `HD-${monthStr}-${rand}`
+    const exists = await prisma.deliveryShipment.findFirst({
+      where: { shipmentNumber: num },
+      select: { id: true },
+    })
+    if (!exists) return num
+  }
+  // フォールバック: タイムスタンプベース
+  const ts = String(Date.now() % 10000).padStart(4, '0')
+  return `HD-${monthStr}-${ts}`
 }
 
 /** GET /api/delivery-shipments

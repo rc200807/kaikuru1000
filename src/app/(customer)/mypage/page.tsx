@@ -2558,10 +2558,6 @@ function MyPageContent() {
                         <p className="font-semibold text-red-700 mb-1">著しい破損・汚れ・ニオイ</p>
                         <p className="text-xs text-red-600">カビ、ベタつき、タバコ・香水の臭い、著しいソールの減りや破れがある靴やバッグ。</p>
                       </div>
-                      <div className="bg-orange-50 rounded-xl p-3">
-                        <p className="font-semibold text-orange-700 mb-1">需要がない・流行遅れ</p>
-                        <p className="text-xs text-orange-600">トレンドが過ぎたノーブランドの洋服や、数十年前の家具・家電。</p>
-                      </div>
                       <div className="bg-amber-50 rounded-xl p-3">
                         <p className="font-semibold text-amber-700 mb-1">故障・不完全な家電</p>
                         <p className="text-xs text-amber-600">動作しない家電、部品が欠損しているもの。</p>

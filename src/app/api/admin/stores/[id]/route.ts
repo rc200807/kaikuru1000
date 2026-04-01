@@ -68,7 +68,7 @@ export async function PATCH(
   // 店舗詳細情報の更新
   if (body.updateDetails) {
     const allowedFields = [
-      'name', 'email', 'phone', 'address', 'prefecture',
+      'name', 'email', 'phone', 'address', 'postalCode', 'prefecture',
       'storeStatus', 'openingDate', 'closingDate',
       'googleBusinessUrl', 'oikuraPageUrl', 'bankInfo',
       'invoiceNumber', 'antiquePermitNumber',

@@ -39,7 +39,7 @@ type UserData = {
   proofDocumentType: string | null
   proofDocumentStatus: string | null
   licenseKey: { key: string }
-  store: { name: string; phone: string | null; address: string | null } | null
+  store: { name: string; phone: string | null; address: string | null; postalCode: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
   // 顧客タイプ
   customerType: string  // "visit" | "delivery" | "regular"
@@ -255,7 +255,7 @@ function MyPageContent() {
   const [showWorthlessModal, setShowWorthlessModal] = useState(false)
   const [pendingMemoCount, setPendingMemoCount] = useState(0)
 
-  const docTypesRequiringBack = ['運転免許証', 'マイナンバーカード']
+  const docTypesRequiringBack = ['運転免許証']
   const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
   useEffect(() => {
@@ -799,6 +799,17 @@ function MyPageContent() {
     if (res.ok) {
       const data = await res.json()
       setCurrentDraftId(data.id)
+      setReservedShipmentNumber(data.shipmentNumber)
+      // 送付一覧のdraftを更新
+      setShipments(prev => {
+        const idx = prev.findIndex(s => s.id === data.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = data
+          return next
+        }
+        return [data, ...prev]
+      })
       setShipmentStep(2)
       setMessage({ type: 'success', text: '箱の中身の情報を保存しました。続けて送付情報を登録してください。' })
     } else {
@@ -2125,7 +2136,7 @@ function MyPageContent() {
                 {(() => {
                   const now = new Date()
                   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-                  const alreadyRegistered = shipments.some(s => s.shipmentMonth === currentMonth)
+                  const alreadyRegistered = shipments.some(s => s.shipmentMonth === currentMonth && s.status !== 'draft')
                   const missingIdDoc = !user.idDocumentPath
                   const missingBank = !user.bankName || !user.accountNumber
 
@@ -2139,6 +2150,8 @@ function MyPageContent() {
                     )
                   }
 
+                  const existingDraft = shipments.find(s => s.shipmentMonth === currentMonth && s.status === 'draft')
+
                   return !alreadyRegistered && (
                     <div className="flex-shrink-0">
                       <Button size="sm" onClick={async () => {
@@ -2146,19 +2159,31 @@ function MyPageContent() {
                           setShowShipmentForm(false)
                           setReservedShipmentNumber(null)
                         } else {
-                          // 番号を事前予約
-                          try {
-                            const res = await fetch('/api/delivery-shipments/reserve', { method: 'POST' })
-                            if (res.ok) {
-                              const data = await res.json()
-                              setReservedShipmentNumber(data.shipmentNumber)
+                          // 下書きがある場合は復元
+                          if (existingDraft) {
+                            setShipmentForm({ description: existingDraft.description || '' })
+                            setCurrentDraftId(existingDraft.id)
+                            setReservedShipmentNumber(existingDraft.shipmentNumber)
+                            // 下書きの画像を復元
+                            if (existingDraft.imageUrls?.length > 0) {
+                              setShipmentImages(existingDraft.imageUrls)
                             }
-                          } catch { /* ignore */ }
+                            setShipmentStep(1)
+                          } else {
+                            // 番号を事前予約
+                            try {
+                              const res = await fetch('/api/delivery-shipments/reserve', { method: 'POST' })
+                              if (res.ok) {
+                                const data = await res.json()
+                                setReservedShipmentNumber(data.shipmentNumber)
+                              }
+                            } catch { /* ignore */ }
+                          }
                           setShowShipmentForm(true)
                           setMessage(null)
                         }
                       }}>
-                        {showShipmentForm ? 'キャンセル' : '今月の送付を登録'}
+                        {showShipmentForm ? 'キャンセル' : existingDraft ? '下書きを続ける' : '今月の送付を登録'}
                       </Button>
                     </div>
                   )
@@ -2371,7 +2396,10 @@ function MyPageContent() {
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">送付先</p>
                           <p className="text-sm font-bold text-gray-900 mb-1">{user.store.name}</p>
                           {user.store.address && (
-                            <p className="text-sm text-gray-700">{user.store.address}</p>
+                            <p className="text-sm text-gray-700">
+                              {user.store.postalCode && <span>〒{user.store.postalCode} </span>}
+                              {user.store.address}
+                            </p>
                           )}
                           {user.store.phone && (
                             <p className="text-xs text-gray-500 mt-1">TEL: {user.store.phone}</p>
@@ -3172,7 +3200,6 @@ function MyPageContent() {
                           { type: '運転免許証', icon: '🪪' },
                           { type: 'マイナンバーカード', icon: '💳' },
                           { type: 'パスポート', icon: '📕' },
-                          { type: '住民基本台帳カード', icon: '🏠' },
                           { type: '在留カード', icon: '🌏' },
                         ].map(doc => (
                           <button
@@ -4094,6 +4121,7 @@ const MEMO_STATUS_STYLE: Record<string, string> = {
 }
 
 const SHIPMENT_STATUS_LABEL: Record<string, string> = {
+  draft:      '下書き',
   registered: '登録済み',
   shipped:    '発送済み',
   received:   '受取済み・査定中',
@@ -4101,6 +4129,7 @@ const SHIPMENT_STATUS_LABEL: Record<string, string> = {
 }
 
 const SHIPMENT_STATUS_STYLE: Record<string, string> = {
+  draft:      'bg-gray-100 text-gray-600',
   registered: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
   shipped:    'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
   received:   'bg-amber-100 text-amber-700',

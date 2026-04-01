@@ -18,6 +18,7 @@ type Store = {
   name: string
   code: string
   prefecture: string | null
+  postalCode: string | null
   address: string | null
   phone: string | null
   email: string | null
@@ -822,6 +823,7 @@ export default function AdminStoresPage() {
                           </select>
                         </div>
                       </div>
+                      <TextField label="郵便番号" value={editForm.postalCode || ''} onChange={v => setEditForm({...editForm, postalCode: v})} placeholder="123-4567" />
                       <TextField label="住所" value={editForm.address || ''} onChange={v => setEditForm({...editForm, address: v})} />
                       <TextField label="電話番号" value={editForm.phone || ''} onChange={v => setEditForm({...editForm, phone: v})} />
                       <TextField label="メールアドレス" type="email" value={editForm.email || ''} onChange={v => setEditForm({...editForm, email: v})} />
@@ -872,6 +874,7 @@ export default function AdminStoresPage() {
                         { label: '店舗コード', value: detailStore.code, mono: true },
                         { label: 'ステータス', value: detailStore.storeStatus === 'closed' ? '閉店' : '営業中' },
                         { label: '都道府県', value: detailStore.prefecture },
+                        { label: '郵便番号', value: detailStore.postalCode ? `〒${detailStore.postalCode}` : null },
                         { label: '住所', value: detailStore.address },
                         { label: '電話番号', value: detailStore.phone },
                         { label: 'メール', value: detailStore.email },

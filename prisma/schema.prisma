@@ -78,6 +78,7 @@ model Store {
   name       String   // 店舗名
   code       String   @unique // 店舗コード
   phone      String?
+  postalCode String?  // 郵便番号
   address    String?
   prefecture String?  // 都道府県
   email      String?

@@ -3908,10 +3908,13 @@ function ShipmentCard({
   onMessage: (msg: { type: 'success' | 'error'; text: string }) => void
 }) {
   const isDraft = shipment.status === 'draft'
+  const isRegistered = shipment.status === 'registered'
   const isTransferred = shipment.status === 'transferred'
+  const canEditSteps = isDraft || isRegistered // 発送完了前はステップ1・2を編集可
 
-  // Draft-mode internal state
+  // Draft/edit-mode internal state
   const [draftStep, setDraftStep] = useState<1 | 2>(1)
+  const [editingStep, setEditingStep] = useState<number | null>(null) // registered時の編集中ステップ
   const [description, setDescription] = useState(shipment.description || '')
   const [boxImages, setBoxImages] = useState<string[]>(shipment.imageUrls || [])
   const [slipImages, setSlipImages] = useState<string[]>(shipment.trackingImageUrls || [])
@@ -4025,8 +4028,36 @@ function ShipmentCard({
     }
   }
 
+  // registered状態でステップ1・2を編集して保存する
+  async function handleSaveEditedStep() {
+    setSubmitting(true)
+    // step 1 と step 2 両方の情報を更新（registered状態を維持）
+    const res = await fetch('/api/delivery-shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: description || undefined,
+        imageUrls: boxImages,
+        trackingImageUrls: slipImages,
+        step: 2, // 完了状態を維持
+        draftId: shipment.id,
+      }),
+    })
+    setSubmitting(false)
+    if (res.ok) {
+      const updated = await res.json()
+      onShipmentUpdated(updated)
+      setEditingStep(null)
+      onMessage({ type: 'success', text: '内容を更新しました' })
+    } else {
+      const d = await res.json()
+      onMessage({ type: 'error', text: d.error || '更新に失敗しました' })
+    }
+  }
+
   // --- stepsDone calculation ---
-  const stepsDone = isDraft ? (draftStep === 2 ? 1 : 0) : getDeliveryStepsDone(shipment.status)
+  const isEditing = editingStep !== null
+  const stepsDone = isDraft ? (draftStep === 2 ? 1 : 0) : isEditing ? editingStep! : getDeliveryStepsDone(shipment.status)
 
   return (
     <>
@@ -4114,8 +4145,8 @@ function ShipmentCard({
                     )}
                   </div>
 
-                  {/* Right-side status badge (non-draft only) */}
-                  {!isDraft && active && (
+                  {/* Right-side: status badge or edit link */}
+                  {!isDraft && !isEditing && active && (
                     <span className="text-xs font-medium text-[var(--portal-primary,#B91C1C)] flex-shrink-0 mt-0.5">
                       {shipment.status === 'registered' ? '発送待ち...' :
                        shipment.status === 'shipped' ? '受取待ち...' :
@@ -4123,7 +4154,89 @@ function ShipmentCard({
                        shipment.status === 'appraised' ? '振込待ち...' : ''}
                     </span>
                   )}
+                  {/* registered状態のステップ1・2に「編集」リンク */}
+                  {isRegistered && !isEditing && done && (idx === 0 || idx === 1) && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingStep(idx)}
+                      className="text-xs text-[var(--portal-primary,#B91C1C)] hover:underline flex-shrink-0 mt-0.5"
+                    >
+                      編集
+                    </button>
+                  )}
                 </div>
+
+                {/* ===== REGISTERED EDITING: Step 0 (発送準備) edit form ===== */}
+                {isRegistered && editingStep === 0 && idx === 0 && (
+                  <div className="mt-3 p-4 rounded-xl bg-white/80 border border-gray-100 space-y-3">
+                    <TextField
+                      label="内容メモ（任意）"
+                      value={description}
+                      onChange={v => setDescription(v)}
+                      placeholder="例：古い携帯電話1台、着なくなった服5着など"
+                      rows={3}
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">箱の中の写真</p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚</p>
+                      <div className="flex flex-wrap gap-2">
+                        {boxImages.map((url, i) => (
+                          <div key={i} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg" />
+                            <button type="button" onClick={() => setBoxImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">×</button>
+                          </div>
+                        ))}
+                        {boxImages.length < 5 && (
+                          <button type="button" onClick={() => boxInputRef.current?.click()} disabled={uploading} className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50">
+                            {uploading ? <LoadingSpinner size="sm" /> : (<><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg><span className="text-xs mt-1">追加</span></>)}
+                          </button>
+                        )}
+                        <input ref={boxInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic" onChange={handleBoxImageUpload} className="hidden" />
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-1">
+                      <Button onClick={handleSaveEditedStep} disabled={submitting} loading={submitting}>
+                        {submitting ? '保存中...' : '変更を保存'}
+                      </Button>
+                      <Button variant="tonal" onClick={() => { setEditingStep(null); setDescription(shipment.description || ''); setBoxImages(shipment.imageUrls || []) }}>
+                        キャンセル
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== REGISTERED EDITING: Step 1 (発送前準備) edit form ===== */}
+                {isRegistered && editingStep === 1 && idx === 1 && (
+                  <div className="mt-3 p-4 rounded-xl bg-white/80 border border-gray-100 space-y-4">
+                    {/* 発送伝票の写真 */}
+                    <div>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">発送伝票の写真</p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">伝票の控えを撮影してください</p>
+                      <div className="flex flex-wrap gap-2">
+                        {slipImages.map((url, i) => (
+                          <div key={`slip-edit-${i}`} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg" />
+                            <button type="button" onClick={() => setSlipImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">×</button>
+                          </div>
+                        ))}
+                        {slipImages.length < 2 && (
+                          <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
+                            {uploading ? <LoadingSpinner size="sm" /> : (<><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg><span className="text-xs mt-1">追加</span></>)}
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" onChange={handleSlipImageUpload} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-1">
+                      <Button onClick={handleSaveEditedStep} disabled={submitting} loading={submitting}>
+                        {submitting ? '保存中...' : '変更を保存'}
+                      </Button>
+                      <Button variant="tonal" onClick={() => { setEditingStep(null); setSlipImages(shipment.trackingImageUrls || []) }}>
+                        キャンセル
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* ===== STEP 0 (発送準備): Draft inline form ===== */}
                 {isDraft && idx === 0 && draftStep === 1 && active && (

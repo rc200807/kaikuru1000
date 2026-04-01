@@ -3040,8 +3040,9 @@ function MyPageContent() {
                   </Card>
                 )}
 
-                {/* ── 本人確認（顔照合） ── */}
-                <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                {/* ── 本人確認（顔照合）── 一時的に非表示 ── */}
+                {/* eslint-disable-next-line no-constant-condition */}
+                {false as boolean && <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                   <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-1 flex items-center gap-2">
                     <span className="text-base">🤳</span>
                     本人確認（顔照合）
@@ -3176,7 +3177,7 @@ function MyPageContent() {
                       </p>
                     </div>
                   )}
-                </Card>
+                </Card>}
 
                 {/* 再提出ボタン */}
                 <div className="flex justify-center">

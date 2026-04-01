@@ -881,6 +881,24 @@ function MyPageContent() {
     }
   }
 
+  // 送付下書き削除
+  async function handleDeleteDraft(id: string) {
+    if (!confirm('この下書きを削除しますか？')) return
+    const res = await fetch(`/api/delivery-shipments/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setShipments(prev => prev.filter(s => s.id !== id))
+      setShowShipmentForm(false)
+      setShipmentStep(1)
+      setCurrentDraftId(null)
+      setReservedShipmentNumber(null)
+      setShipmentForm({ description: '' })
+      setShipmentImages([])
+      setMessage({ type: 'success', text: '下書きを削除しました' })
+    } else {
+      setMessage({ type: 'error', text: '削除に失敗しました' })
+    }
+  }
+
   // メモ削除
   async function handleDeleteMemo(id: string) {
     if (!confirm('このメモを削除しますか？')) return
@@ -1732,8 +1750,17 @@ function MyPageContent() {
                       </div>
                       {user.address && (
                         <div className="flex justify-between gap-3">
-                          <dt className="text-sm text-gray-500 shrink-0">{user.customerType === 'delivery' ? '送付先住所' : '住所'}</dt>
+                          <dt className="text-sm text-gray-500 shrink-0">住所</dt>
                           <dd className="text-sm font-medium text-gray-900 text-right">{user.address}</dd>
+                        </div>
+                      )}
+                      {user.customerType === 'delivery' && user.store?.address && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-sm text-gray-500 shrink-0">送付先住所</dt>
+                          <dd className="text-sm font-medium text-gray-900 text-right">
+                            {user.store.postalCode && <span>〒{user.store.postalCode} </span>}
+                            {user.store.address}
+                          </dd>
                         </div>
                       )}
                     </dl>
@@ -2510,6 +2537,7 @@ function MyPageContent() {
                         setShowShipmentForm(true)
                         setMessage(null)
                       } : undefined}
+                      onDeleteDraft={s.status === 'draft' ? handleDeleteDraft : undefined}
                     />
                   ))}
                 </div>
@@ -4158,11 +4186,13 @@ function ShipmentCard({
   updating,
   onMarkShipped,
   onResumeDraft,
+  onDeleteDraft,
 }: {
   shipment: DeliveryShipment
   updating: boolean
   onMarkShipped: (id: string) => void
   onResumeDraft?: () => void
+  onDeleteDraft?: (id: string) => void
 }) {
   const [showImages, setShowImages] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -4265,17 +4295,30 @@ function ShipmentCard({
         )}
       </div>
 
-      {shipment.status === 'draft' && onResumeDraft && (
-        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
-          <button
-            onClick={onResumeDraft}
-            className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            下書きを続ける
-          </button>
+      {shipment.status === 'draft' && (
+        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-2">
+          {onResumeDraft && (
+            <button
+              onClick={onResumeDraft}
+              className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              下書きを続ける
+            </button>
+          )}
+          {onDeleteDraft && (
+            <button
+              onClick={() => onDeleteDraft(shipment.id)}
+              className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] border border-gray-300 text-gray-500 text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              削除
+            </button>
+          )}
         </div>
       )}
 

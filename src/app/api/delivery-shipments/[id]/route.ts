@@ -105,3 +105,30 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 }
+
+/** DELETE /api/delivery-shipments/[id] — 下書きのみ顧客が削除可 */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const sessionUser = session.user as any
+  if (sessionUser.role !== 'customer') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const shipment = await prisma.deliveryShipment.findUnique({ where: { id } })
+  if (!shipment) return NextResponse.json({ error: '送付記録が見つかりません' }, { status: 404 })
+  if (shipment.userId !== sessionUser.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (shipment.status !== 'draft') {
+    return NextResponse.json({ error: '下書き状態のみ削除できます' }, { status: 409 })
+  }
+
+  await prisma.deliveryShipment.delete({ where: { id } })
+  return NextResponse.json({ deleted: true })
+}

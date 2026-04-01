@@ -3,13 +3,16 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-/** imageUrls をプロキシURLに変換して返す */
+/** imageUrls / trackingImageUrls をプロキシURLに変換して返す */
 function toClientShipment(s: any) {
   let blobUrls: string[] = []
   try { blobUrls = JSON.parse(s.imageUrls || '[]') } catch { /* ignore */ }
+  let trackingUrls: string[] = []
+  try { trackingUrls = JSON.parse(s.trackingImageUrls || '[]') } catch { /* ignore */ }
   return {
     ...s,
     imageUrls: blobUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/images/${i}`),
+    trackingImageUrls: trackingUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/tracking-images/${i}`),
   }
 }
 
@@ -84,20 +87,47 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { description, imageUrls } = body
+  const { description, imageUrls, trackingImageUrls, step } = body
 
   // 当月を YYYY-MM 形式で取得（JST）
   const now = new Date()
   const shipmentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-  // 当月の重複チェック
+  // 既存の下書きまたは登録済みがあるか確認
   const existing = await prisma.deliveryShipment.findFirst({
     where: { userId, shipmentMonth },
   })
-  if (existing) {
+
+  // ステップ2: 既存の下書きに送付情報を追加 → registered に昇格
+  if (step === 2 && existing) {
+    const updated = await prisma.deliveryShipment.update({
+      where: { id: existing.id },
+      data: {
+        trackingImageUrls: JSON.stringify(Array.isArray(trackingImageUrls) ? trackingImageUrls : []),
+        status: 'registered',
+      },
+    })
+    return NextResponse.json(toClientShipment(updated))
+  }
+
+  // ステップ1（新規）: 重複チェック（registered以降は重複不可、draftは上書き可）
+  if (existing && existing.status !== 'draft') {
     return NextResponse.json({ error: '今月の送付はすでに登録されています' }, { status: 409 })
   }
 
+  // 下書きが存在する場合は上書き
+  if (existing && existing.status === 'draft') {
+    const updated = await prisma.deliveryShipment.update({
+      where: { id: existing.id },
+      data: {
+        description: description || null,
+        imageUrls: JSON.stringify(Array.isArray(imageUrls) ? imageUrls : []),
+      },
+    })
+    return NextResponse.json(toClientShipment(updated))
+  }
+
+  // 新規作成（draft状態）
   const shipmentNumber = await generateShipmentNumber(shipmentMonth)
 
   const shipment = await prisma.deliveryShipment.create({
@@ -107,7 +137,7 @@ export async function POST(request: NextRequest) {
       shipmentMonth,
       description: description || null,
       imageUrls: JSON.stringify(Array.isArray(imageUrls) ? imageUrls : []),
-      status: 'registered',
+      status: 'draft',
     },
   })
 

@@ -332,11 +332,12 @@ model DeliveryShipment {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   shipmentNumber String   @unique  // "HD-YYYYMM-NNNN"
   shipmentMonth  String            // "YYYY-MM"
-  description    String?  
-  imageUrls      String   @default("[]") 
+  description    String?
+  imageUrls      String   @default("[]")        // 箱の中の写真
+  trackingImageUrls String @default("[]")       // 発送伝票の写真
   purchaseAmount Int?     // 査定金額（店舗が更新）
-  status         String   @default("registered") // registered|shipped|received|appraised
-  storeNote      String?  
+  status         String   @default("draft")     // draft|registered|shipped|received|appraised
+  storeNote      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

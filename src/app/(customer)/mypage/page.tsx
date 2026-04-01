@@ -200,9 +200,12 @@ function MyPageContent() {
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
   const [shipmentsLoading, setShipmentsLoading] = useState(false)
   const [showShipmentForm, setShowShipmentForm] = useState(false)
+  const [shipmentStep, setShipmentStep] = useState(1) // 1=箱の中身, 2=送付情報
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
   const [reservedShipmentNumber, setReservedShipmentNumber] = useState<string | null>(null)
   const [shipmentForm, setShipmentForm] = useState({ description: '' })
   const [shipmentImages, setShipmentImages] = useState<string[]>([])
+  const [trackingImages, setTrackingImages] = useState<string[]>([])
   const [uploadingShipmentImage, setUploadingShipmentImage] = useState(false)
   const [submittingShipment, setSubmittingShipment] = useState(false)
   const [updatingShipmentId, setUpdatingShipmentId] = useState<string | null>(null)
@@ -780,8 +783,8 @@ function MyPageContent() {
   }
 
   // 今月の送付登録
-  async function handleSubmitShipment(e: React.FormEvent) {
-    e.preventDefault()
+  // ステップ1: 箱の中身情報を下書き保存
+  async function handleSaveStep1() {
     setSubmittingShipment(true)
     const res = await fetch('/api/delivery-shipments', {
       method: 'POST',
@@ -789,20 +792,64 @@ function MyPageContent() {
       body: JSON.stringify({
         description: shipmentForm.description || undefined,
         imageUrls: shipmentImages,
+        step: 1,
       }),
     })
     setSubmittingShipment(false)
     if (res.ok) {
-      const created = await res.json()
-      setShipments(prev => [created, ...prev])
-      setShipmentForm({ description: '' })
-      setShipmentImages([])
-      setShowShipmentForm(false)
-      setMessage({ type: 'success', text: `送付を登録しました。発送ID: ${created.shipmentNumber}` })
+      const data = await res.json()
+      setCurrentDraftId(data.id)
+      setShipmentStep(2)
+      setMessage({ type: 'success', text: '箱の中身の情報を保存しました。続けて送付情報を登録してください。' })
     } else {
       const d = await res.json()
-      setMessage({ type: 'error', text: d.error || '送付登録に失敗しました' })
+      setMessage({ type: 'error', text: d.error || '保存に失敗しました' })
     }
+  }
+
+  // ステップ2: 送付情報を追加して登録完了
+  async function handleCompleteStep2() {
+    setSubmittingShipment(true)
+    const res = await fetch('/api/delivery-shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trackingImageUrls: trackingImages,
+        step: 2,
+      }),
+    })
+    setSubmittingShipment(false)
+    if (res.ok) {
+      const updated = await res.json()
+      // 既存のdraftを更新するか新規追加
+      setShipments(prev => {
+        const idx = prev.findIndex(s => s.id === updated.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = updated
+          return next
+        }
+        return [updated, ...prev]
+      })
+      setShipmentForm({ description: '' })
+      setShipmentImages([])
+      setTrackingImages([])
+      setShowShipmentForm(false)
+      setShipmentStep(1)
+      setCurrentDraftId(null)
+      setReservedShipmentNumber(null)
+      setMessage({ type: 'success', text: `送付登録が完了しました。発送ID: ${updated.shipmentNumber}` })
+    } else {
+      const d = await res.json()
+      setMessage({ type: 'error', text: d.error || '登録に失敗しました' })
+    }
+  }
+
+  // 旧互換: formのsubmitハンドラ（使わないが念のため）
+  async function handleSubmitShipment(e: React.FormEvent) {
+    e.preventDefault()
+    if (shipmentStep === 1) handleSaveStep1()
+    else handleCompleteStep2()
   }
 
   // 送付「発送しました」
@@ -2205,8 +2252,23 @@ function MyPageContent() {
 
               {/* 送付登録フォーム */}
               {showShipmentForm && (
-                <form onSubmit={handleSubmitShipment} className="space-y-4">
+                <div className="space-y-4">
+                  {/* ステップインジケーター */}
+                  <div className="flex items-center gap-2 px-1">
+                    <div className={`flex items-center gap-1.5 ${shipmentStep === 1 ? 'text-[#B91C1C] font-bold' : 'text-gray-400'}`}>
+                      <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${shipmentStep === 1 ? 'bg-[#B91C1C] text-white' : 'bg-gray-200 text-gray-500'}`}>1</span>
+                      <span className="text-xs">箱の中身</span>
+                    </div>
+                    <div className={`flex-1 h-0.5 ${shipmentStep >= 2 ? 'bg-[#B91C1C]' : 'bg-gray-200'}`} />
+                    <div className={`flex items-center gap-1.5 ${shipmentStep === 2 ? 'text-[#B91C1C] font-bold' : 'text-gray-400'}`}>
+                      <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${shipmentStep === 2 ? 'bg-[#B91C1C] text-white' : 'bg-gray-200 text-gray-500'}`}>2</span>
+                      <span className="text-xs">送付情報</span>
+                    </div>
+                  </div>
+
                   {/* Section 1: 箱の中身に関する情報 */}
+                  {shipmentStep === 1 && (
+                  <>
                   <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                     <div className="flex items-center gap-2.5 mb-1">
                       <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-[#B91C1C] to-rose-500 text-white text-sm font-bold flex items-center justify-center">1</span>
@@ -2271,7 +2333,21 @@ function MyPageContent() {
                     </div>
                   </Card>
 
+                  {/* ステップ1のボタン */}
+                  <div className="flex gap-3">
+                    <Button onClick={handleSaveStep1} disabled={submittingShipment} loading={submittingShipment}>
+                      {submittingShipment ? '保存中...' : '下書き保存して次へ'}
+                    </Button>
+                    <Button variant="tonal" onClick={() => { setShowShipmentForm(false); setShipmentStep(1); setShipmentForm({ description: '' }); setShipmentImages([]); setTrackingImages([]) }}>
+                      キャンセル
+                    </Button>
+                  </div>
+                  </>
+                  )}
+
                   {/* Section 2: 送付に関する情報 */}
+                  {shipmentStep === 2 && (
+                  <>
                   <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                     <div className="flex items-center gap-2.5 mb-1">
                       <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-[#B91C1C] to-rose-500 text-white text-sm font-bold flex items-center justify-center">2</span>
@@ -2298,21 +2374,17 @@ function MyPageContent() {
                           伝票の控えを撮影してください（追跡番号の確認に使用します）
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {(shipmentForm as any).trackingImages?.map((url: string, i: number) => (
+                          {trackingImages.map((url, i) => (
                             <div key={`tracking-${i}`} className="relative w-20 h-20">
                               <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const imgs = [...((shipmentForm as any).trackingImages || [])]
-                                  imgs.splice(i, 1)
-                                  setShipmentForm(prev => ({ ...prev, trackingImages: imgs } as any))
-                                }}
+                                onClick={() => setTrackingImages(prev => prev.filter((_, j) => j !== i))}
                                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
                               >×</button>
                             </div>
-                          )) ?? null}
-                          {((shipmentForm as any).trackingImages?.length ?? 0) < 2 && (
+                          ))}
+                          {trackingImages.length < 2 && (
                             <label className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
@@ -2330,10 +2402,7 @@ function MyPageContent() {
                                   const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: fd })
                                   if (res.ok) {
                                     const { url } = await res.json()
-                                    setShipmentForm(prev => ({
-                                      ...prev,
-                                      trackingImages: [...((prev as any).trackingImages || []), url],
-                                    } as any))
+                                    setTrackingImages(prev => [...prev, url])
                                   }
                                   e.target.value = ''
                                 }}
@@ -2345,16 +2414,18 @@ function MyPageContent() {
                     </div>
                   </Card>
 
-                  {/* Submit buttons */}
+                  {/* ステップ2のボタン */}
                   <div className="flex gap-3">
-                    <Button type="submit" disabled={submittingShipment} loading={submittingShipment}>
-                      {submittingShipment ? '登録中...' : '登録する'}
+                    <Button onClick={handleCompleteStep2} disabled={submittingShipment} loading={submittingShipment}>
+                      {submittingShipment ? '登録中...' : '送付登録を完了する'}
                     </Button>
-                    <Button type="button" variant="tonal" onClick={() => { setShowShipmentForm(false); setShipmentForm({ description: '' }); setShipmentImages([]) }}>
-                      キャンセル
+                    <Button variant="tonal" onClick={() => setShipmentStep(1)}>
+                      戻る
                     </Button>
                   </div>
-                </form>
+                  </>
+                  )}
+                </div>
               )}
 
               {/* 送付一覧 */}

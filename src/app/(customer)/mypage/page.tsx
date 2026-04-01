@@ -99,8 +99,9 @@ type DeliveryShipment = {
   shipmentMonth: string
   description: string | null
   imageUrls: string[]
+  trackingImageUrls: string[]
   purchaseAmount: number | null
-  status: string  // registered | shipped | received | appraised
+  status: string  // draft | registered | shipped | received | appraised | transferred
   storeNote: string | null
   createdAt: string
   updatedAt: string
@@ -124,7 +125,6 @@ function MyPageContent() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const memoImageInputRef = useRef<HTMLInputElement>(null)
-  const shipmentImageInputRef = useRef<HTMLInputElement>(null)
 
   const [editForm, setEditForm] = useState({ name: '', furigana: '', phone: '', address: '' })
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
@@ -199,15 +199,6 @@ function MyPageContent() {
   const [shipments, setShipments] = useState<DeliveryShipment[]>([])
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
   const [shipmentsLoading, setShipmentsLoading] = useState(false)
-  const [showShipmentForm, setShowShipmentForm] = useState(false)
-  const [shipmentStep, setShipmentStep] = useState(1) // 1=箱の中身, 2=送付情報
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
-  const [reservedShipmentNumber, setReservedShipmentNumber] = useState<string | null>(null)
-  const [shipmentForm, setShipmentForm] = useState({ description: '' })
-  const [shipmentImages, setShipmentImages] = useState<string[]>([])
-  const [trackingImages, setTrackingImages] = useState<string[]>([])
-  const [uploadingShipmentImage, setUploadingShipmentImage] = useState(false)
-  const [submittingShipment, setSubmittingShipment] = useState(false)
   const [updatingShipmentId, setUpdatingShipmentId] = useState<string | null>(null)
 
   // 身分証OCR関連
@@ -763,106 +754,6 @@ function MyPageContent() {
     }
   }
 
-  // 宅配送付画像アップロード
-  async function handleShipmentImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingShipmentImage(true)
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: formData })
-    if (res.ok) {
-      const data = await res.json()
-      setShipmentImages(prev => [...prev, data.url])
-    } else {
-      const d = await res.json()
-      setMessage({ type: 'error', text: d.error || '画像のアップロードに失敗しました' })
-    }
-    setUploadingShipmentImage(false)
-    e.target.value = ''
-  }
-
-  // 今月の送付登録
-  // ステップ1: 箱の中身情報を下書き保存
-  async function handleSaveStep1() {
-    setSubmittingShipment(true)
-    const res = await fetch('/api/delivery-shipments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: shipmentForm.description || undefined,
-        imageUrls: shipmentImages,
-        step: 1,
-      }),
-    })
-    setSubmittingShipment(false)
-    if (res.ok) {
-      const data = await res.json()
-      setCurrentDraftId(data.id)
-      setReservedShipmentNumber(data.shipmentNumber)
-      // 送付一覧のdraftを更新
-      setShipments(prev => {
-        const idx = prev.findIndex(s => s.id === data.id)
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = data
-          return next
-        }
-        return [data, ...prev]
-      })
-      setShipmentStep(2)
-      setMessage({ type: 'success', text: '箱の中身の情報を保存しました。続けて送付情報を登録してください。' })
-    } else {
-      const d = await res.json()
-      setMessage({ type: 'error', text: d.error || '保存に失敗しました' })
-    }
-  }
-
-  // ステップ2: 送付情報を追加して登録完了
-  async function handleCompleteStep2() {
-    setSubmittingShipment(true)
-    const res = await fetch('/api/delivery-shipments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        trackingImageUrls: trackingImages,
-        step: 2,
-      }),
-    })
-    setSubmittingShipment(false)
-    if (res.ok) {
-      const updated = await res.json()
-      // 既存のdraftを更新するか新規追加
-      setShipments(prev => {
-        const idx = prev.findIndex(s => s.id === updated.id)
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = updated
-          return next
-        }
-        return [updated, ...prev]
-      })
-      setShipmentForm({ description: '' })
-      setShipmentImages([])
-      setTrackingImages([])
-      setShowShipmentForm(false)
-      setShipmentStep(1)
-      setCurrentDraftId(null)
-      setReservedShipmentNumber(null)
-      setMessage({ type: 'success', text: `送付登録が完了しました。発送ID: ${updated.shipmentNumber}` })
-    } else {
-      const d = await res.json()
-      setMessage({ type: 'error', text: d.error || '登録に失敗しました' })
-    }
-  }
-
-  // 旧互換: formのsubmitハンドラ（使わないが念のため）
-  async function handleSubmitShipment(e: React.FormEvent) {
-    e.preventDefault()
-    if (shipmentStep === 1) handleSaveStep1()
-    else handleCompleteStep2()
-  }
-
   // 送付「発送しました」
   async function handleMarkShipped(id: string) {
     setUpdatingShipmentId(id)
@@ -887,12 +778,6 @@ function MyPageContent() {
     const res = await fetch(`/api/delivery-shipments/${id}`, { method: 'DELETE' })
     if (res.ok) {
       setShipments(prev => prev.filter(s => s.id !== id))
-      setShowShipmentForm(false)
-      setShipmentStep(1)
-      setCurrentDraftId(null)
-      setReservedShipmentNumber(null)
-      setShipmentForm({ description: '' })
-      setShipmentImages([])
       setMessage({ type: 'success', text: '下書きを削除しました' })
     } else {
       setMessage({ type: 'error', text: '削除に失敗しました' })
@@ -2179,41 +2064,42 @@ function MyPageContent() {
 
                   const existingDraft = shipments.find(s => s.shipmentMonth === currentMonth && s.status === 'draft')
 
-                  return !alreadyRegistered && (
+                  // Hide button if a draft already exists (user can edit it inline in the card)
+                  if (existingDraft) return null
+
+                  return !alreadyRegistered ? (
                     <div className="flex-shrink-0">
                       <Button size="sm" onClick={async () => {
-                        if (showShipmentForm) {
-                          setShowShipmentForm(false)
-                          setReservedShipmentNumber(null)
-                        } else {
-                          // 下書きがある場合は復元
-                          if (existingDraft) {
-                            setShipmentForm({ description: existingDraft.description || '' })
-                            setCurrentDraftId(existingDraft.id)
-                            setReservedShipmentNumber(existingDraft.shipmentNumber)
-                            // 下書きの画像を復元
-                            if (existingDraft.imageUrls?.length > 0) {
-                              setShipmentImages(existingDraft.imageUrls)
-                            }
-                            setShipmentStep(1)
-                          } else {
-                            // 番号を事前予約
-                            try {
-                              const res = await fetch('/api/delivery-shipments/reserve', { method: 'POST' })
-                              if (res.ok) {
-                                const data = await res.json()
-                                setReservedShipmentNumber(data.shipmentNumber)
-                              }
-                            } catch { /* ignore */ }
+                        try {
+                          // Reserve a shipment number first
+                          const reserveRes = await fetch('/api/delivery-shipments/reserve', { method: 'POST' })
+                          let shipmentNumber: string | undefined
+                          if (reserveRes.ok) {
+                            const reserveData = await reserveRes.json()
+                            shipmentNumber = reserveData.shipmentNumber
                           }
-                          setShowShipmentForm(true)
-                          setMessage(null)
+                          // Create a skeleton draft
+                          const res = await fetch('/api/delivery-shipments', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ description: '', imageUrls: [], step: 1 }),
+                          })
+                          if (res.ok) {
+                            const newDraft = await res.json()
+                            setShipments(prev => [newDraft, ...prev])
+                            setMessage({ type: 'success', text: '下書きを作成しました。以下のカードから登録を続けてください。' })
+                          } else {
+                            const d = await res.json()
+                            setMessage({ type: 'error', text: d.error || '下書きの作成に失敗しました' })
+                          }
+                        } catch {
+                          setMessage({ type: 'error', text: '下書きの作成に失敗しました' })
                         }
                       }}>
-                        {showShipmentForm ? 'キャンセル' : existingDraft ? '下書きを続ける' : '今月の送付を登録'}
+                        今月の送付を登録
                       </Button>
                     </div>
-                  )
+                  ) : null
                 })()}
               </div>
 
@@ -2302,209 +2188,6 @@ function MyPageContent() {
                 </ul>
               </Card>
 
-              {/* 送付登録フォーム */}
-              {showShipmentForm && (
-                <div className="space-y-4">
-                  {/* ステップインジケーター */}
-                  <div className="flex items-center gap-2 px-1">
-                    <div className={`flex items-center gap-1.5 ${shipmentStep === 1 ? 'text-[#B91C1C] font-bold' : 'text-gray-400'}`}>
-                      <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${shipmentStep === 1 ? 'bg-[#B91C1C] text-white' : 'bg-gray-200 text-gray-500'}`}>1</span>
-                      <span className="text-xs">箱の中身</span>
-                    </div>
-                    <div className={`flex-1 h-0.5 ${shipmentStep >= 2 ? 'bg-[#B91C1C]' : 'bg-gray-200'}`} />
-                    <div className={`flex items-center gap-1.5 ${shipmentStep === 2 ? 'text-[#B91C1C] font-bold' : 'text-gray-400'}`}>
-                      <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${shipmentStep === 2 ? 'bg-[#B91C1C] text-white' : 'bg-gray-200 text-gray-500'}`}>2</span>
-                      <span className="text-xs">送付情報</span>
-                    </div>
-                  </div>
-
-                  {/* Section 1: 箱の中身に関する情報 */}
-                  {shipmentStep === 1 && (
-                  <>
-                  <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-                    <div className="flex items-center gap-2.5 mb-1">
-                      <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-[#B91C1C] to-rose-500 text-white text-sm font-bold flex items-center justify-center">1</span>
-                      <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">箱の中身に関する情報</h3>
-                    </div>
-                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4 ml-[38px]">送る品物の内容と写真を登録してください</p>
-
-                    <div className="space-y-4">
-                      <TextField
-                        label="内容メモ（任意）"
-                        value={shipmentForm.description}
-                        onChange={v => setShipmentForm({ description: v })}
-                        placeholder="例：古い携帯電話1台、着なくなった服5着など"
-                        rows={3}
-                      />
-
-                      {/* 箱の中の写真 */}
-                      <div>
-                        <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
-                          箱の中の写真
-                        </p>
-                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                          JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {shipmentImages.map((url, i) => (
-                            <div key={i} className="relative w-20 h-20">
-                              <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
-                              <button
-                                type="button"
-                                onClick={() => setShipmentImages(prev => prev.filter((_, j) => j !== i))}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
-                              >×</button>
-                            </div>
-                          ))}
-                          {shipmentImages.length < 5 && (
-                            <button
-                              type="button"
-                              onClick={() => shipmentImageInputRef.current?.click()}
-                              disabled={uploadingShipmentImage}
-                              className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
-                            >
-                              {uploadingShipmentImage ? <LoadingSpinner size="sm" /> : (
-                                <>
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                                  </svg>
-                                  <span className="text-xs mt-1">追加</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                          <input
-                            ref={shipmentImageInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/heic"
-                            onChange={handleShipmentImageUpload}
-                            className="hidden"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* ステップ1のボタン */}
-                  <div className="flex gap-3">
-                    <Button onClick={handleSaveStep1} disabled={submittingShipment} loading={submittingShipment}>
-                      {submittingShipment ? '保存中...' : '下書き保存して次へ'}
-                    </Button>
-                    <Button variant="tonal" onClick={() => { setShowShipmentForm(false); setShipmentStep(1); setShipmentForm({ description: '' }); setShipmentImages([]); setTrackingImages([]) }}>
-                      キャンセル
-                    </Button>
-                  </div>
-                  </>
-                  )}
-
-                  {/* Section 2: 送付に関する情報 */}
-                  {shipmentStep === 2 && (
-                  <>
-                  <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-                    <div className="flex items-center gap-2.5 mb-1">
-                      <span className="flex-shrink-0 w-7 h-7 rounded-lg bg-gradient-to-br from-[#B91C1C] to-rose-500 text-white text-sm font-bold flex items-center justify-center">2</span>
-                      <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">送付に関する情報</h3>
-                    </div>
-                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4 ml-[38px]">発送IDを伝票に記入し、伝票の写真を登録してください</p>
-
-                    <div className="space-y-4">
-                      {/* 発送ID */}
-                      {reservedShipmentNumber && (
-                        <div className="bg-gradient-to-r from-[#B91C1C] to-rose-500 rounded-2xl p-4 text-center">
-                          <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの発送ID</p>
-                          <p className="text-white text-2xl font-black tracking-widest">{reservedShipmentNumber}</p>
-                          <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
-                        </div>
-                      )}
-
-                      {/* 伝票の記入例 */}
-                      <div className="rounded-2xl border border-gray-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">伝票の記入例</p>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/slip-example.svg" alt="伝票の記入例：品名欄に内容物と発送IDを記入" className="w-full rounded-lg" />
-                        <p className="text-[10px] text-gray-400 mt-1.5 text-center">品名欄に内容物と発送IDを記入してください</p>
-                      </div>
-
-                      {/* 送付先住所 */}
-                      {user.store && (
-                        <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">送付先</p>
-                          <p className="text-sm font-bold text-gray-900 mb-1">{user.store.name}</p>
-                          {user.store.address && (
-                            <p className="text-sm text-gray-700">
-                              {user.store.postalCode && <span>〒{user.store.postalCode} </span>}
-                              {user.store.address}
-                            </p>
-                          )}
-                          {user.store.phone && (
-                            <p className="text-xs text-gray-500 mt-1">TEL: {user.store.phone}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 発送伝票の写真 */}
-                      <div>
-                        <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
-                          発送伝票の写真
-                        </p>
-                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                          伝票の控えを撮影してください（追跡番号の確認に使用します）
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {trackingImages.map((url, i) => (
-                            <div key={`tracking-${i}`} className="relative w-20 h-20">
-                              <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
-                              <button
-                                type="button"
-                                onClick={() => setTrackingImages(prev => prev.filter((_, j) => j !== i))}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
-                              >×</button>
-                            </div>
-                          ))}
-                          {trackingImages.length < 2 && (
-                            <label className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                              </svg>
-                              <span className="text-xs mt-1">追加</span>
-                              <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,image/heic"
-                                className="hidden"
-                                onChange={async (e) => {
-                                  const file = e.target.files?.[0]
-                                  if (!file) return
-                                  const fd = new FormData()
-                                  fd.append('file', file)
-                                  const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: fd })
-                                  if (res.ok) {
-                                    const { url } = await res.json()
-                                    setTrackingImages(prev => [...prev, url])
-                                  }
-                                  e.target.value = ''
-                                }}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* ステップ2のボタン */}
-                  <div className="flex gap-3">
-                    <Button onClick={handleCompleteStep2} disabled={submittingShipment} loading={submittingShipment}>
-                      {submittingShipment ? '登録中...' : '送付登録を完了する'}
-                    </Button>
-                    <Button variant="tonal" onClick={() => setShipmentStep(1)}>
-                      戻る
-                    </Button>
-                  </div>
-                  </>
-                  )}
-                </div>
-              )}
-
               {/* 送付一覧 */}
               {shipmentsLoading ? (
                 <div className="py-8">
@@ -2526,18 +2209,12 @@ function MyPageContent() {
                     <ShipmentCard
                       key={s.id}
                       shipment={s}
+                      user={user}
                       updating={updatingShipmentId === s.id}
                       onMarkShipped={handleMarkShipped}
-                      onResumeDraft={s.status === 'draft' ? () => {
-                        setShipmentForm({ description: s.description || '' })
-                        setCurrentDraftId(s.id)
-                        setReservedShipmentNumber(s.shipmentNumber)
-                        if (s.imageUrls?.length > 0) setShipmentImages(s.imageUrls)
-                        setShipmentStep(1)
-                        setShowShipmentForm(true)
-                        setMessage(null)
-                      } : undefined}
                       onDeleteDraft={s.status === 'draft' ? handleDeleteDraft : undefined}
+                      onShipmentUpdated={(updated) => setShipments(prev => prev.map(x => x.id === updated.id ? updated : x))}
+                      onMessage={setMessage}
                     />
                   ))}
                 </div>
@@ -4215,20 +3892,38 @@ function getDeliveryStepsDone(status: string): number {
 
 function ShipmentCard({
   shipment,
+  user,
   updating,
   onMarkShipped,
-  onResumeDraft,
   onDeleteDraft,
+  onShipmentUpdated,
+  onMessage,
 }: {
   shipment: DeliveryShipment
+  user: UserData
   updating: boolean
   onMarkShipped: (id: string) => void
-  onResumeDraft?: () => void
   onDeleteDraft?: (id: string) => void
+  onShipmentUpdated: (updated: DeliveryShipment) => void
+  onMessage: (msg: { type: 'success' | 'error'; text: string }) => void
 }) {
+  const isDraft = shipment.status === 'draft'
+  const isTransferred = shipment.status === 'transferred'
+
+  // Draft-mode internal state
+  const [draftStep, setDraftStep] = useState<1 | 2>(1)
+  const [description, setDescription] = useState(shipment.description || '')
+  const [boxImages, setBoxImages] = useState<string[]>(shipment.imageUrls || [])
+  const [slipImages, setSlipImages] = useState<string[]>(shipment.trackingImageUrls || [])
+  const [uploading, setUploading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const boxInputRef = useRef<HTMLInputElement>(null)
+
+  // Lightbox state
+  const allImages = [...(shipment.imageUrls || []), ...(shipment.trackingImageUrls || [])]
   const [showImages, setShowImages] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const total = shipment.imageUrls.length
+  const total = allImages.length
 
   useEffect(() => {
     if (lightboxIndex === null) return
@@ -4247,9 +3942,91 @@ function ShipmentCard({
     return () => { document.body.style.overflow = '' }
   }, [lightboxIndex])
 
-  const stepsDone = getDeliveryStepsDone(shipment.status)
-  const isDraft = shipment.status === 'draft'
-  const isTransferred = shipment.status === 'transferred'
+  // --- Draft handlers ---
+  async function handleBoxImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: formData })
+    if (res.ok) {
+      const data = await res.json()
+      setBoxImages(prev => [...prev, data.url])
+    } else {
+      const d = await res.json()
+      onMessage({ type: 'error', text: d.error || '画像のアップロードに失敗しました' })
+    }
+    setUploading(false)
+    e.target.value = ''
+  }
+
+  async function handleSlipImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: formData })
+    if (res.ok) {
+      const data = await res.json()
+      setSlipImages(prev => [...prev, data.url])
+    } else {
+      const d = await res.json()
+      onMessage({ type: 'error', text: d.error || '画像のアップロードに失敗しました' })
+    }
+    setUploading(false)
+    e.target.value = ''
+  }
+
+  async function handleSaveStep1() {
+    setSubmitting(true)
+    const res = await fetch('/api/delivery-shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: description || undefined,
+        imageUrls: boxImages,
+        step: 1,
+        draftId: shipment.id,
+      }),
+    })
+    setSubmitting(false)
+    if (res.ok) {
+      const data = await res.json()
+      onShipmentUpdated(data)
+      setDraftStep(2)
+      onMessage({ type: 'success', text: '箱の中身の情報を保存しました。続けて送付情報を登録してください。' })
+    } else {
+      const d = await res.json()
+      onMessage({ type: 'error', text: d.error || '保存に失敗しました' })
+    }
+  }
+
+  async function handleCompleteStep2() {
+    setSubmitting(true)
+    const res = await fetch('/api/delivery-shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trackingImageUrls: slipImages,
+        step: 2,
+        draftId: shipment.id,
+      }),
+    })
+    setSubmitting(false)
+    if (res.ok) {
+      const updated = await res.json()
+      onShipmentUpdated(updated)
+      onMessage({ type: 'success', text: `送付登録が完了しました。発送ID: ${updated.shipmentNumber}` })
+    } else {
+      const d = await res.json()
+      onMessage({ type: 'error', text: d.error || '登録に失敗しました' })
+    }
+  }
+
+  // --- stepsDone calculation ---
+  const stepsDone = isDraft ? (draftStep === 2 ? 1 : 0) : getDeliveryStepsDone(shipment.status)
 
   return (
     <>
@@ -4266,43 +4043,28 @@ function ShipmentCard({
         {isTransferred && (
           <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">完了</span>
         )}
+        {isDraft && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">下書き</span>
+        )}
+        <div className="flex-1" />
+        {isDraft && onDeleteDraft && (
+          <button
+            onClick={() => onDeleteDraft(shipment.id)}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="下書きを削除"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {shipment.description && (
+      {/* Non-draft description */}
+      {!isDraft && shipment.description && (
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap mb-4">
           {shipment.description}
         </p>
-      )}
-
-      {/* Draft: resume/delete buttons */}
-      {isDraft && (
-        <div className="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
-          <p className="text-xs text-gray-500 mb-2">登録がまだ完了していません</p>
-          <div className="flex items-center gap-2">
-            {onResumeDraft && (
-              <button
-                onClick={onResumeDraft}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--portal-primary,#B91C1C)] text-white text-xs font-medium hover:opacity-90 transition-opacity"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                下書きを続ける
-              </button>
-            )}
-            {onDeleteDraft && (
-              <button
-                onClick={() => onDeleteDraft(shipment.id)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-gray-500 text-xs font-medium hover:bg-gray-50 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                削除
-              </button>
-            )}
-          </div>
-        </div>
       )}
 
       {/* 6-step vertical timeline */}
@@ -4352,8 +4114,8 @@ function ShipmentCard({
                     )}
                   </div>
 
-                  {/* Right-side status badge */}
-                  {active && (
+                  {/* Right-side status badge (non-draft only) */}
+                  {!isDraft && active && (
                     <span className="text-xs font-medium text-[var(--portal-primary,#B91C1C)] flex-shrink-0 mt-0.5">
                       {shipment.status === 'registered' ? '発送待ち...' :
                        shipment.status === 'shipped' ? '受取待ち...' :
@@ -4363,8 +4125,168 @@ function ShipmentCard({
                   )}
                 </div>
 
+                {/* ===== STEP 0 (発送準備): Draft inline form ===== */}
+                {isDraft && idx === 0 && draftStep === 1 && active && (
+                  <div className="mt-3 p-4 rounded-xl bg-white/80 border border-gray-100 space-y-3">
+                    <TextField
+                      label="内容メモ（任意）"
+                      value={description}
+                      onChange={v => setDescription(v)}
+                      placeholder="例：古い携帯電話1台、着なくなった服5着など"
+                      rows={3}
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">箱の中の写真</p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚</p>
+                      <div className="flex flex-wrap gap-2">
+                        {boxImages.map((url, i) => (
+                          <div key={i} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                            <button
+                              type="button"
+                              onClick={() => setBoxImages(prev => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                            >×</button>
+                          </div>
+                        ))}
+                        {boxImages.length < 5 && (
+                          <button
+                            type="button"
+                            onClick={() => boxInputRef.current?.click()}
+                            disabled={uploading}
+                            className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors disabled:opacity-50"
+                          >
+                            {uploading ? <LoadingSpinner size="sm" /> : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span className="text-xs mt-1">追加</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                        <input
+                          ref={boxInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/heic"
+                          onChange={handleBoxImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-1">
+                      <Button onClick={handleSaveStep1} disabled={submitting} loading={submitting}>
+                        {submitting ? '保存中...' : '下書き保存して次へ'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 0 completed summary (draft step 2 = step 0 done) */}
+                {isDraft && idx === 0 && draftStep === 2 && done && (
+                  <div className="text-xs text-emerald-600 flex items-center gap-1.5 mt-2">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>{boxImages.length}枚の写真を登録済み</span>
+                    <button
+                      type="button"
+                      onClick={() => setDraftStep(1)}
+                      className="text-[var(--portal-primary,#B91C1C)] underline ml-1 hover:opacity-70"
+                    >
+                      編集
+                    </button>
+                  </div>
+                )}
+
+                {/* ===== STEP 1 (発送前準備): Draft inline form for slip ===== */}
+                {isDraft && idx === 1 && draftStep === 2 && active && (
+                  <div className="mt-3 p-4 rounded-xl bg-white/80 border border-gray-100 space-y-4">
+                    {/* 発送ID badge */}
+                    <div className="bg-gradient-to-r from-[#B91C1C] to-rose-500 rounded-2xl p-4 text-center">
+                      <p className="text-white/70 text-xs font-medium uppercase tracking-wider mb-1">あなたの発送ID</p>
+                      <p className="text-white text-2xl font-black tracking-widest">{shipment.shipmentNumber}</p>
+                      <p className="text-white/60 text-[10px] mt-1">伝票に記入してください</p>
+                    </div>
+
+                    {/* 伝票の記入例 */}
+                    <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">伝票の記入例</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/slip-example.svg" alt="伝票の記入例：品名欄に内容物と発送IDを記入" className="w-full rounded-lg" />
+                      <p className="text-[10px] text-gray-400 mt-1.5 text-center">品名欄に内容物と発送IDを記入してください</p>
+                    </div>
+
+                    {/* 送付先住所 */}
+                    {user.store && (
+                      <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">送付先</p>
+                        <p className="text-sm font-bold text-gray-900 mb-1">{user.store.name}</p>
+                        {user.store.address && (
+                          <p className="text-sm text-gray-700">
+                            {user.store.postalCode && <span>〒{user.store.postalCode} </span>}
+                            {user.store.address}
+                          </p>
+                        )}
+                        {user.store.phone && (
+                          <p className="text-xs text-gray-500 mt-1">TEL: {user.store.phone}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 発送伝票の写真 */}
+                    <div>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">発送伝票の写真</p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">伝票の控えを撮影してください（追跡番号の確認に使用します）</p>
+                      <div className="flex flex-wrap gap-2">
+                        {slipImages.map((url, i) => (
+                          <div key={`slip-${i}`} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                            <button
+                              type="button"
+                              onClick={() => setSlipImages(prev => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[var(--md-sys-color-error,#B3261E)] text-white rounded-full flex items-center justify-center text-xs leading-none"
+                            >×</button>
+                          </div>
+                        ))}
+                        {slipImages.length < 2 && (
+                          <label className="w-20 h-20 border-2 border-dashed border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] flex flex-col items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary)] transition-colors cursor-pointer">
+                            {uploading ? <LoadingSpinner size="sm" /> : (
+                              <>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span className="text-xs mt-1">追加</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/heic"
+                              className="hidden"
+                              onChange={handleSlipImageUpload}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="flex gap-3 pt-1">
+                      <Button onClick={handleCompleteStep2} disabled={submitting} loading={submitting}>
+                        {submitting ? '登録中...' : '送付登録を完了する'}
+                      </Button>
+                      <Button variant="tonal" onClick={() => setDraftStep(1)}>
+                        戻る
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== Non-draft step content (same as before) ===== */}
+
                 {/* Step 3 action: 発送完了を報告する (index=2, status=registered) */}
-                {active && idx === 2 && shipment.status === 'registered' && (
+                {!isDraft && active && idx === 2 && shipment.status === 'registered' && (
                   <div className="mt-2">
                     <button
                       onClick={() => onMarkShipped(shipment.id)}
@@ -4384,12 +4306,12 @@ function ShipmentCard({
                 )}
 
                 {/* Step 4 waiting (index=3, status=shipped) */}
-                {active && idx === 3 && (
+                {!isDraft && active && idx === 3 && (
                   <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1.5">店舗からの受取確認をお待ちください</p>
                 )}
 
                 {/* Step 5 waiting: 査定中 (index=4, status=received) */}
-                {active && idx === 4 && (
+                {!isDraft && active && idx === 4 && (
                   <div className="mt-2 p-3 bg-amber-50 rounded-lg border border-amber-200 flex items-start gap-2">
                     <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4415,7 +4337,7 @@ function ShipmentCard({
                 )}
 
                 {/* Step 6 waiting: show amount + waiting (index=5, active, status=appraised) */}
-                {active && idx === 5 && (
+                {!isDraft && active && idx === 5 && (
                   <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                     {shipment.purchaseAmount !== null && (
                       <>
@@ -4452,8 +4374,8 @@ function ShipmentCard({
         })}
       </div>
 
-      {/* Image viewer */}
-      {total > 0 && (
+      {/* Image viewer (for non-draft cards with existing images) */}
+      {!isDraft && total > 0 && (
         <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
           <button
             onClick={() => setShowImages(v => !v)}
@@ -4463,7 +4385,7 @@ function ShipmentCard({
           </button>
           {showImages && (
             <div className="flex flex-wrap gap-2 mt-2">
-              {shipment.imageUrls.map((url, i) => (
+              {allImages.map((url, i) => (
                 <button
                   key={i}
                   type="button"
@@ -4522,14 +4444,14 @@ function ShipmentCard({
         )}
         <div className="max-w-[90vw] max-h-[85vh] flex items-center justify-center" onClick={e => e.stopPropagation()}>
           <img
-            src={shipment.imageUrls[lightboxIndex]}
+            src={allImages[lightboxIndex]}
             alt={`画像 ${lightboxIndex + 1}`}
             className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
           />
         </div>
         {total > 1 && (
           <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {shipment.imageUrls.map((_, i) => (
+            {allImages.map((_, i) => (
               <button
                 key={i}
                 onClick={e => { e.stopPropagation(); setLightboxIndex(i) }}

@@ -110,6 +110,7 @@ export async function DELETE(
     where: { id },
     data: {
       idDocumentPath:     null,
+      idDocumentUploadedAt: null,
       idDocumentType:     null,
       idName:             null,
       idBirthDate:        null,
@@ -187,6 +188,7 @@ export async function POST(
       where: { id },
       data: {
         idDocumentPath:   fileUrl,
+        idDocumentUploadedAt: new Date(), // 4日後の自動削除用タイムスタンプ
         idOcrIssueReport: null, // 再アップロード時は誤り報告をリセット
         // クライアントから documentType が指定された場合はそれを優先
         ...(documentType ? { idDocumentType: documentType } : {}),

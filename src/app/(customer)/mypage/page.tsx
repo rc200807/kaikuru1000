@@ -2390,6 +2390,14 @@ function MyPageContent() {
                         </div>
                       )}
 
+                      {/* 伝票の記入例 */}
+                      <div className="rounded-2xl border border-gray-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">伝票の記入例</p>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/slip-example.svg" alt="伝票の記入例：品名欄に内容物と発送IDを記入" className="w-full rounded-lg" />
+                        <p className="text-[10px] text-gray-400 mt-1.5 text-center">品名欄に内容物と発送IDを記入してください</p>
+                      </div>
+
                       {/* 送付先住所 */}
                       {user.store && (
                         <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">

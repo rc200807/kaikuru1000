@@ -2493,6 +2493,15 @@ function MyPageContent() {
                       shipment={s}
                       updating={updatingShipmentId === s.id}
                       onMarkShipped={handleMarkShipped}
+                      onResumeDraft={s.status === 'draft' ? () => {
+                        setShipmentForm({ description: s.description || '' })
+                        setCurrentDraftId(s.id)
+                        setReservedShipmentNumber(s.shipmentNumber)
+                        if (s.imageUrls?.length > 0) setShipmentImages(s.imageUrls)
+                        setShipmentStep(1)
+                        setShowShipmentForm(true)
+                        setMessage(null)
+                      } : undefined}
                     />
                   ))}
                 </div>
@@ -4140,10 +4149,12 @@ function ShipmentCard({
   shipment,
   updating,
   onMarkShipped,
+  onResumeDraft,
 }: {
   shipment: DeliveryShipment
   updating: boolean
   onMarkShipped: (id: string) => void
+  onResumeDraft?: () => void
 }) {
   const [showImages, setShowImages] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -4245,6 +4256,20 @@ function ShipmentCard({
           </div>
         )}
       </div>
+
+      {shipment.status === 'draft' && onResumeDraft && (
+        <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
+          <button
+            onClick={onResumeDraft}
+            className="flex items-center gap-2 px-4 py-2 rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#B91C1C)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            下書きを続ける
+          </button>
+        </div>
+      )}
 
       {shipment.status === 'registered' && (
         <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">

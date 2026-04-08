@@ -1,23 +1,23 @@
 @import "tailwindcss";
 
 /* ============================================================
-   買いクル Design System — Material Design 3
+   買いクル Design System — Vercel-inspired
    ============================================================ */
 
 :root {
   /* ── Shared Neutral ─────────────────────────────────── */
-  --md-sys-color-surface:                  #FFFBFE;
-  --md-sys-color-surface-dim:              #DED8E1;
-  --md-sys-color-surface-bright:           #FFFBFE;
-  --md-sys-color-surface-container-lowest: #FFFFFF;
-  --md-sys-color-surface-container-low:    #F7F2FA;
-  --md-sys-color-surface-container:        #F3EDF7;
-  --md-sys-color-surface-container-high:   #ECE6F0;
-  --md-sys-color-surface-container-highest:#E6E0E9;
-  --md-sys-color-on-surface:               #1C1B1F;
-  --md-sys-color-on-surface-variant:       #49454F;
-  --md-sys-color-outline:                  #79747E;
-  --md-sys-color-outline-variant:          #CAC4D0;
+  --md-sys-color-surface:                  #ffffff;
+  --md-sys-color-surface-dim:              #e5e5e5;
+  --md-sys-color-surface-bright:           #ffffff;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low:    #fafafa;
+  --md-sys-color-surface-container:        #fafafa;
+  --md-sys-color-surface-container-high:   #f5f5f5;
+  --md-sys-color-surface-container-highest:#eeeeee;
+  --md-sys-color-on-surface:               #171717;
+  --md-sys-color-on-surface-variant:       #666666;
+  --md-sys-color-outline:                  #d4d4d4;
+  --md-sys-color-outline-variant:          #e5e5e5;
   --md-sys-color-scrim:                    #000000;
 
   /* ── Customer Portal (Red seed) ─────────────────────── */
@@ -30,61 +30,61 @@
   --customer-tertiary:              #755B2E;
   --customer-tertiary-container:    #FFDEA6;
 
-  /* ── Store Portal (Blue seed) ───────────────────────── */
-  --store-primary:                  #1E3A5F;
-  --store-on-primary:               #FFFFFF;
-  --store-primary-container:        #D3E4FF;
-  --store-on-primary-container:     #001C3A;
-  --store-secondary:                #535F70;
-  --store-secondary-container:      #D7E3F7;
-  --store-tertiary:                 #6B5778;
-  --store-tertiary-container:       #F2DAFF;
+  /* ── Store Portal (Vercel-inspired) ──────────────────── */
+  --store-primary:                  #171717;
+  --store-on-primary:               #ffffff;
+  --store-primary-container:        #f5f5f5;
+  --store-on-primary-container:     #171717;
+  --store-secondary:                #666666;
+  --store-secondary-container:      #f5f5f5;
+  --store-tertiary:                 #666666;
+  --store-tertiary-container:       #fafafa;
 
-  /* ── Admin Portal (Warm Coral seed) ─────────────────── */
-  --admin-primary:                  #E8927C;
-  --admin-on-primary:               #FFFFFF;
-  --admin-primary-container:        #3D2420;
-  --admin-on-primary-container:     #F4C4B8;
-  --admin-secondary:                #565E71;
-  --admin-secondary-container:      #DAE2F9;
-  --admin-tertiary:                 #6E5676;
-  --admin-tertiary-container:       #F8D8FF;
+  /* ── Admin Portal (Vercel dark) ──────────────────────── */
+  --admin-primary:                  #ffffff;
+  --admin-on-primary:               #0a0a0a;
+  --admin-primary-container:        #171717;
+  --admin-on-primary-container:     #ededed;
+  --admin-secondary:                #a3a3a3;
+  --admin-secondary-container:      #262626;
+  --admin-tertiary:                 #a3a3a3;
+  --admin-tertiary-container:       #1a1a1a;
 
   /* ── Shared Error ───────────────────────────────────── */
-  --md-sys-color-error:             #BA1A1A;
-  --md-sys-color-on-error:          #FFFFFF;
-  --md-sys-color-error-container:   #FFDAD6;
-  --md-sys-color-on-error-container:#410002;
+  --md-sys-color-error:             #ef4444;
+  --md-sys-color-on-error:          #ffffff;
+  --md-sys-color-error-container:   #fef2f2;
+  --md-sys-color-on-error-container:#991b1b;
 
   /* ── Semantic Status Colors ─────────────────────────── */
-  --status-scheduled-bg:    #E3F2FD;
-  --status-scheduled-text:  #1565C0;
-  --status-pending-bg:      #FFF8E1;
-  --status-pending-text:    #F57F17;
-  --status-completed-bg:    #E8F5E9;
-  --status-completed-text:  #2E7D32;
-  --status-rescheduled-bg:  #EDE7F6;
-  --status-rescheduled-text:#4527A0;
-  --status-absent-bg:       #FFEBEE;
-  --status-absent-text:     #C62828;
-  --status-cancelled-bg:    #F5F5F5;
-  --status-cancelled-text:  #757575;
+  --status-scheduled-bg:    #ebf5ff;
+  --status-scheduled-text:  #0068d6;
+  --status-pending-bg:      #fff7ed;
+  --status-pending-text:    #c2410c;
+  --status-completed-bg:    #f0fdf4;
+  --status-completed-text:  #15803d;
+  --status-rescheduled-bg:  #f5f3ff;
+  --status-rescheduled-text:#6d28d9;
+  --status-absent-bg:       #fef2f2;
+  --status-absent-text:     #dc2626;
+  --status-cancelled-bg:    #f5f5f5;
+  --status-cancelled-text:  #737373;
 
-  /* ── Elevation ──────────────────────────────────────── */
+  /* ── Elevation (shadow-as-border, Vercel-style) ─────── */
   --md-sys-elevation-0: none;
-  --md-sys-elevation-1: 0 1px 2px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.08);
-  --md-sys-elevation-2: 0 2px 6px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);
-  --md-sys-elevation-3: 0 4px 8px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
-  --md-sys-elevation-4: 0 6px 10px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.10);
-  --md-sys-elevation-5: 0 8px 12px rgba(0,0,0,0.16), 0 4px 8px rgba(0,0,0,0.10);
+  --md-sys-elevation-1: rgba(0,0,0,0.08) 0px 0px 0px 1px;
+  --md-sys-elevation-2: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px;
+  --md-sys-elevation-3: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px;
+  --md-sys-elevation-4: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.06) 0px 4px 6px;
+  --md-sys-elevation-5: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.08) 0px 8px 16px;
 
-  /* ── Shape ──────────────────────────────────────────── */
+  /* ── Shape (tighter radii, Vercel-style) ─────────────── */
   --md-sys-shape-none:         0px;
   --md-sys-shape-extra-small:  4px;
-  --md-sys-shape-small:        8px;
-  --md-sys-shape-medium:       12px;
-  --md-sys-shape-large:        16px;
-  --md-sys-shape-extra-large:  28px;
+  --md-sys-shape-small:        6px;
+  --md-sys-shape-medium:       8px;
+  --md-sys-shape-large:        12px;
+  --md-sys-shape-extra-large:  16px;
   --md-sys-shape-full:         9999px;
 }
 
@@ -105,55 +105,72 @@ body {
   --portal-on-primary:            var(--store-on-primary);
   --portal-primary-container:     var(--store-primary-container);
   --portal-on-primary-container:  var(--store-on-primary-container);
+
+  /* ── Vercel light surface overrides ────────────────── */
+  --md-sys-color-surface:                  #ffffff;
+  --md-sys-color-surface-container:        #fafafa;
+  --md-sys-color-surface-container-high:   #f5f5f5;
+  --md-sys-color-surface-container-low:    #fafafa;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-on-surface:               #171717;
+  --md-sys-color-on-surface-variant:       #666666;
+  --md-sys-color-outline:                  #d4d4d4;
+  --md-sys-color-outline-variant:          #e5e5e5;
+  --md-sys-color-error:                    #ef4444;
+
+  /* ── Vercel light elevations ───────────────────────── */
+  --md-sys-elevation-1: rgba(0,0,0,0.08) 0px 0px 0px 1px;
+  --md-sys-elevation-2: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px;
+  --md-sys-elevation-3: rgba(0,0,0,0.08) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 2px 2px, rgba(0,0,0,0.04) 0px 8px 8px -8px;
 }
 [data-portal="admin"] {
-  /* ── Portal accent (Warm Coral) ───────────────────── */
-  --portal-primary:                 #E8927C;
-  --portal-on-primary:              #FFFFFF;
-  --portal-primary-container:       #3D2420;
-  --portal-on-primary-container:    #F4C4B8;
+  /* ── Portal accent (Vercel dark) ──────────────────── */
+  --portal-primary:                 #ffffff;
+  --portal-on-primary:              #0a0a0a;
+  --portal-primary-container:       #171717;
+  --portal-on-primary-container:    #ededed;
 
-  /* ── Dark surface tokens ──────────────────────────── */
-  --md-sys-color-surface:                  #0F1117;
-  --md-sys-color-surface-dim:              #0A0D14;
-  --md-sys-color-surface-bright:           #2A2E3D;
-  --md-sys-color-surface-container-lowest: #090C13;
-  --md-sys-color-surface-container-low:    #181C27;
-  --md-sys-color-surface-container:        #1E2233;
-  --md-sys-color-surface-container-high:   #252A3D;
-  --md-sys-color-surface-container-highest:#2D3347;
-  --md-sys-color-on-surface:               #E2E6F3;
-  --md-sys-color-on-surface-variant:       #9AA3BF;
-  --md-sys-color-outline:                  #5C6580;
-  --md-sys-color-outline-variant:          #313754;
+  /* ── Vercel dark surface tokens ───────────────────── */
+  --md-sys-color-surface:                  #0a0a0a;
+  --md-sys-color-surface-dim:              #050505;
+  --md-sys-color-surface-bright:           #262626;
+  --md-sys-color-surface-container-lowest: #050505;
+  --md-sys-color-surface-container-low:    #0a0a0a;
+  --md-sys-color-surface-container:        #171717;
+  --md-sys-color-surface-container-high:   #1a1a1a;
+  --md-sys-color-surface-container-highest:#262626;
+  --md-sys-color-on-surface:               #ededed;
+  --md-sys-color-on-surface-variant:       #a3a3a3;
+  --md-sys-color-outline:                  #333333;
+  --md-sys-color-outline-variant:          #262626;
 
   /* ── Dark error ───────────────────────────────────── */
-  --md-sys-color-error:             #F28B82;
-  --md-sys-color-on-error:          #370001;
-  --md-sys-color-error-container:   #8C1D18;
-  --md-sys-color-on-error-container:#F9DEDC;
+  --md-sys-color-error:             #f87171;
+  --md-sys-color-on-error:          #0a0a0a;
+  --md-sys-color-error-container:   #7f1d1d;
+  --md-sys-color-on-error-container:#fecaca;
 
   /* ── Dark status colors ───────────────────────────── */
-  --status-scheduled-bg:    #1A3A5C;
-  --status-scheduled-text:  #82B4E8;
-  --status-pending-bg:      #4A3300;
-  --status-pending-text:    #FFD080;
-  --status-completed-bg:    #1A3A22;
-  --status-completed-text:  #81C784;
-  --status-rescheduled-bg:  #2E1F4A;
-  --status-rescheduled-text:#CE93D8;
-  --status-absent-bg:       #4A1919;
-  --status-absent-text:     #EF9A9A;
-  --status-cancelled-bg:    #252525;
-  --status-cancelled-text:  #9E9E9E;
+  --status-scheduled-bg:    #172554;
+  --status-scheduled-text:  #60a5fa;
+  --status-pending-bg:      #431407;
+  --status-pending-text:    #fb923c;
+  --status-completed-bg:    #14532d;
+  --status-completed-text:  #4ade80;
+  --status-rescheduled-bg:  #2e1065;
+  --status-rescheduled-text:#a78bfa;
+  --status-absent-bg:       #450a0a;
+  --status-absent-text:     #fca5a5;
+  --status-cancelled-bg:    #1a1a1a;
+  --status-cancelled-text:  #a3a3a3;
 
-  /* ── Dark elevation ───────────────────────────────── */
-  --md-sys-elevation-1: 0 1px 2px rgba(0,0,0,0.40), 0 1px 3px rgba(0,0,0,0.30);
-  --md-sys-elevation-2: 0 2px 6px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.30);
-  --md-sys-elevation-3: 0 4px 8px rgba(0,0,0,0.50), 0 2px 4px rgba(0,0,0,0.30);
+  /* ── Vercel dark elevation ────────────────────────── */
+  --md-sys-elevation-1: rgba(255,255,255,0.06) 0px 0px 0px 1px;
+  --md-sys-elevation-2: rgba(255,255,255,0.06) 0px 0px 0px 1px, rgba(0,0,0,0.2) 0px 2px 4px;
+  --md-sys-elevation-3: rgba(255,255,255,0.06) 0px 0px 0px 1px, rgba(0,0,0,0.3) 0px 4px 8px;
 
   /* ── Toggle thumb ─────────────────────────────────── */
-  --toggle-thumb: #E8ECFF;
+  --toggle-thumb: #ededed;
 
   /* ── Browser dark mode ────────────────────────────── */
   color-scheme: dark;
@@ -166,9 +183,10 @@ body {
   color-scheme: dark;
 }
 
-/* Admin: AppBar に区切り線＋ダーク背景 */
+/* Admin: AppBar — shadow-as-border bottom + dark bg */
 [data-portal="admin"] header {
-  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: none;
+  box-shadow: rgba(255,255,255,0.06) 0px 1px 0px 0px;
   background-color: var(--md-sys-color-surface-container-low) !important;
 }
 
@@ -244,3 +262,9 @@ body {
 
 /* ── Safe area (mobile bottom nav) ───────────────────── */
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* ── Geist-like typography ───────────────────────────── */
+h1, h2, h3 { font-feature-settings: "liga" 1; }
+h1 { letter-spacing: -0.04em; }
+h2 { letter-spacing: -0.03em; }
+h3 { letter-spacing: -0.02em; }

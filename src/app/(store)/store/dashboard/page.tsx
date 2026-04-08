@@ -54,34 +54,27 @@ type KpiProps = {
   value: string
   unit?: string
   sub?: string
-  color: string
-  gradFrom: string
-  gradTo: string
   icon: React.ReactNode
 }
 
-function KpiCard({ label, value, unit, sub, color, gradFrom, gradTo, icon }: KpiProps) {
+function KpiCard({ label, value, unit, sub, icon }: KpiProps) {
   return (
     <div
-      className="relative rounded-3xl p-4 overflow-hidden"
+      className="relative rounded-2xl p-4 overflow-hidden"
       style={{
-        background: `linear-gradient(135deg, ${gradFrom} 0%, ${gradTo} 100%)`,
-        border: `1px solid ${color}33`,
+        background: '#ffffff',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.06)',
       }}
     >
-      <div
-        className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-20 blur-2xl pointer-events-none"
-        style={{ background: color }}
-      />
       <div className="flex items-start justify-between mb-3">
-        <span className="text-xs font-medium opacity-70 text-white">{label}</span>
-        <span className="opacity-50 text-white">{icon}</span>
+        <span className="text-[11px] font-normal" style={{ color: '#666666' }}>{label}</span>
+        <span style={{ color: '#a3a3a3' }}>{icon}</span>
       </div>
       <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-black text-white tracking-tight">{value}</span>
-        {unit && <span className="text-xs text-white/70">{unit}</span>}
+        <span className="text-2xl tracking-tight" style={{ color: '#171717', fontWeight: 600 }}>{value}</span>
+        {unit && <span className="text-xs" style={{ color: '#666666' }}>{unit}</span>}
       </div>
-      {sub && <p className="text-[11px] text-white/60 mt-1">{sub}</p>}
+      {sub && <p className="text-[11px] mt-1" style={{ color: '#a3a3a3' }}>{sub}</p>}
     </div>
   )
 }
@@ -89,27 +82,26 @@ function KpiCard({ label, value, unit, sub, color, gradFrom, gradTo, icon }: Kpi
 function ChartTooltip({ active, payload, label, formatter }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)] rounded-xl px-3 py-2 shadow-lg text-xs">
-      <p className="text-[var(--md-sys-color-on-surface-variant)] mb-1">{label}</p>
-      <p className="font-bold text-sm" style={{ color: payload[0].color }}>
+    <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#ffffff', boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.08)' }}>
+      <p className="mb-1" style={{ color: '#666666' }}>{label}</p>
+      <p className="font-semibold text-sm" style={{ color: '#171717' }}>
         {formatter ? formatter(payload[0].value) : payload[0].value}
       </p>
     </div>
   )
 }
 
-function SectionHeading({ children, color }: { children: React.ReactNode; color: string }) {
+function SectionHeading({ children }: { children: React.ReactNode; color?: string }) {
   return (
     <div className="flex items-center gap-2 mb-4">
-      <span className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: color }} />
-      <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{children}</h2>
+      <h2 className="text-sm" style={{ color: '#171717', fontWeight: 600 }}>{children}</h2>
     </div>
   )
 }
 
 function ChartCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-[var(--md-sys-color-surface-container-lowest,#fff)] rounded-3xl border border-[var(--md-sys-color-outline-variant)] p-5 min-w-0 ${className}`}>
+    <div className={`rounded-2xl p-5 min-w-0 ${className}`} style={{ background: '#ffffff', boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.06)' }}>
       {children}
     </div>
   )
@@ -121,27 +113,16 @@ function RankBadge({ rank }: { rank: number | null }) {
   if (rank === null) {
     return (
       <div className="flex flex-col items-center">
-        <span className="text-3xl font-black text-[var(--md-sys-color-outline)]">—</span>
-        <span className="text-[10px] text-[var(--md-sys-color-outline)] mt-1">ランク外</span>
+        <span className="text-3xl" style={{ color: '#a3a3a3', fontWeight: 600 }}>--</span>
+        <span className="text-[10px] mt-1" style={{ color: '#a3a3a3' }}>ランク外</span>
       </div>
     )
   }
 
-  const medals: Record<number, { emoji: string; color: string }> = {
-    1: { emoji: '🥇', color: '#F59E0B' },
-    2: { emoji: '🥈', color: '#94A3B8' },
-    3: { emoji: '🥉', color: '#D97706' },
-  }
-  const medal = medals[rank]
-
   return (
     <div className="flex flex-col items-center">
-      {medal ? (
-        <span className="text-4xl">{medal.emoji}</span>
-      ) : (
-        <span className="text-3xl font-black" style={{ color: '#A78BFA' }}>{rank}</span>
-      )}
-      <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+      <span className="text-3xl" style={{ color: '#171717', fontWeight: 600 }}>{rank}</span>
+      <span className="text-[10px] mt-1" style={{ color: '#666666' }}>
         位
       </span>
     </div>
@@ -190,9 +171,6 @@ export default function StoreDashboardPage() {
     {
       label: '当月買取金額',
       value: fmtYen(currentMonthAmount),
-      color: '#A78BFA',
-      gradFrom: 'rgba(167,139,250,0.7)',
-      gradTo: 'rgba(124,58,237,0.4)',
       icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
     },
     {
@@ -200,18 +178,12 @@ export default function StoreDashboardPage() {
       value: currentMonthVisitCount.toLocaleString(),
       unit: '件',
       sub: `完了 ${currentMonthCompletedCount}件`,
-      color: '#10B981',
-      gradFrom: 'rgba(16,185,129,0.7)',
-      gradTo: 'rgba(5,150,105,0.4)',
       icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>,
     },
     {
       label: '本日の案件',
       value: todayCases.length.toLocaleString(),
       unit: '件',
-      color: '#F59E0B',
-      gradFrom: 'rgba(245,158,11,0.7)',
-      gradTo: 'rgba(217,119,6,0.4)',
       icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>,
     },
   ]
@@ -247,17 +219,16 @@ export default function StoreDashboardPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* ランクカード */}
           <div
-            className="relative rounded-3xl p-4 overflow-hidden flex items-center justify-center"
+            className="relative rounded-2xl p-4 overflow-hidden flex items-center justify-center"
             style={{
-              background: 'linear-gradient(135deg, rgba(59,130,246,0.7) 0%, rgba(124,58,237,0.5) 100%)',
-              border: '1px solid rgba(59,130,246,0.3)',
+              background: '#ffffff',
+              boxShadow: '0 0 0 1px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.06)',
             }}
           >
-            <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-15 blur-2xl pointer-events-none bg-blue-400" />
             <div className="text-center">
-              <p className="text-[10px] font-medium text-white/60 mb-2">全店舗ランキング（当月）</p>
+              <p className="text-[10px] mb-2" style={{ color: '#666666', fontWeight: 400 }}>全店舗ランキング（当月）</p>
               <RankBadge rank={myRank} />
-              <p className="text-[10px] text-white/50 mt-1">/ {totalStores}店舗中</p>
+              <p className="text-[10px] mt-1" style={{ color: '#a3a3a3' }}>/ {totalStores}店舗中</p>
             </div>
           </div>
 
@@ -267,24 +238,24 @@ export default function StoreDashboardPage() {
 
         {/* ── 買取金額推移 ── */}
         <ChartCard>
-          <SectionHeading color="#A78BFA">買取金額の推移（月次・直近12ヶ月）</SectionHeading>
+          <SectionHeading>買取金額の推移（月次・直近12ヶ月）</SectionHeading>
           {monthlyPurchaseAmount.every(d => d.amount === 0) ? (
-            <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-12">買取実績がありません</p>
+            <p className="text-sm text-center py-12" style={{ color: '#a3a3a3' }}>買取実績がありません</p>
           ) : (
             <div className="h-52 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthlyPurchaseAmount} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="storePurchaseGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#A78BFA" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#A78BFA" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#171717" stopOpacity={0.12} />
+                      <stop offset="100%" stopColor="#171717" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant,#ddd)" opacity={0.4} vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#888)' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#888)' }} axisLine={false} tickLine={false} tickFormatter={yenAxis} width={46} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#a3a3a3' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#a3a3a3' }} axisLine={false} tickLine={false} tickFormatter={yenAxis} width={46} />
                   <Tooltip content={<ChartTooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />} />
-                  <Area type="monotone" dataKey="amount" stroke="#A78BFA" strokeWidth={2.5} fill="url(#storePurchaseGrad)" dot={false} activeDot={{ r: 5, fill: '#A78BFA', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="amount" stroke="#171717" strokeWidth={2} fill="url(#storePurchaseGrad)" dot={false} activeDot={{ r: 4, fill: '#171717', strokeWidth: 0 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -294,24 +265,24 @@ export default function StoreDashboardPage() {
         {/* ── 訪問件数推移 + ランキング ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard>
-            <SectionHeading color="#10B981">訪問件数の推移（月次）</SectionHeading>
+            <SectionHeading>訪問件数の推移（月次）</SectionHeading>
             {monthlyVisits.every(d => d.count === 0) ? (
-              <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-8">訪問データがありません</p>
+              <p className="text-sm text-center py-8" style={{ color: '#a3a3a3' }}>訪問データがありません</p>
             ) : (
               <div className="h-44 min-w-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={monthlyVisits} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                     <defs>
                       <linearGradient id="storeVisitGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
-                        <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                        <stop offset="0%" stopColor="#171717" stopOpacity={0.12} />
+                        <stop offset="100%" stopColor="#171717" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-color-outline-variant,#ddd)" opacity={0.4} vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#888)' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: 'var(--md-sys-color-on-surface-variant,#888)' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#a3a3a3' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a3a3a3' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
                     <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
-                    <Area type="monotone" dataKey="count" stroke="#10B981" strokeWidth={2.5} fill="url(#storeVisitGrad)" dot={false} activeDot={{ r: 5, fill: '#10B981', strokeWidth: 0 }} />
+                    <Area type="monotone" dataKey="count" stroke="#171717" strokeWidth={2} fill="url(#storeVisitGrad)" dot={false} activeDot={{ r: 4, fill: '#171717', strokeWidth: 0 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -320,37 +291,26 @@ export default function StoreDashboardPage() {
 
           {/* TOP10 ランキング */}
           <ChartCard>
-            <SectionHeading color="#3B82F6">店舗ランキング TOP10（当月）</SectionHeading>
+            <SectionHeading>店舗ランキング TOP10（当月）</SectionHeading>
             {top10.length === 0 ? (
-              <p className="text-sm text-[var(--md-sys-color-outline)] text-center py-8">当月のデータがありません</p>
+              <p className="text-sm text-center py-8" style={{ color: '#a3a3a3' }}>当月のデータがありません</p>
             ) : (
               <div className="space-y-2.5">
                 {top10.map((store) => (
-                  <div key={store.rank} className={`flex items-center gap-2 ${store.isMe ? 'bg-[var(--store-primary-container,rgba(59,130,246,0.1))] -mx-2 px-2 py-1 rounded-xl' : ''}`}>
-                    <span className={`text-xs font-black w-5 text-center flex-shrink-0 ${
-                      store.rank === 1 ? 'text-amber-400'
-                        : store.rank === 2 ? 'text-slate-400'
-                        : store.rank === 3 ? 'text-amber-700'
-                        : 'text-[var(--md-sys-color-outline)]'
-                    }`}>
+                  <div key={store.rank} className={`flex items-center gap-2 ${store.isMe ? '-mx-2 px-2 py-1 rounded-xl' : ''}`} style={store.isMe ? { background: 'rgba(0,0,0,0.03)' } : undefined}>
+                    <span className="text-xs w-5 text-center flex-shrink-0" style={{ color: '#a3a3a3', fontWeight: 600 }}>
                       {store.rank}
                     </span>
-                    <span className={`text-xs w-28 truncate flex-shrink-0 ${
-                      store.isMe
-                        ? 'font-bold text-[var(--store-primary,#3B82F6)]'
-                        : 'text-[var(--md-sys-color-on-surface)]'
-                    }`}>
+                    <span className={`text-xs w-28 truncate flex-shrink-0`} style={{ color: store.isMe ? '#171717' : '#666666', fontWeight: store.isMe ? 600 : 400 }}>
                       {store.name}
-                      {store.isMe && <span className="ml-1 text-[10px] opacity-60">（自店舗）</span>}
+                      {store.isMe && <span className="ml-1 text-[10px]" style={{ color: '#a3a3a3' }}>（自店舗）</span>}
                     </span>
-                    <div className="flex-1 bg-[var(--md-sys-color-surface-container-high)] rounded-full h-1.5">
+                    <div className="flex-1 rounded-full h-1.5" style={{ background: '#e5e5e5' }}>
                       <div
                         className="h-1.5 rounded-full transition-all"
                         style={{
                           width: `${Math.max(store.ratio * 100, 4)}%`,
-                          background: store.isMe
-                            ? 'linear-gradient(90deg, #3B82F6, #6366F1)'
-                            : 'linear-gradient(90deg, #94A3B8, #64748B)',
+                          background: store.isMe ? '#171717' : '#a3a3a3',
                         }}
                       />
                     </div>
@@ -363,11 +323,10 @@ export default function StoreDashboardPage() {
 
         {/* ── 本日の案件一覧 ── */}
         <ChartCard>
-          <SectionHeading color="#F59E0B">本日の案件一覧</SectionHeading>
+          <SectionHeading>本日の案件一覧</SectionHeading>
           {todayCases.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-2xl mb-2">📭</p>
-              <p className="text-sm text-[var(--md-sys-color-outline)]">本日の予定はありません</p>
+              <p className="text-sm" style={{ color: '#a3a3a3' }}>本日の予定はありません</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -375,37 +334,40 @@ export default function StoreDashboardPage() {
                 <div
                   key={c.id}
                   onClick={() => router.push(`/store/schedule/${c.id}`)}
-                  className="flex items-center gap-3 p-3 rounded-2xl border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors cursor-pointer group"
+                  className="flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer group"
+                  style={{ boxShadow: '0 0 0 1px rgba(0,0,0,0.06)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
                   {/* アバター */}
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-sm font-bold">{c.customerName[0]}</span>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: '#e5e5e5' }}>
+                    <span className="text-sm" style={{ color: '#171717', fontWeight: 600 }}>{c.customerName[0]}</span>
                   </div>
                   {/* 情報 */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{c.customerName} 様</span>
+                      <span className="text-sm" style={{ color: '#171717', fontWeight: 600 }}>{c.customerName} 様</span>
                       <StatusBadge status={c.status as any} />
                     </div>
-                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] truncate mt-0.5">
+                    <p className="text-xs truncate mt-0.5" style={{ color: '#666666' }}>
                       {c.address}
                     </p>
                     {c.note && (
-                      <p className="text-xs text-[var(--md-sys-color-outline)] truncate mt-0.5">{c.note}</p>
+                      <p className="text-xs truncate mt-0.5" style={{ color: '#a3a3a3' }}>{c.note}</p>
                     )}
                   </div>
                   {/* 金額 */}
                   <div className="text-right flex-shrink-0">
                     {c.purchaseAmount != null && c.purchaseAmount > 0 ? (
-                      <span className="text-sm font-bold text-[var(--store-primary,#3B82F6)]">
+                      <span className="text-sm" style={{ color: '#171717', fontWeight: 600 }}>
                         ¥{c.purchaseAmount.toLocaleString()}
                       </span>
                     ) : (
-                      <span className="text-xs text-[var(--md-sys-color-outline)]">未査定</span>
+                      <span className="text-xs" style={{ color: '#a3a3a3' }}>未査定</span>
                     )}
                   </div>
                   {/* 矢印 */}
-                  <svg className="w-4 h-4 text-[var(--md-sys-color-outline)] group-hover:text-[var(--store-primary)] transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#a3a3a3' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>

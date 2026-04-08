@@ -18,43 +18,38 @@ type MessageBannerProps = {
 }
 
 const severityConfig: Record<Severity, {
-  gradient: string
-  iconBg: string
+  bg: string
+  borderColor: string
   iconColor: string
   textColor: string
-  borderColor: string
   defaultAutoHide: number
 }> = {
   success: {
-    gradient: 'from-emerald-50 via-green-50/80 to-teal-50/60',
-    iconBg: 'bg-gradient-to-br from-emerald-100 to-green-100',
-    iconColor: 'text-emerald-600',
-    textColor: 'text-emerald-900',
-    borderColor: 'border-emerald-200/60',
+    bg: '#f0fdf4',
+    borderColor: '#22c55e',
+    iconColor: 'text-[#15803d]',
+    textColor: 'text-[#15803d]',
     defaultAutoHide: 4,
   },
   error: {
-    gradient: 'from-red-50 via-rose-50/80 to-pink-50/60',
-    iconBg: 'bg-gradient-to-br from-red-100 to-rose-100',
-    iconColor: 'text-red-600',
-    textColor: 'text-red-900',
-    borderColor: 'border-red-200/60',
+    bg: '#fef2f2',
+    borderColor: '#ef4444',
+    iconColor: 'text-[#991b1b]',
+    textColor: 'text-[#991b1b]',
     defaultAutoHide: 0,
   },
   warning: {
-    gradient: 'from-amber-50 via-yellow-50/80 to-orange-50/60',
-    iconBg: 'bg-gradient-to-br from-amber-100 to-yellow-100',
-    iconColor: 'text-amber-600',
-    textColor: 'text-amber-900',
-    borderColor: 'border-amber-200/60',
+    bg: '#fffbeb',
+    borderColor: '#f59e0b',
+    iconColor: 'text-[#92400e]',
+    textColor: 'text-[#92400e]',
     defaultAutoHide: 6,
   },
   info: {
-    gradient: 'from-blue-50 via-sky-50/80 to-indigo-50/60',
-    iconBg: 'bg-gradient-to-br from-blue-100 to-sky-100',
-    iconColor: 'text-blue-600',
-    textColor: 'text-blue-900',
-    borderColor: 'border-blue-200/60',
+    bg: '#eff6ff',
+    borderColor: '#3b82f6',
+    iconColor: 'text-[#1e40af]',
+    textColor: 'text-[#1e40af]',
     defaultAutoHide: 5,
   },
 }
@@ -125,19 +120,20 @@ export default function MessageBanner({
     <div
       role="alert"
       className={`
-        flex items-center gap-3 px-4 py-3.5
-        bg-gradient-to-r ${config.gradient}
-        border ${config.borderColor}
-        rounded-2xl shadow-lg shadow-black/5
-        backdrop-blur-sm
+        flex items-center gap-3 px-4 py-3
+        rounded-[8px]
         transition-all duration-300
         ${exiting ? 'opacity-0 translate-y-[-8px] scale-95' : 'opacity-100 translate-y-0 scale-100'}
         ${className}
       `}
-      style={{ maxWidth: '420px' }}
+      style={{
+        backgroundColor: config.bg,
+        borderLeft: `3px solid ${config.borderColor}`,
+        maxWidth: '420px',
+      }}
     >
-      {/* Icon with glass background */}
-      <span className={`flex-shrink-0 w-9 h-9 rounded-xl ${config.iconBg} flex items-center justify-center ${config.iconColor}`}>
+      {/* Icon */}
+      <span className={`flex-shrink-0 ${config.iconColor}`}>
         {icon || defaultIcons[severity]}
       </span>
 
@@ -150,7 +146,7 @@ export default function MessageBanner({
       {dismissible && (
         <button
           onClick={handleDismiss}
-          className="flex-shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors text-gray-400 hover:text-gray-600"
+          className="flex-shrink-0 p-1 rounded-md hover:bg-black/5 transition-colors text-gray-400 hover:text-gray-600"
           aria-label="閉じる"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">

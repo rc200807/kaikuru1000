@@ -9,15 +9,18 @@ type AppBarProps = {
 
 export default function AppBar({ title, subtitle, actions, className = '' }: AppBarProps) {
   return (
-    <header className={`bg-[var(--md-sys-color-surface)] sticky top-0 z-30 ${className}`}>
-      <div className="px-4 sm:px-6 py-4 flex items-center justify-between">
+    <header
+      className={`bg-[var(--md-sys-color-surface)] sticky top-0 z-30 ${className}`}
+      style={{ boxShadow: 'rgba(0,0,0,0.08) 0px 1px 0px 0px' }}
+    >
+      <div className="px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="min-w-0">
           {subtitle && (
-            <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] tracking-wide uppercase mb-0.5">
+            <p className="text-[13px] font-normal text-[var(--md-sys-color-on-surface-variant)] mb-0.5">
               {subtitle}
             </p>
           )}
-          <h1 className="text-xl font-semibold text-[var(--md-sys-color-on-surface)] truncate">
+          <h1 className="text-[14px] font-semibold text-[var(--md-sys-color-on-surface)] truncate tracking-[-0.01em]">
             {title}
           </h1>
         </div>

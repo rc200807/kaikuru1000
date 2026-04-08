@@ -7,13 +7,13 @@ type StatusBadgeProps = {
   className?: string
 }
 
-const statusConfig: Record<Status, { label: string; dotClass: string }> = {
-  scheduled:   { label: '予定',     dotClass: 'bg-[var(--status-scheduled-text)]' },
-  pending:     { label: '保留',     dotClass: 'bg-[var(--status-pending-text)]' },
-  completed:   { label: '完了',     dotClass: 'bg-[var(--status-completed-text)]' },
-  rescheduled: { label: '変更済',   dotClass: 'bg-[var(--status-rescheduled-text)]' },
-  absent:      { label: '不在',     dotClass: 'bg-[var(--status-absent-text)]' },
-  cancelled:   { label: 'キャンセル', dotClass: 'bg-[var(--status-cancelled-text)]' },
+const statusConfig: Record<Status, { label: string }> = {
+  scheduled:   { label: '予定' },
+  pending:     { label: '保留' },
+  completed:   { label: '完了' },
+  rescheduled: { label: '変更済' },
+  absent:      { label: '不在' },
+  cancelled:   { label: 'キャンセル' },
 }
 
 export default function StatusBadge({ status, className = '' }: StatusBadgeProps) {
@@ -23,12 +23,12 @@ export default function StatusBadge({ status, className = '' }: StatusBadgeProps
   return (
     <span
       className={`
-        inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium
+        inline-flex items-center px-2.5 py-0.5
+        rounded-full text-[12px] font-medium leading-tight
         bg-[var(--status-${status}-bg)] text-[var(--status-${status}-text)]
         ${className}
       `}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass}`} />
       {config.label}
     </span>
   )

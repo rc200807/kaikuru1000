@@ -242,16 +242,16 @@ export default function BottomNav() {
         transform transition-transform duration-300 ease-out
         ${menuOpen ? 'translate-y-0' : 'translate-y-full'}
       `}>
-        <div className="bg-[var(--md-sys-color-surface)] rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
+        <div className="bg-[#ffffff] rounded-t-2xl shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_-4px_16px_rgba(0,0,0,0.08)] max-h-[85vh] flex flex-col">
           {/* Handle bar */}
           <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-[var(--md-sys-color-outline-variant)]" />
+            <div className="w-10 h-1 rounded-full bg-[#e5e5e5]" />
           </div>
 
           {/* Store switcher section (only if linked stores exist) */}
           {hasLinkedStores && (
-            <div className="px-4 pt-2 pb-3 border-b border-[var(--md-sys-color-outline-variant)]">
-              <p className="text-[11px] font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-2">
+            <div className="px-4 pt-2 pb-3 border-b border-[rgba(0,0,0,0.08)]">
+              <p className="text-[11px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">
                 店舗を切り替え
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1">
@@ -263,10 +263,10 @@ export default function BottomNav() {
                       onClick={() => handleSwitch(store.id)}
                       disabled={isCurrent || switching}
                       className={`
-                        flex items-center gap-2 px-3 py-2 rounded-xl shrink-0 transition-colors
+                        flex items-center gap-2 px-3 py-2 rounded-lg shrink-0 transition-colors
                         ${isCurrent
-                          ? 'bg-[var(--store-primary-container)] ring-2 ring-[var(--store-primary)]'
-                          : 'bg-[var(--md-sys-color-surface-container)] active:bg-[var(--md-sys-color-surface-container-high)]'
+                          ? 'bg-[#f5f5f5] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]'
+                          : 'bg-[#fafafa] active:bg-[#f0f0f0]'
                         }
                         disabled:opacity-70
                       `}
@@ -274,16 +274,16 @@ export default function BottomNav() {
                       {store.avatar ? (
                         <img src={store.avatar} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
-                          <span className="text-[var(--store-on-primary)] text-xs font-semibold">{store.name[0]}</span>
+                        <div className="w-8 h-8 rounded-full bg-[#171717] flex items-center justify-center shrink-0">
+                          <span className="text-white text-xs font-semibold">{store.name[0]}</span>
                         </div>
                       )}
                       <div className="text-left min-w-0">
-                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)] truncate max-w-[100px]">{store.name}</p>
-                        <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] font-mono">{store.code}</p>
+                        <p className="text-xs font-medium text-[#171717] truncate max-w-[100px]">{store.name}</p>
+                        <p className="text-[10px] text-[#a3a3a3] font-mono">{store.code}</p>
                       </div>
                       {isCurrent && (
-                        <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-[#171717] shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
@@ -295,17 +295,17 @@ export default function BottomNav() {
           )}
 
           {/* Current user info */}
-          <div className="px-4 pt-3 pb-2 flex items-center gap-3 border-b border-[var(--md-sys-color-outline-variant)]">
+          <div className="px-4 pt-3 pb-2 flex items-center gap-3 border-b border-[rgba(0,0,0,0.08)]">
             {user?.avatar ? (
               <img src={user.avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center">
-                <span className="text-[var(--store-on-primary)] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
+              <div className="w-10 h-10 rounded-full bg-[#171717] flex items-center justify-center">
+                <span className="text-white text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">{user?.name ?? '店舗'}</p>
-              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate">{user?.email ?? ''}</p>
+              <p className="text-sm font-semibold text-[#171717] truncate">{user?.name ?? '店舗'}</p>
+              <p className="text-[11px] text-[#a3a3a3] truncate">{user?.email ?? ''}</p>
             </div>
           </div>
 
@@ -321,22 +321,22 @@ export default function BottomNav() {
                     href={item.href}
                     onClick={() => setMenuOpen(false)}
                     className={`
-                      flex flex-col items-center gap-1 py-3 px-1 rounded-xl transition-colors relative
+                      flex flex-col items-center gap-1 py-3 px-1 rounded-lg transition-colors relative
                       ${active
-                        ? 'bg-[var(--store-primary-container)] text-[var(--store-on-primary-container)]'
-                        : 'text-[var(--md-sys-color-on-surface-variant)] active:bg-[var(--md-sys-color-surface-container-high)]'
+                        ? 'bg-[#f5f5f5] text-[#171717]'
+                        : 'text-[#666666] active:bg-[#f5f5f5]'
                       }
                     `}
                   >
                     <div className="relative">
                       {item.icon}
                       {showBadge && (
-                        <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] flex items-center justify-center px-1 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                        <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] flex items-center justify-center px-1 rounded-full bg-[#171717] text-white text-[9px] font-bold leading-none">
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </span>
                       )}
                     </div>
-                    <span className={`text-[10px] font-medium leading-tight text-center ${active ? 'text-[var(--store-primary)]' : ''}`}>
+                    <span className={`text-[10px] leading-tight text-center ${active ? 'font-semibold text-[#171717]' : 'font-medium'}`}>
                       {item.label}
                     </span>
                   </Link>
@@ -346,14 +346,14 @@ export default function BottomNav() {
           </div>
 
           {/* Logout */}
-          <div className="px-4 py-3 border-t border-[var(--md-sys-color-outline-variant)] safe-area-bottom">
+          <div className="px-4 py-3 border-t border-[rgba(0,0,0,0.08)] safe-area-bottom">
             <button
               onClick={() => {
                 if (confirm('ログアウトしますか？')) {
                   signOut({ callbackUrl: '/store/login' })
                 }
               }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[var(--md-sys-color-error)] bg-[var(--md-sys-color-error-container)]/30 active:bg-[var(--md-sys-color-error-container)]/60 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[#666666] bg-[#f5f5f5] active:bg-[#e5e5e5] transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
@@ -365,7 +365,7 @@ export default function BottomNav() {
       </div>
 
       {/* Bottom navigation bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--md-sys-color-surface-container)] border-t border-[var(--md-sys-color-outline-variant)] safe-area-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#ffffff] shadow-[inset_0_1px_0_0_rgba(0,0,0,0.08)] safe-area-bottom">
         <div className="flex items-center justify-around h-16">
           {mainNavItems.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -375,16 +375,16 @@ export default function BottomNav() {
                 href={item.href}
                 className={`
                   flex flex-col items-center justify-center gap-0.5 w-full h-full
-                  text-[10px] font-medium transition-colors
+                  text-[10px] transition-colors
                   ${active
-                    ? 'text-[var(--store-primary)]'
-                    : 'text-[var(--md-sys-color-on-surface-variant)]'
+                    ? 'text-[#171717] font-semibold'
+                    : 'text-[#666666] font-medium'
                   }
                 `}
               >
                 <div className={`
                   px-4 py-1 rounded-full transition-colors
-                  ${active ? 'bg-[var(--store-primary-container)]' : ''}
+                  ${active ? 'bg-[#f5f5f5]' : ''}
                 `}>
                   {item.icon}
                 </div>
@@ -398,16 +398,16 @@ export default function BottomNav() {
             onClick={() => setMenuOpen(!menuOpen)}
             className={`
               flex flex-col items-center justify-center gap-0.5 w-full h-full
-              text-[10px] font-medium transition-colors
+              text-[10px] transition-colors
               ${menuOpen
-                ? 'text-[var(--store-primary)]'
-                : 'text-[var(--md-sys-color-on-surface-variant)]'
+                ? 'text-[#171717] font-semibold'
+                : 'text-[#666666] font-medium'
               }
             `}
           >
             <div className={`
               px-4 py-1 rounded-full transition-colors
-              ${menuOpen ? 'bg-[var(--store-primary-container)]' : ''}
+              ${menuOpen ? 'bg-[#f5f5f5]' : ''}
             `}>
               {menuOpen ? (
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">

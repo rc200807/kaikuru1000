@@ -1,14 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Roboto } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import Script from "next/script";
-
-const roboto = Roboto({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '700'],
-  display: 'swap',
-});
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://kaikuru.jp";
 
@@ -63,7 +58,7 @@ export default function RootLayout({
             gtag('config', 'G-TM3EF04Z22');`}
         </Script>
       </head>
-      <body className={`${roboto.className} antialiased`}>
+      <body className={`${GeistSans.className} ${GeistMono.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -44,21 +44,22 @@ export default function TextField({
   const isPassword = type === 'password'
   const inputType = isPassword && showPassword ? 'text' : type
 
-  const borderColor = error
-    ? 'border-[var(--md-sys-color-error)]'
+  // Vercel shadow-as-border + focus ring
+  const borderShadow = error
+    ? 'rgb(239,68,68) 0px 0px 0px 1px'
     : focused
-      ? 'border-[var(--portal-primary,#374151)]'
-      : 'border-[var(--md-sys-color-outline)]'
+      ? 'hsla(212, 100%, 48%, 1) 0px 0px 0px 2px'
+      : 'rgb(235,235,235) 0px 0px 0px 1px'
 
   const labelColor = error
     ? 'text-[var(--md-sys-color-error)]'
     : focused
-      ? 'text-[var(--portal-primary,#374151)]'
+      ? 'text-[hsla(212,100%,48%,1)]'
       : 'text-[var(--md-sys-color-on-surface-variant)]'
 
   const sharedInputClass = `
     w-full bg-transparent text-sm text-[var(--md-sys-color-on-surface)]
-    placeholder:text-[var(--md-sys-color-outline)]
+    placeholder:text-[#a3a3a3]
     focus:outline-none disabled:opacity-50
     ${leadingIcon ? 'pl-10' : 'pl-3.5'}
     ${(trailingIcon || isPassword) ? 'pr-10' : 'pr-3.5'}
@@ -73,7 +74,7 @@ export default function TextField({
           absolute left-3 transition-all duration-200 pointer-events-none z-10
           ${isFloating
             ? `-top-2.5 text-xs px-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] ${labelColor}`
-            : `top-3 text-sm ${labelColor}`
+            : `top-3 text-[13px] font-medium ${labelColor}`
           }
           ${leadingIcon && !isFloating ? 'left-10' : 'left-3'}
         `}
@@ -81,7 +82,10 @@ export default function TextField({
         {label}{required && <span className="text-[var(--md-sys-color-error)] ml-0.5">*</span>}
       </label>
 
-      <div className={`relative border rounded-[var(--md-sys-shape-small)] transition-colors duration-200 ${borderColor} ${focused ? 'border-2' : 'border'}`}>
+      <div
+        className="relative rounded-[6px] bg-[var(--md-sys-color-surface-container-lowest,#fff)] transition-shadow duration-200"
+        style={{ boxShadow: borderShadow }}
+      >
         {/* Leading icon */}
         {leadingIcon && (
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--md-sys-color-on-surface-variant)]">

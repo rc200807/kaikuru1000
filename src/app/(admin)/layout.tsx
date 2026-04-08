@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div data-portal="admin" className="flex min-h-screen bg-[var(--md-sys-color-surface)]">
+    <div data-portal="admin" className="flex min-h-screen" style={{ background: '#0a0a0a' }}>
       <NavigationDrawer />
       <main className="flex-1 min-w-0 lg:pl-0 pb-4">
         {children}

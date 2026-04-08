@@ -16,7 +16,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   // 契約書ページではサイドバー・ボトムナビを非表示
   if (isAgreementPage) {
     return (
-      <div data-portal="store" className="min-h-screen bg-[var(--md-sys-color-surface)]">
+      <div data-portal="store" className="min-h-screen" style={{ background: '#ffffff' }}>
         <main className="min-w-0">
           {children}
         </main>
@@ -25,7 +25,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div data-portal="store" className="flex min-h-screen bg-[var(--md-sys-color-surface)]">
+    <div data-portal="store" className="flex min-h-screen" style={{ background: '#ffffff' }}>
       <NavigationRail />
       <main className="flex-1 min-w-0 pb-20 md:pb-4">
         {children}

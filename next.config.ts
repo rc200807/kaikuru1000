@@ -22,7 +22,7 @@ const securityHeaders = [
       // Vercel Blob の公開 URL + YouTube サムネイルを img-src に追加
       "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://img.youtube.com",
       "font-src 'self'",
-      "connect-src 'self' https://*.public.blob.vercel-storage.com",
+      "connect-src 'self' https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com",
       // YouTube 埋め込み（研修動画）を許可
       "frame-src 'self' https://www.youtube.com https://youtube.com",
       "frame-ancestors 'none'",

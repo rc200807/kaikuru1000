@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { upload } from '@vercel/blob/client'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Card from '@/components/Card'
@@ -140,41 +141,45 @@ export default function AdminTrainingVideosPage() {
     }
   }
 
-  // === ファイルアップロード ===
+  // === ファイルアップロード（Vercel Blob クライアントアップロード） ===
   async function handleVideoUpload(file: File) {
     setUploading(true)
     setUploadProgress(0)
     setMessage(null)
+
+    // ファイル検証
+    const ALLOWED_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
+    const MAX_SIZE = 500 * 1024 * 1024 // 500MB
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setMessage({ type: 'error', text: 'MP4・WebM・MOV 形式の動画のみアップロードできます' })
+      setUploading(false)
+      return
+    }
+    if (file.size > MAX_SIZE) {
+      setMessage({ type: 'error', text: '動画ファイルは500MB以下にしてください' })
+      setUploading(false)
+      return
+    }
+
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('type', 'video')
+      // Vercel Blob クライアントアップロード: ブラウザから直接ストレージへ送信
+      // サーバーレス関数のボディサイズ制限（4.5MB）を回避
+      const blob = await upload(
+        `training-videos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.type === 'video/mp4' ? 'mp4' : file.type === 'video/webm' ? 'webm' : 'mov'}`,
+        file,
+        {
+          access: 'public',
+          handleUploadUrl: '/api/admin/training-videos/upload',
+          onUploadProgress: (e) => {
+            setUploadProgress(Math.round(e.percentage))
+          },
+        },
+      )
 
-      // XMLHttpRequest で進捗を取得
-      const url = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/admin/training-videos/upload')
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setUploadProgress(Math.round((e.loaded / e.total) * 100))
-          }
-        }
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText)
-            resolve(data.url)
-          } else {
-            const data = JSON.parse(xhr.responseText)
-            reject(new Error(data.error || 'アップロード失敗'))
-          }
-        }
-        xhr.onerror = () => reject(new Error('通信エラー'))
-        xhr.send(formData)
-      })
-
-      setVideoForm(prev => ({ ...prev, videoUrl: url, fileSize: file.size }))
+      setVideoForm(prev => ({ ...prev, videoUrl: blob.url, fileSize: file.size }))
       setMessage({ type: 'success', text: '動画をアップロードしました' })
     } catch (err: any) {
+      console.error('Video upload error:', err)
       setMessage({ type: 'error', text: err.message || 'アップロードに失敗しました' })
     } finally {
       setUploading(false)
@@ -221,6 +226,8 @@ export default function AdminTrainingVideosPage() {
         const data = await res.json()
         setMessage({ type: 'error', text: data.error || 'エラー' })
       }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || '保存に失敗しました' })
     } finally {
       setVideoSubmitting(false)
     }

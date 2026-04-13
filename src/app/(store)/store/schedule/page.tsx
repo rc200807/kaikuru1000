@@ -105,9 +105,19 @@ export default function StoreSchedulePage() {
   } | null>(null)
   const [editing, setEditing] = useState(false)
 
+  // 3点リーダーメニュー
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
+
+  useEffect(() => {
+    if (!openMenuId) return
+    const handler = () => setOpenMenuId(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [openMenuId])
 
   useEffect(() => {
     fetch('/api/visit-statuses')
@@ -631,21 +641,22 @@ export default function StoreSchedulePage() {
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">ステータス</th>
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">買取金額</th>
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">請求金額</th>
-                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden lg:table-cell">再訪問日</th>
-                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden lg:table-cell">メモ</th>
-                      <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">契約書</th>
-                      <th className="px-3 py-3"></th>
+                      <th className="w-10 px-3 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {past.map(schedule => (
-                      <tr key={schedule.id} className="border-b border-[var(--md-sys-color-surface-container-high)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors">
+                      <tr
+                        key={schedule.id}
+                        className="border-b border-[var(--md-sys-color-surface-container-high)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors cursor-pointer"
+                        onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                      >
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
                           {format(new Date(schedule.visitDate), 'yyyy/M/d（E）', { locale: ja })}
                         </td>
                         <td className="px-3 py-3 font-medium text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{schedule.user.name}</td>
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-40 truncate hidden md:table-cell">{schedule.user.address}</td>
-                        <td className="px-3 py-3">
+                        <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                           <select
                             value={schedule.status}
                             onChange={e => handleStatusChange(schedule.id, e.target.value)}
@@ -658,55 +669,58 @@ export default function StoreSchedulePage() {
                         </td>
                         <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.purchaseAmount)}</td>
                         <td className="px-3 py-3 text-right text-[var(--md-sys-color-on-surface)] whitespace-nowrap hidden sm:table-cell">{fmt(schedule.billingAmount)}</td>
-                        <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap hidden lg:table-cell">
-                          {schedule.revisitDate ? (
-                            <span className="inline-flex items-center gap-1 text-xs">
-                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-400"></span>
-                              {format(new Date(schedule.revisitDate), 'M/d', { locale: ja })}
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-32 truncate hidden lg:table-cell">{schedule.note || '—'}</td>
-                        <td className="px-3 py-3">
-                          {schedule.salesContract ? (
-                            <Button variant="text" size="sm" onClick={() => router.push(`/store/schedule/${schedule.id}/agreement`)}>
-                              確認
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-[var(--md-sys-color-outline)]">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-right">
-                          <div className="flex gap-2 justify-end flex-wrap">
-                            <Button
-                              variant="outlined"
-                              size="sm"
-                              onClick={() => window.open(
-                                `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(schedule.user.address)}&travelmode=driving`,
-                                '_blank'
-                              )}
+                        <td className="px-3 py-3 text-right" onClick={e => e.stopPropagation()}>
+                          <div className="relative inline-block">
+                            <button
+                              className="p-1.5 rounded-[var(--md-sys-shape-small)] hover:bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] transition-colors"
+                              onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === schedule.id ? null : schedule.id) }}
+                              aria-label="メニューを開く"
                             >
-                              ルートを検索
-                            </Button>
-                            <Button
-                              variant="tonal"
-                              size="sm"
-                              onClick={() => router.push(`/store/schedule/${schedule.id}`)}
-                            >
-                              編集
-                            </Button>
-                            <Button
-                              variant="text"
-                              size="sm"
-                              onClick={() => setEditModal({
-                                schedule,
-                                note: schedule.note || '',
-                                purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
-                                billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
-                              })}
-                            >
-                              金額編集
-                            </Button>
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+                              </svg>
+                            </button>
+                            {openMenuId === schedule.id && (
+                              <div className="absolute right-0 top-full mt-1 z-50 min-w-40 bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] shadow-lg py-1 text-sm">
+                                <button
+                                  className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
+                                  onClick={() => { setOpenMenuId(null); router.push(`/store/schedule/${schedule.id}`) }}
+                                >
+                                  詳細・編集
+                                </button>
+                                <button
+                                  className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
+                                  onClick={() => {
+                                    setOpenMenuId(null)
+                                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(schedule.user.address)}&travelmode=driving`, '_blank')
+                                  }}
+                                >
+                                  ルートを検索
+                                </button>
+                                <button
+                                  className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
+                                  onClick={() => {
+                                    setOpenMenuId(null)
+                                    setEditModal({
+                                      schedule,
+                                      note: schedule.note || '',
+                                      purchaseAmount: schedule.purchaseAmount != null ? String(schedule.purchaseAmount) : '',
+                                      billingAmount: schedule.billingAmount != null ? String(schedule.billingAmount) : '',
+                                    })
+                                  }}
+                                >
+                                  金額編集
+                                </button>
+                                {schedule.salesContract && (
+                                  <button
+                                    className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
+                                    onClick={() => { setOpenMenuId(null); router.push(`/store/schedule/${schedule.id}/agreement`) }}
+                                  >
+                                    契約書を確認
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

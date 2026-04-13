@@ -23,6 +23,8 @@ const securityHeaders = [
       "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://img.youtube.com",
       "font-src 'self'",
       "connect-src 'self' https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com",
+      // Vercel Blob の動画再生を許可
+      "media-src 'self' https://*.public.blob.vercel-storage.com",
       // YouTube 埋め込み（研修動画）を許可
       "frame-src 'self' https://www.youtube.com https://youtube.com",
       "frame-ancestors 'none'",

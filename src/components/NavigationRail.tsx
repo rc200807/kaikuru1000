@@ -207,7 +207,7 @@ export default function NavigationRail() {
               className={`
                 flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative
                 ${active
-                  ? 'bg-[#f5f5f5] text-[#171717] font-semibold border-l-2 border-[#171717] pl-[10px]'
+                  ? 'bg-[#f5f5f5] text-[#171717] font-semibold'
                   : 'text-[#666666] hover:bg-[#f5f5f5] hover:text-[#171717]'
                 }
               `}

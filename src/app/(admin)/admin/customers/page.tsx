@@ -33,6 +33,7 @@ type User = {
   isActive: boolean
   // 顧客タイプ
   customerType: string  // "visit" | "delivery" | "regular"
+  visitFrequencyMonths: number
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -132,7 +133,8 @@ export default function AdminCustomersPage() {
 
   // 顧客情報編集
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit' })
+  const [editForm, setEditForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit', visitFrequencyMonths: 1 })
+  const [changingFrequency, setChangingFrequency] = useState<string | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
   // OCR情報編集
@@ -357,6 +359,23 @@ export default function AdminCustomersPage() {
     }
   }
 
+  async function handleChangeFrequency(userId: string, newFreq: number) {
+    setChangingFrequency(userId)
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visitFrequencyMonths: newFreq }),
+    })
+    setChangingFrequency(null)
+    if (res.ok) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, visitFrequencyMonths: newFreq } : u))
+      setDetailUser(prev => prev && prev.id === userId ? { ...prev, visitFrequencyMonths: newFreq } : prev)
+      setMessage({ type: 'success', text: `訪問頻度を「${newFreq}ヶ月に1回」に変更しました` })
+    } else {
+      setMessage({ type: 'error', text: '頻度変更に失敗しました' })
+    }
+  }
+
   function startEditMode() {
     if (!detailUser) return
     setEditForm({
@@ -366,6 +385,7 @@ export default function AdminCustomersPage() {
       phone: detailUser.phone,
       address: detailUser.address,
       customerType: detailUser.customerType,
+      visitFrequencyMonths: detailUser.visitFrequencyMonths ?? 1,
     })
     setEditMode(true)
   }
@@ -384,6 +404,7 @@ export default function AdminCustomersPage() {
           phone: editForm.phone,
           address: editForm.address,
           customerType: editForm.customerType,
+          visitFrequencyMonths: editForm.visitFrequencyMonths,
         }),
       })
       if (res.ok) {
@@ -395,6 +416,7 @@ export default function AdminCustomersPage() {
           phone: updated.phone ?? editForm.phone,
           address: updated.address ?? editForm.address,
           customerType: updated.customerType ?? editForm.customerType,
+          visitFrequencyMonths: updated.visitFrequencyMonths ?? editForm.visitFrequencyMonths,
         }
         setDetailUser(prev => prev ? { ...prev, ...patch } : null)
         setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, ...patch } : u))
@@ -1050,6 +1072,25 @@ export default function AdminCustomersPage() {
                         <option value="regular">通常買取</option>
                       </select>
                     </div>
+                    {(editForm.customerType === 'visit' || editForm.customerType === 'delivery') && (
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                          訪問頻度
+                        </label>
+                        <select
+                          value={editForm.visitFrequencyMonths}
+                          onChange={e => setEditForm(prev => ({ ...prev, visitFrequencyMonths: Number(e.target.value) }))}
+                          className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                        >
+                          <option value={1}>1ヶ月に1回</option>
+                          <option value={2}>2ヶ月に1回</option>
+                          <option value={3}>3ヶ月に1回</option>
+                          <option value={4}>4ヶ月に1回</option>
+                          <option value={6}>6ヶ月に1回</option>
+                          <option value={12}>12ヶ月に1回</option>
+                        </select>
+                      </div>
+                    )}
                     <div className="flex justify-end gap-3 pt-2">
                       <Button variant="outlined" onClick={() => setEditMode(false)} disabled={editSubmitting}>
                         キャンセル
@@ -1293,6 +1334,24 @@ export default function AdminCustomersPage() {
                       <option value="regular">通常買取</option>
                     </select>
                   </div>
+                  {(detailUser.customerType === 'visit' || detailUser.customerType === 'delivery') && (
+                    <div className="px-4 py-3 border-t border-[var(--md-sys-color-outline-variant)] flex flex-col sm:flex-row sm:items-center gap-2.5">
+                      <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">訪問頻度</span>
+                      <select
+                        className="text-xs px-2 py-1 rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
+                        value={detailUser.visitFrequencyMonths ?? 1}
+                        disabled={changingFrequency === detailUser.id}
+                        onChange={e => handleChangeFrequency(detailUser.id, Number(e.target.value))}
+                      >
+                        <option value={1}>1ヶ月に1回</option>
+                        <option value={2}>2ヶ月に1回</option>
+                        <option value={3}>3ヶ月に1回</option>
+                        <option value={4}>4ヶ月に1回</option>
+                        <option value={6}>6ヶ月に1回</option>
+                        <option value={12}>12ヶ月に1回</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* 振込先口座情報 */}

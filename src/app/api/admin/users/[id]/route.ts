@@ -40,6 +40,16 @@ export async function PATCH(
     return NextResponse.json({ id: updated.id, customerType: updated.customerType })
   }
 
+  // 訪問頻度のみ変更
+  if (typeof body.visitFrequencyMonths === 'number' && Object.keys(body).length === 1) {
+    const freq = Math.max(1, Math.floor(body.visitFrequencyMonths))
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { visitFrequencyMonths: freq },
+    })
+    return NextResponse.json({ id: updated.id, visitFrequencyMonths: updated.visitFrequencyMonths })
+  }
+
   // 顧客情報の編集（name が含まれていればプロフィール編集とみなす）
   if (typeof body.name === 'string') {
     const data: Record<string, unknown> = {}
@@ -60,10 +70,14 @@ export async function PATCH(
       data.customerType = body.customerType
     }
 
+    if (typeof body.visitFrequencyMonths === 'number') {
+      data.visitFrequencyMonths = Math.max(1, Math.floor(body.visitFrequencyMonths))
+    }
+
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true },
+      select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true, visitFrequencyMonths: true },
     })
     return NextResponse.json(updated)
   }

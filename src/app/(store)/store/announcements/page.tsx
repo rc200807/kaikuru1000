@@ -29,10 +29,10 @@ type Announcement = {
 }
 
 const CATEGORIES: Record<string, { label: string; color: string; icon: string }> = {
-  general:  { label: '一般',         color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',     icon: '📢' },
-  important:{ label: '重要',         color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',         icon: '🔴' },
-  system:   { label: 'システム',     color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300', icon: '⚙️' },
-  campaign: { label: 'キャンペーン', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',  icon: '🎉' },
+  general:  { label: '一般',         color: 'bg-blue-500 text-white',   icon: '📢' },
+  important:{ label: '重要',         color: 'bg-red-500 text-white',    icon: '🔴' },
+  system:   { label: 'システム',     color: 'bg-purple-500 text-white', icon: '⚙️' },
+  campaign: { label: 'キャンペーン', color: 'bg-green-500 text-white',  icon: '🎉' },
 }
 
 export default function StoreAnnouncementsPage() {

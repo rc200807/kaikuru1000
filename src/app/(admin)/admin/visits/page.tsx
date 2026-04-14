@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -65,6 +65,21 @@ export default function AdminVisitsPage() {
   const STATUS_OPTIONS = visitStatuses.length > 0
     ? [{ value: '', label: 'すべて' }, ...visitStatuses.map(s => ({ value: s.key, label: s.label }))]
     : DEFAULT_STATUS_OPTIONS
+
+  // 3点メニュー
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!openMenuId) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [openMenuId])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
@@ -209,26 +224,46 @@ export default function AdminVisitsPage() {
       sortValue: (record) => record.billingAmount ?? 0,
     },
     {
-      key: 'note',
-      header: 'メモ',
-      hideOnMobile: true,
-      render: (record) => (
-        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)] max-w-48 truncate block">
-          {record.note || <span className="text-[var(--md-sys-color-outline)]">{'\u2014'}</span>}
-        </span>
-      ),
-    },
-    {
-      key: 'detail',
+      key: 'menu',
       header: '',
+      width: '40px',
       render: (record) => (
-        <Button
-          size="sm"
-          variant="text"
-          onClick={() => router.push(`/admin/visits/${record.id}`)}
-        >
-          詳細
-        </Button>
+        <div className="relative flex justify-end" ref={openMenuId === record.id ? menuRef : undefined}>
+          <button
+            className="p-1.5 rounded-[var(--md-sys-shape-small)] hover:bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] transition-colors"
+            onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === record.id ? null : record.id) }}
+            aria-label="メニューを開く"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+            </svg>
+          </button>
+          {openMenuId === record.id && (
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-44 bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] shadow-lg py-1 text-sm">
+              <button
+                className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
+                onClick={e => { e.stopPropagation(); setOpenMenuId(null); router.push(`/admin/visits/${record.id}`) }}
+              >
+                詳細を見る
+              </button>
+              <button
+                className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
+                onClick={e => {
+                  e.stopPropagation()
+                  setOpenMenuId(null)
+                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(record.user.address)}&travelmode=driving`, '_blank')
+                }}
+              >
+                ルートを検索
+              </button>
+              {record.note && (
+                <div className="px-4 py-2 border-t border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  {record.note}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       ),
     },
   ]
@@ -368,6 +403,7 @@ export default function AdminVisitsPage() {
               columns={visitColumns}
               data={records}
               rowKey={(record) => record.id}
+              onRowClick={(record) => router.push(`/admin/visits/${record.id}`)}
             />
             {total > records.length && (
               <div className="px-4 py-3 bg-[var(--md-sys-color-surface-container-low)] border-t border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)] text-center">

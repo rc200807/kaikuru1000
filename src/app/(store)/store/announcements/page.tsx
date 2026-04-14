@@ -123,30 +123,27 @@ export default function StoreAnnouncementsPage() {
                   {/* Category badge */}
                   {a.announcementCategory ? (
                     <span
-                      className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      className="text-xs font-semibold px-2 py-0.5 rounded-full text-white"
                       style={{
-                        backgroundColor: a.announcementCategory.color
-                          ? `${a.announcementCategory.color}20`
-                          : undefined,
-                        color: a.announcementCategory.color || undefined,
+                        backgroundColor: a.announcementCategory.color || '#666',
                       }}
                     >
-                      {a.announcementCategory.icon} {a.announcementCategory.name}
+                      {a.announcementCategory.name}
                     </span>
                   ) : (
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${catDisplay.color}`}>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${catDisplay.color}`}>
                       {catDisplay.label}
                     </span>
                   )}
 
                   {/* Priority badge */}
                   {a.priority === 'urgent' && (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 animate-pulse">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white animate-pulse">
                       緊急
                     </span>
                   )}
                   {a.priority === 'high' && (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white">
                       重要
                     </span>
                   )}

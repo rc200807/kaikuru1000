@@ -99,12 +99,7 @@ export default function StoreAnnouncementsPage() {
                 })()
 
             // Priority-based styles
-            const priorityBorder =
-              a.priority === 'urgent'
-                ? 'border-l-4 border-l-red-500'
-                : a.priority === 'high'
-                  ? 'border-l-4 border-l-orange-500'
-                  : ''
+            const priorityBorder = ''
 
             const priorityBg =
               a.priority === 'urgent'

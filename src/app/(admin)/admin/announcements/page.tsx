@@ -259,8 +259,6 @@ function AdminAnnouncementsContent() {
   }
 
   function getListBorderClass(a: Announcement) {
-    if (a.priority === 'urgent') return 'border-red-500 dark:border-red-500 border-l-4'
-    if (a.priority === 'high') return 'border-orange-400 dark:border-orange-500 border-l-4'
     return 'border-[var(--md-sys-color-outline-variant)]'
   }
 

@@ -246,6 +246,9 @@ function MyPageContent() {
   const [showWorthlessModal, setShowWorthlessModal] = useState(false)
   const [pendingMemoCount, setPendingMemoCount] = useState(0)
 
+  // 身分証登録プロンプトモーダル
+  const [showIdDocumentModal, setShowIdDocumentModal] = useState(false)
+
   const docTypesRequiringBack = ['運転免許証']
   const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
@@ -327,6 +330,15 @@ function MyPageContent() {
           }
         })
         .catch(() => {})
+    }
+  }, [user, activeTab])
+
+  // 身分証登録プロンプト: ライセンスキー登録ユーザーで未提出なら表示
+  useEffect(() => {
+    if (user && activeTab === 'dashboard' && user.licenseKey && !user.idDocumentPath) {
+      if (!sessionStorage.getItem('id-document-prompt-dismissed')) {
+        setTimeout(() => setShowIdDocumentModal(true), 800)
+      }
     }
   }, [user, activeTab])
 
@@ -1313,6 +1325,7 @@ function MyPageContent() {
                       label: '買取トライ',
                       sub: '写真で事前査定',
                       tab: 'memos',
+                      requiresId: true,
                       gradient: 'from-red-400 to-orange-500',
                       icon: (
                         <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1325,6 +1338,7 @@ function MyPageContent() {
                       label: '訪問リクエスト',
                       sub: '日時を予約',
                       tab: 'visit-request',
+                      requiresId: true,
                       gradient: 'from-blue-400 to-indigo-500',
                       icon: (
                         <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1336,6 +1350,7 @@ function MyPageContent() {
                       label: '訪問履歴',
                       sub: '過去の訪問一覧',
                       tab: 'history',
+                      requiresId: true,
                       gradient: 'from-emerald-400 to-teal-500',
                       icon: (
                         <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1371,27 +1386,37 @@ function MyPageContent() {
                     // Hide memos, visit-request and history for delivery customers
                     if (isDelivery && (item.tab === 'memos' || item.tab === 'visit-request' || item.tab === 'history')) return false
                     return true
-                  }).map(item => (
-                    <button
-                      key={item.tab}
-                      onClick={() => handleTabChange(item.tab)}
-                      className="bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 hover:shadow-lg hover:bg-white/80 transition-all active:scale-[0.98] cursor-pointer"
-                    >
-                      <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${item.gradient} shadow-lg overflow-hidden`}>
-                        {/* Glass overlay */}
-                        <div className="absolute inset-0 bg-white/20" />
-                        {/* Decorative circles for depth */}
-                        <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-white/20 blur-sm" />
-                        <div className="absolute -bottom-1 -left-1 w-8 h-8 rounded-full bg-white/10" />
-                        {/* Icon */}
-                        <div className="relative flex items-center justify-center w-full h-full">
-                          {item.icon}
+                  }).map(item => {
+                    const locked = !!(item.requiresId && !user.idDocumentPath)
+                    return (
+                      <button
+                        key={item.tab}
+                        onClick={() => locked ? handleTabChange('id-document') : handleTabChange(item.tab)}
+                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all cursor-pointer ${locked ? 'opacity-50 grayscale' : 'hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
+                      >
+                        {locked && (
+                          <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-gray-400 flex items-center justify-center">
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                        <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${item.gradient} shadow-lg overflow-hidden`}>
+                          {/* Glass overlay */}
+                          <div className="absolute inset-0 bg-white/20" />
+                          {/* Decorative circles for depth */}
+                          <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-white/20 blur-sm" />
+                          <div className="absolute -bottom-1 -left-1 w-8 h-8 rounded-full bg-white/10" />
+                          {/* Icon */}
+                          <div className="relative flex items-center justify-center w-full h-full">
+                            {item.icon}
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-sm font-bold text-gray-800 mt-3">{item.label}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{item.sub}</p>
-                    </button>
-                  ))}
+                        <p className="text-sm font-bold text-gray-800 mt-3">{item.label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{locked ? '身分証明証が必要です' : item.sub}</p>
+                      </button>
+                    )
+                  })}
                 </div>
 
                 {/* ─── 身分証明書未提出バナー ─── */}
@@ -1729,6 +1754,53 @@ function MyPageContent() {
                       onClick={() => {
                         setShowOnboardingModal(false)
                         sessionStorage.setItem('onboarding-dismissed', '1')
+                      }}
+                      className="w-full mt-3 text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
+                    >
+                      あとで
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── 身分証登録プロンプトモーダル ─── */}
+              {showIdDocumentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div
+                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                    onClick={() => {
+                      setShowIdDocumentModal(false)
+                      sessionStorage.setItem('id-document-prompt-dismissed', '1')
+                    }}
+                  />
+                  <div className="relative bg-white rounded-3xl shadow-2xl p-8 max-w-sm mx-auto animate-in fade-in zoom-in duration-300">
+                    <div className="flex justify-center mb-5">
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-400 flex items-center justify-center shadow-lg">
+                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z" />
+                        </svg>
+                      </div>
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                      身分証明証を登録しましょう
+                    </h2>
+                    <p className="text-sm text-gray-600 text-center mb-6 leading-relaxed">
+                      サービスのご利用には身分証明証の提出が必要です。運転免許証やマイナンバーカードなどをご準備ください。
+                    </p>
+                    <button
+                      onClick={() => {
+                        setShowIdDocumentModal(false)
+                        sessionStorage.setItem('id-document-prompt-dismissed', '1')
+                        handleTabChange('id-document')
+                      }}
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-2xl py-3 font-semibold text-sm shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                    >
+                      身分証明証を登録する
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowIdDocumentModal(false)
+                        sessionStorage.setItem('id-document-prompt-dismissed', '1')
                       }}
                       className="w-full mt-3 text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
                     >

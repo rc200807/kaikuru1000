@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { FormField, FormSchema } from './types'
+import { PREFECTURES } from './types'
 
 /** FormSchema から動的に zod スキーマを生成し、回答値を検証する */
 export function buildZodFromSchema(schema: FormSchema) {
@@ -43,6 +44,9 @@ export function buildZodFromSchema(schema: FormSchema) {
           last: z.string().max(50),
           first: z.string().max(50),
         })
+        break
+      case 'prefecture':
+        validator = z.string().refine(v => v === '' || (PREFECTURES as readonly string[]).includes(v), { message: '都道府県を選択してください' })
         break
       default:
         validator = z.unknown()

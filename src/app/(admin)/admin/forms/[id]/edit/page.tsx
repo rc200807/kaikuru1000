@@ -27,7 +27,7 @@ type FormData = {
 }
 
 const PALETTE: Array<FormField['type']> = [
-  'text', 'textarea', 'email', 'phone', 'number', 'date', 'select', 'radio', 'checkbox', 'name', 'heading', 'paragraph',
+  'text', 'textarea', 'email', 'phone', 'number', 'date', 'select', 'radio', 'checkbox', 'name', 'prefecture', 'heading', 'paragraph',
 ]
 
 function newField(type: FormField['type']): FormField {
@@ -47,6 +47,8 @@ function newField(type: FormField['type']): FormField {
       return { id, type, label: FIELD_TYPE_LABELS[type], required: false, options: ['選択肢1', '選択肢2'] }
     case 'name':
       return { id, type, label: 'お名前', required: true }
+    case 'prefecture':
+      return { id, type, label: '都道府県', required: false }
     case 'heading':
       return { id, type, text: '見出しテキスト' }
     case 'paragraph':

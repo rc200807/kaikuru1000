@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { FormField, FormSchema } from '@/lib/forms/types'
+import { PREFECTURES } from '@/lib/forms/types'
 
 type Values = Record<string, any>
 
@@ -206,6 +207,14 @@ function FieldView({ field, value, onChange, selected, onClick }: { field: FormF
       )
       break
     }
+    case 'prefecture':
+      control = (
+        <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={required} className={baseInput}>
+          <option value="">選択してください</option>
+          {PREFECTURES.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      )
+      break
   }
 
   return (

@@ -916,3 +916,42 @@ export async function sendStoreAssignmentNotification(params: {
   })
   return true
 }
+
+/** フォーム送信通知（管理者向け） */
+export async function sendFormSubmissionNotification(params: {
+  to: string[]
+  formTitle: string
+  submissionId: string
+  submittedAt: Date
+  fields: { label: string; value: string }[]
+  reviewUrl: string
+}): Promise<boolean> {
+  if (!params.to || params.to.length === 0) return false
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const dateStr = params.submittedAt.toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const escape = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const rowsHtml = params.fields.map(f => `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#555;width:30%;font-weight:600;">${escape(f.label)}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#222;white-space:pre-wrap;">${escape(f.value || '（未入力）')}</td></tr>`).join('')
+  const html = `<!DOCTYPE html><html lang="ja"><body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:8px;overflow:hidden;"><tr><td style="padding:24px 28px;background:#0a0a0a;color:#fff;"><h1 style="margin:0;font-size:18px;">フォーム回答が届きました</h1><p style="margin:6px 0 0;font-size:13px;color:#bbb;">${escape(params.formTitle)}</p></td></tr><tr><td style="padding:20px 28px;color:#333;font-size:14px;"><p style="margin:0 0 8px;color:#666;">受信日時: ${escape(dateStr)}</p><p style="margin:0 0 16px;color:#666;">回答ID: ${escape(params.submissionId)}</p><table cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #eee;font-size:13px;">${rowsHtml}</table><p style="margin:24px 0 0;"><a href="${escape(params.reviewUrl)}" style="display:inline-block;background:#0a0a0a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;">管理画面で確認する</a></p></td></tr></table></td></tr></table></body></html>`
+
+  const text = [
+    `フォーム「${params.formTitle}」に回答が届きました`,
+    `受信日時: ${dateStr}`,
+    `回答ID: ${params.submissionId}`,
+    '',
+    ...params.fields.map(f => `${f.label}: ${f.value || '（未入力）'}`),
+    '',
+    `管理画面: ${params.reviewUrl}`,
+  ].join('\n')
+
+  await transporter.sendMail({
+    from,
+    to: params.to.join(','),
+    subject: `【買いクル】フォーム回答: ${params.formTitle}`,
+    html,
+    text,
+  })
+  return true
+}

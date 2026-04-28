@@ -49,3 +49,4 @@ prisma/dev.db-journal
 
 # ローカルアップロードファイル（本番はVercel Blob）
 public/uploads/
+.mcp.json

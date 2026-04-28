@@ -1,0 +1,90 @@
+import { z } from 'zod'
+import type { FormField, FormSchema } from './types'
+
+/** FormSchema から動的に zod スキーマを生成し、回答値を検証する */
+export function buildZodFromSchema(schema: FormSchema) {
+  const shape: Record<string, z.ZodTypeAny> = {}
+
+  for (const f of schema) {
+    if (f.type === 'heading' || f.type === 'paragraph') continue
+
+    let validator: z.ZodTypeAny
+
+    switch (f.type) {
+      case 'text':
+      case 'textarea':
+        validator = z.string().max(5000)
+        break
+      case 'email':
+        validator = z.string().email('メールアドレスの形式が正しくありません').max(200).or(z.literal(''))
+        break
+      case 'phone':
+        validator = z.string().max(30).regex(/^[0-9\-\+\(\)\s]*$/, '電話番号の形式が正しくありません').or(z.literal(''))
+        break
+      case 'number':
+        validator = z.coerce.number().or(z.literal(''))
+        break
+      case 'date':
+        validator = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日付の形式が正しくありません').or(z.literal(''))
+        break
+      case 'select':
+      case 'radio': {
+        const opts = (f as Extract<FormField, { type: 'select' | 'radio' }>).options
+        validator = z.string().refine(v => v === '' || opts.includes(v), { message: '選択肢から選んでください' })
+        break
+      }
+      case 'checkbox': {
+        const opts = (f as Extract<FormField, { type: 'checkbox' }>).options
+        validator = z.array(z.string()).refine(arr => arr.every(v => opts.includes(v)), { message: '選択肢から選んでください' })
+        break
+      }
+      case 'name':
+        validator = z.object({
+          last: z.string().max(50),
+          first: z.string().max(50),
+        })
+        break
+      default:
+        validator = z.unknown()
+    }
+
+    // required チェック
+    if ('required' in f && f.required) {
+      if (f.type === 'checkbox') {
+        validator = (validator as z.ZodArray<z.ZodString>).min(1, `${f.label} は必須項目です`)
+      } else if (f.type === 'name') {
+        validator = z.object({
+          last: z.string().min(1, `${f.label}（姓）は必須項目です`).max(50),
+          first: z.string().min(1, `${f.label}（名）は必須項目です`).max(50),
+        })
+      } else {
+        validator = (validator as z.ZodString).refine(v => v !== '' && v != null, { message: `${f.label} は必須項目です` })
+      }
+    } else {
+      validator = validator.optional()
+    }
+
+    shape[f.id] = validator
+  }
+
+  return z.object(shape)
+}
+
+/** 検証済み値を表示用の {label, value} 配列に整形する */
+export function formatAnswersForDisplay(schema: FormSchema, data: Record<string, unknown>): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = []
+  for (const f of schema) {
+    if (f.type === 'heading' || f.type === 'paragraph') continue
+    const v = data[f.id]
+    if (f.type === 'name' && v && typeof v === 'object') {
+      const nv = v as { last?: string; first?: string }
+      out.push({ label: f.label, value: `${nv.last ?? ''} ${nv.first ?? ''}`.trim() })
+    } else if (f.type === 'checkbox' && Array.isArray(v)) {
+      out.push({ label: f.label, value: v.join(', ') })
+    } else {
+      const label = (f as Exclude<FormField, { type: 'heading' | 'paragraph' }>).label
+      out.push({ label, value: v == null ? '' : String(v) })
+    }
+  }
+  return out
+}

@@ -259,6 +259,7 @@ model Admin {
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
   announcements  Announcement[]
   trainingVideos TrainingVideo[]
+  forms          Form[]
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -600,4 +601,41 @@ model VisitRequest {
   @@index([userId])
   @@index([storeId])
   @@index([status])
+}
+
+// 汎用フォームビルダー
+model Form {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  title            String
+  description      String?          @db.Text
+  schema           String           @db.Text  // JSON文字列: FormField[]
+  status           String           @default("draft") // draft | published | closed
+  notifyEmails     String?          // カンマ区切りメールアドレス
+  successMessage   String?          @db.Text
+  sheetWebhookUrl  String?          @db.Text
+  recaptchaEnabled Boolean          @default(true)
+  createdById      String
+  createdBy        Admin            @relation(fields: [createdById], references: [id])
+  submissions      FormSubmission[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([status])
+  @@index([createdById])
+}
+
+// フォーム回答
+model FormSubmission {
+  id             String    @id @default(cuid())
+  formId         String
+  form           Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  data           String    @db.Text  // JSON文字列: { [fieldId]: value }
+  ipAddress      String?
+  userAgent      String?   @db.Text
+  sheetSyncedAt  DateTime?
+  sheetSyncError String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  @@index([formId, createdAt])
 }

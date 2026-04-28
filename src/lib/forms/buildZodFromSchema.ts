@@ -30,8 +30,18 @@ export function buildZodFromSchema(schema: FormSchema) {
         break
       case 'select':
       case 'radio': {
-        const opts = (f as Extract<FormField, { type: 'select' | 'radio' }>).options
-        validator = z.string().refine(v => v === '' || opts.includes(v), { message: '選択肢から選んでください' })
+        const ff = f as Extract<FormField, { type: 'select' | 'radio' }>
+        const opts = ff.options
+        validator = z.string().refine(
+          v => {
+            if (v === '') return true
+            if (opts.includes(v)) return true
+            // 「その他」許可時: "その他" 単体 or "その他: <自由テキスト>" を許可
+            if (ff.allowOther && (v === 'その他' || v.startsWith('その他: '))) return true
+            return false
+          },
+          { message: '選択肢から選んでください' }
+        )
         break
       }
       case 'checkbox': {

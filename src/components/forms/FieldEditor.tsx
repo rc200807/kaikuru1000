@@ -81,6 +81,18 @@ export default function FieldEditor({ field, onChange, onDelete }: Props) {
         />
       )}
 
+      {(field.type === 'select' || field.type === 'radio') && (
+        <label className="flex items-center gap-2 cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            checked={!!(field as any).allowOther}
+            onChange={(e) => onChange({ ...field, allowOther: e.target.checked } as FormField)}
+            className="w-4 h-4 rounded accent-[hsla(212,100%,48%,1)]"
+          />
+          <span className="text-sm text-[var(--md-sys-color-on-surface)]">「その他」を許可（自由記述欄を表示）</span>
+        </label>
+      )}
+
       {('required' in field) && (
         <label className="flex items-center gap-2 cursor-pointer pt-1">
           <input

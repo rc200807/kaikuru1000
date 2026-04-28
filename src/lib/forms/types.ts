@@ -6,7 +6,7 @@ export type DecorationFieldType = 'heading' | 'paragraph'
 
 export type FormField =
   | { id: string; type: SimpleFieldType; label: string; required: boolean; placeholder?: string; helpText?: string }
-  | { id: string; type: ChoiceFieldType; label: string; required: boolean; options: string[]; helpText?: string }
+  | { id: string; type: ChoiceFieldType; label: string; required: boolean; options: string[]; helpText?: string; allowOther?: boolean }
   | { id: string; type: CheckboxFieldType; label: string; required?: boolean; options: string[]; helpText?: string }
   | { id: string; type: CompositeFieldType; label: string; required: boolean }
   | { id: string; type: DecorationFieldType; text: string }

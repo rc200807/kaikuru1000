@@ -153,26 +153,79 @@ function FieldView({ field, value, onChange, selected, onClick }: { field: FormF
         />
       )
       break
-    case 'select':
+    case 'select': {
+      const v: string = value ?? ''
+      const isOther = field.allowOther && (v === 'その他' || v.startsWith('その他: '))
+      const otherText = v.startsWith('その他: ') ? v.slice('その他: '.length) : ''
+      const choice = isOther ? 'その他' : v
       control = (
-        <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} required={required} className={baseInput}>
-          <option value="">選択してください</option>
-          {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
+        <div className="space-y-2">
+          <select
+            value={choice}
+            onChange={(e) => {
+              const next = e.target.value
+              if (field.allowOther && next === 'その他') onChange(otherText ? `その他: ${otherText}` : 'その他')
+              else onChange(next)
+            }}
+            required={required}
+            className={baseInput}
+          >
+            <option value="">選択してください</option>
+            {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {field.allowOther && <option value="その他">その他</option>}
+          </select>
+          {isOther && (
+            <input
+              type="text"
+              value={otherText}
+              onChange={(e) => onChange(e.target.value ? `その他: ${e.target.value}` : 'その他')}
+              placeholder="その他の内容を入力"
+              className={baseInput}
+            />
+          )}
+        </div>
       )
       break
-    case 'radio':
+    }
+    case 'radio': {
+      const v: string = value ?? ''
+      const isOther = field.allowOther && (v === 'その他' || v.startsWith('その他: '))
+      const otherText = v.startsWith('その他: ') ? v.slice('その他: '.length) : ''
       control = (
         <div className="space-y-2">
           {field.options.map(opt => (
             <label key={opt} className="flex items-center gap-2 cursor-pointer">
-              <input type="radio" name={field.id} value={opt} checked={value === opt} onChange={() => onChange(opt)} className="w-4 h-4 text-[#0a0a0a] focus:ring-[#0a0a0a]" />
+              <input type="radio" name={field.id} value={opt} checked={v === opt} onChange={() => onChange(opt)} className="w-4 h-4 text-[#0a0a0a] focus:ring-[#0a0a0a]" />
               <span className="text-sm text-gray-800">{opt}</span>
             </label>
           ))}
+          {field.allowOther && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name={field.id}
+                  checked={isOther}
+                  onChange={() => onChange(otherText ? `その他: ${otherText}` : 'その他')}
+                  className="w-4 h-4 text-[#0a0a0a] focus:ring-[#0a0a0a]"
+                />
+                <span className="text-sm text-gray-800">その他</span>
+              </label>
+              {isOther && (
+                <input
+                  type="text"
+                  value={otherText}
+                  onChange={(e) => onChange(e.target.value ? `その他: ${e.target.value}` : 'その他')}
+                  placeholder="その他の内容を入力"
+                  className={`${baseInput} ml-6 w-[calc(100%-1.5rem)]`}
+                />
+              )}
+            </div>
+          )}
         </div>
       )
       break
+    }
     case 'checkbox':
       control = (
         <div className="space-y-2">

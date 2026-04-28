@@ -3371,6 +3371,11 @@ function MyPageContent() {
                 <span>65歳以上の方は、訪問時にご家族の同意・同席が必要です。</span>
               </div>
 
+              <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+                <span className="mt-0.5 shrink-0">ℹ️</span>
+                <span>ご希望の日程は、リクエスト送信日から1週間後以降の日程を選択してください。</span>
+              </div>
+
               {requestMsg && (
                 <MessageBanner severity={requestMsg.type} dismissible onDismiss={() => setRequestMsg(null)}>
                   {requestMsg.text}
@@ -4965,10 +4970,14 @@ function VisitRequestCalendarForm({
 }) {
   const [bizHours, setBizHours] = useState({ start: '10:00', end: '19:00', days: [0,1,2,3,4,5,6] })
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - d.getDay() + 1) // Monday
-    d.setHours(0,0,0,0)
-    return d
+    // 1週間後の日付を含む週の月曜日から表示する
+    const min = new Date()
+    min.setHours(0,0,0,0)
+    min.setDate(min.getDate() + 7)
+    const dow = min.getDay() // 0=Sun
+    const monday = new Date(min)
+    monday.setDate(min.getDate() - (dow === 0 ? 6 : dow - 1))
+    return monday
   })
   const [activeCandidate, setActiveCandidate] = useState(1)
 

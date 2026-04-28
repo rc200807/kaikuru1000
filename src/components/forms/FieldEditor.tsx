@@ -75,17 +75,10 @@ export default function FieldEditor({ field, onChange, onDelete }: Props) {
       )}
 
       {hasOptions && (
-        <div>
-          <Label>選択肢（1行に1つ）</Label>
-          <textarea
-            value={(field as any).options.join('\n')}
-            onChange={(e) => onChange({ ...field, options: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } as FormField)}
-            rows={5}
-            className={inputCls}
-            style={inputStyle}
-            {...inputFocusHandlers}
-          />
-        </div>
+        <OptionsEditor
+          options={(field as any).options as string[]}
+          onChange={(opts) => onChange({ ...field, options: opts } as FormField)}
+        />
       )}
 
       {('required' in field) && (
@@ -108,6 +101,85 @@ function Label({ children }: { children: React.ReactNode }) {
     <label className="block text-[11px] font-semibold uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
       {children}
     </label>
+  )
+}
+
+function OptionsEditor({ options, onChange }: { options: string[]; onChange: (opts: string[]) => void }) {
+  function update(idx: number, value: string) {
+    const next = options.slice()
+    next[idx] = value
+    onChange(next)
+  }
+  function add() {
+    onChange([...options, `選択肢${options.length + 1}`])
+  }
+  function remove(idx: number) {
+    onChange(options.filter((_, i) => i !== idx))
+  }
+  function move(idx: number, dir: 'up' | 'down') {
+    const target = dir === 'up' ? idx - 1 : idx + 1
+    if (target < 0 || target >= options.length) return
+    const next = options.slice()
+    ;[next[idx], next[target]] = [next[target], next[idx]]
+    onChange(next)
+  }
+  return (
+    <div>
+      <Label>選択肢</Label>
+      <ul className="space-y-2">
+        {options.map((opt, idx) => (
+          <li
+            key={idx}
+            className="flex items-center gap-2 rounded-[8px] p-2 bg-[var(--md-sys-color-surface-container-lowest)]"
+            style={{ boxShadow: 'rgba(255,255,255,0.08) 0 0 0 1px' }}
+          >
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => move(idx, 'up')}
+                disabled={idx === 0}
+                className="p-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] disabled:opacity-30 disabled:hover:text-[var(--md-sys-color-on-surface-variant)]"
+                aria-label="上へ"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => move(idx, 'down')}
+                disabled={idx === options.length - 1}
+                className="p-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] disabled:opacity-30 disabled:hover:text-[var(--md-sys-color-on-surface-variant)]"
+                aria-label="下へ"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </button>
+            </div>
+            <input
+              value={opt}
+              onChange={(e) => update(idx, e.target.value)}
+              placeholder={`選択肢${idx + 1}`}
+              className="flex-1 bg-transparent text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[#737373] focus:outline-none px-1"
+            />
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              disabled={options.length <= 1}
+              className="p-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[#f87171] disabled:opacity-30 disabled:hover:text-[var(--md-sys-color-on-surface-variant)]"
+              aria-label="削除"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={add}
+        className="mt-2 w-full text-left text-sm px-2.5 py-2 rounded-[6px] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+        style={{ boxShadow: 'rgba(255,255,255,0.08) 0 0 0 1px inset' }}
+      >
+        + 選択肢を追加
+      </button>
+    </div>
   )
 }
 

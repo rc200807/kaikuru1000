@@ -1,10 +1,16 @@
 /** GAS Webhook へ回答データを POST する
  *
- * GAS Web App は script.google.com → *.googleusercontent.com への
- * 302 リダイレクトを返す。Node の fetch は spec 準拠で 302 を POST→GET に
- * 変換してボディを失うため、redirect:'manual' で受けて自前で再POSTする。
- * また 302 の Set-Cookie をリダイレクト先に引き継がないと Google 側で
- * 401 が返るため、Cookie の伝播も行う。
+ * GAS Web App の挙動：
+ *   1. /exec への POST で doPost() が実行され、シート書き込みなどの処理が完了する
+ *   2. レスポンス本文は *.googleusercontent.com にキャッシュされ、302 で Location が返る
+ *   3. クライアントはその Location を GET で取得して JSON 本文を得る
+ *
+ * したがって「初回 POST、リダイレクトは GET で追従」が正しい挙動。
+ * 302 後も POST を再送すると googleusercontent.com から 405 が返る。
+ *
+ * Node の fetch は spec 準拠で 302 を POST→GET に変換するが、redirect:'follow' だと
+ * 302 の Set-Cookie がリダイレクト先に引き継がれず Google 側で 401 が返ることがあるため、
+ * redirect:'manual' で受けて Cookie を引き継ぎつつ自前で追従する。
  */
 export async function postToSheetWebhook(params: {
   url: string
@@ -17,6 +23,7 @@ export async function postToSheetWebhook(params: {
 }): Promise<{ ok: boolean; error?: string }> {
   const body = JSON.stringify(params.payload)
   let url = params.url
+  let method: 'POST' | 'GET' = 'POST'
   const cookieJar = new Map<string, string>() // name → value
 
   function buildCookieHeader(): string | undefined {
@@ -40,14 +47,15 @@ export async function postToSheetWebhook(params: {
 
   try {
     for (let hop = 0; hop < 6; hop++) {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      const headers: Record<string, string> = {}
+      if (method === 'POST') headers['Content-Type'] = 'application/json'
       const cookieHeader = buildCookieHeader()
       if (cookieHeader) headers['Cookie'] = cookieHeader
 
       const res = await fetch(url, {
-        method: 'POST',
+        method,
         headers,
-        body,
+        body: method === 'POST' ? body : undefined,
         redirect: 'manual',
         signal: AbortSignal.timeout(15000),
       })
@@ -57,6 +65,7 @@ export async function postToSheetWebhook(params: {
         const loc = res.headers.get('location')
         if (!loc) return { ok: false, error: `redirect ${res.status} without Location` }
         url = new URL(loc, url).toString()
+        method = 'GET'
         continue
       }
       if (!res.ok) {

@@ -1633,6 +1633,12 @@ function MyPageContent() {
                           )}
                         </dd>
                       </div>
+                      {user.store?.phone && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-sm text-gray-500">担当店舗 電話番号</dt>
+                          <dd className="text-sm font-medium text-gray-900 text-right">{user.store.phone}</dd>
+                        </div>
+                      )}
                       {user.address && (
                         <div className="flex justify-between gap-3">
                           <dt className="text-sm text-gray-500 shrink-0">住所</dt>
@@ -3286,6 +3292,11 @@ function MyPageContent() {
                     {showRequestForm ? 'キャンセル' : '+ 新しい訪問リクエスト'}
                   </Button>
                 </div>
+              </div>
+
+              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                <span className="mt-0.5 shrink-0">⚠️</span>
+                <span>65歳以上の方は、訪問時にご家族の同意・同席が必要です。</span>
               </div>
 
               {requestMsg && (

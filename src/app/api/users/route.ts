@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/lib/mailer'
 import { z } from 'zod'
 
 const MIN_PASSWORD_LENGTH = 8
@@ -31,6 +34,11 @@ export async function POST(request: NextRequest) {
 
     const { name, furigana, email, phone, address, password, licenseKey, customerType, skipLicenseKey } = parsed.data
 
+    // 店舗ユーザーが登録した場合は、その店舗に自動割り当てする
+    const session = await getServerSession(authOptions)
+    const sessionUser = session?.user as any
+    const autoStoreId: string | null = sessionUser?.role === 'store' && sessionUser?.id ? sessionUser.id : null
+
     // 通常買取 or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
     const isRegular = customerType === 'regular'
     const needsLicenseKey = !isRegular && !skipLicenseKey && !licenseKey
@@ -58,8 +66,39 @@ export async function POST(request: NextRequest) {
           name, furigana, email: email || null, phone, address,
           password: hashedPassword,
           customerType: customerType || 'visit',
+          ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },
+        include: { store: true },
       })
+
+      // 店舗から登録した場合は割り当て通知メールを送信
+      if (autoStoreId && user.store?.email) {
+        sendAssignmentNotification({
+          storeEmail: user.store.email,
+          storeName: user.store.name,
+          customerName: user.name,
+          customerFurigana: user.furigana,
+          customerEmail: user.email || '',
+          customerPhone: user.phone,
+          customerAddress: user.address,
+          registeredAt: user.createdAt,
+        }).catch((err) => {
+          console.error('[Users] 店舗向け割り当て通知メールの送信に失敗しました:', err.message)
+        })
+      }
+      if (autoStoreId && user.email && user.store) {
+        const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+        sendStoreAssignmentNotification({
+          to: user.email,
+          name: user.name,
+          storeName: user.store.name,
+          customerType: user.customerType,
+          loginUrl: `${baseUrl}/login`,
+        }).catch((err) => {
+          console.error('[Users] 顧客向け割り当て通知メールの送信に失敗しました:', err.message)
+        })
+      }
+
       return NextResponse.json({
         id: user.id,
         name: user.name,
@@ -86,6 +125,7 @@ export async function POST(request: NextRequest) {
           name, furigana, email, phone, address,
           password: hashedPassword,
           licenseKeyId: licenseKeyRecord.id,
+          ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },
       })
       await tx.licenseKey.update({

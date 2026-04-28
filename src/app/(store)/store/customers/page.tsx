@@ -105,15 +105,10 @@ export default function StoreCustomersPage() {
         setAddCustomerSubmitting(false)
         return
       }
-      const newUser = await res.json()
+      await res.json()
 
-      // 店舗に自動アサイン
+      // サーバー側で自動的に当該店舗へ割り当て済み
       const storeId = (session?.user as any).id
-      await fetch('/api/assignments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: newUser.id, storeId }),
-      })
 
       // 顧客一覧を再取得
       const listRes = await fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)

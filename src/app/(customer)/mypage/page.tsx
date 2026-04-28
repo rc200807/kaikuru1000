@@ -967,7 +967,7 @@ function MyPageContent() {
             </p>
             <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200/50 mb-6">
               <p className="text-xs text-amber-700 leading-relaxed">
-                買取方法（定期訪問または定期宅配）は、担当店舗の割り当て後に決定されます。しばらくお待ちください。
+                買取方法（訪問または宅配）は、担当店舗の割り当て後に決定されます。しばらくお待ちください。
               </p>
             </div>
             <div className="space-y-2 text-left bg-white/50 rounded-xl p-4">

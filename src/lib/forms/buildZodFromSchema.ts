@@ -17,10 +17,17 @@ export function buildZodFromSchema(schema: FormSchema) {
         validator = z.string().max(5000)
         break
       case 'email':
-        validator = z.string().email('メールアドレスの形式が正しくありません').max(200).or(z.literal(''))
+        validator = z.string()
+          .max(200)
+          .refine(v => v === '' || /^[\x20-\x7E]+$/.test(v), { message: 'メールアドレスは半角英数字で入力してください' })
+          .refine(v => v === '' || /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/.test(v), { message: 'メールアドレスの形式が正しくありません' })
         break
       case 'phone':
-        validator = z.string().max(30).regex(/^[0-9\-\+\(\)\s]*$/, '電話番号の形式が正しくありません').or(z.literal(''))
+        validator = z.string()
+          .max(30)
+          .refine(v => v === '' || /^[+0-9\-\s()]+$/.test(v), { message: '電話番号は半角数字とハイフンで入力してください' })
+          .refine(v => v === '' || (v.match(/\d/g)?.length ?? 0) >= 9, { message: '電話番号の桁数が正しくありません' })
+          .transform(v => v.replace(/[\s\-()]/g, ''))
         break
       case 'number':
         validator = z.coerce.number().or(z.literal(''))

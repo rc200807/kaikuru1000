@@ -60,8 +60,8 @@ export async function GET(
     safeCall(() => getMessageQuota(token)),
   ])
 
-  // 過去最大730日（約2年）分の友だち推移＆送信通数推移
-  // LINE Insights API はチャネル作成日まで遡れるが、計算量を考え2年を上限とする
+  // 過去最大730日（約2年）分の友だち推移
+  // LINE Insights API のレート制限を考慮し、followers のみ取得（delivery は重いので省略）
   const MAX_DAYS = 730
   const dateList: Date[] = []
   for (let i = MAX_DAYS - 1; i >= 0; i--) {
@@ -70,33 +70,29 @@ export async function GET(
     dateList.push(d)
   }
 
-  // 30件ずつバッチ並列実行（LINE API レート制限を考慮）
-  const BATCH = 30
-  type DayPoint = { date: string; followers?: number; targetedReaches?: number; blocks?: number; delivery?: number }
+  // 8件ずつバッチ並列＋200ms遅延でレート制限を回避
+  const BATCH = 8
+  const DELAY_MS = 200
+  type DayPoint = { date: string; followers?: number; targetedReaches?: number; blocks?: number }
   const histResults: DayPoint[] = []
   for (let i = 0; i < dateList.length; i += BATCH) {
     const slice = dateList.slice(i, i + BATCH)
     const batch = await Promise.all(
       slice.map(async (d) => {
-        const [f, m] = await Promise.all([
-          safeCall(() => getFollowersInsight(token, d)),
-          safeCall(() => getMessageDeliveryInsight(token, d)),
-        ])
+        const f = await safeCall(() => getFollowersInsight(token, d))
         const fe = f as any
-        const me = m as any
-        const deliveryTotal = me?.status === 'ready'
-          ? (me.broadcast ?? 0) + (me.targeting ?? 0) + (me.apiPush ?? 0) + (me.apiBroadcast ?? 0) + (me.apiMulticast ?? 0) + (me.apiNarrowcast ?? 0)
-          : undefined
         return {
           date: d.toISOString().slice(0, 10),
           followers: fe?.status === 'ready' ? fe.followers : undefined,
           targetedReaches: fe?.status === 'ready' ? fe.targetedReaches : undefined,
           blocks: fe?.status === 'ready' ? fe.blocks : undefined,
-          delivery: deliveryTotal,
         }
       })
     )
     histResults.push(...batch)
+    if (i + BATCH < dateList.length) {
+      await new Promise(r => setTimeout(r, DELAY_MS))
+    }
   }
 
   // データがある最初の日以降のみ返す（チャネル作成前の空データを除外）

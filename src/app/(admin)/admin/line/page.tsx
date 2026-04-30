@@ -370,24 +370,14 @@ function InsightsModal({
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                   {demographic.genders && (
                     <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
-                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>性別</div>
-                      {demographic.genders.map((g: any) => (
-                        <div key={g.gender} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                          <span>{g.gender === 'male' ? '男性' : g.gender === 'female' ? '女性' : '不明'}</span>
-                          <span style={{ fontWeight: 700 }}>{g.percentage.toFixed(1)}%</span>
-                        </div>
-                      ))}
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>性別</div>
+                      <GenderPieChart data={demographic.genders} />
                     </div>
                   )}
                   {demographic.ages && (
                     <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
-                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>年代</div>
-                      {demographic.ages.map((a: any) => (
-                        <div key={a.age} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                          <span>{ageLabel(a.age)}</span>
-                          <span style={{ fontWeight: 700 }}>{a.percentage.toFixed(1)}%</span>
-                        </div>
-                      ))}
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>年代</div>
+                      <AgeBarChart data={demographic.ages} />
                     </div>
                   )}
                   {demographic.areas && demographic.areas.length > 0 && (
@@ -429,6 +419,83 @@ function ageLabel(age: string): string {
   const m2 = age.match(/^from(\d+)$/)
   if (m2) return `${m2[1]}歳以上`
   return age
+}
+
+/** 性別 円グラフ */
+function GenderPieChart({ data }: { data: { gender: string; percentage: number }[] }) {
+  const colors: Record<string, string> = { female: '#f472b6', male: '#4f8ef7', unknown: '#9ca3af' }
+  const labels: Record<string, string> = { female: '女性', male: '男性', unknown: '不明' }
+  const size = 160
+  const cx = size / 2
+  const cy = size / 2
+  const r = 70
+
+  let acc = 0
+  const arcs = data.map((d) => {
+    const start = (acc / 100) * Math.PI * 2 - Math.PI / 2
+    acc += d.percentage
+    const end = (acc / 100) * Math.PI * 2 - Math.PI / 2
+    const large = d.percentage > 50 ? 1 : 0
+    const x1 = cx + r * Math.cos(start)
+    const y1 = cy + r * Math.sin(start)
+    const x2 = cx + r * Math.cos(end)
+    const y2 = cy + r * Math.sin(end)
+    return {
+      ...d,
+      path: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`,
+      color: colors[d.gender] ?? '#9ca3af',
+      label: labels[d.gender] ?? d.gender,
+    }
+  })
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {arcs.map((a, i) => <path key={i} d={a.path} fill={a.color} />)}
+      </svg>
+      <div style={{ flex: 1 }}>
+        {arcs.map((a, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 12, height: 12, background: a.color, borderRadius: 2, display: 'inline-block' }} />
+              {a.label}
+            </span>
+            <span style={{ fontWeight: 700 }}>{a.percentage.toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 年代 棒グラフ */
+function AgeBarChart({ data }: { data: { age: string; percentage: number }[] }) {
+  // 年齢でソート（不明・50歳以上は最後に）
+  const ordered = [...data].sort((a, b) => {
+    const order = (s: string) => {
+      if (s === 'unknown') return 999
+      if (s === 'from50') return 998 // 集計値「50歳以上」は別枠
+      const m = s.match(/^from(\d+)/)
+      return m ? Number(m[1]) : 1000
+    }
+    return order(a.age) - order(b.age)
+  })
+
+  const max = Math.max(...ordered.map(a => a.percentage), 1)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {ordered.map((a) => (
+        <div key={a.age} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 50px', alignItems: 'center', gap: 8, fontSize: 12 }}>
+          <span style={{ color: '#9ca3af' }}>{ageLabel(a.age)}</span>
+          <div style={{ height: 16, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(a.percentage / max) * 100}%`, background: '#4f8ef7', transition: 'width 0.3s' }} />
+          </div>
+          <span style={{ fontWeight: 700, textAlign: 'right' }}>{a.percentage.toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 /** 簡易折れ線グラフ（SVG） */

@@ -10,6 +10,7 @@ const createSchema = z.object({
   channelId:          z.string().min(1).max(100),
   channelSecret:      z.string().min(1),
   channelAccessToken: z.string().min(1),
+  storeId:            z.string().nullable().optional(),
 })
 
 async function requireAdmin(request: NextRequest) {
@@ -28,6 +29,7 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: 'asc' },
     include: {
       _count: { select: { lineUsers: true } },
+      store: { select: { id: true, name: true } },
     },
   })
 
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
   }
 
-  const { name, channelId, channelSecret, channelAccessToken } = parsed.data
+  const { name, channelId, channelSecret, channelAccessToken, storeId } = parsed.data
 
   // channelId 重複確認
   const existing = await prisma.lineChannel.findUnique({ where: { channelId } })
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
       channelId,
       channelSecret: encrypt(channelSecret),
       channelAccessToken: encrypt(channelAccessToken),
+      storeId: storeId ?? null,
     },
   })
 

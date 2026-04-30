@@ -13,7 +13,11 @@ type Channel = {
   isActive: boolean
   userCount: number
   unreadCount: number
+  storeId?: string | null
+  store?: { id: string; name: string } | null
 }
+
+type StoreOption = { id: string; name: string }
 
 type LastMessage = {
   content: string | null
@@ -52,10 +56,12 @@ type Message = {
 /* ─── チャネル設定モーダル ───────────────────────── */
 function ChannelModal({
   channel,
+  stores,
   onClose,
   onSaved,
 }: {
   channel: Partial<Channel> | null
+  stores: StoreOption[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -64,6 +70,7 @@ function ChannelModal({
   const [channelId, setChannelId] = useState(channel?.channelId ?? '')
   const [channelSecret, setChannelSecret] = useState('')
   const [accessToken, setAccessToken] = useState('')
+  const [storeId, setStoreId] = useState<string>(channel?.storeId ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -81,7 +88,7 @@ function ChannelModal({
     setSaving(true)
     setError('')
     try {
-      const body: any = { name }
+      const body: any = { name, storeId: storeId || null }
       if (isNew) {
         body.channelId = channelId
         body.channelSecret = channelSecret
@@ -187,6 +194,28 @@ function ChannelModal({
             </div>
           </div>
         )}
+
+        {/* 店舗紐付け */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>
+            紐付け店舗（任意）
+          </label>
+          <select
+            value={storeId}
+            onChange={(e) => setStoreId(e.target.value)}
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 8,
+              border: '1px solid var(--md-sys-color-outline-variant)',
+              background: 'var(--md-sys-color-surface-container-highest)',
+              color: 'var(--md-sys-color-on-surface)', fontSize: 14,
+            }}
+          >
+            <option value="">— 紐付けなし（本部管理）—</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
 
         {error && <p style={{ color: 'var(--md-sys-color-error)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
 
@@ -328,6 +357,7 @@ export default function LineManagePage() {
   const [channelModal, setChannelModal] = useState<{ open: boolean; channel: Partial<Channel> | null }>({ open: false, channel: null })
   const [linkModal, setLinkModal] = useState<LineUser | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [stores, setStores] = useState<StoreOption[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 認証チェック
@@ -355,7 +385,14 @@ export default function LineManagePage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'authenticated') fetchChannels()
+    if (status === 'authenticated') {
+      fetchChannels()
+      // 店舗一覧を取得
+      fetch('/api/admin/stores').then(r => r.ok ? r.json() : []).then(d => {
+        const list = Array.isArray(d) ? d : (d.stores ?? [])
+        setStores(list.map((s: any) => ({ id: s.id, name: s.name })))
+      }).catch(() => {})
+    }
   }, [status, fetchChannels])
 
   /* ユーザー一覧 */
@@ -549,6 +586,7 @@ export default function LineManagePage() {
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{ch.userCount}人</span>
+                  {ch.store && <span style={{ color: '#4f8ef7' }}>🏪 {ch.store.name}</span>}
                   {!ch.isActive && <span style={{ color: 'var(--md-sys-color-error)' }}>無効</span>}
                 </div>
                 {/* ドロップダウンメニュー */}
@@ -784,6 +822,7 @@ export default function LineManagePage() {
       {channelModal.open && (
         <ChannelModal
           channel={channelModal.channel}
+          stores={stores}
           onClose={() => setChannelModal({ open: false, channel: null })}
           onSaved={() => { fetchChannels(); fetchUsers(selectedChannelId) }}
         />

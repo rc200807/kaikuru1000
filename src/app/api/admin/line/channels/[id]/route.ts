@@ -10,6 +10,7 @@ const updateSchema = z.object({
   channelSecret:      z.string().min(1).optional(),
   channelAccessToken: z.string().min(1).optional(),
   isActive:           z.boolean().optional(),
+  storeId:            z.string().nullable().optional(),
 })
 
 async function requireAdmin(request: NextRequest) {
@@ -39,6 +40,7 @@ export async function PATCH(
   if (parsed.data.channelSecret !== undefined)       updateData.channelSecret = encrypt(parsed.data.channelSecret)
   if (parsed.data.channelAccessToken !== undefined)  updateData.channelAccessToken = encrypt(parsed.data.channelAccessToken)
   if (parsed.data.isActive !== undefined)            updateData.isActive = parsed.data.isActive
+  if (parsed.data.storeId !== undefined)             updateData.storeId = parsed.data.storeId
 
   const channel = await prisma.lineChannel.update({
     where: { id },

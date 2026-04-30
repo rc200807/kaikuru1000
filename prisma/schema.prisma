@@ -114,6 +114,7 @@ model Store {
   storeLinksTo   StoreLink[] @relation("StoreLinkTo")
   announcementReads AnnouncementRead[]
   inquiries  Inquiry[]
+  lineChannels LineChannel[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -634,10 +635,14 @@ model LineChannel {
   channelSecret      String        @db.Text         // AES-256-GCM 暗号化
   channelAccessToken String        @db.Text         // AES-256-GCM 暗号化
   isActive           Boolean       @default(true)
+  storeId            String?                        // 紐付け店舗（任意）
+  store              Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
   lineUsers          LineUser[]
   messages           LineMessage[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+
+  @@index([storeId])
 }
 
 // LINE ユーザー（Webhook 経由でメッセージを送ってきたユーザー）

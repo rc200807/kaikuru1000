@@ -25,6 +25,17 @@ type DashboardData = {
   dailyVisits: { date: string; count: number }[]
   monthlyPurchaseAmount: { month: string; amount: number }[]
   storePurchaseRanking: { storeId: string; name: string; amount: number }[]
+  line?: {
+    channelTotal: number
+    channelActive: number
+    userTotal: number
+    userLinked: number
+    unreadCount: number
+    inbound7d: number
+    outbound7d: number
+    sendFailures7d: number
+    daily: { date: string; inbound: number; outbound: number }[]
+  }
 }
 
 function fmtYen(n: number) {
@@ -375,7 +386,78 @@ export default function AdminDashboardPage() {
           </ChartCard>
         </div>
 
+        {/* ─── LINE 統計 ─────────────────────────── */}
+        {data.line && <LineSection line={data.line} />}
+
       </div>
     </>
+  )
+}
+
+/* ─── LINE セクション ───────────────────────── */
+function LineSection({ line }: { line: NonNullable<DashboardData['line']> }) {
+  const linkRate = line.userTotal > 0 ? Math.round((line.userLinked / line.userTotal) * 100) : 0
+  const maxDaily = Math.max(...line.daily.map(d => Math.max(d.inbound, d.outbound)), 1)
+
+  return (
+    <section style={{ marginTop: 32 }}>
+      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, color: 'var(--md-sys-color-on-surface)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ background: '#06c755', color: '#fff', padding: '2px 10px', borderRadius: 6, fontSize: 12 }}>LINE</span>
+        メッセージング統計
+      </h2>
+
+      {/* KPI カード */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
+        <LineKpi label="登録チャネル" value={line.channelTotal} sub={`${line.channelActive}件 アクティブ`} />
+        <LineKpi label="LINE友だち（当ポータル経由）" value={line.userTotal} sub={`${line.userLinked}人 顧客紐付け済み（${linkRate}%）`} />
+        <LineKpi label="未読メッセージ" value={line.unreadCount} color={line.unreadCount > 0 ? '#f87171' : undefined} />
+        <LineKpi label="受信（過去7日）" value={line.inbound7d} />
+        <LineKpi label="返信送信（過去7日）" value={line.outbound7d} sub={line.sendFailures7d > 0 ? `失敗 ${line.sendFailures7d}件` : undefined} />
+      </div>
+
+      {/* 日別推移 */}
+      <div style={{ background: 'var(--md-sys-color-surface-container)', borderRadius: 12, padding: 20, border: '1px solid var(--md-sys-color-outline-variant)' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: 'var(--md-sys-color-on-surface)' }}>
+          直近7日のメッセージ通数
+        </h3>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12 }}>
+          <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, background: '#4f8ef7', borderRadius: 2, marginRight: 4, verticalAlign: 'middle' }} />受信
+          </span>
+          <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, background: '#22c55e', borderRadius: 2, marginRight: 4, verticalAlign: 'middle' }} />返信送信
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 160, paddingBottom: 24, position: 'relative' }}>
+          {line.daily.map((d) => (
+            <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }}>
+              <div style={{ width: '100%', display: 'flex', gap: 2, alignItems: 'flex-end', height: 'calc(100% - 24px)' }}>
+                <div
+                  title={`受信 ${d.inbound}通`}
+                  style={{ flex: 1, height: `${(d.inbound / maxDaily) * 100}%`, background: '#4f8ef7', borderRadius: '3px 3px 0 0', minHeight: d.inbound > 0 ? 2 : 0 }}
+                />
+                <div
+                  title={`返信 ${d.outbound}通`}
+                  style={{ flex: 1, height: `${(d.outbound / maxDaily) * 100}%`, background: '#22c55e', borderRadius: '3px 3px 0 0', minHeight: d.outbound > 0 ? 2 : 0 }}
+                />
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--md-sys-color-on-surface-variant)', whiteSpace: 'nowrap' }}>
+                {d.date.slice(5)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function LineKpi({ label, value, sub, color }: { label: string; value: number; sub?: string; color?: string }) {
+  return (
+    <div style={{ background: 'var(--md-sys-color-surface-container)', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 12, padding: 16 }}>
+      <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: color ?? 'var(--md-sys-color-on-surface)' }}>{value.toLocaleString()}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>{sub}</div>}
+    </div>
   )
 }

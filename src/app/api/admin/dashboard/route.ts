@@ -155,6 +155,53 @@ export async function GET(request: NextRequest) {
     amount: g._sum.purchaseAmount ?? 0,
   }))
 
+  // LINE 関連の統計
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+  const [
+    lineChannelTotal,
+    lineChannelActive,
+    lineUserTotal,
+    lineUserLinked,
+    lineUnreadCount,
+    lineInbound7d,
+    lineOutbound7d,
+    lineSendFailures7d,
+    lineMessages7d,
+  ] = await Promise.all([
+    prisma.lineChannel.count(),
+    prisma.lineChannel.count({ where: { isActive: true } }),
+    prisma.lineUser.count(),
+    prisma.lineUser.count({ where: { userId: { not: null } } }),
+    prisma.lineMessage.count({ where: { direction: 'inbound', readAt: null } }),
+    prisma.lineMessage.count({ where: { direction: 'inbound', sentAt: { gte: sevenDaysAgo } } }),
+    prisma.lineMessage.count({ where: { direction: 'outbound', sentAt: { gte: sevenDaysAgo } } }),
+    prisma.lineMessage.count({ where: { direction: 'outbound', status: 'failed', sentAt: { gte: sevenDaysAgo } } }),
+    // 過去7日の日別受信＋送信数
+    prisma.lineMessage.findMany({
+      where: { sentAt: { gte: sevenDaysAgo } },
+      select: { direction: true, sentAt: true },
+    }),
+  ])
+
+  // 日別集計（直近7日）
+  const lineDailyMap: Record<string, { date: string; inbound: number; outbound: number }> = {}
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    lineDailyMap[key] = { date: key, inbound: 0, outbound: 0 }
+  }
+  for (const m of lineMessages7d) {
+    const key = m.sentAt.toISOString().slice(0, 10)
+    if (lineDailyMap[key]) {
+      if (m.direction === 'inbound') lineDailyMap[key].inbound++
+      else if (m.direction === 'outbound') lineDailyMap[key].outbound++
+    }
+  }
+  const lineDaily = Object.values(lineDailyMap)
+
   return NextResponse.json({
     summary: {
       totalCustomers,
@@ -170,5 +217,16 @@ export async function GET(request: NextRequest) {
     dailyVisits,
     monthlyPurchaseAmount,
     storePurchaseRanking,
+    line: {
+      channelTotal: lineChannelTotal,
+      channelActive: lineChannelActive,
+      userTotal: lineUserTotal,
+      userLinked: lineUserLinked,
+      unreadCount: lineUnreadCount,
+      inbound7d: lineInbound7d,
+      outbound7d: lineOutbound7d,
+      sendFailures7d: lineSendFailures7d,
+      daily: lineDaily,
+    },
   })
 }

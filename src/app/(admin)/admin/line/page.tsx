@@ -46,6 +46,7 @@ type Message = {
   messageType: string
   content: string | null
   sentAt: string
+  status?: string // "sent" | "failed" | "sending"
 }
 
 /* ─── チャネル設定モーダル ───────────────────────── */
@@ -415,12 +416,13 @@ export default function LineManagePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: replyText.trim() }),
       })
+      const d = await res.json().catch(() => ({}))
       if (res.ok) {
-        const msg: Message = await res.json()
-        setMessages((prev) => [...prev, msg])
+        setMessages((prev) => [...prev, d])
         setReplyText('')
       } else {
-        const d = await res.json().catch(() => ({}))
+        // 失敗時もメッセージ履歴に追加（failed ステータス付き）
+        if (d.message) setMessages((prev) => [...prev, d.message])
         setSendError(d.error ?? '送信に失敗しました')
       }
     } catch {
@@ -706,20 +708,23 @@ export default function LineManagePage() {
                 ) : (
                   messages.map((msg) => {
                     const isOutbound = msg.direction === 'outbound'
+                    const isFailed = msg.status === 'failed'
                     return (
-                      <div key={msg.id} style={{ display: 'flex', justifyContent: isOutbound ? 'flex-end' : 'flex-start' }}>
+                      <div key={msg.id} style={{ display: 'flex', justifyContent: isOutbound ? 'flex-end' : 'flex-start', flexDirection: 'column', alignItems: isOutbound ? 'flex-end' : 'flex-start' }}>
                         <div
                           style={{
                             maxWidth: '72%', padding: '10px 14px', borderRadius: isOutbound ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                            background: isOutbound ? '#4f8ef7' : 'var(--md-sys-color-surface-container-high)',
-                            color: isOutbound ? '#ffffff' : 'var(--md-sys-color-on-surface)',
+                            background: isFailed ? 'rgba(248,113,113,0.15)' : isOutbound ? '#4f8ef7' : 'var(--md-sys-color-surface-container-high)',
+                            color: isFailed ? '#f87171' : isOutbound ? '#ffffff' : 'var(--md-sys-color-on-surface)',
                             fontSize: 14, lineHeight: 1.5,
+                            border: isFailed ? '1px solid rgba(248,113,113,0.4)' : 'none',
                           }}
                         >
                           <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                             {msg.content ?? `[${msg.messageType}]`}
                           </div>
-                          <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7, textAlign: isOutbound ? 'right' : 'left' }}>
+                          <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7, textAlign: isOutbound ? 'right' : 'left', display: 'flex', gap: 6, justifyContent: isOutbound ? 'flex-end' : 'flex-start', alignItems: 'center' }}>
+                            {isFailed && <span style={{ color: '#f87171', opacity: 1 }}>送信失敗</span>}
                             {new Date(msg.sentAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>

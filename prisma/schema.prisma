@@ -671,6 +671,7 @@ model LineMessage {
   content       String?     @db.Text              // テキスト本文
   imageUrl      String?     @db.Text              // 画像の場合
   lineMessageId String?     @unique               // LINE 側のメッセージID（重複防止）
+  status        String      @default("sent")      // "sent" | "failed"
   sentAt        DateTime
   readAt        DateTime?
   createdAt     DateTime    @default(now())

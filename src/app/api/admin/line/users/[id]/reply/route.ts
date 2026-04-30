@@ -36,20 +36,7 @@ export async function POST(
     return NextResponse.json({ error: 'チャネルが無効です' }, { status: 400 })
   }
 
-  const accessToken = getDecryptedAccessToken(lineUser.lineChannel)
-
-  // LINE へ Push 送信
-  try {
-    await sendPushMessage(accessToken, lineUser.lineUserId, parsed.data.text)
-  } catch (err: any) {
-    console.error('[LINE Reply] Push message failed:', err?.message)
-    return NextResponse.json(
-      { error: `LINE送信に失敗しました: ${err?.message ?? '不明なエラー'}` },
-      { status: 502 }
-    )
-  }
-
-  // DB に outbound メッセージを保存
+  // 先に DB へ保存（送信前に履歴を記録）
   const message = await prisma.lineMessage.create({
     data: {
       lineUserId: id,
@@ -57,9 +44,31 @@ export async function POST(
       direction: 'outbound',
       messageType: 'text',
       content: parsed.data.text,
+      status: 'sending',
       sentAt: new Date(),
     },
   })
 
-  return NextResponse.json(message)
+  // LINE へ Push 送信
+  const accessToken = getDecryptedAccessToken(lineUser.lineChannel)
+  try {
+    await sendPushMessage(accessToken, lineUser.lineUserId, parsed.data.text)
+    // 送信成功 → status を sent に更新
+    const updated = await prisma.lineMessage.update({
+      where: { id: message.id },
+      data: { status: 'sent' },
+    })
+    return NextResponse.json(updated)
+  } catch (err: any) {
+    console.error('[LINE Reply] Push message failed:', err?.message)
+    // 送信失敗 → status を failed に更新（履歴は残す）
+    const updated = await prisma.lineMessage.update({
+      where: { id: message.id },
+      data: { status: 'failed' },
+    })
+    return NextResponse.json(
+      { error: `LINE送信に失敗しました: ${err?.message ?? '不明なエラー'}`, message: updated },
+      { status: 502 }
+    )
+  }
 }

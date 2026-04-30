@@ -325,6 +325,7 @@ export default function LineManagePage() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [channelModal, setChannelModal] = useState<{ open: boolean; channel: Partial<Channel> | null }>({ open: false, channel: null })
   const [linkModal, setLinkModal] = useState<LineUser | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 認証チェック
@@ -508,38 +509,57 @@ export default function LineManagePage() {
             {channels.map((ch) => (
               <div
                 key={ch.id}
-                onClick={() => setSelectedChannelId(ch.id)}
+                onClick={() => { setSelectedChannelId(ch.id); setOpenMenuId(null) }}
                 style={{
-                  padding: '12px 14px', cursor: 'pointer',
+                  padding: '12px 14px', cursor: 'pointer', position: 'relative',
                   background: selectedChannelId === ch.id ? 'var(--md-sys-color-secondary-container)' : 'transparent',
                   borderBottom: '1px solid var(--md-sys-color-outline-variant)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                  <span style={{ fontSize: 13, fontWeight: selectedChannelId === ch.id ? 700 : 400, color: 'var(--md-sys-color-on-surface)' }}>
+                  <span style={{ fontSize: 13, fontWeight: selectedChannelId === ch.id ? 700 : 400, color: 'var(--md-sys-color-on-surface)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {ch.name}
                   </span>
-                  {ch.unreadCount > 0 && (
-                    <span style={{ background: 'var(--md-sys-color-error)', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>
-                      {ch.unreadCount}
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {ch.unreadCount > 0 && (
+                      <span style={{ background: 'var(--md-sys-color-error)', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>
+                        {ch.unreadCount}
+                      </span>
+                    )}
+                    {/* 3点リーダーボタン */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === ch.id ? null : ch.id) }}
+                      style={{ width: 24, height: 24, borderRadius: 4, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                    >
+                      ⋮
+                    </button>
+                  </div>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{ch.userCount}人</span>
                   {!ch.isActive && <span style={{ color: 'var(--md-sys-color-error)' }}>無効</span>}
                 </div>
-                {selectedChannelId === ch.id && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                {/* ドロップダウンメニュー */}
+                {openMenuId === ch.id && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      position: 'absolute', top: 36, right: 8, zIndex: 100,
+                      background: 'var(--md-sys-color-surface-container-high)',
+                      border: '1px solid var(--md-sys-color-outline-variant)',
+                      borderRadius: 8, overflow: 'hidden', minWidth: 100,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    }}
+                  >
                     <button
-                      onClick={(e) => { e.stopPropagation(); setChannelModal({ open: true, channel: ch }) }}
-                      style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)' }}
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setChannelModal({ open: true, channel: ch }) }}
+                      style={{ display: 'block', width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, textAlign: 'left' }}
                     >
                       編集
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); deleteChannel(ch.id, ch.name) }}
-                      style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: 'none', cursor: 'pointer', background: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); deleteChannel(ch.id, ch.name) }}
+                      style={{ display: 'block', width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer', background: 'transparent', color: '#f87171', fontSize: 13, textAlign: 'left' }}
                     >
                       削除
                     </button>

@@ -17,6 +17,7 @@ import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import BankSearch from '@/components/customer/BankSearch'
+import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
 type User = {
   id: string
@@ -32,7 +33,8 @@ type User = {
   visitSchedules: Array<{ visitDate: string; status: string }>
   isActive: boolean
   // 顧客タイプ
-  customerType: string  // "visit" | "delivery" | "regular"
+  customerType: string  // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
+  customerTypes?: string  // JSON配列（複数可）
   visitFrequencyMonths: number
   // 振込先口座情報
   bankName:      string | null
@@ -133,7 +135,7 @@ export default function AdminCustomersPage() {
 
   // 顧客情報編集
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit', visitFrequencyMonths: 1 })
+  const [editForm, setEditForm] = useState<{ name: string; furigana: string; email: string; phone: string; address: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number }>({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1 })
   const [changingFrequency, setChangingFrequency] = useState<string | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
@@ -378,6 +380,7 @@ export default function AdminCustomersPage() {
 
   function startEditMode() {
     if (!detailUser) return
+    const types = parseCustomerTypes((detailUser as any).customerTypes, detailUser.customerType)
     setEditForm({
       name: detailUser.name,
       furigana: detailUser.furigana,
@@ -385,6 +388,7 @@ export default function AdminCustomersPage() {
       phone: detailUser.phone,
       address: detailUser.address,
       customerType: detailUser.customerType,
+      customerTypes: types.length > 0 ? types : [detailUser.customerType],
       visitFrequencyMonths: detailUser.visitFrequencyMonths ?? 1,
     })
     setEditMode(true)
@@ -404,6 +408,7 @@ export default function AdminCustomersPage() {
           phone: editForm.phone,
           address: editForm.address,
           customerType: editForm.customerType,
+          customerTypes: editForm.customerTypes,
           visitFrequencyMonths: editForm.visitFrequencyMonths,
         }),
       })
@@ -814,13 +819,21 @@ export default function AdminCustomersPage() {
       header: 'タイプ',
       hideOnMobile: true,
       render: (user) => {
-        const typeMap: Record<string, {label:string, cls:string}> = {
-          delivery: { label: '定期宅配', cls: 'bg-[#E8927C]/15 text-[#E8927C]' },
-          regular:  { label: '通常買取', cls: 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]' },
-          visit:    { label: '定期訪問', cls: 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]' },
-        }
-        const t = typeMap[user.customerType] ?? typeMap.visit
-        return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
+        const types = parseCustomerTypes((user as any).customerTypes, user.customerType)
+        const list = types.length > 0 ? types : [user.customerType as any]
+        return (
+          <div className="flex gap-1 flex-wrap">
+            {list.map((t: any) => {
+              const c = CUSTOMER_TYPE_BADGE[t as keyof typeof CUSTOMER_TYPE_BADGE]
+              const label = CUSTOMER_TYPE_LABEL[t as keyof typeof CUSTOMER_TYPE_LABEL] ?? t
+              return (
+                <span key={t} className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: c?.bg, color: c?.fg }}>
+                  {label}
+                </span>
+              )
+            })}
+          </div>
+        )
       },
     },
     {
@@ -1060,16 +1073,52 @@ export default function AdminCustomersPage() {
                     />
                     <div>
                       <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-                        顧客タイプ
+                        顧客タイプ（複数選択可）
                       </label>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {CUSTOMER_TYPES.map(t => {
+                          const checked = editForm.customerTypes.includes(t)
+                          const c = CUSTOMER_TYPE_BADGE[t]
+                          return (
+                            <label
+                              key={t}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full cursor-pointer text-xs font-medium border"
+                              style={{
+                                background: checked ? c.bg : 'transparent',
+                                color: checked ? c.fg : 'var(--md-sys-color-on-surface-variant)',
+                                borderColor: checked ? c.fg : 'var(--md-sys-color-outline-variant)',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={e => {
+                                  setEditForm(prev => {
+                                    const next = e.target.checked
+                                      ? [...prev.customerTypes, t]
+                                      : prev.customerTypes.filter(x => x !== t)
+                                    // 主タイプが配列から外れた場合は先頭に切替
+                                    const primary = next.includes(prev.customerType as CustomerType) ? prev.customerType : (next[0] ?? prev.customerType)
+                                    return { ...prev, customerTypes: next.length > 0 ? next : [prev.customerType], customerType: primary }
+                                  })
+                                }}
+                                className="hidden"
+                              />
+                              {checked && <span>✓</span>}
+                              {CUSTOMER_TYPE_LABEL[t]}
+                            </label>
+                          )
+                        })}
+                      </div>
+                      <label className="block text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-2 mb-1">主タイプ（マイページの表示種別）</label>
                       <select
                         value={editForm.customerType}
                         onChange={e => setEditForm(prev => ({ ...prev, customerType: e.target.value }))}
-                        className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                        className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                       >
-                        <option value="visit">定期訪問</option>
-                        <option value="delivery">定期宅配</option>
-                        <option value="regular">通常買取</option>
+                        {editForm.customerTypes.map(t => (
+                          <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t as CustomerType] ?? t}</option>
+                        ))}
                       </select>
                     </div>
                     {(editForm.customerType === 'visit' || editForm.customerType === 'delivery') && (
@@ -1319,19 +1368,28 @@ export default function AdminCustomersPage() {
                   <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
                     <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">顧客タイプ</span>
                   </div>
-                  <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
-                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full self-start ${detailUser.customerType === 'delivery' ? 'bg-[#E8927C]/15 text-[#E8927C]' : detailUser.customerType === 'regular' ? 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]' : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]'}`}>
-                      {detailUser.customerType === 'delivery' ? '定期宅配' : detailUser.customerType === 'regular' ? '通常買取' : '定期訪問'}
-                    </span>
+                  <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5 flex-wrap">
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseCustomerTypes((detailUser as any).customerTypes, detailUser.customerType).map(t => {
+                        const c = CUSTOMER_TYPE_BADGE[t]
+                        const isPrimary = t === detailUser.customerType
+                        return (
+                          <span key={t} className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: c.bg, color: c.fg, border: isPrimary ? `1px solid ${c.fg}` : 'none' }}>
+                            {CUSTOMER_TYPE_LABEL[t]}
+                            {isPrimary && <span className="ml-1 text-[10px] opacity-75">(主)</span>}
+                          </span>
+                        )
+                      })}
+                    </div>
                     <select
                       className="text-xs px-2 py-1 rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
                       value={detailUser.customerType}
                       disabled={changingType === detailUser.id}
                       onChange={(e) => handleChangeCustomerType(detailUser.id, e.target.value)}
                     >
-                      <option value="visit">定期訪問</option>
-                      <option value="delivery">定期宅配</option>
-                      <option value="regular">通常買取</option>
+                      {CUSTOMER_TYPES.map(t => (
+                        <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t]}</option>
+                      ))}
                     </select>
                   </div>
                   {(detailUser.customerType === 'visit' || detailUser.customerType === 'delivery') && (
@@ -1701,10 +1759,11 @@ export default function AdminCustomersPage() {
               onChange={e => setAddForm(prev => ({ ...prev, customerType: e.target.value }))}
               className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
             >
-              <option value="visit">定期訪問</option>
-              <option value="delivery">定期宅配</option>
-              <option value="regular">通常買取</option>
+              {CUSTOMER_TYPES.map(t => (
+                <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t]}</option>
+              ))}
             </select>
+            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">作成後の編集画面で複数タイプを追加できます</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">

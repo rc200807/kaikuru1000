@@ -56,7 +56,8 @@ model User {
   store          Store?    @relation(fields: [storeId], references: [id])
   isActive       Boolean   @default(true)
   // 顧客タイプ
-  customerType          String    @default("visit")  // "visit" | "delivery" | "regular"
+  customerType          String    @default("visit")  // 主たる種別: "visit" | "delivery" | "regular" | "akikuru"
+  customerTypes         String    @default("[]")      // JSON配列: 顧客に適用する全種別（複数可）
   visitFrequencyMonths  Int       @default(1)         // 訪問・宅配の頻度（何ヶ月に1回）
   // 振込先口座情報
   bankName       String?

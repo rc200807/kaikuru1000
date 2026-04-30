@@ -15,6 +15,7 @@ import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import BankSearch from '@/components/customer/BankSearch'
 import { convertToJpegIfNeeded, createPreviewUrl } from '@/lib/image-utils'
+import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, customerView, type CustomerType } from '@/lib/customer-types'
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 
 type UserData = {
@@ -43,7 +44,8 @@ type UserData = {
   store: { name: string; phone: string | null; address: string | null; postalCode: string | null } | null
   visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
   // 顧客タイプ
-  customerType: string  // "visit" | "delivery" | "regular"
+  customerType: string  // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
+  customerTypes?: string  // JSON配列（複数可）
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -1003,7 +1005,10 @@ function MyPageContent() {
 
   const nextVisit = user.visitSchedules?.[0]
 
-  const isDelivery = user.customerType === 'delivery'
+  const view = customerView(user.customerType)
+  const isDelivery = view === 'delivery'
+  const isRegularLike = view === 'regular' // regular + akikuru
+  const appliedTypes = parseCustomerTypes(user.customerTypes, user.customerType)
 
   const tabs = isDelivery
     ? [
@@ -1204,7 +1209,7 @@ function MyPageContent() {
   const activeMemos = memos.filter(m => m.status !== 'completed')
   const completedMemos = memos.filter(m => m.status === 'completed')
 
-  const customerTypeLabel = user ? (user.customerType === 'visit' ? '訪問型' : user.customerType === 'delivery' ? '宅配型' : '一般') : ''
+  const customerTypeLabel = user ? (CUSTOMER_TYPE_LABEL[user.customerType as CustomerType] ?? user.customerType) : ''
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-red-50 via-white to-blue-50">
@@ -1263,7 +1268,7 @@ function MyPageContent() {
                 {/* Top bar */}
                 <div className="flex items-center justify-between mb-6 relative z-10">
                   <h1 className="text-lg font-bold text-white">
-                    {user.customerType === 'regular' ? '買いクル' : 'エコ得BOX'}
+                    {isRegularLike ? '買いクル' : 'エコ得BOX'}
                   </h1>
                   <div />
                 </div>
@@ -1273,9 +1278,13 @@ function MyPageContent() {
                   <div className="mb-3">
                     <div>
                       <p className="text-white text-lg font-bold">{user.name} 様</p>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/20 text-white">
-                        {customerTypeLabel}
-                      </span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(appliedTypes.length > 0 ? appliedTypes : [user.customerType as CustomerType]).map(t => (
+                          <span key={t} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/20 text-white">
+                            {CUSTOMER_TYPE_LABEL[t] ?? t}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
 

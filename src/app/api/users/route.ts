@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/lib/mailer'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
+import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
 const registerSchema = z.object({
   name:         z.string().min(1, '氏名は必須です').max(100),
@@ -15,7 +16,8 @@ const registerSchema = z.object({
   address:      z.string().min(1, '住所は必須です').max(200),
   password:     z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional().or(z.literal('')),
   licenseKey:   z.string().optional(),
-  customerType: z.enum(['visit', 'delivery', 'regular']).optional(),
+  customerType: z.enum(CUSTOMER_TYPES).optional(),
+  customerTypes: z.array(z.enum(CUSTOMER_TYPES)).optional(),
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
 
@@ -31,16 +33,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 })
     }
 
-    const { name, furigana, email, phone, address, password, licenseKey, customerType, skipLicenseKey } = parsed.data
+    const { name, furigana, email, phone, address, password, licenseKey, customerType, customerTypes, skipLicenseKey } = parsed.data
 
     // 店舗ユーザーが登録した場合は、その店舗に自動割り当てする
     const session = await getServerSession(authOptions)
     const sessionUser = session?.user as any
     const autoStoreId: string | null = sessionUser?.role === 'store' && sessionUser?.id ? sessionUser.id : null
 
-    // 通常買取 or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
-    const isRegular = customerType === 'regular'
-    const needsLicenseKey = !isRegular && !skipLicenseKey && !licenseKey
+    // 主タイプ決定（customerType → customerTypes[0] → 'visit'）
+    const primaryType: CustomerType = (customerType ?? customerTypes?.[0] ?? 'visit') as CustomerType
+    const typesArray = (customerTypes && customerTypes.length > 0 ? customerTypes : [primaryType]) as CustomerType[]
+    const customerTypesJson = stringifyCustomerTypes(typesArray, primaryType)
+
+    // 通常買取 or アキクル or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
+    const isLicenseFree = primaryType === 'regular' || primaryType === 'akikuru'
+    const needsLicenseKey = !isLicenseFree && !skipLicenseKey && !licenseKey
 
     if (needsLicenseKey) {
       return NextResponse.json({ error: 'ライセンスキーは必須です' }, { status: 400 })
@@ -58,13 +65,14 @@ export async function POST(request: NextRequest) {
     const actualPassword = password || Math.random().toString(36).slice(-12) + 'A1!'
     const hashedPassword = await bcrypt.hash(actualPassword, 10)
 
-    // ライセンスキーなしで作成（通常買取 or 管理者/店舗からの追加）
-    if (isRegular || skipLicenseKey || !licenseKey) {
+    // ライセンスキーなしで作成（通常買取 / アキクル / 管理者・店舗からの追加）
+    if (isLicenseFree || skipLicenseKey || !licenseKey) {
       const user = await prisma.user.create({
         data: {
           name, furigana, email: email || null, phone, address,
           password: hashedPassword,
-          customerType: customerType || 'visit',
+          customerType: primaryType,
+          customerTypes: customerTypesJson,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },
         include: { store: true },
@@ -123,6 +131,8 @@ export async function POST(request: NextRequest) {
         data: {
           name, furigana, email, phone, address,
           password: hashedPassword,
+          customerType: primaryType,
+          customerTypes: customerTypesJson,
           licenseKeyId: licenseKeyRecord.id,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },

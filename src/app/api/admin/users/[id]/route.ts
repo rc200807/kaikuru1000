@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { CUSTOMER_TYPES, isCustomerType, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
-const VALID_CUSTOMER_TYPES = ['visit', 'delivery', 'regular']
+const VALID_CUSTOMER_TYPES = CUSTOMER_TYPES as readonly string[]
+
+/** body から customerTypes 配列を抽出（不正値は除外）。未指定なら null。 */
+function extractCustomerTypes(body: any): CustomerType[] | null {
+  if (!Array.isArray(body.customerTypes)) return null
+  const list = body.customerTypes.filter(isCustomerType)
+  return list
+}
 
 /** 顧客の有効化・無効化・タイプ変更 */
 export async function PATCH(
@@ -31,13 +39,32 @@ export async function PATCH(
     return NextResponse.json({ id: updated.id, isActive: updated.isActive })
   }
 
-  // 顧客タイプのみ変更
-  if (body.customerType && Object.keys(body).length === 1 && VALID_CUSTOMER_TYPES.includes(body.customerType)) {
+  // 顧客タイプのみ変更（単一 or 複数）
+  if (
+    Object.keys(body).length === 1 &&
+    (
+      (body.customerType && VALID_CUSTOMER_TYPES.includes(body.customerType)) ||
+      Array.isArray(body.customerTypes)
+    )
+  ) {
+    const types = extractCustomerTypes(body)
+    const data: Record<string, unknown> = {}
+    if (body.customerType && VALID_CUSTOMER_TYPES.includes(body.customerType)) {
+      data.customerType = body.customerType
+    }
+    if (types) {
+      // customerTypes が空配列なら主タイプにフォールバック
+      const primary = (data.customerType as string) ?? user.customerType
+      data.customerTypes = stringifyCustomerTypes(types, primary)
+      // 主タイプ未指定なら配列の先頭を主タイプに昇格
+      if (!data.customerType && types.length > 0) data.customerType = types[0]
+    }
     const updated = await prisma.user.update({
       where: { id },
-      data: { customerType: body.customerType },
+      data,
+      select: { id: true, customerType: true, customerTypes: true },
     })
-    return NextResponse.json({ id: updated.id, customerType: updated.customerType })
+    return NextResponse.json(updated)
   }
 
   // 訪問頻度のみ変更
@@ -70,6 +97,13 @@ export async function PATCH(
       data.customerType = body.customerType
     }
 
+    const types = extractCustomerTypes(body)
+    if (types) {
+      const primary = (data.customerType as string) ?? user.customerType
+      data.customerTypes = stringifyCustomerTypes(types, primary)
+      if (!data.customerType && types.length > 0) data.customerType = types[0]
+    }
+
     if (typeof body.visitFrequencyMonths === 'number') {
       data.visitFrequencyMonths = Math.max(1, Math.floor(body.visitFrequencyMonths))
     }
@@ -77,7 +111,7 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true, visitFrequencyMonths: true },
+      select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true, customerTypes: true, visitFrequencyMonths: true },
     })
     return NextResponse.json(updated)
   }

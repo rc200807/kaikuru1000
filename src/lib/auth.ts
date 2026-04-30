@@ -58,6 +58,7 @@ export const authOptions: NextAuthOptions = {
                 avatar: null,
                 role: 'customer' as const,
                 customerType: u.customerType,
+                customerTypes: u.customerTypes,
               }
             }
           }
@@ -86,6 +87,7 @@ export const authOptions: NextAuthOptions = {
           avatar: null,
           role: 'customer' as const,
           customerType: user.customerType,
+          customerTypes: user.customerTypes,
         }
       },
     }),
@@ -229,6 +231,7 @@ export const authOptions: NextAuthOptions = {
           avatar: null,
           role: 'customer' as const,
           customerType: (magicLink.user as any).customerType,
+          customerTypes: (magicLink.user as any).customerTypes,
         }
       },
     }),
@@ -240,6 +243,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.avatar = (user as any).avatar ?? null
         token.customerType = (user as any).customerType ?? null
+        token.customerTypes = (user as any).customerTypes ?? null
       }
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
@@ -260,6 +264,7 @@ export const authOptions: NextAuthOptions = {
         if (updatedSession.email !== undefined) token.email = updatedSession.email
         if (updatedSession.avatar !== undefined) token.avatar = updatedSession.avatar
         if (updatedSession.customerType !== undefined) token.customerType = updatedSession.customerType
+        if (updatedSession.customerTypes !== undefined) token.customerTypes = updatedSession.customerTypes
       }
       return token
     },
@@ -269,6 +274,7 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).id = token.id
         ;(session.user as any).avatar = token.avatar ?? null
         ;(session.user as any).customerType = token.customerType ?? null
+        ;(session.user as any).customerTypes = token.customerTypes ?? null
         if (token.name) session.user.name = token.name as string
         if (token.email) session.user.email = token.email as string
       }

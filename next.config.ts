@@ -19,8 +19,8 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js HMR 用
       "style-src 'self' 'unsafe-inline'",
-      // Vercel Blob の公開 URL + YouTube サムネイルを img-src に追加
-      "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://img.youtube.com",
+      // Vercel Blob の公開 URL + YouTube サムネイル + LINE プロフィール画像を img-src に追加
+      "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://img.youtube.com https://profile.line-scdn.net https://*.line-scdn.net",
       "font-src 'self'",
       "connect-src 'self' https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com",
       // Vercel Blob の動画再生を許可

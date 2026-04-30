@@ -609,7 +609,7 @@ export default function LineManagePage() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {u.pictureUrl ? (
-                      <img src={u.pictureUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+                      <img src={u.pictureUrl} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover', display: 'block' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.setAttribute('style', 'display:flex') }} /><div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0, alignItems: 'center', justifyContent: 'center', fontSize: 16, display: 'none' }}>👤</div>
                     ) : (
                       <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
                         👤
@@ -659,7 +659,7 @@ export default function LineManagePage() {
               <div style={{ ...colStyle.header, flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {selectedUser.pictureUrl ? (
-                    <img src={selectedUser.pictureUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                    <img src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
                   )}

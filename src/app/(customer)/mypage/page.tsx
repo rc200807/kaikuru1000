@@ -2315,6 +2315,9 @@ function MyPageContent() {
                   <li>粗大ゴミ</li>
                   <li>毒物／劇物／法律違反となるもの</li>
                 </ul>
+                <p className="text-xs text-amber-700 mt-3 pt-3 border-t border-amber-200/70">
+                  ※ 上記に該当する商品が含まれていた場合、ご返送させていただく場合があります。
+                </p>
               </Card>
 
               {/* 送付一覧 */}

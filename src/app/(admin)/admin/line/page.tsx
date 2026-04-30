@@ -236,6 +236,181 @@ function ChannelModal({
   )
 }
 
+/* ─── 分析モーダル ────────────────────────────────── */
+function InsightsModal({
+  channel,
+  onClose,
+}: {
+  channel: Channel
+  onClose: () => void
+}) {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/admin/line/channels/${channel.id}/insights`)
+      .then(async r => {
+        const d = await r.json()
+        if (cancelled) return
+        if (!r.ok) setError(d.error ?? '取得に失敗しました')
+        else setData(d)
+      })
+      .catch(() => !cancelled && setError('ネットワークエラー'))
+      .finally(() => !cancelled && setLoading(false))
+    return () => { cancelled = true }
+  }, [channel.id])
+
+  function diff(a?: number, b?: number) {
+    if (a === undefined || b === undefined) return null
+    const d = a - b
+    if (d === 0) return null
+    return d > 0 ? `+${d}` : `${d}`
+  }
+
+  function StatCard({ label, value, sub, color }: { label: string; value: React.ReactNode; sub?: React.ReactNode; color?: string }) {
+    return (
+      <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>{label}</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: color ?? 'var(--md-sys-color-on-surface)' }}>{value}</div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>{sub}</div>}
+      </div>
+    )
+  }
+
+  const followersToday = data?.followersToday
+  const followersWeekAgo = data?.followersWeekAgo
+  const noFollowerData = followersToday?.status && followersToday.status !== 'ready'
+  const followerError = followersToday?.error
+
+  const delivery = data?.messageDelivery
+  const noDeliveryData = delivery?.status && delivery.status !== 'ready'
+
+  const demographic = data?.demographic
+  const quotaConsumption = data?.quotaConsumption
+  const quota = data?.quota
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--md-sys-color-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>分析: {channel.name}</h2>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)' }}>×</button>
+        </div>
+
+        {loading && <p style={{ textAlign: 'center', padding: 40, color: 'var(--md-sys-color-on-surface-variant)' }}>読み込み中...</p>}
+        {error && <p style={{ color: '#f87171', fontSize: 13 }}>⚠ {error}</p>}
+
+        {data && (
+          <>
+            <p style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 16 }}>
+              集計日: {data.aggregateDate}（LINEの分析データは2〜3日遅れて反映されます）
+            </p>
+
+            {/* 友だち */}
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px' }}>友だち</h3>
+            {followerError ? (
+              <p style={{ fontSize: 13, color: '#f87171' }}>友だちデータ取得失敗: {followerError}</p>
+            ) : noFollowerData ? (
+              <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                友だちが20人未満のためデータが提供されません（LINE仕様）
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                <StatCard
+                  label="友だち追加（累計）"
+                  value={followersToday?.followers?.toLocaleString() ?? '—'}
+                  sub={diff(followersToday?.followers, followersWeekAgo?.followers) && `7日前比 ${diff(followersToday?.followers, followersWeekAgo?.followers)}`}
+                />
+                <StatCard
+                  label="ターゲットリーチ"
+                  value={followersToday?.targetedReaches?.toLocaleString() ?? '—'}
+                  sub={diff(followersToday?.targetedReaches, followersWeekAgo?.targetedReaches) && `7日前比 ${diff(followersToday?.targetedReaches, followersWeekAgo?.targetedReaches)}`}
+                />
+                <StatCard
+                  label="ブロック（累計）"
+                  value={followersToday?.blocks?.toLocaleString() ?? '—'}
+                  sub={diff(followersToday?.blocks, followersWeekAgo?.blocks) && `7日前比 ${diff(followersToday?.blocks, followersWeekAgo?.blocks)}`}
+                  color="#f87171"
+                />
+              </div>
+            )}
+
+            {/* メッセージ */}
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px' }}>メッセージ通数</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 12 }}>
+              <StatCard
+                label="当月の使用通数（課金対象）"
+                value={quotaConsumption?.totalUsage?.toLocaleString() ?? '—'}
+                sub={quota?.value ? `上限: ${quota.value.toLocaleString()}通 / ${quota.type}` : `プラン: ${quota?.type ?? '—'}`}
+              />
+              <StatCard
+                label={`LINE側送信通数（${data.aggregateDate}）`}
+                value={
+                  noDeliveryData
+                    ? '—'
+                    : ((delivery?.broadcast ?? 0) + (delivery?.targeting ?? 0) + (delivery?.apiPush ?? 0) + (delivery?.apiBroadcast ?? 0) + (delivery?.apiMulticast ?? 0) + (delivery?.apiNarrowcast ?? 0)).toLocaleString()
+                }
+                sub={!noDeliveryData && `Push: ${delivery?.apiPush ?? 0} / Broadcast: ${(delivery?.broadcast ?? 0) + (delivery?.apiBroadcast ?? 0)}`}
+              />
+            </div>
+
+            {/* ポータル経由 */}
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '20px 0 12px' }}>当ポータル経由（過去7日間）</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
+              <StatCard label="受信メッセージ" value={data.portal.inboundLast7Days.toLocaleString()} />
+              <StatCard label="返信メッセージ" value={data.portal.outboundLast7Days.toLocaleString()} />
+            </div>
+
+            {/* デモグラ */}
+            {demographic?.available && (
+              <>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px' }}>デモグラフィック（友だち属性）</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                  {demographic.genders && (
+                    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
+                      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>性別</div>
+                      {demographic.genders.map((g: any) => (
+                        <div key={g.gender} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>{g.gender === 'male' ? '男性' : g.gender === 'female' ? '女性' : g.gender}</span>
+                          <span style={{ fontWeight: 700 }}>{g.percentage.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {demographic.ages && (
+                    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
+                      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>年代</div>
+                      {demographic.ages.map((a: any) => (
+                        <div key={a.age} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>{a.age}</span>
+                          <span style={{ fontWeight: 700 }}>{a.percentage.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {demographic.areas && demographic.areas.length > 0 && (
+                    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16, gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>エリア（上位）</div>
+                      {demographic.areas.slice(0, 8).map((a: any) => (
+                        <div key={a.area} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>{a.area}</span>
+                          <span style={{ fontWeight: 700 }}>{a.percentage.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ─── 顧客紐付けモーダル ─────────────────────────── */
 function LinkUserModal({
   lineUser,
@@ -356,6 +531,7 @@ export default function LineManagePage() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [channelModal, setChannelModal] = useState<{ open: boolean; channel: Partial<Channel> | null }>({ open: false, channel: null })
   const [linkModal, setLinkModal] = useState<LineUser | null>(null)
+  const [insightsChannel, setInsightsChannel] = useState<Channel | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [stores, setStores] = useState<StoreOption[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -602,6 +778,12 @@ export default function LineManagePage() {
                     }}
                   >
                     <button
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setInsightsChannel(ch) }}
+                      style={{ display: 'block', width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, textAlign: 'left' }}
+                    >
+                      📊 分析
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); setChannelModal({ open: true, channel: ch }) }}
                       style={{ display: 'block', width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, textAlign: 'left' }}
                     >
@@ -832,6 +1014,12 @@ export default function LineManagePage() {
           lineUser={linkModal}
           onClose={() => setLinkModal(null)}
           onLinked={() => fetchUsers(selectedChannelId)}
+        />
+      )}
+      {insightsChannel && (
+        <InsightsModal
+          channel={insightsChannel}
+          onClose={() => setInsightsChannel(null)}
         />
       )}
     </div>

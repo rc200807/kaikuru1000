@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { GeistSans } from "geist/font/sans";
@@ -6,6 +6,13 @@ import { GeistMono } from "geist/font/mono";
 import Script from "next/script";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://kaikuru.jp";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // maximumScale は省略（アクセシビリティのためユーザーズームを制限しない）
+  // iOS Safari のフォーム入力時ズームは globals.css の font-size:16px で対応
+};
 
 export const metadata: Metadata = {
   title: "買いクル | 定期訪問サービス",

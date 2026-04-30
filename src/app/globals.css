@@ -190,6 +190,25 @@ body {
   background-color: var(--md-sys-color-surface-container-low) !important;
 }
 
+/* ── iOS Safari: フォーム入力時の自動ズームを防ぐ ──────── */
+/* font-size が 16px 未満だと iOS Safari がフォーカス時にズームするため、
+   すべての入力要素に最低 16px を保証する。               */
+input,
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
+
 /* ── Utility classes ──────────────────────────────────── */
 .elevation-0 { box-shadow: var(--md-sys-elevation-0); }
 .elevation-1 { box-shadow: var(--md-sys-elevation-1); }

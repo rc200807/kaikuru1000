@@ -131,13 +131,12 @@ export default function AdminFormsPage() {
                   return (
                     <tr
                       key={f.id}
-                      className="hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                      className="hover:bg-[var(--md-sys-color-surface-container)] transition-colors cursor-pointer"
                       style={{ boxShadow: idx === 0 ? 'rgba(255,255,255,0.06) 0 1px 0 0 inset' : 'rgba(255,255,255,0.06) 0 1px 0 0 inset' }}
+                      onClick={() => router.push(`/admin/forms/${f.id}`)}
                     >
                       <td className="px-4 py-3">
-                        <Link href={`/admin/forms/${f.id}/edit`} className="font-medium text-[var(--md-sys-color-on-surface)] hover:underline">
-                          {f.title}
-                        </Link>
+                        <span className="font-medium text-[var(--md-sys-color-on-surface)]">{f.title}</span>
                         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 font-mono">/f/{f.slug}</p>
                       </td>
                       <td className="px-4 py-3">
@@ -149,13 +148,11 @@ export default function AdminFormsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <Link href={`/admin/forms/${f.id}/submissions`} className="text-[hsla(212,100%,68%,1)] hover:underline">
-                          {f.submissionCount}件
-                        </Link>
+                        <span className="text-[hsla(212,100%,68%,1)]">{f.submissionCount}件</span>
                       </td>
                       <td className="px-4 py-3 text-[var(--md-sys-color-on-surface-variant)]">{new Date(f.updatedAt).toLocaleDateString('ja-JP')}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <div className="inline-flex gap-2">
+                        <div className="inline-flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <Button variant="outlined" size="sm" onClick={() => copyUrl(f.slug, f.id)}>
                             {copiedId === f.id ? 'コピー済' : 'URLコピー'}
                           </Button>

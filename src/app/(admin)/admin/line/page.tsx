@@ -366,33 +366,33 @@ function InsightsModal({
             {/* デモグラ */}
             {demographic?.available && (
               <>
-                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px' }}>デモグラフィック（友だち属性）</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px', color: '#e5e7eb' }}>デモグラフィック（友だち属性）</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                   {demographic.genders && (
-                    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
-                      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>性別</div>
+                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>性別</div>
                       {demographic.genders.map((g: any) => (
                         <div key={g.gender} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                          <span>{g.gender === 'male' ? '男性' : g.gender === 'female' ? '女性' : g.gender}</span>
+                          <span>{g.gender === 'male' ? '男性' : g.gender === 'female' ? '女性' : '不明'}</span>
                           <span style={{ fontWeight: 700 }}>{g.percentage.toFixed(1)}%</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {demographic.ages && (
-                    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
-                      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>年代</div>
+                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>年代</div>
                       {demographic.ages.map((a: any) => (
                         <div key={a.age} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                          <span>{a.age}</span>
+                          <span>{ageLabel(a.age)}</span>
                           <span style={{ fontWeight: 700 }}>{a.percentage.toFixed(1)}%</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {demographic.areas && demographic.areas.length > 0 && (
-                    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16, gridColumn: '1 / -1' }}>
-                      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>エリア（上位）</div>
+                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, gridColumn: '1 / -1', color: '#e5e7eb' }}>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>エリア（上位）</div>
                       {demographic.areas.slice(0, 8).map((a: any) => (
                         <div key={a.area} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                           <span>{a.area}</span>
@@ -404,9 +404,104 @@ function InsightsModal({
                 </div>
               </>
             )}
+
+            {/* 取得可能な全期間の推移 */}
+            {Array.isArray(data.history) && data.history.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '24px 0 12px', color: '#e5e7eb' }}>
+                  友だち推移（{data.history.length}日分）
+                </h3>
+                <HistoryChart history={data.history} />
+              </>
+            )}
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+/** 年代ラベル変換 */
+function ageLabel(age: string): string {
+  if (age === 'unknown') return '不明'
+  const m = age.match(/^from(\d+)to(\d+)$/)
+  if (m) return `${m[1]}〜${m[2]}歳`
+  const m2 = age.match(/^from(\d+)$/)
+  if (m2) return `${m2[1]}歳以上`
+  return age
+}
+
+/** 簡易折れ線グラフ（SVG） */
+function HistoryChart({ history }: { history: { date: string; followers?: number; targetedReaches?: number; blocks?: number; delivery?: number }[] }) {
+  const w = 640
+  const h = 200
+  const pad = { l: 40, r: 12, t: 12, b: 28 }
+
+  const validFollowers = history.filter(d => d.followers !== undefined)
+  const followers = history.map(d => d.followers ?? null)
+  const reaches = history.map(d => d.targetedReaches ?? null)
+
+  const allValues = [...followers, ...reaches].filter((v): v is number => v !== null)
+  const max = allValues.length > 0 ? Math.max(...allValues) : 0
+  const min = allValues.length > 0 ? Math.min(...allValues) : 0
+  const range = max - min || 1
+
+  const x = (i: number) => pad.l + (i * (w - pad.l - pad.r)) / Math.max(1, history.length - 1)
+  const y = (v: number) => pad.t + (h - pad.t - pad.b) * (1 - (v - min) / range)
+
+  function pathFor(arr: (number | null)[], color: string) {
+    let path = ''
+    let pen = false
+    arr.forEach((v, i) => {
+      if (v === null) { pen = false; return }
+      path += pen ? ` L ${x(i)} ${y(v)}` : ` M ${x(i)} ${y(v)}`
+      pen = true
+    })
+    return <path d={path} stroke={color} strokeWidth={2} fill="none" />
+  }
+
+  if (validFollowers.length === 0) {
+    return (
+      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+        グラフデータが取得できませんでした（友だち20人未満または集計中）
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 11 }}>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#4f8ef7', borderRadius: 2, marginRight: 4 }} />友だち累計</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#22c55e', borderRadius: 2, marginRight: 4 }} />ターゲットリーチ</span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto' }}>
+        {/* y軸グリッド */}
+        {[0, 0.5, 1].map((p, i) => {
+          const yv = pad.t + (h - pad.t - pad.b) * (1 - p)
+          const v = Math.round(min + range * p)
+          return (
+            <g key={i}>
+              <line x1={pad.l} y1={yv} x2={w - pad.r} y2={yv} stroke="rgba(255,255,255,0.08)" />
+              <text x={pad.l - 6} y={yv + 4} fontSize={10} fill="#9ca3af" textAnchor="end">{v.toLocaleString()}</text>
+            </g>
+          )
+        })}
+        {/* x軸ラベル（最大8〜10個程度） */}
+        {(() => {
+          const N = history.length
+          const tickCount = Math.min(8, N)
+          const step = Math.max(1, Math.floor(N / tickCount))
+          return history.filter((_, i) => i % step === 0 || i === N - 1).map((d) => {
+            const idx = history.indexOf(d)
+            const label = d.date.length === 10 ? d.date.slice(2).replace(/^(\d{2})-(\d{2})-(\d{2})$/, '$1/$2/$3') : d.date
+            return (
+              <text key={idx} x={x(idx)} y={h - 8} fontSize={10} fill="#9ca3af" textAnchor="middle">{label}</text>
+            )
+          })
+        })()}
+        {pathFor(followers, '#4f8ef7')}
+        {pathFor(reaches, '#22c55e')}
+      </svg>
     </div>
   )
 }

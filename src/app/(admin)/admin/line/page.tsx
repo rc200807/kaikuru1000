@@ -73,6 +73,32 @@ function ChannelModal({
   const [storeId, setStoreId] = useState<string>(channel?.storeId ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [storeQuery, setStoreQuery] = useState('')
+  const [storeOpen, setStoreOpen] = useState(false)
+  const storeWrapperRef = useRef<HTMLDivElement>(null)
+
+  const selectedStoreName =
+    stores.find((s) => s.id === storeId)?.name ?? ''
+  const storeInputDisplay = storeOpen
+    ? storeQuery
+    : (selectedStoreName || '')
+  const filteredStores = storeQuery
+    ? stores.filter((s) => s.name.toLowerCase().includes(storeQuery.toLowerCase())).slice(0, 50)
+    : stores.slice(0, 50)
+  const showHeadOption =
+    !storeQuery || '紐付けなし本部管理'.includes(storeQuery)
+
+  useEffect(() => {
+    if (!storeOpen) return
+    function onDown(e: MouseEvent) {
+      if (storeWrapperRef.current && !storeWrapperRef.current.contains(e.target as Node)) {
+        setStoreOpen(false)
+        setStoreQuery('')
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [storeOpen])
 
   const webhookBase =
     typeof window !== 'undefined'
@@ -200,21 +226,64 @@ function ChannelModal({
           <label style={{ display: 'block', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>
             紐付け店舗（任意）
           </label>
-          <select
-            value={storeId}
-            onChange={(e) => setStoreId(e.target.value)}
-            style={{
-              width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 8,
-              border: '1px solid var(--md-sys-color-outline-variant)',
-              background: 'var(--md-sys-color-surface-container-highest)',
-              color: 'var(--md-sys-color-on-surface)', fontSize: 14,
-            }}
-          >
-            <option value="">— 紐付けなし（本部管理）—</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          <div ref={storeWrapperRef} style={{ position: 'relative' }}>
+            <input
+              type="text"
+              value={storeInputDisplay}
+              placeholder={selectedStoreName || '— 紐付けなし（本部管理）—'}
+              onFocus={() => { setStoreOpen(true); setStoreQuery('') }}
+              onChange={(e) => { setStoreQuery(e.target.value); setStoreOpen(true) }}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setStoreOpen(false); setStoreQuery('') } }}
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 8,
+                border: '1px solid var(--md-sys-color-outline-variant)',
+                background: 'var(--md-sys-color-surface-container-highest)',
+                color: 'var(--md-sys-color-on-surface)', fontSize: 14,
+              }}
+            />
+            {storeOpen && (
+              <div
+                style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                  background: 'var(--md-sys-color-surface-container-high)',
+                  border: '1px solid var(--md-sys-color-outline-variant)',
+                  borderRadius: 8, maxHeight: 240, overflowY: 'auto', zIndex: 10,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                }}
+              >
+                {showHeadOption && (
+                  <div
+                    onMouseDown={(e) => { e.preventDefault(); setStoreId(''); setStoreOpen(false); setStoreQuery('') }}
+                    style={{
+                      padding: '10px 14px', cursor: 'pointer', fontSize: 14,
+                      color: 'var(--md-sys-color-on-surface-variant)',
+                      background: storeId === '' ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                    }}
+                  >
+                    — 紐付けなし（本部管理）—
+                  </div>
+                )}
+                {filteredStores.map((s) => (
+                  <div
+                    key={s.id}
+                    onMouseDown={(e) => { e.preventDefault(); setStoreId(s.id); setStoreOpen(false); setStoreQuery('') }}
+                    style={{
+                      padding: '10px 14px', cursor: 'pointer', fontSize: 14,
+                      color: 'var(--md-sys-color-on-surface)',
+                      background: storeId === s.id ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                    }}
+                  >
+                    {s.name}
+                  </div>
+                ))}
+                {filteredStores.length === 0 && !showHeadOption && (
+                  <div style={{ padding: '10px 14px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                    該当する店舗がありません
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {error && <p style={{ color: 'var(--md-sys-color-error)', fontSize: 13, marginBottom: 12 }}>{error}</p>}

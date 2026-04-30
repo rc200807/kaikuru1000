@@ -338,7 +338,7 @@ export default function FormEditPage() {
             <div>
               <Label>顧客フィールドマッピング</Label>
               <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-2">
-                顧客レコードの各項目を、フォームのどのフィールドから取得するか指定してください。氏名・電話・住所が揃っていない回答は顧客作成をスキップします。
+                顧客レコードの各項目を、フォームのどのフィールドから取得するか指定してください。氏名・電話が揃っていない回答は顧客作成をスキップします。
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 {([
@@ -347,7 +347,7 @@ export default function FormEditPage() {
                   { key: 'email', label: 'メール' },
                   { key: 'phone', label: '電話 *' },
                   { key: 'postalCode', label: '郵便番号' },
-                  { key: 'address', label: '住所 *' },
+                  { key: 'address', label: '住所' },
                 ] as const).map(({ key, label }) => (
                   <div key={key}>
                     <Label>{label}</Label>

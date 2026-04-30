@@ -94,8 +94,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     try {
       const fieldMap = form.customerFieldMap ? JSON.parse(form.customerFieldMap) : {}
       const cf = extractCustomerFields(fieldMap, parsed.data as Record<string, unknown>)
-      // 必須項目（氏名・電話・住所）が揃っていれば作成
-      if (cf.name && cf.phone && cf.address) {
+      // 必須項目（氏名・電話）が揃っていれば作成
+      if (cf.name && cf.phone) {
         const primary: CustomerType = isCustomerType(form.customerType) ? form.customerType : 'regular'
         const types = parseCustomerTypes(form.customerTypes, primary)
         const typesArray: CustomerType[] = types.length > 0 ? types : [primary]

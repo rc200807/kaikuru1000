@@ -1066,10 +1066,9 @@ export default function AdminCustomersPage() {
                       required
                     />
                     <TextField
-                      label="住所"
+                      label="住所（任意）"
                       value={editForm.address}
                       onChange={v => setEditForm(prev => ({ ...prev, address: v }))}
-                      required
                     />
                     <div>
                       <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
@@ -1146,7 +1145,7 @@ export default function AdminCustomersPage() {
                       </Button>
                       <Button
                         onClick={handleSaveCustomer}
-                        disabled={editSubmitting || !editForm.name || !editForm.furigana || !editForm.phone || !editForm.address}
+                        disabled={editSubmitting || !editForm.name || !editForm.furigana || !editForm.phone}
                         loading={editSubmitting}
                       >
                         {editSubmitting ? '保存中...' : '保存'}
@@ -1736,10 +1735,9 @@ export default function AdminCustomersPage() {
             placeholder="090-1234-5678"
           />
           <TextField
-            label="住所"
+            label="住所（任意）"
             value={addForm.address}
             onChange={v => setAddForm(prev => ({ ...prev, address: v }))}
-            required
             placeholder="東京都渋谷区..."
           />
           <TextField
@@ -1788,7 +1786,7 @@ export default function AdminCustomersPage() {
             </Button>
             <Button
               type="submit"
-              disabled={addSubmitting || !addForm.name || !addForm.furigana || !addForm.email || !addForm.phone || !addForm.address || addForm.password.length < 8}
+              disabled={addSubmitting || !addForm.name || !addForm.furigana || !addForm.email || !addForm.phone || addForm.password.length < 8}
               loading={addSubmitting}
             >
               {addSubmitting ? '追加中...' : '顧客を追加'}

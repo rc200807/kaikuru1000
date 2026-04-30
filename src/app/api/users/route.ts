@@ -13,7 +13,7 @@ const registerSchema = z.object({
   furigana:     z.string().min(1, 'ふりがなは必須です').max(100),
   email:        z.string().email('有効なメールアドレスを入力してください').optional().or(z.literal('')),
   phone:        z.string().min(1, '電話番号は必須です').max(20).transform(v => v.replace(/[-ー\s]/g, '')),
-  address:      z.string().min(1, '住所は必須です').max(200),
+  address:      z.string().max(200).optional().or(z.literal('')),
   password:     z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional().or(z.literal('')),
   licenseKey:   z.string().optional(),
   customerType: z.enum(CUSTOMER_TYPES).optional(),
@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 })
     }
 
-    const { name, furigana, email, phone, address, password, licenseKey, customerType, customerTypes, skipLicenseKey } = parsed.data
+    const { name, furigana, email, phone, password, licenseKey, customerType, customerTypes, skipLicenseKey } = parsed.data
+    const address = parsed.data.address ?? ''
 
     // 店舗ユーザーが登録した場合は、その店舗に自動割り当てする
     const session = await getServerSession(authOptions)

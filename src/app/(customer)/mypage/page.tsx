@@ -2279,7 +2279,7 @@ function MyPageContent() {
                 <ol className="space-y-3 text-sm text-[var(--md-sys-color-on-surface-variant)]">
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">1</span>
-                    <span>買取希望の商品を箱に入れる<br /><span className="text-xs text-gray-400">箱のサイズは120サイズまで（縦・横・高さの合計が120cm以内）</span></span>
+                    <span>買取希望の商品を箱に入れる<br /><span className="text-xs font-bold text-red-600">※ 商品は必ず5点以上入れてください</span><br /><span className="text-xs text-gray-400">箱のサイズは120サイズまで（縦・横・高さの合計が120cm以内）</span></span>
                   </li>
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">2</span>

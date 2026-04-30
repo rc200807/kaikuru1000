@@ -70,6 +70,7 @@ model User {
   deliveryShipments DeliveryShipment[]
   magicLinks        MagicLink[]
   inquiries         Inquiry[]
+  lineUsers         LineUser[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -623,6 +624,60 @@ model Form {
 
   @@index([status])
   @@index([createdById])
+}
+
+// LINE チャネル設定（管理ポータルから複数アカウントを管理）
+model LineChannel {
+  id                 String        @id @default(cuid())
+  name               String                        // 管理用の表示名
+  channelId          String        @unique          // LINE Channel ID
+  channelSecret      String        @db.Text         // AES-256-GCM 暗号化
+  channelAccessToken String        @db.Text         // AES-256-GCM 暗号化
+  isActive           Boolean       @default(true)
+  lineUsers          LineUser[]
+  messages           LineMessage[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+// LINE ユーザー（Webhook 経由でメッセージを送ってきたユーザー）
+model LineUser {
+  id            String        @id @default(cuid())
+  lineUserId    String                             // LINE の userId (U...)
+  displayName   String
+  pictureUrl    String?       @db.Text
+  lineChannelId String
+  lineChannel   LineChannel   @relation(fields: [lineChannelId], references: [id], onDelete: Cascade)
+  userId        String?                            // 既存顧客との紐付け（任意）
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages      LineMessage[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([lineUserId, lineChannelId])
+  @@index([lineChannelId])
+  @@index([userId])
+}
+
+// LINE メッセージ履歴
+model LineMessage {
+  id            String      @id @default(cuid())
+  lineUserId    String
+  lineUser      LineUser    @relation(fields: [lineUserId], references: [id], onDelete: Cascade)
+  lineChannelId String
+  lineChannel   LineChannel @relation(fields: [lineChannelId], references: [id], onDelete: Cascade)
+  direction     String                            // "inbound" | "outbound"
+  messageType   String                            // "text" | "image" | "sticker" | "other"
+  content       String?     @db.Text              // テキスト本文
+  imageUrl      String?     @db.Text              // 画像の場合
+  lineMessageId String?     @unique               // LINE 側のメッセージID（重複防止）
+  sentAt        DateTime
+  readAt        DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([lineUserId])
+  @@index([lineChannelId])
+  @@index([sentAt])
 }
 
 // フォーム回答

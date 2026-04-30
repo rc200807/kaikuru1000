@@ -362,7 +362,7 @@ export default function FormEditPage() {
                       <option value="">— 未設定 —</option>
                       {schema.filter(isInputField).map(f => (
                         <option key={f.id} value={f.id}>
-                          {('label' in f ? f.label : f.id)} ({FIELD_TYPE_LABELS[f.type]})
+                          {f.label} ({FIELD_TYPE_LABELS[f.type]})
                         </option>
                       ))}
                     </select>

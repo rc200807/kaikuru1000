@@ -3424,7 +3424,7 @@ function MyPageContent() {
 
               <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
                 <span className="mt-0.5 shrink-0">ℹ️</span>
-                <span>ご希望の日程は、リクエスト送信日から1週間後以降の日程を選択してください。</span>
+                <span>ご希望の日程は、リクエスト送信日から1週間後以降の日程を選択できます。</span>
               </div>
 
               {requestMsg && (

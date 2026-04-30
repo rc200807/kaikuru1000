@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { extractIdDocumentInfo, GeminiError } from '@/lib/gemini'
+import { isAddressMatch } from '@/lib/address-utils'
 import path from 'path'
 
 export async function POST(
@@ -31,7 +32,7 @@ export async function POST(
 
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { idDocumentPath: true },
+    select: { idDocumentPath: true, address: true },
   })
 
   if (!user?.idDocumentPath) {
@@ -79,6 +80,15 @@ export async function POST(
       throw err
     }
 
+    // 住所一致判定（OCR で住所が取得でき、登録住所がある場合）
+    let addressMismatchFlag: boolean | null = null
+    let addressVerifiedFlag: boolean | null = null
+    if (ocrResult.idAddress && user.address) {
+      const matched = isAddressMatch(user.address, ocrResult.idAddress)
+      addressMismatchFlag = !matched
+      addressVerifiedFlag = matched
+    }
+
     // DBに更新
     await prisma.user.update({
       where: { id },
@@ -91,10 +101,18 @@ export async function POST(
         idExpiryDate:    ocrResult.idExpiryDate,
         // 再読み取り成功時は誤り報告をリセット
         idOcrIssueReport: null,
+        // 住所一致判定（OCR住所が取得できた場合のみ更新）
+        ...(addressMismatchFlag !== null ? {
+          addressMismatch: addressMismatchFlag,
+          addressVerified: addressVerifiedFlag!,
+        } : {}),
       },
     })
 
-    return NextResponse.json({ ocr: ocrResult })
+    return NextResponse.json({
+      ocr: ocrResult,
+      addressMismatch: addressMismatchFlag,
+    })
   } catch (err) {
     console.error('[reocr] error:', err)
     return NextResponse.json({ error: 'OCRに失敗しました', ocr: null }, { status: 500 })

@@ -249,6 +249,10 @@ function MyPageContent() {
   // 身分証登録プロンプトモーダル
   const [showIdDocumentModal, setShowIdDocumentModal] = useState(false)
 
+  // ロックカードタップ時の「身分証が必要」モーダル
+  const [showIdRequiredModal, setShowIdRequiredModal] = useState(false)
+  const [idRequiredItemLabel, setIdRequiredItemLabel] = useState('')
+
   const docTypesRequiringBack = ['運転免許証']
   const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
@@ -1391,7 +1395,14 @@ function MyPageContent() {
                     return (
                       <button
                         key={item.tab}
-                        onClick={() => locked ? handleTabChange('id-document') : handleTabChange(item.tab)}
+                        onClick={() => {
+                          if (locked) {
+                            setIdRequiredItemLabel(item.label)
+                            setShowIdRequiredModal(true)
+                          } else {
+                            handleTabChange(item.tab)
+                          }
+                        }}
                         className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all cursor-pointer ${locked ? 'opacity-50 grayscale' : 'hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
                       >
                         {locked && (
@@ -1810,6 +1821,46 @@ function MyPageContent() {
                 </div>
               )}
 
+            </div>
+          )}
+
+          {/* ─── 身分証必須モーダル（ロックカードタップ時） ─── */}
+          {showIdRequiredModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={() => setShowIdRequiredModal(false)}
+              />
+              <div className="relative bg-white rounded-3xl shadow-2xl p-8 max-w-sm mx-auto animate-in fade-in zoom-in duration-300">
+                <div className="flex justify-center mb-5">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 flex items-center justify-center shadow-lg">
+                    <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+                  身分証明証の登録が必要です
+                </h2>
+                <p className="text-sm text-gray-600 text-center mb-6 leading-relaxed">
+                  「{idRequiredItemLabel}」をご利用いただくには、身分証明証の登録が必要です。登録ページから身分証明証をご提出ください。
+                </p>
+                <button
+                  onClick={() => {
+                    setShowIdRequiredModal(false)
+                    handleTabChange('id-document')
+                  }}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-500 text-white rounded-2xl py-3 font-semibold text-sm shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                >
+                  身分証明証を登録する
+                </button>
+                <button
+                  onClick={() => setShowIdRequiredModal(false)}
+                  className="w-full mt-3 text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
+                >
+                  閉じる
+                </button>
+              </div>
             </div>
           )}
 

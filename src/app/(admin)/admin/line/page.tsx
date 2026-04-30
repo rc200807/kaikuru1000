@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
 /* ─── 型定義 ─────────────────────────────────────── */
@@ -307,6 +309,8 @@ function LinkUserModal({
 
 /* ─── メインページ ────────────────────────────────── */
 export default function LineManagePage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [channels, setChannels] = useState<Channel[]>([])
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [lineUsers, setLineUsers] = useState<LineUser[]>([])
@@ -321,6 +325,18 @@ export default function LineManagePage() {
   const [linkModal, setLinkModal] = useState<LineUser | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // 認証チェック
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/admin/login')
+  }, [status, router])
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      const user = session?.user as any
+      if (user?.role !== 'admin') router.push('/')
+    }
+  }, [status, session, router])
+
   const selectedUser = lineUsers.find((u) => u.id === selectedUserId) ?? null
 
   /* チャネル一覧 */
@@ -333,7 +349,9 @@ export default function LineManagePage() {
     }
   }, [])
 
-  useEffect(() => { fetchChannels() }, [fetchChannels])
+  useEffect(() => {
+    if (status === 'authenticated') fetchChannels()
+  }, [status, fetchChannels])
 
   /* ユーザー一覧 */
   const fetchUsers = useCallback(async (channelId: string | null) => {
@@ -418,11 +436,13 @@ export default function LineManagePage() {
     return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
   }
 
-  if (loading) return (
+  if (status === 'loading' || (status === 'authenticated' && loading)) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
       <LoadingSpinner />
     </div>
   )
+
+  if (status !== 'authenticated') return null
 
   /* ─── レイアウト定数 ─── */
   const colStyle = {

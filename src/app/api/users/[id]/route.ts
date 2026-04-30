@@ -4,8 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-
-const MIN_PASSWORD_LENGTH = 8
+import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 
 const updateUserSchema = z.object({
   name:             z.string().min(1).max(100).optional(),
@@ -13,7 +12,7 @@ const updateUserSchema = z.object({
   phone:            z.string().min(1).max(20).optional(),
   address:          z.string().min(1).max(200).optional(),
   currentPassword:  z.string().optional(),
-  newPassword:      z.string().min(MIN_PASSWORD_LENGTH, `新しいパスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional(),
+  newPassword:      z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional(),
   idOcrIssueReport: z.string().max(1000).nullable().optional(), // 顧客によるOCR誤り報告
   // 振込先口座情報
   bankName:      z.string().max(50).nullable().optional(),

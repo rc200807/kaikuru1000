@@ -5,8 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/lib/mailer'
 import { z } from 'zod'
-
-const MIN_PASSWORD_LENGTH = 8
+import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 
 const registerSchema = z.object({
   name:         z.string().min(1, '氏名は必須です').max(100),
@@ -14,7 +13,7 @@ const registerSchema = z.object({
   email:        z.string().email('有効なメールアドレスを入力してください').optional().or(z.literal('')),
   phone:        z.string().min(1, '電話番号は必須です').max(20).transform(v => v.replace(/[-ー\s]/g, '')),
   address:      z.string().min(1, '住所は必須です').max(200),
-  password:     z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional().or(z.literal('')),
+  password:     z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional().or(z.literal('')),
   licenseKey:   z.string().optional(),
   customerType: z.enum(['visit', 'delivery', 'regular']).optional(),
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ

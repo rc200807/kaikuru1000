@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import MessageBanner from '@/components/MessageBanner'
+import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
@@ -23,10 +24,8 @@ function ResetPasswordForm() {
     e.preventDefault()
     setError('')
 
-    if (password.length < 6) {
-      setError('パスワードは6文字以上で入力してください')
-      return
-    }
+    const pwErr = validatePassword(password)
+    if (pwErr) { setError(pwErr); return }
 
     if (password !== confirmPassword) {
       setError('パスワードが一致しません')
@@ -101,7 +100,7 @@ function ResetPasswordForm() {
               value={password}
               onChange={setPassword}
               required
-              placeholder="6文字以上"
+              placeholder={PASSWORD_RULE}
             />
             <GlassInput
               label="新しいパスワード（確認）"

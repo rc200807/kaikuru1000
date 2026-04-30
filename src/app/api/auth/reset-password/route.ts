@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 
 export async function POST(req: Request) {
   try {
@@ -13,11 +14,8 @@ export async function POST(req: Request) {
       )
     }
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: 'パスワードは6文字以上で入力してください' },
-        { status: 400 }
-      )
+    if (!PASSWORD_REGEX.test(password)) {
+      return NextResponse.json({ error: PASSWORD_ERROR }, { status: 400 })
     }
 
     // トークンを検証

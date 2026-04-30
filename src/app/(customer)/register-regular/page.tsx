@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import MessageBanner from '@/components/MessageBanner'
+import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
@@ -38,10 +39,8 @@ export default function RegisterRegularPage() {
       return
     }
 
-    if (formData.password.length < 8) {
-      setError('パスワードは8文字以上で入力してください')
-      return
-    }
+    const pwErr = validatePassword(formData.password)
+    if (pwErr) { setError(pwErr); return }
 
     setLoading(true)
 
@@ -168,7 +167,7 @@ export default function RegisterRegularPage() {
           value={formData.password}
           onChange={(val) => handleChange('password', val)}
           required
-          placeholder="8文字以上"
+          placeholder={PASSWORD_RULE}
         />
 
         <GlassInput

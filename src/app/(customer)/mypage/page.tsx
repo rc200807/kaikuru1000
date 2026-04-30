@@ -15,6 +15,7 @@ import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import BankSearch from '@/components/customer/BankSearch'
 import { convertToJpegIfNeeded, createPreviewUrl } from '@/lib/image-utils'
+import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 
 type UserData = {
   id: string
@@ -460,10 +461,8 @@ function MyPageContent() {
       setMessage({ type: 'error', text: '新しいパスワードが一致しません' })
       return
     }
-    if (pwForm.next.length < 8) {
-      setMessage({ type: 'error', text: 'パスワードは8文字以上で入力してください' })
-      return
-    }
+    const pwErr = validatePassword(pwForm.next)
+    if (pwErr) { setMessage({ type: 'error', text: pwErr }); return }
     setSaving(true)
     setMessage(null)
     const userId = (session?.user as any).id
@@ -2529,7 +2528,7 @@ function MyPageContent() {
                   value={pwForm.next}
                   onChange={(val) => setPwForm({ ...pwForm, next: val })}
                   required
-                  placeholder="8文字以上"
+                  placeholder={PASSWORD_RULE}
                 />
                 <TextField
                   label="新しいパスワード（確認）"
@@ -4477,6 +4476,12 @@ function ShipmentCard({
                       <p className="text-[10px] text-gray-400 mt-1.5 text-center">品名欄に内容物と発送IDを記入してください</p>
                     </div>
 
+                    {/* 発送番号未記載の注意 */}
+                    <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">
+                      <span className="shrink-0 mt-0.5">⚠️</span>
+                      <span>発送番号の記載なく送付された場合、お支払いができない可能性があります。</span>
+                    </div>
+
                     {/* 送付先住所 */}
                     {user.store && (
                       <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
@@ -4558,6 +4563,11 @@ function ShipmentCard({
                           <p className="text-xs text-amber-700 mt-0.5">ボタンを押さないと店舗側で荷物の到着確認ができません。発送が完了したら忘れずにタップしてください。</p>
                         </div>
                       </div>
+                    </div>
+                    {/* 発送番号未記載の注意 */}
+                    <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">
+                      <span className="shrink-0 mt-0.5">⚠️</span>
+                      <span>発送番号の記載なく送付された場合、お支払いができない可能性があります。</span>
                     </div>
                     {/* 大きな発送完了ボタン */}
                     <button

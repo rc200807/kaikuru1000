@@ -60,6 +60,37 @@ export async function GET(
     safeCall(() => getMessageQuota(token)),
   ])
 
+  // 過去30日間のメッセージ送信通数（種別ごとに合計）
+  const messageStats = {
+    broadcast: 0,
+    targeting: 0,
+    autoResponse: 0,
+    welcomeResponse: 0,
+    chat: 0,
+    apiBroadcast: 0,
+    apiPush: 0,
+    apiMulticast: 0,
+    apiNarrowcast: 0,
+    apiReply: 0,
+  }
+  const last30Dates: Date[] = []
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(yesterday)
+    d.setDate(d.getDate() - i)
+    last30Dates.push(d)
+  }
+  const deliveryResults = await Promise.all(
+    last30Dates.map(d => safeCall(() => getMessageDeliveryInsight(token, d)))
+  )
+  for (const r of deliveryResults) {
+    const m = r as any
+    if (m?.status !== 'ready') continue
+    for (const k of Object.keys(messageStats) as (keyof typeof messageStats)[]) {
+      messageStats[k] += m[k] ?? 0
+    }
+  }
+  const messageStatsTotal = Object.values(messageStats).reduce((a, b) => a + b, 0)
+
   // 過去最大730日（約2年）分の友だち推移
   // LINE Insights API のレート制限を考慮し、followers のみ取得（delivery は重いので省略）
   const MAX_DAYS = 730
@@ -122,6 +153,10 @@ export async function GET(
       inboundLast7Days: inboundCount,
       outboundLast7Days: outboundCount,
     },
-    history: days, // 過去30日推移
+    messageStats: {                  // 過去30日のLINE側送信通数（種別ごと合計）
+      ...messageStats,
+      total: messageStatsTotal,
+    },
+    history: days, // 友だち推移（最大2年分）
   })
 }

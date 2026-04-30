@@ -309,7 +309,7 @@ function InsightsModal({
             </p>
 
             {/* 友だち */}
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px' }}>友だち</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px', color: '#e5e7eb' }}>友だち</h3>
             {followerError ? (
               <p style={{ fontSize: 13, color: '#f87171' }}>友だちデータ取得失敗: {followerError}</p>
             ) : noFollowerData ? (
@@ -338,7 +338,7 @@ function InsightsModal({
             )}
 
             {/* メッセージ */}
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '8px 0 12px' }}>メッセージ通数</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '20px 0 12px', color: '#e5e7eb' }}>メッセージ通数</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 12 }}>
               <StatCard
                 label="当月の使用通数（課金対象）"
@@ -356,8 +356,20 @@ function InsightsModal({
               />
             </div>
 
+            {/* 過去30日のメッセージ送信内訳 */}
+            {data.messageStats && (
+              <>
+                <h3 style={{ fontSize: 14, fontWeight: 700, margin: '20px 0 12px', color: '#e5e7eb' }}>
+                  過去30日 メッセージ送信内訳（合計 {data.messageStats.total.toLocaleString()}通）
+                </h3>
+                <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <MessageStatsBars stats={data.messageStats} />
+                </div>
+              </>
+            )}
+
             {/* ポータル経由 */}
-            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '20px 0 12px' }}>当ポータル経由（過去7日間）</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: '20px 0 12px', color: '#e5e7eb' }}>当ポータル経由（過去7日間）</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
               <StatCard label="受信メッセージ" value={data.portal.inboundLast7Days.toLocaleString()} />
               <StatCard label="返信メッセージ" value={data.portal.outboundLast7Days.toLocaleString()} />
@@ -378,6 +390,28 @@ function InsightsModal({
                     <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
                       <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>年代</div>
                       <AgeBarChart data={demographic.ages} />
+                    </div>
+                  )}
+                  {demographic.appTypes && demographic.appTypes.length > 0 && (
+                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>デバイス種別</div>
+                      {demographic.appTypes.map((a: any) => (
+                        <div key={a.appType} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>{appTypeLabel(a.appType)}</span>
+                          <span style={{ fontWeight: 700 }}>{a.percentage.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {demographic.subscriptionPeriods && demographic.subscriptionPeriods.length > 0 && (
+                    <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#e5e7eb' }}>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>友だち継続期間</div>
+                      {demographic.subscriptionPeriods.map((s: any) => (
+                        <div key={s.subscriptionPeriod} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                          <span>{subscriptionPeriodLabel(s.subscriptionPeriod)}</span>
+                          <span style={{ fontWeight: 700 }}>{s.percentage.toFixed(1)}%</span>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {demographic.areas && demographic.areas.length > 0 && (
@@ -419,6 +453,69 @@ function ageLabel(age: string): string {
   const m2 = age.match(/^from(\d+)$/)
   if (m2) return `${m2[1]}歳以上`
   return age
+}
+
+/** デバイス種別ラベル */
+function appTypeLabel(appType: string): string {
+  switch (appType) {
+    case 'ios': return 'iOS'
+    case 'android': return 'Android'
+    case 'pc': return 'PC'
+    case 'others': return 'その他'
+    case 'unknown': return '不明'
+    default: return appType
+  }
+}
+
+/** 友だち継続期間ラベル */
+function subscriptionPeriodLabel(period: string): string {
+  switch (period) {
+    case 'within7days':       return '7日以内'
+    case 'within30days':      return '8〜30日'
+    case 'within90days':      return '31〜90日'
+    case 'within180days':     return '91〜180日'
+    case 'within365days':     return '181〜365日'
+    case 'over365days':       return '365日超'
+    case 'unknown':           return '不明'
+    default: return period
+  }
+}
+
+/** メッセージ送信種別ラベル */
+const MESSAGE_TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  broadcast:        { label: '一斉配信',          color: '#4f8ef7' },
+  targeting:        { label: '絞り込み配信',      color: '#22c55e' },
+  autoResponse:     { label: '応答メッセージ',    color: '#f59e0b' },
+  welcomeResponse:  { label: 'あいさつメッセージ', color: '#a78bfa' },
+  chat:             { label: 'チャット（手動）',  color: '#ec4899' },
+  apiBroadcast:     { label: 'API一斉配信',       color: '#06b6d4' },
+  apiPush:          { label: 'API Push',          color: '#10b981' },
+  apiMulticast:     { label: 'APIマルチキャスト', color: '#8b5cf6' },
+  apiNarrowcast:    { label: 'API絞り込み配信',   color: '#f43f5e' },
+  apiReply:         { label: 'API返信',           color: '#facc15' },
+}
+
+/** メッセージ種別ごとの内訳（横棒グラフ） */
+function MessageStatsBars({ stats }: { stats: any }) {
+  const items = Object.entries(MESSAGE_TYPE_LABELS).map(([key, { label, color }]) => ({
+    key, label, color, value: stats[key] ?? 0,
+  }))
+  const max = Math.max(...items.map(i => i.value), 1)
+  // ゼロ件の項目はまとめて末尾に置く
+  items.sort((a, b) => b.value - a.value)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map((it) => (
+        <div key={it.key} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 70px', alignItems: 'center', gap: 10, fontSize: 12, color: '#e5e7eb' }}>
+          <span style={{ color: '#d1d5db' }}>{it.label}</span>
+          <div style={{ height: 14, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(it.value / max) * 100}%`, background: it.color, transition: 'width 0.3s' }} />
+          </div>
+          <span style={{ fontWeight: 700, textAlign: 'right' }}>{it.value.toLocaleString()}通</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 /** 性別 円グラフ */
@@ -517,14 +614,25 @@ function HistoryChart({ history }: { history: { date: string; followers?: number
   const y = (v: number) => pad.t + (h - pad.t - pad.b) * (1 - (v - min) / range)
 
   function pathFor(arr: (number | null)[], color: string) {
-    let path = ''
-    let pen = false
+    // null/undefined をスキップして有効なポイントだけを連結
+    const points: { v: number; i: number }[] = []
     arr.forEach((v, i) => {
-      if (v === null) { pen = false; return }
-      path += pen ? ` L ${x(i)} ${y(v)}` : ` M ${x(i)} ${y(v)}`
-      pen = true
+      if (v === null || v === undefined || Number.isNaN(v)) return
+      points.push({ v: v as number, i })
     })
-    return <path d={path} stroke={color} strokeWidth={2} fill="none" />
+    if (points.length === 0) return null
+    let path = `M ${x(points[0].i)} ${y(points[0].v)}`
+    for (let k = 1; k < points.length; k++) {
+      path += ` L ${x(points[k].i)} ${y(points[k].v)}`
+    }
+    return (
+      <g>
+        <path d={path} stroke={color} strokeWidth={2} fill="none" />
+        {points.map(p => (
+          <circle key={p.i} cx={x(p.i)} cy={y(p.v)} r={2} fill={color} />
+        ))}
+      </g>
+    )
   }
 
   if (validFollowers.length === 0) {

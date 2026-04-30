@@ -357,7 +357,7 @@ export default function AdminStoresPage() {
         <Button
           size="sm"
           variant="text"
-          onClick={() => setDetailStore(store)}
+          onClick={() => router.push(`/admin/stores/${store.id}`)}
         >
           詳細
         </Button>

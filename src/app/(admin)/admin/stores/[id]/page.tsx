@@ -1,0 +1,447 @@
+'use client'
+
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
+import LoadingSpinner from '@/components/LoadingSpinner'
+
+type Store = {
+  id: string
+  code: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  prefecture?: string | null
+  address?: string | null
+  storeStatus?: string | null
+  openingDate?: string | null
+  closingDate?: string | null
+  googleBusinessUrl?: string | null
+  oikuraPageUrl?: string | null
+  bankInfo?: string | null
+  invoiceNumber?: string | null
+  antiquePermitNumber?: string | null
+  isActive: boolean
+  _count?: { customers: number }
+}
+
+type LineChannel = {
+  id: string
+  name: string
+  channelId: string
+  isActive: boolean
+  userCount: number
+  unreadCount: number
+}
+
+type LineUser = {
+  id: string
+  lineUserId: string
+  displayName: string
+  pictureUrl: string | null
+  channel: { id: string; name: string }
+  linkedUser: { id: string; name: string; furigana: string; phone: string } | null
+  lastMessage: { content: string | null; sentAt: string; direction: string; messageType: string } | null
+  unreadCount: number
+}
+
+type Message = {
+  id: string
+  direction: string
+  messageType: string
+  content: string | null
+  sentAt: string
+  status?: string
+}
+
+type Insights = {
+  followersToday?: any
+  followersWeekAgo?: any
+  quotaConsumption?: any
+  quota?: any
+  messageStats?: any
+}
+
+export default function StoreDetailPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const params = useParams<{ id: string }>()
+  const storeId = params.id
+
+  const [store, setStore] = useState<Store | null>(null)
+  const [channels, setChannels] = useState<LineChannel[]>([])
+  const [lineUsers, setLineUsers] = useState<LineUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [insights, setInsights] = useState<Record<string, Insights>>({})
+  const [loadingInsights, setLoadingInsights] = useState<Record<string, boolean>>({})
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [replyText, setReplyText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const selectedUser = lineUsers.find(u => u.id === selectedUserId) ?? null
+
+  /* 認証 */
+  useEffect(() => {
+    if (status === 'unauthenticated') router.push('/admin/login')
+  }, [status, router])
+
+  /* 店舗データ＋LINE情報 */
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    const [storeRes, lineRes] = await Promise.all([
+      fetch(`/api/admin/stores/${storeId}`),
+      fetch(`/api/admin/stores/${storeId}/line`),
+    ])
+    if (storeRes.ok) setStore(await storeRes.json())
+    if (lineRes.ok) {
+      const d = await lineRes.json()
+      setChannels(d.channels)
+      setLineUsers(d.lineUsers)
+    }
+    setLoading(false)
+  }, [storeId])
+
+  useEffect(() => {
+    if (status === 'authenticated') fetchData()
+  }, [status, fetchData])
+
+  /* チャネル分析を取得 */
+  const fetchInsights = useCallback(async (channelId: string) => {
+    setLoadingInsights(p => ({ ...p, [channelId]: true }))
+    try {
+      const res = await fetch(`/api/admin/line/channels/${channelId}/insights`)
+      if (res.ok) {
+        const d = await res.json()
+        setInsights(p => ({ ...p, [channelId]: d }))
+      }
+    } finally {
+      setLoadingInsights(p => ({ ...p, [channelId]: false }))
+    }
+  }, [])
+
+  /* メッセージ取得 */
+  useEffect(() => {
+    if (!selectedUserId) { setMessages([]); return }
+    setLoadingMessages(true)
+    fetch(`/api/admin/line/users/${selectedUserId}/messages`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        setMessages(d)
+        setLineUsers(prev => prev.map(u => u.id === selectedUserId ? { ...u, unreadCount: 0 } : u))
+      })
+      .finally(() => setLoadingMessages(false))
+  }, [selectedUserId])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  /* 返信送信 */
+  async function handleSend() {
+    if (!replyText.trim() || !selectedUserId || sending) return
+    setSending(true); setSendError('')
+    try {
+      const res = await fetch(`/api/admin/line/users/${selectedUserId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: replyText.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setMessages(prev => [...prev, d])
+        setReplyText('')
+      } else {
+        if (d.message) setMessages(prev => [...prev, d.message])
+        setSendError(d.error ?? '送信に失敗しました')
+      }
+    } catch {
+      setSendError('ネットワークエラー')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (status === 'loading' || loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><LoadingSpinner /></div>
+  }
+  if (!store) return <p style={{ padding: 40, textAlign: 'center' }}>店舗が見つかりません</p>
+
+  return (
+    <div style={{ padding: '24px 20px', maxWidth: 1200, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
+      {/* パンくず */}
+      <div style={{ marginBottom: 16, fontSize: 13 }}>
+        <Link href="/admin/stores" style={{ color: '#4f8ef7', textDecoration: 'none' }}>← 店舗管理</Link>
+      </div>
+
+      {/* ヘッダー */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{store.name}</h1>
+        <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
+          <code>{store.code}</code>
+          {store.storeStatus && <span>{store.storeStatus === 'active' ? '営業中' : '閉店'}</span>}
+          {store._count && <span>顧客 {store._count.customers}名</span>}
+        </div>
+      </div>
+
+      {/* 基本情報 */}
+      <Section title="基本情報">
+        <InfoGrid items={[
+          ['店舗コード', store.code],
+          ['電話番号', store.phone],
+          ['メール', store.email],
+          ['都道府県', store.prefecture],
+          ['住所', store.address],
+          ['Googleビジネス', store.googleBusinessUrl ? <a href={store.googleBusinessUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
+          ['おいくらページ', store.oikuraPageUrl ? <a href={store.oikuraPageUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
+          ['インボイス番号', store.invoiceNumber],
+          ['古物営業許可番号', store.antiquePermitNumber],
+        ]} />
+      </Section>
+
+      {/* LINE チャネル */}
+      <Section title={`紐付けLINEチャネル（${channels.length}件）`}>
+        {channels.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+            この店舗に紐付けられた LINE チャネルはありません。
+            <Link href="/admin/line" style={{ color: '#4f8ef7', marginLeft: 8 }}>LINE管理画面で設定</Link>
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {channels.map(ch => (
+              <ChannelInsightCard
+                key={ch.id}
+                channel={ch}
+                insights={insights[ch.id]}
+                loading={!!loadingInsights[ch.id]}
+                onLoad={() => fetchInsights(ch.id)}
+              />
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* LINE 会話 */}
+      <Section title={`LINE会話（${lineUsers.length}件）`}>
+        {lineUsers.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>会話がありません</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12, height: 520 }}>
+            {/* ユーザー一覧 */}
+            <div style={{ background: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {lineUsers.map(u => (
+                  <div
+                    key={u.id}
+                    onClick={() => setSelectedUserId(u.id)}
+                    style={{
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      background: selectedUserId === u.id ? 'rgba(79,142,247,0.15)' : 'transparent',
+                      borderBottom: '1px solid var(--md-sys-color-outline-variant)',
+                      borderLeft: selectedUserId === u.id ? '3px solid #4f8ef7' : '3px solid transparent',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {u.pictureUrl ? (
+                        <img src={u.pictureUrl} alt="" referrerPolicy="no-referrer"
+                          style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
+                          onError={(e) => { e.currentTarget.style.display = 'none' }}
+                        />
+                      ) : (
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>👤</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, fontWeight: u.unreadCount > 0 ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.linkedUser?.name ?? u.displayName}
+                          </span>
+                          {u.unreadCount > 0 && (
+                            <span style={{ background: 'var(--md-sys-color-error)', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>
+                              {u.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 2 }}>
+                          {u.channel.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                          {u.lastMessage ? (u.lastMessage.content ?? `[${u.lastMessage.messageType}]`) : '— メッセージなし —'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* メッセージスレッド */}
+            <div style={{ background: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {selectedUser ? (
+                <>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--md-sys-color-outline-variant)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {selectedUser.pictureUrl ? (
+                      <img src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                    ) : (
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedUser.linkedUser?.name ?? selectedUser.displayName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>{selectedUser.channel.name}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {loadingMessages ? <LoadingSpinner /> : messages.map(msg => {
+                      const isOutbound = msg.direction === 'outbound'
+                      const isFailed = msg.status === 'failed'
+                      return (
+                        <div key={msg.id} style={{ display: 'flex', justifyContent: isOutbound ? 'flex-end' : 'flex-start' }}>
+                          <div style={{
+                            maxWidth: '72%', padding: '10px 14px', borderRadius: isOutbound ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                            background: isFailed ? 'rgba(248,113,113,0.15)' : isOutbound ? '#4f8ef7' : 'var(--md-sys-color-surface-container-high)',
+                            color: isFailed ? '#f87171' : isOutbound ? '#ffffff' : 'var(--md-sys-color-on-surface)',
+                            border: isFailed ? '1px solid rgba(248,113,113,0.4)' : 'none',
+                            fontSize: 14,
+                          }}>
+                            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content ?? `[${msg.messageType}]`}</div>
+                            <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7, textAlign: isOutbound ? 'right' : 'left' }}>
+                              {isFailed && <span style={{ color: '#f87171', marginRight: 6 }}>送信失敗</span>}
+                              {new Date(msg.sentAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {sendError && <p style={{ margin: 0, fontSize: 12, color: '#f87171' }}>⚠ {sendError}</p>}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <textarea
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                        placeholder="返信を入力（Enterで送信）"
+                        rows={2}
+                        style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, resize: 'none', fontFamily: 'inherit' }}
+                      />
+                      <button
+                        onClick={handleSend}
+                        disabled={sending || !replyText.trim()}
+                        style={{ padding: '0 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontWeight: 700, opacity: (sending || !replyText.trim()) ? 0.5 : 1 }}
+                      >送信</button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 14 }}>
+                  ユーザーを選択
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Section>
+    </div>
+  )
+}
+
+/* ─── 補助コンポーネント ───────────────────────── */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section style={{ marginBottom: 28 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px', color: 'var(--md-sys-color-on-surface)' }}>{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+function InfoGrid({ items }: { items: [string, React.ReactNode][] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+      {items.map(([label, value]) => (
+        <div key={label} style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface)' }}>{value || '—'}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ChannelInsightCard({ channel, insights, loading, onLoad }: { channel: LineChannel; insights?: Insights; loading: boolean; onLoad: () => void }) {
+  const followers = insights?.followersToday
+  const followersWeek = insights?.followersWeekAgo
+  const ready = followers?.status === 'ready'
+
+  return (
+    <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{channel.name}</div>
+          <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>
+            Channel ID: {channel.channelId} ／ ユーザー {channel.userCount}人
+            {channel.unreadCount > 0 && <span style={{ marginLeft: 8, color: '#f87171', fontWeight: 700 }}>未読 {channel.unreadCount}</span>}
+            {!channel.isActive && <span style={{ marginLeft: 8, color: '#f87171' }}>無効</span>}
+          </div>
+        </div>
+        {!insights && !loading && (
+          <button
+            onClick={onLoad}
+            style={{ padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 12, fontWeight: 600 }}
+          >📊 分析を読み込む</button>
+        )}
+      </div>
+
+      {loading && <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'center', padding: 24 }}>読み込み中（10〜30秒）...</p>}
+
+      {insights && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          <Stat
+            label="友だち追加"
+            value={ready ? followers.followers?.toLocaleString() : '—'}
+            sub={ready && followersWeek?.status === 'ready' ? diffStr(followers.followers, followersWeek.followers) : null}
+          />
+          <Stat
+            label="ターゲットリーチ"
+            value={ready ? followers.targetedReaches?.toLocaleString() : '—'}
+            sub={ready && followersWeek?.status === 'ready' ? diffStr(followers.targetedReaches, followersWeek.targetedReaches) : null}
+          />
+          <Stat
+            label="ブロック"
+            value={ready ? followers.blocks?.toLocaleString() : '—'}
+            color="#f87171"
+          />
+          <Stat
+            label="今月の使用通数"
+            value={insights.quotaConsumption?.totalUsage?.toLocaleString() ?? '—'}
+            sub={insights.quota?.value ? `/ ${insights.quota.value.toLocaleString()}通` : insights.quota?.type}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Stat({ label, value, sub, color }: { label: string; value: React.ReactNode; sub?: React.ReactNode; color?: string }) {
+  return (
+    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 10 }}>
+      <div style={{ fontSize: 10, color: 'var(--md-sys-color-on-surface-variant)' }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--md-sys-color-on-surface)', marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function diffStr(a?: number, b?: number): string | null {
+  if (a === undefined || b === undefined) return null
+  const d = a - b
+  if (d === 0) return '7日前比 ±0'
+  return d > 0 ? `7日前比 +${d}` : `7日前比 ${d}`
+}

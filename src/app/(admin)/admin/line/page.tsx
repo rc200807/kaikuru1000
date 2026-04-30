@@ -1032,7 +1032,22 @@ export default function LineManagePage() {
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{ch.userCount}人</span>
-                  {ch.store && <span style={{ color: '#4f8ef7' }}>🏪 {ch.store.name}</span>}
+                  {ch.store && (
+                    <span
+                      title={ch.store.name}
+                      style={{
+                        background: 'rgba(79,142,247,0.18)',
+                        color: '#4f8ef7',
+                        borderRadius: 999,
+                        padding: '2px 8px',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      店舗紐付け済み
+                    </span>
+                  )}
                   {!ch.isActive && <span style={{ color: 'var(--md-sys-color-error)' }}>無効</span>}
                 </div>
                 {/* ドロップダウンメニュー */}

@@ -1287,7 +1287,7 @@ function MyPageContent() {
                       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
                       const thisMonthShipment = shipments.find(s => s.shipmentMonth === currentMonth)
                       const shipStatusLabel: Record<string, string> = {
-                        registered: '登録済み', shipped: '発送済み', received: '受取済み・査定中', appraised: '査定完了',
+                        registered: '登録済み', shipped: '発送済み', received: '受取済み・買取品確認中', appraised: '買取品確認完了',
                       }
                       return (
                         <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
@@ -3982,7 +3982,7 @@ const SHIPMENT_STATUS_LABEL: Record<string, string> = {
   draft:       '下書き',
   registered:  '登録済み',
   shipped:     '発送済み',
-  received:    '査定中',
+  received:    '買取品確認中',
   appraised:   '振込準備中',
   transferred: '振込完了',
 }
@@ -4002,7 +4002,7 @@ const DELIVERY_STEPS = [
   { label: '発送前準備', desc: '伝票を記入して写真を記録' },
   { label: '発送', desc: '発送完了を店舗に報告' },
   { label: '店舗受取確認', desc: '店舗が荷物を受け取り' },
-  { label: '査定', desc: '査定が完了' },
+  { label: '買取品確認', desc: '買取品確認が完了' },
   { label: '振込', desc: '代金のお振り込みが完了' },
 ]
 
@@ -4013,7 +4013,7 @@ function getStepSubStatus(stepIdx: number, shipmentStatus: string): { text: stri
     if (['received', 'appraised', 'transferred'].includes(shipmentStatus)) return { text: '受取完了', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
   }
   if (stepIdx === 4) { // 査定
-    if (shipmentStatus === 'received') return { text: '査定中', color: 'text-amber-600 bg-amber-50 border-amber-200' }
+    if (shipmentStatus === 'received') return { text: '買取品確認中', color: 'text-amber-600 bg-amber-50 border-amber-200' }
     if (['appraised', 'transferred'].includes(shipmentStatus)) return { text: '査定完了', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
   }
   if (stepIdx === 5) { // 振込
@@ -4591,8 +4591,8 @@ function ShipmentCard({
                       </svg>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-amber-800">査定中</p>
-                      <p className="text-xs text-amber-600 mt-0.5">店舗が査定中です。結果をお待ちください。</p>
+                      <p className="text-xs font-semibold text-amber-800">買取品確認中</p>
+                      <p className="text-xs text-amber-600 mt-0.5">店舗が買取品を確認中です。結果をお待ちください。</p>
                     </div>
                   </div>
                 )}

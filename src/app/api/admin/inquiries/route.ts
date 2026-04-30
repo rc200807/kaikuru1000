@@ -21,6 +21,10 @@ export async function GET(request: NextRequest) {
       user: {
         select: { id: true, name: true, email: true, phone: true, customerType: true },
       },
+      purchaseMemos: {
+        select: { id: true, title: true, imageUrls: true, status: true },
+        orderBy: { createdAt: 'asc' },
+      },
     },
     orderBy: { createdAt: 'desc' },
   })

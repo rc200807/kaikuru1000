@@ -83,6 +83,18 @@ export default function StoreDetailPage() {
   const [sendError, setSendError] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // 編集／PW再発行
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState<Record<string, string>>({})
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [resetting, setResetting] = useState(false)
+  const [pwModal, setPwModal] = useState<{ password: string } | null>(null)
+  const [pwCopied, setPwCopied] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   const selectedUser = lineUsers.find(u => u.id === selectedUserId) ?? null
 
   /* 認証 */
@@ -141,6 +153,98 @@ export default function StoreDetailPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  /* 編集開始 */
+  function handleStartEdit() {
+    if (!store) return
+    setEditError('')
+    setEditForm({
+      name: store.name || '',
+      email: store.email || '',
+      phone: store.phone || '',
+      address: store.address || '',
+      prefecture: store.prefecture || '',
+      storeStatus: store.storeStatus || 'active',
+      openingDate: store.openingDate ? store.openingDate.slice(0, 10) : '',
+      closingDate: store.closingDate ? store.closingDate.slice(0, 10) : '',
+      googleBusinessUrl: store.googleBusinessUrl || '',
+      oikuraPageUrl: store.oikuraPageUrl || '',
+      bankInfo: store.bankInfo || '',
+      invoiceNumber: store.invoiceNumber || '',
+      antiquePermitNumber: store.antiquePermitNumber || '',
+    })
+    setEditMode(true)
+  }
+
+  /* 編集保存 */
+  async function handleSaveEdit() {
+    if (!store) return
+    setSavingEdit(true)
+    setEditError('')
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updateDetails: true, ...editForm }),
+    })
+    setSavingEdit(false)
+    if (res.ok) {
+      const updated = await res.json()
+      setStore({ ...store, ...updated })
+      setEditMode(false)
+      setActionMessage({ type: 'success', text: '店舗情報を更新しました' })
+      setTimeout(() => setActionMessage(null), 4000)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setEditError(data.error || '更新に失敗しました')
+    }
+  }
+
+  /* PW再発行 */
+  async function handleResetPassword() {
+    if (!store) return
+    if (!confirm(`「${store.name}」のパスワードを再発行しますか？\n現在のパスワードは無効になります。`)) return
+    setResetting(true)
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetPassword: true }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setResetting(false)
+    if (res.ok) {
+      setPwModal({ password: data.password })
+      setPwCopied(false)
+      setEmailSent(false)
+    } else {
+      setActionMessage({ type: 'error', text: data.error || 'パスワードの再発行に失敗しました' })
+      setTimeout(() => setActionMessage(null), 5000)
+    }
+  }
+
+  function handleCopyPassword() {
+    if (!pwModal) return
+    navigator.clipboard.writeText(pwModal.password)
+    setPwCopied(true)
+    setTimeout(() => setPwCopied(false), 2000)
+  }
+
+  async function handleSendPasswordEmail() {
+    if (!pwModal || !store) return
+    setSendingEmail(true)
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sendPasswordEmail: true, password: pwModal.password }),
+    })
+    setSendingEmail(false)
+    if (res.ok) {
+      setEmailSent(true)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setActionMessage({ type: 'error', text: data.error || 'メール送信に失敗しました' })
+      setTimeout(() => setActionMessage(null), 5000)
+    }
+  }
+
   /* 返信送信 */
   async function handleSend() {
     if (!replyText.trim() || !selectedUserId || sending) return
@@ -179,28 +283,111 @@ export default function StoreDetailPage() {
       </div>
 
       {/* ヘッダー */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{store.name}</h1>
-        <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
-          <code>{store.code}</code>
-          {store.storeStatus && <span>{store.storeStatus === 'active' ? '営業中' : '閉店'}</span>}
-          {store._count && <span>顧客 {store._count.customers}名</span>}
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{store.name}</h1>
+          <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
+            <code>{store.code}</code>
+            {store.storeStatus && <span>{store.storeStatus === 'active' ? '営業中' : '閉店'}</span>}
+            {store._count && <span>顧客 {store._count.customers}名</span>}
+          </div>
         </div>
+        {!editMode && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleResetPassword}
+              disabled={resetting}
+              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: resetting ? 'wait' : 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, opacity: resetting ? 0.6 : 1 }}
+            >
+              {resetting ? '処理中...' : 'PW再発行'}
+            </button>
+            <button
+              onClick={handleStartEdit}
+              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600 }}
+            >
+              編集
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* メッセージバナー */}
+      {actionMessage && (
+        <div style={{
+          marginBottom: 16, padding: '10px 14px', borderRadius: 8,
+          background: actionMessage.type === 'success' ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+          color: actionMessage.type === 'success' ? '#4ade80' : '#f87171',
+          fontSize: 13,
+        }}>
+          {actionMessage.text}
+        </div>
+      )}
 
       {/* 基本情報 */}
       <Section title="基本情報">
-        <InfoGrid items={[
-          ['店舗コード', store.code],
-          ['電話番号', store.phone],
-          ['メール', store.email],
-          ['都道府県', store.prefecture],
-          ['住所', store.address],
-          ['Googleビジネス', store.googleBusinessUrl ? <a href={store.googleBusinessUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
-          ['おいくらページ', store.oikuraPageUrl ? <a href={store.oikuraPageUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
-          ['インボイス番号', store.invoiceNumber],
-          ['古物営業許可番号', store.antiquePermitNumber],
-        ]} />
+        {editMode ? (
+          <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+              <EditField label="店舗名 *" value={editForm.name} onChange={v => setEditForm({ ...editForm, name: v })} />
+              <EditSelect label="ステータス" value={editForm.storeStatus} onChange={v => setEditForm({ ...editForm, storeStatus: v })} options={[{ value: 'active', label: '営業中' }, { value: 'closed', label: '閉店' }]} />
+              <EditField label="電話番号" value={editForm.phone} onChange={v => setEditForm({ ...editForm, phone: v })} />
+              <EditField label="メールアドレス" type="email" value={editForm.email} onChange={v => setEditForm({ ...editForm, email: v })} />
+              <EditField label="都道府県" value={editForm.prefecture} onChange={v => setEditForm({ ...editForm, prefecture: v })} />
+              <EditField label="住所" value={editForm.address} onChange={v => setEditForm({ ...editForm, address: v })} />
+              <EditField label="開業日" type="date" value={editForm.openingDate} onChange={v => setEditForm({ ...editForm, openingDate: v })} />
+              <EditField label="閉店日" type="date" value={editForm.closingDate} onChange={v => setEditForm({ ...editForm, closingDate: v })} />
+              <EditField label="GoogleビジネスURL" value={editForm.googleBusinessUrl} onChange={v => setEditForm({ ...editForm, googleBusinessUrl: v })} />
+              <EditField label="おいくらページURL" value={editForm.oikuraPageUrl} onChange={v => setEditForm({ ...editForm, oikuraPageUrl: v })} />
+              <EditField label="インボイス番号" value={editForm.invoiceNumber} onChange={v => setEditForm({ ...editForm, invoiceNumber: v })} />
+              <EditField label="古物営業許可番号" value={editForm.antiquePermitNumber} onChange={v => setEditForm({ ...editForm, antiquePermitNumber: v })} />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>銀行情報</label>
+              <textarea
+                value={editForm.bankInfo || ''}
+                onChange={e => setEditForm({ ...editForm, bankInfo: e.target.value })}
+                placeholder={'金融機関名:\n支店名:\n支店番号:\n口座種別: 普通/当座\n口座番号:\n口座名義:\n入金時の名義:'}
+                rows={6}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
+              />
+            </div>
+            {editError && <p style={{ color: '#f87171', fontSize: 13, marginTop: 12 }}>{editError}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button
+                onClick={() => { setEditMode(false); setEditError('') }}
+                disabled={savingEdit}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={savingEdit || !editForm.name?.trim()}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 700, opacity: (savingEdit || !editForm.name?.trim()) ? 0.5 : 1 }}
+              >
+                {savingEdit ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <InfoGrid items={[
+            ['店舗コード', store.code],
+            ['電話番号', store.phone],
+            ['メール', store.email],
+            ['都道府県', store.prefecture],
+            ['住所', store.address],
+            ['Googleビジネス', store.googleBusinessUrl ? <a href={store.googleBusinessUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
+            ['おいくらページ', store.oikuraPageUrl ? <a href={store.oikuraPageUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
+            ['インボイス番号', store.invoiceNumber],
+            ['古物営業許可番号', store.antiquePermitNumber],
+          ]} />
+        )}
+        {!editMode && store.bankInfo && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>銀行情報</div>
+            <pre style={{ fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12, margin: 0 }}>{store.bankInfo}</pre>
+          </div>
+        )}
       </Section>
 
       {/* LINE チャネル */}
@@ -348,11 +535,96 @@ export default function StoreDetailPage() {
           </div>
         )}
       </Section>
+
+      {/* PW再発行モーダル */}
+      {pwModal && (
+        <div
+          onClick={() => setPwModal(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--md-sys-color-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480 }}
+          >
+            <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>パスワードを発行しました</h2>
+            <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 0, marginBottom: 16 }}>{store.name}</p>
+            <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>ログインパスワード</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <code style={{ flex: 1, fontSize: 16, fontWeight: 700, fontFamily: 'monospace', color: 'var(--md-sys-color-on-surface)' }}>{pwModal.password}</code>
+                <button
+                  onClick={handleCopyPassword}
+                  style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', background: pwCopied ? '#4ade80' : '#4f8ef7', color: '#fff', fontSize: 12, fontWeight: 600 }}
+                >
+                  {pwCopied ? 'コピー済' : 'コピー'}
+                </button>
+              </div>
+            </div>
+            <p style={{ fontSize: 12, color: '#f87171', marginBottom: 16 }}>
+              ⚠ このパスワードは一度しか表示されません。必ず控えてから閉じてください。
+            </p>
+            {store.email && (
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  onClick={handleSendPasswordEmail}
+                  disabled={sendingEmail || emailSent}
+                  style={{
+                    width: '100%', padding: '10px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)',
+                    cursor: (sendingEmail || emailSent) ? 'default' : 'pointer',
+                    background: emailSent ? 'rgba(74,222,128,0.15)' : 'transparent',
+                    color: emailSent ? '#4ade80' : 'var(--md-sys-color-on-surface)',
+                    fontSize: 13, fontWeight: 600, opacity: sendingEmail ? 0.5 : 1,
+                  }}
+                >
+                  {emailSent ? '✓ メール送信済み' : sendingEmail ? '送信中...' : `📧 ${store.email} にメール送信`}
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setPwModal(null)}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 700 }}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 /* ─── 補助コンポーネント ───────────────────────── */
+function EditField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>{label}</label>
+      <input
+        type={type}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+      />
+    </div>
+  )
+}
+
+function EditSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>{label}</label>
+      <select
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+      >
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  )
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: 28 }}>

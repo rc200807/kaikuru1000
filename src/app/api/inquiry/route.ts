@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
         await prisma.purchaseMemo.create({
           data: {
             userId,
+            inquiryId: inquiry.id,
             title: item.title,
             imageUrls: JSON.stringify(item.imageUrl ? [item.imageUrl] : []),
             status: 'pending',

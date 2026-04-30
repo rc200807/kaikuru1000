@@ -320,6 +320,8 @@ model PurchaseMemo {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inquiryId   String?
+  inquiry     Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
   title       String                      // 品名・タイトル
   description String?             // 詳細説明
   imageUrls   String   @default("[]")   // JSON配列: 画像URL[]
@@ -329,6 +331,8 @@ model PurchaseMemo {
   aiAppraisalAt DateTime?           // AI査定実行日時
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([inquiryId])
 }
 
 // 宅配買取送付履歴
@@ -405,6 +409,7 @@ model Inquiry {
   userId          String?  // 自動作成された顧客のID
   user            User?    @relation(fields: [userId], references: [id])
   status          String   @default("new") // new/contacted/completed
+  purchaseMemos   PurchaseMemo[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

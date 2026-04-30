@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { researchMarketPrice, type ImageData } from '@/lib/gemini'
+import { researchMarketPrice, GeminiError, type ImageData } from '@/lib/gemini'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
@@ -134,13 +134,20 @@ export async function POST(
   }
 
   // AI調査実行（画像付き + 楽天データ補強）
-  const result = await researchMarketPrice(enrichedItemName, item.category, images)
-
-  if (!result) {
-    return NextResponse.json(
-      { error: 'AI調査を実行できません。GEMINI_API_KEY が設定されているか確認してください。' },
-      { status: 503 }
-    )
+  let result
+  try {
+    result = await researchMarketPrice(enrichedItemName, item.category, images)
+  } catch (err) {
+    if (err instanceof GeminiError) {
+      const status = err.reason === 'no-key' ? 503 : 502
+      const message = err.reason === 'no-key'
+        ? 'AI調査を実行できません。GEMINI_API_KEY が設定されているか確認してください。'
+        : err.reason === 'parse-error'
+          ? 'AI調査のレスポンスを解釈できませんでした。再試行してください。'
+          : `AI調査に失敗しました: ${err.detail ?? err.message}`
+      return NextResponse.json({ error: message, reason: err.reason }, { status })
+    }
+    throw err
   }
 
   // 結果をDBに保存

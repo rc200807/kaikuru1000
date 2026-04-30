@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { compareFaces } from '@/lib/gemini'
+import { compareFaces, GeminiError } from '@/lib/gemini'
 import { uploadFile, deleteFile } from '@/lib/storage'
 
 /**
@@ -128,8 +128,17 @@ export async function POST(
       })
     }
 
-    // Gemini で顔照合
-    const verificationResult = await compareFaces(user.idDocumentPath, selfieUrl)
+    // Gemini で顔照合（失敗してもセルフィーアップロード自体は成功扱い）
+    let verificationResult: Awaited<ReturnType<typeof compareFaces>> | null = null
+    try {
+      verificationResult = await compareFaces(user.idDocumentPath, selfieUrl)
+    } catch (err) {
+      if (err instanceof GeminiError) {
+        console.warn('[selfie-verify] 顔照合失敗:', err.reason, err.message)
+      } else {
+        console.error('[selfie-verify] 顔照合想定外エラー:', err)
+      }
+    }
 
     // 結果を保存
     await prisma.user.update({

@@ -1,16 +1,79 @@
 /**
- * Gemini Vision API を使った身分証明書OCR
+ * Gemini Vision API 経由の各種AI機能
  *
- * 抽出フィールド:
- *   - idDocumentType  書類種別（運転免許証/パスポート/マイナンバーカードなど）
- *   - idName          氏名
- *   - idBirthDate     生年月日
- *   - idAddress       住所
- *   - idLicenseNumber 免許番号・旅券番号など
- *   - idExpiryDate    有効期限
+ * 主な使い分け:
+ * - 身分証OCR     : extractIdDocumentInfo / extractBackAddress
+ * - 市場相場調査    : researchMarketPrice
+ * - 買取査定      : appraiseForPurchase
+ * - 動画要約      : summarizeVideo
+ * - 顔照合       : compareFaces
+ *
+ * エラー時は GeminiError をスローします。`reason` で原因を判別可能。
+ *   - 'no-key'      : GEMINI_API_KEY 未設定
+ *   - 'api-error'   : Gemini API 呼び出し失敗（認証 / クォータ / モデル名 等）
+ *   - 'parse-error' : レスポンスを JSON として解釈できない
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const MODEL_ID = 'gemini-2.5-flash'
+
+export class GeminiError extends Error {
+  reason: 'no-key' | 'api-error' | 'parse-error'
+  detail?: string
+
+  constructor(reason: 'no-key' | 'api-error' | 'parse-error', message: string, detail?: string) {
+    super(message)
+    this.name = 'GeminiError'
+    this.reason = reason
+    this.detail = detail
+  }
+}
+
+/** 環境変数から APIキーを取得（無ければ throw） */
+function getApiKey(): string {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new GeminiError('no-key', 'GEMINI_API_KEY が設定されていません')
+  }
+  return apiKey
+}
+
+/** Gemini に投げて JSON テキストとしてパースして返す共通ヘルパー */
+async function callGeminiJson(parts: (string | { inlineData: { mimeType: string; data: string } })[]): Promise<unknown> {
+  const apiKey = getApiKey()
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({
+    model: MODEL_ID,
+    generationConfig: {
+      // Gemini に JSON 形式での回答を強制（前置文や Markdown 装飾を防ぐ）
+      responseMimeType: 'application/json',
+    },
+  })
+
+  let rawText: string
+  try {
+    const result = await model.generateContent(parts)
+    rawText = result.response.text().trim()
+  } catch (err: any) {
+    const detail = err?.message ?? String(err)
+    console.error('[gemini] API呼び出し失敗:', detail)
+    throw new GeminiError('api-error', `Gemini API エラー: ${detail}`, detail)
+  }
+
+  try {
+    // responseMimeType=application/json で素のJSONが返るはずだが、
+    // 念のため code fence を剥がしてからパース
+    const jsonStr = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    return JSON.parse(jsonStr)
+  } catch (err: any) {
+    const detail = err?.message ?? String(err)
+    console.error('[gemini] JSON パース失敗:', detail, '\nraw:', rawText.slice(0, 500))
+    throw new GeminiError('parse-error', `Gemini レスポンスの JSON パースに失敗: ${detail}`, rawText.slice(0, 500))
+  }
+}
+
+/* ─── 身分証 OCR ──────────────────────────────────────── */
 
 export type IdDocumentOcrResult = {
   idDocumentType:  string | null
@@ -21,7 +84,7 @@ export type IdDocumentOcrResult = {
   idExpiryDate:    string | null
 }
 
-const PROMPT = `この画像は日本の身分証明書です。以下の情報を正確に読み取り、JSON形式で返してください。
+const ID_DOCUMENT_PROMPT = `この画像は日本の身分証明書です。以下の情報を正確に読み取り、JSON形式で返してください。
 
 抽出する項目:
 - documentType: 書類の種類（「運転免許証」「パスポート」「マイナンバーカード」「健康保険証」「在留カード」など）
@@ -33,114 +96,50 @@ const PROMPT = `この画像は日本の身分証明書です。以下の情報�
 
 読み取れない・該当しない項目はnullにしてください。
 マイナンバー（12桁の個人番号）は絶対に含めないでください。
-
-必ずJSONのみ返してください。説明文は不要です。
 例: {"documentType":"運転免許証","name":"山田太郎","birthDate":"1985-06-20","address":"東京都新宿区西新宿1-1-1","idNumber":"123456789012","expiryDate":"2028-06-20"}`
 
-/**
- * 身分証明書画像からテキスト情報を抽出する
- *
- * @param imageBuffer  画像のバイナリデータ
- * @param mimeType     画像のMIMEタイプ（image/jpeg, image/png など）
- * @returns 抽出結果。APIキー未設定またはエラー時は null
- */
 export async function extractIdDocumentInfo(
   imageBuffer: Buffer,
   mimeType: string,
-): Promise<IdDocumentOcrResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.warn('[gemini] GEMINI_API_KEY が未設定のためOCRをスキップします')
-    return null
-  }
+): Promise<IdDocumentOcrResult> {
+  const parsed = await callGeminiJson([
+    ID_DOCUMENT_PROMPT,
+    { inlineData: { mimeType, data: imageBuffer.toString('base64') } },
+  ]) as Record<string, unknown>
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-    const result = await model.generateContent([
-      PROMPT,
-      {
-        inlineData: {
-          mimeType,
-          data: imageBuffer.toString('base64'),
-        },
-      },
-    ])
-
-    const text = result.response.text().trim()
-
-    // ```json ... ``` で囲まれている場合に対応
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    return {
-      idDocumentType:  parsed.documentType  ?? null,
-      idName:          parsed.name          ?? null,
-      idBirthDate:     parsed.birthDate     ?? null,
-      idAddress:       parsed.address       ?? null,
-      idLicenseNumber: parsed.idNumber      ?? null,
-      idExpiryDate:    parsed.expiryDate    ?? null,
-    }
-  } catch (err) {
-    console.error('[gemini] OCR失敗:', err)
-    return null
+  return {
+    idDocumentType:  (parsed.documentType  as string) ?? null,
+    idName:          (parsed.name          as string) ?? null,
+    idBirthDate:     (parsed.birthDate     as string) ?? null,
+    idAddress:       (parsed.address       as string) ?? null,
+    idLicenseNumber: (parsed.idNumber      as string) ?? null,
+    idExpiryDate:    (parsed.expiryDate    as string) ?? null,
   }
 }
 
-/**
- * 身分証明書の裏面画像から新住所を抽出する
- *
- * @param imageBuffer  画像のバイナリデータ
- * @param mimeType     画像のMIMEタイプ（image/jpeg, image/png など）
- * @returns 新住所文字列。記載がない場合やエラー時は null
- */
+const BACK_ADDRESS_PROMPT = `この身分証明書の裏面画像から、新住所（住所変更記載）を読み取ってください。新住所の記載がない場合はnullを返してください。JSON形式で {"newAddress": string | null} を返してください。`
+
 export async function extractBackAddress(
   imageBuffer: Buffer,
   mimeType: string,
 ): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.warn('[gemini] GEMINI_API_KEY が未設定のため裏面OCRをスキップします')
-    return null
-  }
+  const parsed = await callGeminiJson([
+    BACK_ADDRESS_PROMPT,
+    { inlineData: { mimeType, data: imageBuffer.toString('base64') } },
+  ]) as Record<string, unknown>
 
-  const BACK_PROMPT = `この身分証明書の裏面画像から、新住所（住所変更記載）を読み取ってください。新住所の記載がない場合はnullを返してください。JSON形式で {"newAddress": string | null} を返してください。`
-
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-    const result = await model.generateContent([
-      BACK_PROMPT,
-      {
-        inlineData: {
-          mimeType,
-          data: imageBuffer.toString('base64'),
-        },
-      },
-    ])
-
-    const text = result.response.text().trim()
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    return parsed.newAddress ?? null
-  } catch (err) {
-    console.error('[gemini] 裏面OCR失敗:', err)
-    return null
-  }
+  return (parsed.newAddress as string) ?? null
 }
 
-/* ─── 中古市場 AI 調査 ─── */
+/* ─── 市場相場調査 ────────────────────────────────────── */
 
 export type MarketResearchResult = {
-  productDetail: string    // 商品名や型番などの詳細
-  estimatedCondition: string // 想定コンディション
-  maxPrice: string         // 中古市場での最高値
-  minPrice: string         // 中古市場での最安値
-  platforms: string        // 主な取引プラットフォーム
-  supplement: string       // 補足情報
+  productDetail: string
+  estimatedCondition: string
+  maxPrice: string
+  minPrice: string
+  platforms: string
+  supplement: string
 }
 
 export type ImageData = {
@@ -168,93 +167,57 @@ const MARKET_RESEARCH_PROMPT = `あなたは中古品の買取査定の専門家
 - platforms: 主な取引プラットフォーム（カンマ区切りの文字列で。例: "メルカリ、ヤフオク、楽天ラクマ"）
 - supplement: 補足情報（査定時の注意点、付属品の有無による価格差、市場トレンドなど）
 
-必ずJSONのみ返してください。説明文は不要です。
 すべての値は文字列型で返してください（配列やオブジェクトは使わないでください）。
 価格は日本円で、現在の市場相場に基づいて現実的な金額を記載してください。`
 
-/**
- * 中古市場のAI調査を行う（画像解析対応）
- *
- * @param itemName   品名（例: "ルイヴィトン ネヴァーフル MM"）
- * @param category   カテゴリー（例: "バッグ"）
- * @param images     商品画像データ（最大3枚）
- * @returns 調査結果。APIキー未設定またはエラー時は null
- */
+const stringify = (v: unknown): string => {
+  if (v == null) return '不明'
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return v.join('、')
+  if (typeof v === 'object') {
+    return Object.entries(v as Record<string, unknown>)
+      .filter(([, val]) => val && val !== '（不明）' && val !== '不明')
+      .map(([, val]) => String(val))
+      .join(' / ') || '不明'
+  }
+  return String(v)
+}
+
 export async function researchMarketPrice(
   itemName: string,
   category: string,
   images: ImageData[] = [],
-): Promise<MarketResearchResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.warn('[gemini] GEMINI_API_KEY が未設定のためAI調査をスキップします')
-    return null
+): Promise<MarketResearchResult> {
+  const userPrompt = images.length > 0
+    ? `商品名: ${itemName}\nカテゴリー: ${category}\n\n添付の${images.length}枚の画像を分析し、商品を正確に特定してください。ロゴ、型番、ラベル、シリアルナンバーなどを注意深く読み取ってください。`
+    : `商品名: ${itemName}\nカテゴリー: ${category}\n\n（画像なし。商品名とカテゴリーから推測してください）`
+
+  const parts: (string | { inlineData: { mimeType: string; data: string } })[] = [
+    MARKET_RESEARCH_PROMPT,
+    userPrompt,
+  ]
+  for (const img of images) {
+    parts.push({ inlineData: { mimeType: img.mimeType, data: img.buffer.toString('base64') } })
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-    const userPrompt = images.length > 0
-      ? `商品名: ${itemName}\nカテゴリー: ${category}\n\n添付の${images.length}枚の画像を分析し、商品を正確に特定してください。ロゴ、型番、ラベル、シリアルナンバーなどを注意深く読み取ってください。`
-      : `商品名: ${itemName}\nカテゴリー: ${category}\n\n（画像なし。商品名とカテゴリーから推測してください）`
-
-    // プロンプト + 画像データを組み立て
-    const contents: (string | { inlineData: { mimeType: string; data: string } })[] = [
-      MARKET_RESEARCH_PROMPT,
-      userPrompt,
-    ]
-
-    for (const img of images) {
-      contents.push({
-        inlineData: {
-          mimeType: img.mimeType,
-          data: img.buffer.toString('base64'),
-        },
-      })
-    }
-
-    const result = await model.generateContent(contents)
-
-    const text = result.response.text().trim()
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    // 値がオブジェクトや配列の場合は文字列に変換
-    const stringify = (v: unknown): string => {
-      if (v == null) return '不明'
-      if (typeof v === 'string') return v
-      if (Array.isArray(v)) return v.join('、')
-      if (typeof v === 'object') {
-        return Object.entries(v as Record<string, unknown>)
-          .filter(([, val]) => val && val !== '（不明）' && val !== '不明')
-          .map(([, val]) => String(val))
-          .join(' / ') || '不明'
-      }
-      return String(v)
-    }
-
-    return {
-      productDetail:      stringify(parsed.productDetail),
-      estimatedCondition: stringify(parsed.estimatedCondition),
-      maxPrice:           stringify(parsed.maxPrice),
-      minPrice:           stringify(parsed.minPrice),
-      platforms:          stringify(parsed.platforms),
-      supplement:         stringify(parsed.supplement),
-    }
-  } catch (err) {
-    console.error('[gemini] 市場調査失敗:', err)
-    return null
+  const parsed = await callGeminiJson(parts) as Record<string, unknown>
+  return {
+    productDetail:      stringify(parsed.productDetail),
+    estimatedCondition: stringify(parsed.estimatedCondition),
+    maxPrice:           stringify(parsed.maxPrice),
+    minPrice:           stringify(parsed.minPrice),
+    platforms:          stringify(parsed.platforms),
+    supplement:         stringify(parsed.supplement),
   }
 }
 
-/* ─── 買取相談メモ AI 査定 ─── */
+/* ─── 買取査定 ────────────────────────────────────────── */
 
 export type PurchaseAppraisalResult = {
-  productDetail: string     // 商品の詳細情報
-  offerPrice: string        // 買取提示額
-  offerReason: string       // 提示額の根拠
-  supplement: string        // 補足情報
+  productDetail: string
+  offerPrice: string
+  offerReason: string
+  supplement: string
 }
 
 const PURCHASE_APPRAISAL_PROMPT = `あなたは中古品の買取業者の査定専門家です。以下の商品について、買取業者として買い取れる金額を算出してください。
@@ -278,93 +241,42 @@ const PURCHASE_APPRAISAL_PROMPT = `あなたは中古品の買取業者の査定
 - offerReason: 提示額の根拠（市場相場からどのように算出したか、簡潔に説明）
 - supplement: 補足情報（査定時の注意点、付属品の有無による価格変動、コンディションによる変動幅など）
 
-必ずJSONのみ返してください。説明文は不要です。
 すべての値は文字列型で返してください（配列やオブジェクトは使わないでください）。
 価格は日本円で、現在の市場相場に基づいて現実的な金額を記載してください。`
 
-/**
- * 買取相談メモのAI査定を行う（画像解析対応）
- *
- * @param title       品名タイトル
- * @param description 詳細説明（任意）
- * @param images      商品画像データ（任意）
- * @returns 査定結果。APIキー未設定またはエラー時は null
- */
 export async function appraiseForPurchase(
   title: string,
   description: string | null,
   images: ImageData[] = [],
-): Promise<PurchaseAppraisalResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.warn('[gemini] GEMINI_API_KEY が未設定のためAI査定をスキップします')
-    return null
+): Promise<PurchaseAppraisalResult> {
+  let userPrompt = `品名: ${title}`
+  if (description) userPrompt += `\n詳細説明: ${description}`
+  userPrompt += images.length > 0
+    ? `\n\n添付の${images.length}枚の画像を分析し、商品を正確に特定してください。ロゴ、型番、ラベル、シリアルナンバーなどを注意深く読み取ってください。`
+    : `\n\n（画像なし。品名と説明から推測してください）`
+
+  const parts: (string | { inlineData: { mimeType: string; data: string } })[] = [
+    PURCHASE_APPRAISAL_PROMPT,
+    userPrompt,
+  ]
+  for (const img of images) {
+    parts.push({ inlineData: { mimeType: img.mimeType, data: img.buffer.toString('base64') } })
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-    let userPrompt = `品名: ${title}`
-    if (description) userPrompt += `\n詳細説明: ${description}`
-
-    if (images.length > 0) {
-      userPrompt += `\n\n添付の${images.length}枚の画像を分析し、商品を正確に特定してください。ロゴ、型番、ラベル、シリアルナンバーなどを注意深く読み取ってください。`
-    } else {
-      userPrompt += `\n\n（画像なし。品名と説明から推測してください）`
-    }
-
-    const contents: (string | { inlineData: { mimeType: string; data: string } })[] = [
-      PURCHASE_APPRAISAL_PROMPT,
-      userPrompt,
-    ]
-
-    for (const img of images) {
-      contents.push({
-        inlineData: {
-          mimeType: img.mimeType,
-          data: img.buffer.toString('base64'),
-        },
-      })
-    }
-
-    const result = await model.generateContent(contents)
-
-    const text = result.response.text().trim()
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    // 値がオブジェクトや配列の場合は文字列に変換
-    const stringify = (v: unknown): string => {
-      if (v == null) return '不明'
-      if (typeof v === 'string') return v
-      if (Array.isArray(v)) return v.join('、')
-      if (typeof v === 'object') {
-        return Object.entries(v as Record<string, unknown>)
-          .filter(([, val]) => val && val !== '（不明）' && val !== '不明')
-          .map(([, val]) => String(val))
-          .join(' / ') || '不明'
-      }
-      return String(v)
-    }
-
-    return {
-      productDetail:   stringify(parsed.productDetail),
-      offerPrice:      stringify(parsed.offerPrice),
-      offerReason:     stringify(parsed.offerReason),
-      supplement:      stringify(parsed.supplement),
-    }
-  } catch (err) {
-    console.error('[gemini] AI査定失敗:', err)
-    return null
+  const parsed = await callGeminiJson(parts) as Record<string, unknown>
+  return {
+    productDetail: stringify(parsed.productDetail),
+    offerPrice:    stringify(parsed.offerPrice),
+    offerReason:   stringify(parsed.offerReason),
+    supplement:    stringify(parsed.supplement),
   }
 }
 
-/* ─── 研修動画 AI 要約 ─── */
+/* ─── 動画要約 ────────────────────────────────────────── */
 
 export type VideoSummaryResult = {
-  summary: string        // 動画の要約（500〜1000文字程度）
-  keyPoints: string[]    // 重要ポイント（5〜10項目）
+  summary: string
+  keyPoints: string[]
 }
 
 const VIDEO_SUMMARY_PROMPT = `あなたは企業研修の専門家です。以下のYouTube動画の内容を分析し、研修資料として活用できるよう要約してください。
@@ -374,59 +286,26 @@ const VIDEO_SUMMARY_PROMPT = `あなたは企業研修の専門家です。以�
 - summary: 動画の内容を500〜1000文字程度で要約。研修を受ける人が事前に読んで概要を把握できる内容にしてください。段落分けして読みやすくしてください。
 - keyPoints: 動画の重要ポイントを5〜10項目の配列で。各項目は1〜2文の簡潔な説明。
 
-必ずJSONのみ返してください。説明文は不要です。
 「対象」「難易度」「所要時間」などのメタ情報は含めないでください。
 日本語で回答してください。`
 
-/**
- * YouTube動画の内容をAIで要約する
- *
- * @param youtubeUrl YouTube動画のURL
- * @param title      動画のタイトル（補助情報）
- * @param description 動画の説明（補助情報）
- * @returns 要約結果。APIキー未設定またはエラー時は null
- */
 export async function summarizeVideo(
   youtubeUrl: string,
   title: string,
   description?: string | null,
-): Promise<VideoSummaryResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.warn('[gemini] GEMINI_API_KEY が未設定のため動画要約をスキップします')
-    return null
-  }
+): Promise<VideoSummaryResult> {
+  let userPrompt = `動画タイトル: ${title}\nYouTube URL: ${youtubeUrl}`
+  if (description) userPrompt += `\n動画説明: ${description}`
+  userPrompt += '\n\nこの動画の内容を分析し、研修資料として要約してください。'
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-    let userPrompt = `動画タイトル: ${title}\nYouTube URL: ${youtubeUrl}`
-    if (description) {
-      userPrompt += `\n動画説明: ${description}`
-    }
-    userPrompt += '\n\nこの動画の内容を分析し、研修資料として要約してください。'
-
-    const result = await model.generateContent([
-      VIDEO_SUMMARY_PROMPT,
-      userPrompt,
-    ])
-
-    const text = result.response.text().trim()
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    return {
-      summary:        typeof parsed.summary === 'string' ? parsed.summary : '要約を取得できませんでした',
-      keyPoints:      Array.isArray(parsed.keyPoints) ? parsed.keyPoints.map(String) : [],
-    }
-  } catch (err) {
-    console.error('[gemini] 動画要約失敗:', err)
-    return null
+  const parsed = await callGeminiJson([VIDEO_SUMMARY_PROMPT, userPrompt]) as Record<string, unknown>
+  return {
+    summary:   typeof parsed.summary === 'string' ? parsed.summary : '要約を取得できませんでした',
+    keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints.map(String) : [],
   }
 }
 
-/* ─── 顔照合（本人確認） ─── */
+/* ─── 顔照合 ──────────────────────────────────────────── */
 
 export type FaceComparisonResult = {
   match: boolean
@@ -449,78 +328,39 @@ const FACE_COMPARISON_PROMPT = `あなたは本人確認の専門家です。以
 - confidence: 判定の確信度（"high"=高い確信 / "medium"=中程度 / "low"=低い確信）
 - reason: 判定理由の説明（日本語で簡潔に）
 
-必ずJSONのみ返してください。説明文は不要です。
 例: {"match":true,"confidence":"high","reason":"顔の輪郭・目・鼻の特徴が一致しており、同一人物と判定しました。"}`
 
-/**
- * 2枚の顔写真を比較して同一人物かどうかを判定する
- *
- * @param idFaceImageUrl   身分証明書から抽出した顔写真のURL
- * @param selfieImageUrl   本人が撮影したセルフィー写真のURL
- * @returns 照合結果。APIキー未設定またはエラー時は null
- */
 export async function compareFaces(
   idFaceImageUrl: string,
   selfieImageUrl: string,
-): Promise<FaceComparisonResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.warn('[gemini] GEMINI_API_KEY が未設定のため顔照合をスキップします')
-    return null
+): Promise<FaceComparisonResult> {
+  // 2枚の画像をダウンロードしてbase64に変換
+  const [idFaceRes, selfieRes] = await Promise.all([
+    fetch(idFaceImageUrl),
+    fetch(selfieImageUrl),
+  ])
+  if (!idFaceRes.ok || !selfieRes.ok) {
+    throw new GeminiError('api-error', '顔画像のダウンロードに失敗しました')
   }
 
-  try {
-    // 2枚の画像をダウンロードしてbase64に変換
-    const [idFaceRes, selfieRes] = await Promise.all([
-      fetch(idFaceImageUrl),
-      fetch(selfieImageUrl),
-    ])
+  const idFaceBuffer = Buffer.from(await idFaceRes.arrayBuffer())
+  const selfieBuffer = Buffer.from(await selfieRes.arrayBuffer())
+  const idFaceMime = idFaceRes.headers.get('content-type') || 'image/jpeg'
+  const selfieMime = selfieRes.headers.get('content-type') || 'image/jpeg'
 
-    if (!idFaceRes.ok || !selfieRes.ok) {
-      console.error('[gemini] 顔画像のダウンロードに失敗しました')
-      return null
-    }
+  const parsed = await callGeminiJson([
+    FACE_COMPARISON_PROMPT,
+    { inlineData: { mimeType: idFaceMime, data: idFaceBuffer.toString('base64') } },
+    { inlineData: { mimeType: selfieMime, data: selfieBuffer.toString('base64') } },
+  ]) as Record<string, unknown>
 
-    const idFaceBuffer = Buffer.from(await idFaceRes.arrayBuffer())
-    const selfieBuffer = Buffer.from(await selfieRes.arrayBuffer())
+  const confidence = ['high', 'medium', 'low'].includes(parsed.confidence as string)
+    ? (parsed.confidence as 'high' | 'medium' | 'low')
+    : 'low'
 
-    const idFaceMime = idFaceRes.headers.get('content-type') || 'image/jpeg'
-    const selfieMime = selfieRes.headers.get('content-type') || 'image/jpeg'
-
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-    const result = await model.generateContent([
-      FACE_COMPARISON_PROMPT,
-      {
-        inlineData: {
-          mimeType: idFaceMime,
-          data: idFaceBuffer.toString('base64'),
-        },
-      },
-      {
-        inlineData: {
-          mimeType: selfieMime,
-          data: selfieBuffer.toString('base64'),
-        },
-      },
-    ])
-
-    const text = result.response.text().trim()
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
-    const parsed = JSON.parse(jsonStr)
-
-    const confidence = ['high', 'medium', 'low'].includes(parsed.confidence)
-      ? (parsed.confidence as 'high' | 'medium' | 'low')
-      : 'low'
-
-    return {
-      match:      Boolean(parsed.match),
-      confidence,
-      reason:     typeof parsed.reason === 'string' ? parsed.reason : '判定理由を取得できませんでした',
-    }
-  } catch (err) {
-    console.error('[gemini] 顔照合失敗:', err)
-    return null
+  return {
+    match:      Boolean(parsed.match),
+    confidence,
+    reason:     typeof parsed.reason === 'string' ? parsed.reason : '判定理由を取得できませんでした',
   }
 }

@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { extractIdDocumentInfo } from '@/lib/gemini'
+import { extractIdDocumentInfo, GeminiError } from '@/lib/gemini'
 import path from 'path'
 
 export async function POST(
@@ -63,10 +63,20 @@ export async function POST(
         : 'image/jpeg'
     }
 
-    const ocrResult = await extractIdDocumentInfo(buffer, mimeType)
-
-    if (!ocrResult) {
-      return NextResponse.json({ error: 'OCRに失敗しました。画像を再アップロードしてください。', ocr: null })
+    let ocrResult: Awaited<ReturnType<typeof extractIdDocumentInfo>>
+    try {
+      ocrResult = await extractIdDocumentInfo(buffer, mimeType)
+    } catch (err) {
+      if (err instanceof GeminiError) {
+        const status = err.reason === 'no-key' ? 503 : 502
+        const message = err.reason === 'no-key'
+          ? '自動読み取りを実行できません。GEMINI_API_KEY が設定されているか確認してください。'
+          : err.reason === 'parse-error'
+            ? 'OCR結果を解釈できませんでした。画像を再アップロードしてください。'
+            : `OCRに失敗しました: ${err.detail ?? err.message}`
+        return NextResponse.json({ error: message, reason: err.reason, ocr: null }, { status })
+      }
+      throw err
     }
 
     // DBに更新

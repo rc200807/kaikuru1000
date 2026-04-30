@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
-import { extractBackAddress } from '@/lib/gemini'
+import { extractBackAddress, GeminiError } from '@/lib/gemini'
 
 /**
  * 身分証明書の裏面画像を認証プロキシ経由で配信
@@ -157,7 +157,16 @@ export async function POST(
     }
 
     // Gemini Vision OCR で裏面新住所を抽出（失敗しても upload は成功扱い）
-    const newAddress = await extractBackAddress(buffer, file.type)
+    let newAddress: string | null = null
+    try {
+      newAddress = await extractBackAddress(buffer, file.type)
+    } catch (err) {
+      if (err instanceof GeminiError) {
+        console.warn('[id-document/back] OCR失敗:', err.reason, err.message)
+      } else {
+        console.error('[id-document/back] OCR想定外エラー:', err)
+      }
+    }
 
     await prisma.user.update({
       where: { id },

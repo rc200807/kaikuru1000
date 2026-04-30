@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { appraiseForPurchase, type ImageData } from '@/lib/gemini'
+import { appraiseForPurchase, GeminiError, type ImageData } from '@/lib/gemini'
 
 const MONTHLY_LIMIT = 10
 
@@ -78,17 +78,20 @@ export async function POST(
   }
 
   // Gemini AI査定実行
-  const result = await appraiseForPurchase(
-    memo.title,
-    memo.description,
-    images,
-  )
-
-  if (!result) {
-    return NextResponse.json(
-      { error: 'AI査定に失敗しました。しばらく経ってから再度お試しください。' },
-      { status: 500 },
-    )
+  let result
+  try {
+    result = await appraiseForPurchase(memo.title, memo.description, images)
+  } catch (err) {
+    if (err instanceof GeminiError) {
+      const status = err.reason === 'no-key' ? 503 : 502
+      const message = err.reason === 'no-key'
+        ? 'AI査定を実行できません。GEMINI_API_KEY が設定されているか確認してください。'
+        : err.reason === 'parse-error'
+          ? 'AI査定のレスポンスを解釈できませんでした。再試行してください。'
+          : `AI査定に失敗しました: ${err.detail ?? err.message}`
+      return NextResponse.json({ error: message, reason: err.reason }, { status })
+    }
+    throw err
   }
 
   // 結果をDBに保存

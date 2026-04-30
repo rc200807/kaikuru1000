@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { summarizeVideo } from '@/lib/gemini'
+import { summarizeVideo, GeminiError } from '@/lib/gemini'
 
 /** 動画のAI要約を生成 */
 export async function POST(
@@ -21,9 +21,18 @@ export async function POST(
     return NextResponse.json({ error: '動画が見つかりません' }, { status: 404 })
   }
 
-  const result = await summarizeVideo(video.videoUrl, video.title, video.description)
-  if (!result) {
-    return NextResponse.json({ error: 'AI要約の生成に失敗しました' }, { status: 500 })
+  let result
+  try {
+    result = await summarizeVideo(video.videoUrl, video.title, video.description)
+  } catch (err) {
+    if (err instanceof GeminiError) {
+      const status = err.reason === 'no-key' ? 503 : 502
+      const message = err.reason === 'no-key'
+        ? 'AI要約を実行できません。GEMINI_API_KEY が設定されているか確認してください。'
+        : `AI要約に失敗しました: ${err.detail ?? err.message}`
+      return NextResponse.json({ error: message, reason: err.reason }, { status })
+    }
+    throw err
   }
 
   const updated = await prisma.trainingVideo.update({

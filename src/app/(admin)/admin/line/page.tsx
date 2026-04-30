@@ -115,13 +115,15 @@ function ChannelModal({
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        padding: '16px',
       }}
       onClick={onClose}
     >
       <div
         style={{
           background: 'var(--md-sys-color-surface)',
-          borderRadius: 16, padding: 28, width: '90%', maxWidth: 520,
+          borderRadius: 16, padding: 28, width: '100%', maxWidth: 520,
+          maxHeight: '90vh', overflowY: 'auto',
         }}
         onClick={(e) => e.stopPropagation()}
       >

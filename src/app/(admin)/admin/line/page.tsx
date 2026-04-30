@@ -196,7 +196,7 @@ function ChannelModal({
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{ padding: '10px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', fontWeight: 600 }}
+            style={{ padding: '10px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#ffffff', fontWeight: 600, opacity: saving ? 0.6 : 1 }}
           >
             {saving ? '保存中...' : '保存'}
           </button>
@@ -280,7 +280,7 @@ function LinkUserModal({
             placeholder="顧客名・フリガナで検索"
             style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 14 }}
           />
-          <button onClick={search} disabled={searching} style={{ padding: '0 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
+          <button onClick={search} disabled={searching} style={{ padding: '0 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#ffffff' }}>
             検索
           </button>
         </div>
@@ -674,8 +674,8 @@ export default function LineManagePage() {
                         <div
                           style={{
                             maxWidth: '72%', padding: '10px 14px', borderRadius: isOutbound ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                            background: isOutbound ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container-high)',
-                            color: isOutbound ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-on-surface)',
+                            background: isOutbound ? '#4f8ef7' : 'var(--md-sys-color-surface-container-high)',
+                            color: isOutbound ? '#ffffff' : 'var(--md-sys-color-on-surface)',
                             fontSize: 14, lineHeight: 1.5,
                           }}
                         >
@@ -714,7 +714,7 @@ export default function LineManagePage() {
                   disabled={sending || !replyText.trim()}
                   style={{
                     padding: '0 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                    background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)',
+                    background: '#4f8ef7', color: '#ffffff',
                     fontWeight: 700, opacity: (sending || !replyText.trim()) ? 0.5 : 1,
                     alignSelf: 'stretch',
                   }}

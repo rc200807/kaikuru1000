@@ -72,6 +72,7 @@ model User {
   magicLinks        MagicLink[]
   inquiries         Inquiry[]
   lineUsers         LineUser[]
+  formSubmissions   FormSubmission[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -116,6 +117,7 @@ model Store {
   announcementReads AnnouncementRead[]
   inquiries  Inquiry[]
   lineChannels LineChannel[]
+  formsAsCustomerStore Form[]   @relation("FormCustomerStore")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -623,6 +625,13 @@ model Form {
   successMessage   String?          @db.Text
   sheetWebhookUrl  String?          @db.Text
   recaptchaEnabled Boolean          @default(true)
+  // 回答から顧客を自動作成する設定
+  customerCreate   Boolean          @default(false)
+  customerType     String?          // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
+  customerTypes    String?          // JSON配列（複数可）
+  customerFieldMap String?          @db.Text  // JSON: { name?, furigana?, email?, phone?, address?, postalCode? } → fieldId
+  customerStoreId  String?
+  customerStore    Store?           @relation("FormCustomerStore", fields: [customerStoreId], references: [id], onDelete: SetNull)
   createdById      String
   createdBy        Admin            @relation(fields: [createdById], references: [id])
   submissions      FormSubmission[]
@@ -631,6 +640,7 @@ model Form {
 
   @@index([status])
   @@index([createdById])
+  @@index([customerStoreId])
 }
 
 // LINE チャネル設定（管理ポータルから複数アカウントを管理）
@@ -702,7 +712,11 @@ model FormSubmission {
   userAgent      String?   @db.Text
   sheetSyncedAt  DateTime?
   sheetSyncError String?   @db.Text
+  // 自動作成された顧客（customerCreate=true 時）
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt      DateTime  @default(now())
 
   @@index([formId, createdAt])
+  @@index([userId])
 }

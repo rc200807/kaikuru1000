@@ -10,7 +10,17 @@ import MessageBanner from '@/components/MessageBanner'
 import FormBuilderCanvas from '@/components/forms/FormBuilderCanvas'
 import FieldEditor from '@/components/forms/FieldEditor'
 import FormRenderer from '@/components/forms/FormRenderer'
-import { FIELD_TYPE_LABELS, parseSchema, type FormField, type FormSchema, type FormStatus } from '@/lib/forms/types'
+import { FIELD_TYPE_LABELS, parseSchema, isInputField, type FormField, type FormSchema, type FormStatus } from '@/lib/forms/types'
+import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
+
+type CustomerFieldMap = {
+  name?: string
+  furigana?: string
+  email?: string
+  phone?: string
+  address?: string
+  postalCode?: string
+}
 
 type FormData = {
   id: string
@@ -24,7 +34,15 @@ type FormData = {
   sheetWebhookUrl: string | null
   recaptchaEnabled: boolean
   submissionCount: number
+  // 顧客自動作成
+  customerCreate: boolean
+  customerType: string | null
+  customerTypes: string | null  // JSON
+  customerFieldMap: string | null // JSON
+  customerStoreId: string | null
 }
+
+type StoreOption = { id: string; name: string }
 
 const PALETTE: Array<FormField['type']> = [
   'text', 'textarea', 'email', 'phone', 'number', 'date', 'select', 'radio', 'checkbox', 'name', 'prefecture', 'heading', 'paragraph',
@@ -72,6 +90,19 @@ export default function FormEditPage() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 顧客自動作成設定
+  const [customerTypesArr, setCustomerTypesArr] = useState<CustomerType[]>([])
+  const [customerFieldMap, setCustomerFieldMap] = useState<CustomerFieldMap>({})
+  const [stores, setStores] = useState<StoreOption[]>([])
+
+  // ストアリスト読み込み
+  useEffect(() => {
+    fetch('/api/stores').then(r => r.ok ? r.json() : []).then(d => {
+      const list = Array.isArray(d) ? d : (d.stores ?? [])
+      setStores(list.map((s: any) => ({ id: s.id, name: s.name })))
+    }).catch(() => {})
+  }, [])
+
   useEffect(() => { void load() }, [formId])
 
   async function load() {
@@ -81,6 +112,13 @@ export default function FormEditPage() {
       const d: FormData = await res.json()
       setData(d)
       setSchema(parseSchema(d.schema))
+      // 顧客作成設定の初期化
+      setCustomerTypesArr(parseCustomerTypes(d.customerTypes, d.customerType ?? undefined))
+      try {
+        setCustomerFieldMap(d.customerFieldMap ? JSON.parse(d.customerFieldMap) : {})
+      } catch {
+        setCustomerFieldMap({})
+      }
     } else {
       setMsg({ type: 'error', text: 'フォームを取得できませんでした' })
     }
@@ -136,6 +174,12 @@ export default function FormEditPage() {
         sheetWebhookUrl: data.sheetWebhookUrl,
         recaptchaEnabled: data.recaptchaEnabled,
         slug: data.slug,
+        // 顧客自動作成
+        customerCreate: data.customerCreate,
+        customerType: data.customerType,
+        customerTypes: customerTypesArr,
+        customerFieldMap: customerFieldMap,
+        customerStoreId: data.customerStoreId,
       }
       const res = await fetch(`/api/admin/forms/${formId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!res.ok) {
@@ -212,6 +256,138 @@ export default function FormEditPage() {
             <span className="text-sm text-[var(--md-sys-color-on-surface)]">reCAPTCHA を有効化</span>
           </label>
         </div>
+      </Card>
+
+      {/* 顧客自動作成 */}
+      <Card variant="elevated" padding="md" className="mb-4">
+        <label className="flex items-center gap-2 cursor-pointer mb-4">
+          <input
+            type="checkbox"
+            checked={data.customerCreate}
+            onChange={(e) => setField('customerCreate', e.target.checked)}
+            className="w-4 h-4 rounded accent-[hsla(212,100%,48%,1)]"
+          />
+          <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">回答から顧客を自動作成する</h3>
+        </label>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+          有効化すると、フォーム回答時に該当する氏名・電話・住所が揃っていれば、自動的に顧客レコードを作成します。
+          メールアドレスが既存ユーザーと一致する場合は、新規作成せずそのユーザーに紐付けます。
+        </p>
+
+        {data.customerCreate && (
+          <div className="space-y-5 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+            {/* 顧客種別 */}
+            <div>
+              <Label>顧客種別（複数選択可）</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {CUSTOMER_TYPES.map(t => {
+                  const checked = customerTypesArr.includes(t)
+                  const c = CUSTOMER_TYPE_BADGE[t]
+                  return (
+                    <label
+                      key={t}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full cursor-pointer text-xs font-medium border"
+                      style={{
+                        background: checked ? c.bg : 'transparent',
+                        color: checked ? c.fg : 'var(--md-sys-color-on-surface-variant)',
+                        borderColor: checked ? c.fg : 'var(--md-sys-color-outline-variant)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...customerTypesArr, t]
+                            : customerTypesArr.filter(x => x !== t)
+                          setCustomerTypesArr(next)
+                          // 主タイプが配列から外れたら先頭に切替
+                          const primary = next.includes((data.customerType ?? '') as CustomerType)
+                            ? data.customerType
+                            : (next[0] ?? null)
+                          setField('customerType', primary)
+                        }}
+                        className="hidden"
+                      />
+                      {checked && <span>✓</span>}
+                      {CUSTOMER_TYPE_LABEL[t]}
+                    </label>
+                  )
+                })}
+              </div>
+              {customerTypesArr.length > 0 && (
+                <>
+                  <Label>主タイプ（マイページの表示種別）</Label>
+                  <select
+                    value={data.customerType ?? ''}
+                    onChange={(e) => setField('customerType', e.target.value || null)}
+                    className={inputCls}
+                    style={{ boxShadow: inputBoxShadow }}
+                    onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}
+                    onBlur={(e) => { e.currentTarget.style.boxShadow = inputBoxShadow }}
+                  >
+                    {customerTypesArr.map(t => (
+                      <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t]}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+
+            {/* フィールドマッピング */}
+            <div>
+              <Label>顧客フィールドマッピング</Label>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                顧客レコードの各項目を、フォームのどのフィールドから取得するか指定してください。氏名・電話・住所が揃っていない回答は顧客作成をスキップします。
+              </p>
+              <div className="grid md:grid-cols-2 gap-3">
+                {([
+                  { key: 'name', label: '氏名 *' },
+                  { key: 'furigana', label: 'フリガナ' },
+                  { key: 'email', label: 'メール' },
+                  { key: 'phone', label: '電話 *' },
+                  { key: 'postalCode', label: '郵便番号' },
+                  { key: 'address', label: '住所 *' },
+                ] as const).map(({ key, label }) => (
+                  <div key={key}>
+                    <Label>{label}</Label>
+                    <select
+                      value={customerFieldMap[key] ?? ''}
+                      onChange={(e) => setCustomerFieldMap(prev => ({ ...prev, [key]: e.target.value || undefined }))}
+                      className={inputCls}
+                      style={{ boxShadow: inputBoxShadow }}
+                      onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}
+                      onBlur={(e) => { e.currentTarget.style.boxShadow = inputBoxShadow }}
+                    >
+                      <option value="">— 未設定 —</option>
+                      {schema.filter(isInputField).map(f => (
+                        <option key={f.id} value={f.id}>
+                          {('label' in f ? f.label : f.id)} ({FIELD_TYPE_LABELS[f.type]})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 紐付け店舗 */}
+            <div>
+              <Label>紐付け店舗（任意）</Label>
+              <select
+                value={data.customerStoreId ?? ''}
+                onChange={(e) => setField('customerStoreId', e.target.value || null)}
+                className={inputCls}
+                style={{ boxShadow: inputBoxShadow }}
+                onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}
+                onBlur={(e) => { e.currentTarget.style.boxShadow = inputBoxShadow }}
+              >
+                <option value="">— 紐付けなし（本部管理）—</option>
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* タブ切り替え */}

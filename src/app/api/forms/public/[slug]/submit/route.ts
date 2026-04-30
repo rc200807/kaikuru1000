@@ -1,10 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { parseSchema } from '@/lib/forms/types'
 import { buildZodFromSchema, formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
 import { verifyRecaptcha } from '@/lib/recaptcha'
 import { postToSheetWebhook } from '@/lib/forms/sheetWebhook'
 import { sendFormSubmissionNotification } from '@/lib/mailer'
+import { isCustomerType, parseCustomerTypes, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
+
+/** フォーム回答から顧客フィールドを抽出。fieldMap で指定された fieldId の値を読む。 */
+function extractCustomerFields(
+  fieldMap: Record<string, string | undefined>,
+  answers: Record<string, unknown>,
+) {
+  const get = (key: string): string => {
+    const fieldId = fieldMap[key]
+    if (!fieldId) return ''
+    const v = answers[fieldId]
+    if (typeof v === 'string') return v.trim()
+    // name 型の合成フィールド (姓 + 名 形式)
+    if (v && typeof v === 'object') {
+      const o = v as any
+      if (o.last && o.first) return `${o.last} ${o.first}`.trim()
+      if (o.lastFurigana && o.firstFurigana) return `${o.lastFurigana} ${o.firstFurigana}`.trim()
+    }
+    return ''
+  }
+  return {
+    name:       get('name'),
+    furigana:   get('furigana'),
+    email:      get('email'),
+    phone:      get('phone').replace(/[-ー\s]/g, ''),
+    address:    get('address'),
+    postalCode: get('postalCode'),
+  }
+}
 
 // 簡易メモリレート制限（IP+slug ごと、60秒で10リクエストまで）
 const rateBucket = new Map<string, { count: number; resetAt: number }>()
@@ -58,12 +88,59 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'バリデーションエラー' }, { status: 400 })
   }
 
+  // 顧客自動作成（customerCreate=true 時、必須項目が揃っていれば）
+  let createdUserId: string | null = null
+  if (form.customerCreate) {
+    try {
+      const fieldMap = form.customerFieldMap ? JSON.parse(form.customerFieldMap) : {}
+      const cf = extractCustomerFields(fieldMap, parsed.data as Record<string, unknown>)
+      // 必須項目（氏名・電話・住所）が揃っていれば作成
+      if (cf.name && cf.phone && cf.address) {
+        const primary: CustomerType = isCustomerType(form.customerType) ? form.customerType : 'regular'
+        const types = parseCustomerTypes(form.customerTypes, primary)
+        const typesArray: CustomerType[] = types.length > 0 ? types : [primary]
+
+        // メール重複チェック（指定がある場合）
+        let existing = null
+        if (cf.email) {
+          existing = await prisma.user.findUnique({ where: { email: cf.email } })
+        }
+
+        if (!existing) {
+          const randomPassword = Math.random().toString(36).slice(-12) + 'A1!'
+          const hashed = await bcrypt.hash(randomPassword, 10)
+          const created = await prisma.user.create({
+            data: {
+              name:     cf.name,
+              furigana: cf.furigana || cf.name,
+              email:    cf.email || null,
+              phone:    cf.phone,
+              address:  cf.address,
+              password: hashed,
+              customerType:  primary,
+              customerTypes: stringifyCustomerTypes(typesArray, primary),
+              ...(form.customerStoreId ? { storeId: form.customerStoreId } : {}),
+            },
+            select: { id: true },
+          })
+          createdUserId = created.id
+        } else {
+          // 既存ユーザーがいる場合は紐付けのみ（種別は変えない）
+          createdUserId = existing.id
+        }
+      }
+    } catch (err: any) {
+      console.error('[FormSubmit] customer auto-create failed:', err?.message)
+    }
+  }
+
   const submission = await prisma.formSubmission.create({
     data: {
       formId: form.id,
       data: JSON.stringify(parsed.data),
       ipAddress: ip,
       userAgent: req.headers.get('user-agent') ?? null,
+      ...(createdUserId ? { userId: createdUserId } : {}),
     },
   })
 

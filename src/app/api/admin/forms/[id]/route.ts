@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { normalizeCustomSlug } from '@/lib/forms/slug'
+import { CUSTOMER_TYPES } from '@/lib/customer-types'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -11,6 +12,15 @@ async function requireAdmin() {
   if (!session || user?.role !== 'admin') return null
   return user
 }
+
+const customerFieldMapSchema = z.object({
+  name:       z.string().optional(),
+  furigana:   z.string().optional(),
+  email:      z.string().optional(),
+  phone:      z.string().optional(),
+  address:    z.string().optional(),
+  postalCode: z.string().optional(),
+}).partial()
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -22,6 +32,12 @@ const updateSchema = z.object({
   sheetWebhookUrl: z.string().url().nullable().optional().or(z.literal('')),
   recaptchaEnabled: z.boolean().optional(),
   slug: z.string().min(2).max(50).optional(),
+  // 顧客自動作成
+  customerCreate: z.boolean().optional(),
+  customerType: z.enum(CUSTOMER_TYPES).nullable().optional(),
+  customerTypes: z.array(z.enum(CUSTOMER_TYPES)).nullable().optional(),
+  customerFieldMap: customerFieldMapSchema.nullable().optional(),
+  customerStoreId: z.string().nullable().optional(),
 })
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -69,6 +85,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   if (data.sheetWebhookUrl === '') data.sheetWebhookUrl = null
+
+  // 顧客自動作成: customerTypes と customerFieldMap は JSON 文字列に直列化
+  if ('customerTypes' in data) {
+    data.customerTypes = data.customerTypes && data.customerTypes.length > 0 ? JSON.stringify(data.customerTypes) : null
+  }
+  if ('customerFieldMap' in data) {
+    data.customerFieldMap = data.customerFieldMap ? JSON.stringify(data.customerFieldMap) : null
+  }
+  if (data.customerStoreId === '') data.customerStoreId = null
 
   const updated = await prisma.form.update({ where: { id }, data })
   return NextResponse.json(updated)

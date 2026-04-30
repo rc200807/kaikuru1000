@@ -564,7 +564,7 @@ export default function LineManagePage() {
     if (status === 'authenticated') {
       fetchChannels()
       // 店舗一覧を取得
-      fetch('/api/admin/stores').then(r => r.ok ? r.json() : []).then(d => {
+      fetch('/api/stores').then(r => r.ok ? r.json() : []).then(d => {
         const list = Array.isArray(d) ? d : (d.stores ?? [])
         setStores(list.map((s: any) => ({ id: s.id, name: s.name })))
       }).catch(() => {})

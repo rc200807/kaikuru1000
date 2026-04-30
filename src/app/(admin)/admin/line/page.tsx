@@ -496,12 +496,14 @@ export default function LineManagePage() {
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {/* 「全チャネル」 */}
             <div
-              onClick={() => setSelectedChannelId(null)}
+              onClick={() => { setSelectedChannelId(null); setOpenMenuId(null) }}
               style={{
                 padding: '12px 14px', cursor: 'pointer', fontSize: 13,
-                background: selectedChannelId === null ? 'var(--md-sys-color-secondary-container)' : 'transparent',
-                color: selectedChannelId === null ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface)',
+                background: selectedChannelId === null ? 'rgba(79,142,247,0.15)' : 'transparent',
+                color: selectedChannelId === null ? '#4f8ef7' : 'var(--md-sys-color-on-surface)',
                 borderBottom: '1px solid var(--md-sys-color-outline-variant)',
+                borderLeft: selectedChannelId === null ? '3px solid #4f8ef7' : '3px solid transparent',
+                fontWeight: selectedChannelId === null ? 700 : 400,
               }}
             >
               すべてのチャネル
@@ -512,8 +514,9 @@ export default function LineManagePage() {
                 onClick={() => { setSelectedChannelId(ch.id); setOpenMenuId(null) }}
                 style={{
                   padding: '12px 14px', cursor: 'pointer', position: 'relative',
-                  background: selectedChannelId === ch.id ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                  background: selectedChannelId === ch.id ? 'rgba(79,142,247,0.15)' : 'transparent',
                   borderBottom: '1px solid var(--md-sys-color-outline-variant)',
+                  borderLeft: selectedChannelId === ch.id ? '3px solid #4f8ef7' : '3px solid transparent',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -599,8 +602,9 @@ export default function LineManagePage() {
                   onClick={() => setSelectedUserId(u.id)}
                   style={{
                     padding: '12px 14px', cursor: 'pointer',
-                    background: selectedUserId === u.id ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                    background: selectedUserId === u.id ? 'rgba(79,142,247,0.15)' : 'transparent',
                     borderBottom: '1px solid var(--md-sys-color-outline-variant)',
+                    borderLeft: selectedUserId === u.id ? '3px solid #4f8ef7' : '3px solid transparent',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

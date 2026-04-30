@@ -320,6 +320,7 @@ export default function LineManagePage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [loadingMessages, setLoadingMessages] = useState(false)
@@ -407,6 +408,7 @@ export default function LineManagePage() {
   async function handleSend() {
     if (!replyText.trim() || !selectedUserId || sending) return
     setSending(true)
+    setSendError('')
     try {
       const res = await fetch(`/api/admin/line/users/${selectedUserId}/reply`, {
         method: 'POST',
@@ -417,7 +419,12 @@ export default function LineManagePage() {
         const msg: Message = await res.json()
         setMessages((prev) => [...prev, msg])
         setReplyText('')
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setSendError(d.error ?? '送信に失敗しました')
       }
+    } catch {
+      setSendError('ネットワークエラーが発生しました')
     } finally {
       setSending(false)
     }
@@ -609,7 +616,13 @@ export default function LineManagePage() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {u.pictureUrl ? (
-                      <img src={u.pictureUrl} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover', display: 'block' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.setAttribute('style', 'display:flex') }} /><div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0, alignItems: 'center', justifyContent: 'center', fontSize: 16, display: 'none' }}>👤</div>
+                      <img
+                        src={u.pictureUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
                     ) : (
                       <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
                         👤
@@ -718,7 +731,13 @@ export default function LineManagePage() {
               </div>
 
               {/* 返信入力 */}
-              <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0 }}>
+              <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+              {sendError && (
+                <p style={{ margin: 0, fontSize: 13, color: '#f87171', background: 'rgba(248,113,113,0.1)', padding: '8px 12px', borderRadius: 8 }}>
+                  ⚠ {sendError}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 10 }}>
                 <textarea
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
@@ -745,6 +764,7 @@ export default function LineManagePage() {
                 >
                   {sending ? '...' : '送信'}
                 </button>
+              </div>
               </div>
             </>
           ) : (

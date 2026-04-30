@@ -39,7 +39,15 @@ export async function POST(
   const accessToken = getDecryptedAccessToken(lineUser.lineChannel)
 
   // LINE へ Push 送信
-  await sendPushMessage(accessToken, lineUser.lineUserId, parsed.data.text)
+  try {
+    await sendPushMessage(accessToken, lineUser.lineUserId, parsed.data.text)
+  } catch (err: any) {
+    console.error('[LINE Reply] Push message failed:', err?.message)
+    return NextResponse.json(
+      { error: `LINE送信に失敗しました: ${err?.message ?? '不明なエラー'}` },
+      { status: 502 }
+    )
+  }
 
   // DB に outbound メッセージを保存
   const message = await prisma.lineMessage.create({

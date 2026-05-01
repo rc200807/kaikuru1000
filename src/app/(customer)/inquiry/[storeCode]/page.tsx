@@ -257,9 +257,6 @@ export default function InquiryPage() {
             <div className="bg-white/40 rounded-2xl p-4 border border-white/50">
               <p className="text-xs text-gray-400 mb-1">担当店舗</p>
               <p className="text-sm font-semibold text-gray-700">{storeInfo.name}</p>
-              {storeInfo.phone && (
-                <p className="text-xs text-gray-500 mt-1">{storeInfo.phone}</p>
-              )}
             </div>
           )}
         </div>

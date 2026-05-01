@@ -145,8 +145,11 @@ export async function POST(request: NextRequest) {
     }
 
     // --- 店舗への通知メール送信（メール登録があれば、非同期・失敗無視） ---
-    if (store.email) {
+    if (!store.email) {
+      console.warn(`[inquiry] 店舗 "${store.name}" (${store.code}) にメールアドレスが未登録のため通知メールをスキップ`)
+    } else {
       const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+      console.log(`[inquiry] 店舗通知メール送信を試行: to=${store.email} store=${store.name}`)
       sendStoreInquiryNotification({
         storeEmail: store.email,
         storeName: store.name,
@@ -161,6 +164,12 @@ export async function POST(request: NextRequest) {
         itemCount,
         inquiryAdminUrl: `${baseUrl}/store/inquiries`,
         receivedAt: inquiry.createdAt,
+      }).then(sent => {
+        if (sent) {
+          console.log(`[inquiry] 店舗通知メール送信成功: ${store.email}`)
+        } else {
+          console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
+        }
       }).catch(err => {
         console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err)
       })

@@ -1,13 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import EmptyState from '@/components/EmptyState'
+
+type PurchaseMemo = {
+  id: string
+  title: string
+  imageUrls: string
+  status: string
+}
 
 type Inquiry = {
   id: string
@@ -22,6 +28,7 @@ type Inquiry = {
   status: string
   userId: string | null
   user: { id: string; name: string } | null
+  purchaseMemos: PurchaseMemo[]
   createdAt: string
 }
 
@@ -45,7 +52,8 @@ export default function StoreInquiriesPage() {
   const [storeCode, setStoreCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [searchText, setSearchText] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -54,9 +62,7 @@ export default function StoreInquiriesPage() {
   }, [authStatus, router])
 
   useEffect(() => {
-    if (authStatus === 'authenticated') {
-      fetchInquiries()
-    }
+    if (authStatus === 'authenticated') fetchInquiries()
   }, [authStatus, filterStatus])
 
   async function fetchInquiries() {
@@ -105,6 +111,20 @@ export default function StoreInquiriesPage() {
     })
   }
 
+  const filtered = useMemo(() => {
+    const q = searchText.trim().toLowerCase()
+    if (!q) return inquiries
+    return inquiries.filter(i => {
+      const hay = [i.name, i.furigana, i.phone, i.email ?? '', i.address].join(' ').toLowerCase()
+      return hay.includes(q)
+    })
+  }, [inquiries, searchText])
+
+  const selected = useMemo(() => {
+    if (!selectedId) return null
+    return inquiries.find(i => i.id === selectedId) ?? null
+  }, [inquiries, selectedId])
+
   if (authStatus === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage />
   }
@@ -112,225 +132,254 @@ export default function StoreInquiriesPage() {
   const inquiryFormUrl = `https://system.rcinc.jp/inquiry/${storeCode}`
 
   return (
-    <div className="max-w-4xl mx-auto pb-24 md:pb-8">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 56px)' }}>
       <AppBar title="問い合わせ一覧" />
 
-      <div className="px-4 sm:px-6 space-y-4">
-        {/* Inquiry form URL card */}
-        {storeCode && (
-          <div className="rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)]">
+      {/* 問い合わせフォームURL */}
+      {storeCode && (
+        <div className="px-4 sm:px-6 pt-3">
+          <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-3 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)]">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
               </svg>
-              <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
-                店舗専用問い合わせフォーム
-              </p>
+              <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">店舗専用問い合わせフォーム</p>
             </div>
-            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
-              このURLをお客様に共有して、問い合わせを受け付けることができます。
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)]">
-                <p className="text-sm text-[var(--md-sys-color-on-surface)] truncate font-mono">
-                  {inquiryFormUrl}
-                </p>
-              </div>
-              <button
-                onClick={handleCopyUrl}
-                className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-[var(--store-primary)] text-[var(--store-on-primary)] hover:opacity-90 active:opacity-80 transition-opacity"
-              >
-                {copied ? (
-                  <>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    コピー済み
-                  </>
-                ) : (
-                  <>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-                    </svg>
-                    URLをコピー
-                  </>
-                )}
-              </button>
+            <div className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)]">
+              <p className="text-xs text-[var(--md-sys-color-on-surface)] truncate font-mono">{inquiryFormUrl}</p>
+            </div>
+            <button
+              onClick={handleCopyUrl}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--store-primary)] text-[var(--store-on-primary)] hover:opacity-90 transition-opacity"
+            >
+              {copied ? '✓ コピー済み' : 'URLをコピー'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 分割レイアウト */}
+      <div className="flex-1 grid overflow-hidden mt-3" style={{ gridTemplateColumns: 'minmax(280px, 360px) 1fr' }}>
+        {/* 左ペイン: フィルタ + 一覧 */}
+        <aside className="flex flex-col border-r border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface)]">
+          {/* フィルタ */}
+          <div className="p-3 border-b border-[var(--md-sys-color-outline-variant)] flex flex-col gap-2">
+            <input
+              type="text"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="🔍 検索（氏名/電話/メール/住所）"
+              className="w-full px-3 py-2 rounded-full border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-highest)] text-[var(--md-sys-color-on-surface)] text-sm focus:outline-none focus:border-[var(--store-primary)]"
+            />
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {[
+                { value: 'all', label: 'すべて' },
+                { value: 'new', label: '新規' },
+                { value: 'contacted', label: '対応中' },
+                { value: 'completed', label: '完了' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setFilterStatus(opt.value)}
+                  className={`
+                    px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0
+                    ${filterStatus === opt.value
+                      ? 'bg-[var(--store-primary)] text-[var(--store-on-primary)]'
+                      : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                    }
+                  `}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
-        )}
 
-        {/* Status filter */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {[
-            { value: 'all', label: 'すべて' },
-            { value: 'new', label: '新規' },
-            { value: 'contacted', label: '対応中' },
-            { value: 'completed', label: '完了' },
-          ].map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => setFilterStatus(opt.value)}
-              className={`
-                px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors
-                ${filterStatus === opt.value
-                  ? 'bg-[var(--store-primary)] text-[var(--store-on-primary)]'
-                  : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
-                }
-              `}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Inquiry list */}
-        {inquiries.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-              </svg>
-            }
-            title="問い合わせはありません"
-            description={filterStatus !== 'all' ? 'フィルターを変更してみてください' : '新しい問い合わせが届くとここに表示されます'}
-          />
-        ) : (
-          <div className="space-y-3">
-            {inquiries.map(inq => {
-              const isExpanded = expandedId === inq.id
-              const statusConf = STATUS_CONFIG[inq.status] ?? STATUS_CONFIG.new
-              const typeLabel = INQUIRY_TYPES[inq.inquiryType] ?? inq.inquiryType
-
-              return (
-                <div
-                  key={inq.id}
-                  className="rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] overflow-hidden"
-                >
-                  {/* Summary row */}
+          {/* リスト */}
+          <div className="flex-1 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="text-center py-10 px-6 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                {searchText || filterStatus !== 'all' ? '該当する問い合わせがありません' : '問い合わせはまだありません'}
+              </div>
+            ) : (
+              filtered.map(inq => {
+                const isActive = selectedId === inq.id
+                const statusConf = STATUS_CONFIG[inq.status] ?? STATUS_CONFIG.new
+                const typeLabel = INQUIRY_TYPES[inq.inquiryType] ?? inq.inquiryType
+                return (
                   <button
-                    onClick={() => setExpandedId(isExpanded ? null : inq.id)}
-                    className="w-full text-left px-4 py-3 hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                    key={inq.id}
+                    onClick={() => setSelectedId(inq.id)}
+                    className={`
+                      block w-full text-left px-4 py-3 border-t border-[var(--md-sys-color-outline-variant)] transition-colors
+                      ${isActive
+                        ? 'bg-[var(--store-primary-container)]/30 border-l-[3px] border-l-[var(--store-primary)]'
+                        : 'border-l-[3px] border-l-transparent hover:bg-[var(--md-sys-color-surface-container)]'
+                      }
+                    `}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusConf.bg} ${statusConf.text}`}>
-                            {statusConf.label}
-                          </span>
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                            {typeLabel}
-                          </span>
-                          <span className="text-xs text-[var(--md-sys-color-outline)] ml-auto">
-                            {format(new Date(inq.createdAt), 'yyyy/M/d HH:mm', { locale: ja })}
-                          </span>
-                        </div>
-                        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">
-                          {inq.name}
-                          {inq.furigana && (
-                            <span className="text-xs font-normal text-[var(--md-sys-color-on-surface-variant)] ml-2">
-                              ({inq.furigana})
-                            </span>
-                          )}
-                        </p>
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                          <span>{inq.phone}</span>
-                          {inq.email && <span>{inq.email}</span>}
-                        </div>
-                      </div>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={2}
-                        stroke="currentColor"
-                        className={`w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                      </svg>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusConf.bg} ${statusConf.text}`}>
+                        {statusConf.label}
+                      </span>
+                      <span className="text-[10px] text-[var(--md-sys-color-outline)] whitespace-nowrap">
+                        {format(new Date(inq.createdAt), 'M/d HH:mm', { locale: ja })}
+                      </span>
+                    </div>
+                    <div className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">{inq.name}</div>
+                    <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate">{inq.furigana}</div>
+                    <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex justify-between gap-2 mt-1">
+                      <span className="truncate">{typeLabel}</span>
+                      {inq.purchaseMemos.length > 0 && <span className="shrink-0">📷 {inq.purchaseMemos.length}点</span>}
                     </div>
                   </button>
+                )
+              })
+            )}
+          </div>
+        </aside>
 
-                  {/* Expanded details */}
-                  {isExpanded && (
-                    <div className="px-4 pb-4 border-t border-[var(--md-sys-color-outline-variant)]">
-                      <div className="pt-3 space-y-3">
-                        {/* Detail fields */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-0.5">住所</p>
-                            <p className="text-[var(--md-sys-color-on-surface)]">
-                              {inq.postalCode && `〒${inq.postalCode} `}{inq.address}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-0.5">申込内容</p>
-                            <p className="text-[var(--md-sys-color-on-surface)]">{typeLabel}</p>
-                          </div>
-                          {inq.email && (
-                            <div>
-                              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-0.5">メール</p>
-                              <p className="text-[var(--md-sys-color-on-surface)]">{inq.email}</p>
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-0.5">電話番号</p>
-                            <p className="text-[var(--md-sys-color-on-surface)]">{inq.phone}</p>
-                          </div>
-                        </div>
+        {/* 右ペイン: 詳細 */}
+        <main className="overflow-y-auto">
+          {selected ? (
+            <DetailPane
+              inquiry={selected}
+              updating={updatingId === selected.id}
+              onStatusChange={(s) => handleStatusChange(selected.id, s)}
+              onOpenCustomer={(uid) => router.push(`/store/customers/${uid}`)}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-[var(--md-sys-color-on-surface-variant)] p-10 text-center">
+              左のリストから問い合わせを選択してください
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
 
-                        {/* Details text */}
-                        {inq.details && (
-                          <div>
-                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-0.5">相談内容</p>
-                            <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap bg-[var(--md-sys-color-surface-container)] rounded-xl p-3">
-                              {inq.details}
-                            </p>
-                          </div>
-                        )}
+/* ─── 詳細ペイン ─── */
+function DetailPane({
+  inquiry,
+  updating,
+  onStatusChange,
+  onOpenCustomer,
+}: {
+  inquiry: Inquiry
+  updating: boolean
+  onStatusChange: (status: string) => void
+  onOpenCustomer: (userId: string) => void
+}) {
+  const typeLabel = INQUIRY_TYPES[inquiry.inquiryType] ?? inquiry.inquiryType
+  const statusConf = STATUS_CONFIG[inquiry.status] ?? STATUS_CONFIG.new
 
-                        {/* Linked customer */}
-                        {inq.userId && inq.user && (
-                          <div>
-                            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">紐付き顧客</p>
-                            <button
-                              onClick={() => router.push(`/store/customers/${inq.userId}`)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--store-primary)] bg-[var(--store-primary-container)]/30 hover:bg-[var(--store-primary-container)]/60 transition-colors"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                              </svg>
-                              {inq.user.name}
-                            </button>
-                          </div>
-                        )}
+  return (
+    <div className="px-5 py-5 max-w-3xl">
+      {/* ヘッダー */}
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">
+          {inquiry.name}
+          {inquiry.furigana && <span className="text-sm font-normal text-[var(--md-sys-color-on-surface-variant)] ml-2">({inquiry.furigana})</span>}
+        </h2>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+          {format(new Date(inquiry.createdAt), 'yyyy年M月d日 HH:mm', { locale: ja })}
+        </p>
+      </div>
 
-                        {/* Status change */}
-                        <div className="flex items-center gap-3 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
-                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">ステータス変更:</p>
-                          <select
-                            value={inq.status}
-                            onChange={(e) => handleStatusChange(inq.id, e.target.value)}
-                            disabled={updatingId === inq.id}
-                            className="text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)] disabled:opacity-50"
-                          >
-                            <option value="new">新規</option>
-                            <option value="contacted">対応中</option>
-                            <option value="completed">完了</option>
-                          </select>
-                          {updatingId === inq.id && (
-                            <LoadingSpinner size="sm" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
+      {/* ステータス + 種別バッジ */}
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusConf.bg} ${statusConf.text}`}>
+          {statusConf.label}
+        </span>
+        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          {typeLabel}
+        </span>
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">ステータス:</span>
+          <select
+            value={inquiry.status}
+            onChange={(e) => onStatusChange(e.target.value)}
+            disabled={updating}
+            className="text-xs rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)] disabled:opacity-50"
+          >
+            <option value="new">新規</option>
+            <option value="contacted">対応中</option>
+            <option value="completed">完了</option>
+          </select>
+          {updating && <LoadingSpinner size="sm" />}
+        </div>
+      </div>
+
+      {/* フィールド一覧 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+        <Field label="電話番号" value={inquiry.phone} />
+        <Field label="メール" value={inquiry.email || '—'} />
+        <Field label="郵便番号" value={inquiry.postalCode ? `〒${inquiry.postalCode}` : '—'} />
+        <Field label="住所" value={inquiry.address || '—'} wide />
+      </div>
+
+      {/* 相談内容 */}
+      {inquiry.details && (
+        <div className="mb-5">
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">相談内容</p>
+          <div className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap bg-[var(--md-sys-color-surface-container)] rounded-xl p-3">
+            {inquiry.details}
+          </div>
+        </div>
+      )}
+
+      {/* 紐付け顧客 */}
+      {inquiry.userId && inquiry.user && (
+        <div className="mb-5">
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">紐付け顧客</p>
+          <button
+            onClick={() => onOpenCustomer(inquiry.userId!)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[var(--store-primary)] bg-[var(--store-primary-container)]/30 hover:bg-[var(--store-primary-container)]/60 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+            {inquiry.user.name}
+          </button>
+        </div>
+      )}
+
+      {/* 申込品目 */}
+      {inquiry.purchaseMemos.length > 0 && (
+        <div>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">申込品目（{inquiry.purchaseMemos.length}点）</p>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+            {inquiry.purchaseMemos.map(memo => {
+              let urls: string[] = []
+              try { urls = JSON.parse(memo.imageUrls) } catch { /* ignore */ }
+              return (
+                <div key={memo.id} className="bg-[var(--md-sys-color-surface-container)] rounded-lg overflow-hidden">
+                  {urls[0] ? (
+                    <a href={urls[0]} target="_blank" rel="noreferrer" className="block">
+                      <img src={urls[0]} alt={memo.title} className="w-full h-28 object-cover" />
+                    </a>
+                  ) : (
+                    <div className="h-28 flex items-center justify-center text-2xl opacity-40">📷</div>
                   )}
+                  <div className="px-2 py-1.5 text-xs font-semibold leading-tight text-[var(--md-sys-color-on-surface)]">
+                    {memo.title}
+                  </div>
                 </div>
               )
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Field({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={wide ? 'sm:col-span-2' : ''}>
+      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-0.5">{label}</p>
+      <p className="text-sm text-[var(--md-sys-color-on-surface)] break-words">{value}</p>
     </div>
   )
 }

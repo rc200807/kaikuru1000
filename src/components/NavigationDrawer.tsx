@@ -61,6 +61,15 @@ const navItems = [
     ),
   },
   {
+    href: '/admin/operators',
+    label: '運営者情報',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21V8.25c0-.69.56-1.25 1.25-1.25h7.5c.69 0 1.25.56 1.25 1.25V21M3 21h18M3 21V5.25C3 4.56 3.56 4 4.25 4h7.5c.69 0 1.25.56 1.25 1.25V21m6 0V11.25c0-.69.56-1.25 1.25-1.25h.5c.69 0 1.25.56 1.25 1.25V21m-9 0v-3.75A1.5 1.5 0 0 1 8 15.75h0a1.5 1.5 0 0 1 1.5 1.5V21M6 9h.01M6 12h.01M6 15h.01M9 9h.01M9 12h.01M9 15h.01" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/members',
     label: 'メンバー',
     icon: (

@@ -118,8 +118,42 @@ model Store {
   inquiries  Inquiry[]
   lineChannels LineChannel[]
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
+  // 運営者（複数店舗を1運営者が運営できる）
+  operatorId String?
+  operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([operatorId])
+}
+
+// 運営者情報（法人・個人事業主）
+model Operator {
+  id                       String   @id @default(cuid())
+  // 会社形態
+  entityType               String                              // "corporation" | "sole_proprietor"
+  corporatePrefix          String?                             // "株式会社" | "有限会社" | "合同会社" など。個人事業主時は null
+  prefixPosition           String?                             // "before" | "after"。個人事業主時は null
+  name                     String                              // 会社名（プレフィックス除く）or 屋号
+  address                  String?                             // 所在地
+  representativeName       String                              // 代表者氏名
+  representativeNameKana   String?                             // 代表者氏名（フリガナ）
+  corporateNumber          String?                             // 法人番号（13桁）
+  invoiceRegistered        Boolean  @default(false)
+  invoiceNumber            String?                             // 適格請求書発行事業者登録番号（T+13桁）
+  phone                    String?
+  email                    String?
+  contractFilePath         String?                             // 契約書PDF（Vercel Blob URL）
+  contractFileUploadedAt   DateTime?
+  // 古物営業
+  antiquePermitNumber      String?                             // 古物営業許可番号
+  antiqueOfficeAddress     String?                             // 古物営業所住所
+  antiqueLicenseHolder     String?                             // 古物営業法届出名義
+  publicSafetyCommission   String?                             // 管轄公安委員会
+  service                  String?  @db.Text                   // 運営サービス（自由記述）
+  stores                   Store[]
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 }
 
 // 店舗Googleカレンダー連携設定

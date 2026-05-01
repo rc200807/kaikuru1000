@@ -124,6 +124,32 @@ export async function validateIdDocumentFile(
 }
 
 /**
+ * 契約書PDFの総合検証
+ * - サイズ: 10MB 以下
+ * - 形式: PDF のみ
+ * - Magic Number でファイル内容を確認
+ */
+export async function validateContractFile(
+  file: File,
+): Promise<{ valid: boolean; ext?: string; error?: string }> {
+  const ALLOWED_TYPES = ['application/pdf']
+  const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+
+  if (file.size > MAX_SIZE) {
+    return { valid: false, error: 'ファイルサイズは10MB以下にしてください' }
+  }
+
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return { valid: false, error: 'PDF形式のみアップロードできます' }
+  }
+
+  const magicResult = await validateFileMagicNumber(file, ALLOWED_TYPES)
+  if (!magicResult.valid) return { valid: false, error: magicResult.error }
+
+  return { valid: true, ext: getSafeExtension(magicResult.detectedType ?? file.type) }
+}
+
+/**
  * 動画ファイルの総合検証（研修動画用）
  * - サイズ: 500MB 以下
  * - 形式: MP4 / WebM / MOV のみ

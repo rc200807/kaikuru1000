@@ -388,8 +388,8 @@ export default function InquiryPage() {
           </div>
         </div>
 
-        {/* Item input section for 査定申し込み / 出張買取 */}
-        {showItemSection && (
+        {/* Item input section for 査定申し込み / 出張買取（一旦非表示・運用見直し中） */}
+        {false && showItemSection && (
           <div className="bg-white/50 rounded-2xl p-4 border border-white/60 space-y-3">
             <div>
               <h3 className="text-sm font-semibold text-gray-700">

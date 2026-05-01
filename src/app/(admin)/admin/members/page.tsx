@@ -35,6 +35,12 @@ export default function AdminMembersPage() {
   // 削除確認モーダル
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
+  // パスワード再発行
+  const [resetTarget, setResetTarget] = useState<{ id: string; name: string; email: string } | null>(null)
+  const [resettingId, setResettingId] = useState<string | null>(null)
+  const [resetResult, setResetResult] = useState<{ name: string; email: string; password: string; emailSent: boolean } | null>(null)
+  const [pwCopied, setPwCopied] = useState(false)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
     if (status === 'authenticated') {
@@ -80,6 +86,33 @@ export default function AdminMembersPage() {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || 'アカウントの作成に失敗しました' })
     }
+  }
+
+  async function handleResetPassword(id: string, name: string) {
+    setResettingId(id)
+    setResetTarget(null)
+
+    const res = await fetch(`/api/admin/members/${id}/reset-password`, { method: 'POST' })
+    setResettingId(null)
+    if (res.ok) {
+      const data = await res.json()
+      setResetResult({
+        name,
+        email: data.email,
+        password: data.password,
+        emailSent: !!data.emailSent,
+      })
+    } else {
+      const d = await res.json().catch(() => ({}))
+      setMessage({ type: 'error', text: d.error || 'パスワードの再発行に失敗しました' })
+    }
+  }
+
+  function copyPassword() {
+    if (!resetResult) return
+    navigator.clipboard.writeText(resetResult.password)
+    setPwCopied(true)
+    setTimeout(() => setPwCopied(false), 2000)
   }
 
   async function handleDelete(id: string, name: string) {
@@ -190,8 +223,17 @@ export default function AdminMembersPage() {
                 <Button
                   variant="text"
                   size="sm"
+                  disabled={resettingId === member.id || deletingId === member.id}
+                  loading={resettingId === member.id}
+                  onClick={() => setResetTarget({ id: member.id, name: member.name, email: member.email })}
+                >
+                  PW再発行
+                </Button>
+                <Button
+                  variant="text"
+                  size="sm"
                   danger
-                  disabled={deletingId === member.id}
+                  disabled={deletingId === member.id || resettingId === member.id}
                   loading={deletingId === member.id}
                   onClick={() => setDeleteTarget({ id: member.id, name: member.name })}
                 >
@@ -293,6 +335,81 @@ export default function AdminMembersPage() {
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
           この操作は取り消せません。
         </p>
+      </Modal>
+
+      {/* PW再発行 確認モーダル */}
+      <Modal
+        open={!!resetTarget}
+        onClose={() => setResetTarget(null)}
+        title="パスワード再発行の確認"
+        size="sm"
+        footer={
+          <>
+            <Button variant="text" onClick={() => setResetTarget(null)}>
+              キャンセル
+            </Button>
+            <Button
+              variant="filled"
+              loading={!!resettingId}
+              onClick={() => {
+                if (resetTarget) handleResetPassword(resetTarget.id, resetTarget.name)
+              }}
+            >
+              再発行する
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+          <span className="font-semibold">{resetTarget?.name}</span> さんのパスワードを再発行しますか？
+        </p>
+        <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
+          現在のパスワードは無効になります。新しいパスワードは <span className="font-mono">{resetTarget?.email}</span> 宛にメール送信されます。
+        </p>
+      </Modal>
+
+      {/* PW再発行 結果モーダル */}
+      <Modal
+        open={!!resetResult}
+        onClose={() => { setResetResult(null); setPwCopied(false) }}
+        title="パスワードを再発行しました"
+        size="sm"
+        footer={
+          <Button variant="filled" onClick={() => { setResetResult(null); setPwCopied(false) }}>
+            閉じる
+          </Button>
+        }
+      >
+        {resetResult && (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+              <span className="font-semibold">{resetResult.name}</span> さんのパスワードを再発行しました。
+            </p>
+            <div className="bg-[var(--md-sys-color-surface-container-high)] rounded-lg p-3">
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">新しいログインパスワード</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 font-mono text-base font-semibold text-[var(--md-sys-color-on-surface)] break-all">
+                  {resetResult.password}
+                </code>
+                <Button variant="outlined" size="sm" onClick={copyPassword}>
+                  {pwCopied ? 'コピー済' : 'コピー'}
+                </Button>
+              </div>
+            </div>
+            <div className={`rounded-lg p-3 text-xs ${
+              resetResult.emailSent
+                ? 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]'
+                : 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]'
+            }`}>
+              {resetResult.emailSent
+                ? `✓ ${resetResult.email} 宛にメールを送信しました`
+                : `⚠ メール送信に失敗しました。上記パスワードを ${resetResult.email} に直接お伝えください`}
+            </div>
+            <p className="text-xs text-[var(--md-sys-color-error)]">
+              ⚠ このパスワードは一度しか表示されません。必ず控えてから閉じてください。
+            </p>
+          </div>
+        )}
       </Modal>
     </>
   )

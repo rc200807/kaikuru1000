@@ -53,6 +53,19 @@ export default function AdminInquiriesPage() {
   const [storeFilter, setStoreFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [selected, setSelected] = useState<Inquiry | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [allStores, setAllStores] = useState<{ id: string; name: string; code: string }[]>([])
+
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    fetch('/api/stores')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d.stores ?? [])
+        setAllStores(list.map((s: any) => ({ id: s.id, name: s.name, code: s.code })))
+      })
+      .catch(() => {})
+  }, [status])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
@@ -106,12 +119,34 @@ export default function AdminInquiriesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)', color: 'var(--md-sys-color-on-surface)' }}>
       {/* ヘッダー */}
-      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
-        <h1 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 700 }}>お問い合わせ管理</h1>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
-          全店舗の問い合わせフォームから受け付けた依頼（{filtered.length}件 / 全{inquiries.length}件）
-        </p>
+      <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--md-sys-color-outline-variant)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 700 }}>お問い合わせ管理</h1>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
+            全店舗の問い合わせフォームから受け付けた依頼（{filtered.length}件 / 全{inquiries.length}件）
+          </p>
+        </div>
+        <button
+          onClick={() => setImportOpen(true)}
+          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+        >
+          CSVインポート
+        </button>
       </div>
+
+      {/* CSVインポートモーダル */}
+      {importOpen && (
+        <ImportModal
+          stores={allStores}
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            // 一覧を再取得
+            fetch('/api/admin/inquiries')
+              .then(r => r.ok ? r.json() : [])
+              .then((d: Inquiry[]) => setInquiries(d))
+          }}
+        />
+      )}
 
       {/* 分割レイアウト */}
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) 1fr', overflow: 'hidden' }}>
@@ -327,5 +362,184 @@ function StatusBadge({ status }: { status: string }) {
     <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: c.bg, color: c.fg }}>
       {STATUS_LABEL[status] || status}
     </span>
+  )
+}
+
+/* ─── CSVインポートモーダル ─── */
+type ImportResult = { created: number; errors: { row: number; message: string }[] }
+
+function ImportModal({
+  stores,
+  onClose,
+  onImported,
+}: {
+  stores: { id: string; name: string; code: string }[]
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [mode, setMode] = useState<'all' | 'store'>('all')
+  const [storeId, setStoreId] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<ImportResult | null>(null)
+  const [error, setError] = useState('')
+
+  async function handleImport(file: File) {
+    if (mode === 'store' && !storeId) {
+      setError('店舗を選択してください')
+      return
+    }
+    setImporting(true)
+    setError('')
+    setResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (mode === 'store') fd.append('storeId', storeId)
+      const res = await fetch('/api/admin/inquiries/import', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok && !data.created) {
+        setError(data.error ?? 'インポートに失敗しました')
+        if (Array.isArray(data.errors)) setResult({ created: 0, errors: data.errors })
+        return
+      }
+      setResult({ created: data.created ?? 0, errors: data.errors ?? [] })
+      if (data.created > 0) onImported()
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const sampleHref = mode === 'store'
+    ? '/api/admin/inquiries/import?scope=store'
+    : '/api/admin/inquiries/import'
+
+  return (
+    <div
+      onClick={() => !importing && onClose()}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: 'var(--md-sys-color-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 600, maxHeight: '85vh', overflowY: 'auto' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>お問い合わせをCSVインポート</h2>
+          <button onClick={() => !importing && onClose()} style={{ background: 'transparent', border: 'none', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* モード切替 */}
+        <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--md-sys-color-surface-container-high)', borderRadius: 10, marginBottom: 16 }}>
+          {([
+            { v: 'all', label: '全店舗まとめてインポート' },
+            { v: 'store', label: '店舗を指定してインポート' },
+          ] as const).map(opt => {
+            const active = mode === opt.v
+            return (
+              <button
+                key={opt.v}
+                onClick={() => { setMode(opt.v); setResult(null); setError('') }}
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  background: active ? 'var(--md-sys-color-surface)' : 'transparent',
+                  color: active ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-on-surface-variant)',
+                  boxShadow: active ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+          {mode === 'all'
+            ? 'CSVに記載された 店舗コード をもとに、各行を該当店舗のお問い合わせとして登録します。'
+            : '指定した店舗にすべての行を紐付けて登録します。CSVに店舗コード列は不要です。'}
+        </p>
+
+        {mode === 'store' && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>登録先の店舗</label>
+            <select
+              value={storeId}
+              onChange={e => setStoreId(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+            >
+              <option value="">— 店舗を選択 —</option>
+              {stores.map(s => <option key={s.id} value={s.id}>[{s.code}] {s.name}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 12 }}>
+          <a
+            href={sampleHref}
+            download
+            style={{ display: 'inline-block', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', textDecoration: 'none', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+          >
+            ⬇ サンプルCSVをダウンロード
+          </a>
+        </div>
+
+        <div style={{ marginBottom: 12, padding: 12, background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.6 }}>
+          <strong style={{ color: 'var(--md-sys-color-on-surface)' }}>必須列:</strong><br />
+          {mode === 'all' && '・店舗コード（既存店舗のもの）'}{mode === 'all' && <br />}
+          ・氏名 / フリガナ / 電話 / 申込内容<br />
+          <strong style={{ color: 'var(--md-sys-color-on-surface)' }}>任意列:</strong> 受付日時 / メール / 郵便番号 / 住所 / 相談内容 / ステータス（新規/対応中/完了）
+        </div>
+
+        {!result && (
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', borderRadius: 12, border: '2px dashed var(--md-sys-color-outline-variant)', cursor: importing || (mode === 'store' && !storeId) ? 'not-allowed' : 'pointer', fontSize: 13, opacity: importing || (mode === 'store' && !storeId) ? 0.5 : 1 }}>
+            {importing ? 'インポート中…' : '📎 CSVファイルを選択'}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              disabled={importing || (mode === 'store' && !storeId)}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = '' }}
+            />
+          </label>
+        )}
+
+        {error && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', color: '#f87171', fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        {result && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ padding: '12px 14px', borderRadius: 8, background: result.created > 0 ? 'rgba(74,222,128,0.15)' : 'rgba(251,191,36,0.15)', color: result.created > 0 ? '#4ade80' : '#fbbf24', fontSize: 13, marginBottom: 12 }}>
+              ✓ {result.created} 件のお問い合わせを登録しました
+              {result.errors.length > 0 && `（${result.errors.length} 件はエラーでスキップ）`}
+            </div>
+            {result.errors.length > 0 && (
+              <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>エラー詳細:</div>
+                {result.errors.map((e, i) => (
+                  <div key={i} style={{ fontSize: 12, color: '#f87171', marginBottom: 4 }}>
+                    行 {e.row}: {e.message}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button
+                onClick={() => { setResult(null); setError('') }}
+                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+              >
+                続けてインポート
+              </button>
+              <button
+                onClick={onClose}
+                style={{ padding: '8px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 700 }}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

@@ -162,36 +162,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- 店舗への通知メール送信（メール登録があれば、非同期・失敗無視） ---
-    if (!store.email) {
-      console.warn(`[inquiry] 店舗 "${store.name}" (${store.code}) にメールアドレスが未登録のため通知メールをスキップ`)
-    } else {
-      const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-      console.log(`[inquiry] 店舗通知メール送信を試行: to=${store.email} store=${store.name}`)
-      sendStoreInquiryNotification({
-        storeEmail: store.email,
-        storeName: store.name,
-        customerName: name,
-        customerFurigana: furigana,
-        customerPhone: normalizedPhone,
-        customerEmail: email || null,
-        customerPostalCode: postalCode || null,
-        customerAddress: address,
-        inquiryType,
-        details: details || null,
-        itemCount,
-        inquiryAdminUrl: `${baseUrl}/store/inquiries`,
-        receivedAt: inquiry.createdAt,
-      }).then(sent => {
-        if (sent) {
-          console.log(`[inquiry] 店舗通知メール送信成功: ${store.email}`)
-        } else {
-          console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
-        }
-      }).catch(err => {
-        console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err)
-      })
-    }
+    // --- 店舗への通知メール送信（非同期・失敗無視） ---
+    // 店舗メール未登録時は本部のフォールバック宛先に送信
+    const FALLBACK_NOTIFICATION_EMAIL = 'contact@kaikuru4.com'
+    const notifyTo = store.email || FALLBACK_NOTIFICATION_EMAIL
+    const isFallback = !store.email
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+    console.log(`[inquiry] 店舗通知メール送信を試行: to=${notifyTo} store=${store.name}${isFallback ? ' (fallback)' : ''}`)
+    sendStoreInquiryNotification({
+      storeEmail: notifyTo,
+      storeName: store.name,
+      isFallbackRecipient: isFallback,
+      customerName: name,
+      customerFurigana: furigana,
+      customerPhone: normalizedPhone,
+      customerEmail: email || null,
+      customerPostalCode: postalCode || null,
+      customerAddress: address,
+      inquiryType,
+      details: details || null,
+      itemCount,
+      inquiryAdminUrl: `${baseUrl}/store/inquiries`,
+      receivedAt: inquiry.createdAt,
+    }).then(sent => {
+      if (sent) {
+        console.log(`[inquiry] 店舗通知メール送信成功: ${notifyTo}${isFallback ? ' (fallback)' : ''}`)
+      } else {
+        console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
+      }
+    }).catch(err => {
+      console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err)
+    })
 
     return NextResponse.json({
       success: true,

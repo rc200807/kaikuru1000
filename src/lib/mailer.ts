@@ -840,6 +840,7 @@ export async function sendInquiryAutoReply(params: {
 export async function sendStoreInquiryNotification(params: {
   storeEmail: string
   storeName: string
+  isFallbackRecipient?: boolean  // 店舗にメール未登録のため本部宛に送付された場合 true
   customerName: string
   customerFurigana: string
   customerPhone: string
@@ -898,8 +899,18 @@ export async function sendStoreInquiryNotification(params: {
           <!-- 本文 -->
           <tr>
             <td style="background-color:#ffffff;padding:32px;">
+              ${params.isFallbackRecipient ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border-radius:10px;border:1px solid #fca5a5;overflow:hidden;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p style="margin:0;color:#991b1b;font-size:13px;font-weight:600;line-height:1.6;">⚠ 本部フォールバック宛</p>
+                    <p style="margin:4px 0 0;color:#7f1d1d;font-size:12px;line-height:1.6;">店舗「${escape(params.storeName)}」にメールアドレスが登録されていないため、本部宛に転送されました。店舗側で対応する場合は本部から連絡してください。</p>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
               <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
-                ${escape(params.storeName)} 様<br><br>
+                ${params.isFallbackRecipient ? '買いクル本部 様' : `${escape(params.storeName)} 様`}<br><br>
                 店舗専用問い合わせフォームから新しいお問い合わせを受信しました。<br>
                 内容を確認の上、お客様への対応をお願いいたします。
               </p>
@@ -981,13 +992,16 @@ export async function sendStoreInquiryNotification(params: {
   await transporter.sendMail({
     from,
     to: params.storeEmail,
-    subject: `【買いクル】新しいお問い合わせ - ${params.customerName} 様（${typeLabel}）`,
+    subject: `${params.isFallbackRecipient ? '【買いクル/本部宛】' : '【買いクル】'}新しいお問い合わせ - ${params.customerName} 様（${typeLabel}）${params.isFallbackRecipient ? ` ※ 店舗「${params.storeName}」未登録` : ''}`,
     html,
     text: [
-      `${params.storeName} 様`,
+      params.isFallbackRecipient
+        ? `買いクル本部 様（※ 店舗「${params.storeName}」にメールアドレスが未登録のため転送）`
+        : `${params.storeName} 様`,
       '',
       '店舗専用問い合わせフォームから新しいお問い合わせを受信しました。',
       `受信日時: ${dateStr}`,
+      `店舗: ${params.storeName}`,
       '',
       `■ 申込内容: ${typeLabel}`,
       '',

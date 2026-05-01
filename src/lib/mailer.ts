@@ -657,51 +657,8 @@ export async function sendInquiryAutoReply(params: {
   }
   const typeLabel = inquiryTypeLabels[params.inquiryType] || params.inquiryType
 
-  const actionSection = params.isExisting
-    ? `
-              <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">
-                すでにマイページがございます。<br>
-                ログインして買取トライやお取引状況をご確認ください。
-              </p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <tr>
-                  <td align="center">
-                    <a href="${params.loginUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
-                      マイページにログイン
-                    </a>
-                  </td>
-                </tr>
-              </table>`
-    : `
-              <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.7;">
-                マイページが発行されました。<br>
-                下記のボタンからパスワードを設定してご利用ください。<br>
-                <strong>買取トライでAI簡易査定もできます。</strong>
-              </p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <tr>
-                  <td align="center">
-                    <a href="${params.setupUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
-                      パスワードを設定する
-                    </a>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 24px;color:#6b7280;font-size:13px;line-height:1.7;">
-                ボタンが機能しない場合は、以下のURLをブラウザに貼り付けてください：
-              </p>
-              <p style="margin:0 0 24px;word-break:break-all;">
-                <a href="${params.setupUrl}" style="color:#991b1b;font-size:12px;">${params.setupUrl}</a>
-              </p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border-radius:10px;border:1px solid #fcd34d;overflow:hidden;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="margin:0;color:#92400e;font-size:12px;line-height:1.7;">
-                      このリンクは<strong>7日間</strong>有効です。
-                    </p>
-                  </td>
-                </tr>
-              </table>`
+  // マイページ誘導は一旦削除。お問い合わせ受付の旨のみを通知する。
+  const actionSection = ''
 
   const html = `
 <!DOCTYPE html>
@@ -736,20 +693,6 @@ export async function sendInquiryAutoReply(params: {
               </p>
 
               ${actionSection}
-              ${params.itemCount && params.itemCount > 0 ? `
-              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ecfdf5;border-radius:10px;border:1px solid #6ee7b7;overflow:hidden;margin-bottom:24px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="margin:0;color:#065f46;font-size:14px;line-height:1.7;font-weight:600;">
-                      ${params.itemCount}件の商品が買取トライに登録されました
-                    </p>
-                    <p style="margin:4px 0 0;color:#047857;font-size:12px;line-height:1.7;">
-                      マイページからAI簡易査定を実行できます
-                    </p>
-                  </td>
-                </tr>
-              </table>` : ''}
-
               <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
                 ご不明な点がございましたら、${params.storeName}までお気軽にお問い合わせください。
               </p>
@@ -773,19 +716,6 @@ export async function sendInquiryAutoReply(params: {
 </html>
 `
 
-  const actionText = params.isExisting
-    ? [
-        'すでにマイページがございます。',
-        `ログインURL: ${params.loginUrl}`,
-      ]
-    : [
-        'マイページが発行されました。',
-        `パスワード設定URL: ${params.setupUrl}`,
-        '（7日間有効）',
-        '',
-        '買取トライでAI簡易査定もできます。',
-      ]
-
   await transporter.sendMail({
     from,
     to: params.to,
@@ -796,18 +726,9 @@ export async function sendInquiryAutoReply(params: {
       '',
       `${params.storeName}へお問い合わせいただきありがとうございます。`,
       `「${typeLabel}」のご依頼を承りました。`,
-      '担当者より改めてご連絡いたします。',
+      '担当者より改めてご連絡いたしますので、しばらくお待ちください。',
       '',
-      ...actionText,
-      '',
-      ...(params.itemCount && params.itemCount > 0
-        ? [
-            `${params.itemCount}件の商品が買取トライに登録されました。`,
-            'マイページからAI簡易査定を実行できます。',
-            '',
-          ]
-        : []),
-      `ご不明な点は${params.storeName}までお問い合わせください。`,
+      `ご不明な点がございましたら、${params.storeName}までお気軽にお問い合わせください。`,
     ].join('\n'),
   })
   return true

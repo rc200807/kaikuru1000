@@ -5,7 +5,9 @@ export function generateSecurePassword(): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
   const lower = 'abcdefghjkmnpqrstuvwxyz'
   const digits = '23456789'
-  const symbols = '!@#$%&*'
+  // HTML/URL/シェルでの解釈ミスを避けるため、安全な記号だけに絞る
+  // （&, <, >, ", ', /, \, =, ?, # などは除外）
+  const symbols = '!@#$%*+-_'
   const all = upper + lower + digits + symbols
 
   // 各種1文字ずつ保証

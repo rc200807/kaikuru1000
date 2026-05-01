@@ -2,6 +2,19 @@ import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encrypt'
 
+/**
+ * HTMLエスケープ（メール本文に動的値を差し込む際に使用）
+ * 特にパスワードに & が含まれるとエンティティ解釈で値がずれてしまうため必須
+ */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 /** DBからメール設定を読み込んでトランスポーターを生成する */
 async function createTransporter() {
   const config = await prisma.emailConfig.findFirst()
@@ -210,7 +223,7 @@ export async function sendStorePasswordResetNotification(params: {
                       <tr>
                         <td style="padding:6px 0;color:#6b7280;font-size:12px;vertical-align:top;">新しいパスワード</td>
                         <td style="padding:6px 0;vertical-align:top;">
-                          <code style="background-color:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:700;color:#111827;letter-spacing:0.05em;">${params.newPassword}</code>
+                          <code style="background-color:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:700;color:#111827;letter-spacing:0.05em;">${escapeHtml(params.newPassword)}</code>
                         </td>
                       </tr>
                     </table>
@@ -563,7 +576,7 @@ export async function sendWelcomeWithPasswordEmail(params: {
                       <tr>
                         <td style="padding:6px 0;color:#6b7280;font-size:12px;vertical-align:top;">パスワード</td>
                         <td style="padding:6px 0;vertical-align:top;">
-                          <code style="background-color:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:700;color:#111827;letter-spacing:0.05em;">${params.password}</code>
+                          <code style="background-color:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:700;color:#111827;letter-spacing:0.05em;">${escapeHtml(params.password)}</code>
                         </td>
                       </tr>
                     </table>

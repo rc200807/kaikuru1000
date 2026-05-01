@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
             address,
             email,
             password: '', // パスワード未設定
-            customerType: 'visit',
+            customerType: 'regular',
+            customerTypes: JSON.stringify(['regular']),
             storeId: store.id,
           },
         })

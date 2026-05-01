@@ -640,9 +640,22 @@ export async function sendInquiryAutoReply(params: {
   storeName: string
   inquiryType: string
   isExisting: boolean
-  setupUrl?: string  // 新規ユーザー用
-  loginUrl?: string  // 既存ユーザー用
-  itemCount?: number // 買取トライ登録件数
+  // 確認用に表示するご入力内容
+  customerFurigana?: string
+  customerPhone?: string
+  customerEmail?: string | null
+  customerPostalCode?: string | null
+  customerAddress?: string
+  customerDetails?: string | null
+  // 店舗連絡先
+  storePhone?: string | null
+  storeEmail?: string | null
+  storeAddress?: string | null
+  storePostalCode?: string | null
+  // 互換維持（現在は未使用）
+  setupUrl?: string
+  loginUrl?: string
+  itemCount?: number
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
@@ -657,8 +670,55 @@ export async function sendInquiryAutoReply(params: {
   }
   const typeLabel = inquiryTypeLabels[params.inquiryType] || params.inquiryType
 
-  // マイページ誘導は一旦削除。お問い合わせ受付の旨のみを通知する。
-  const actionSection = ''
+  // ご入力内容セクション（HTML）
+  const inputRows: string[] = []
+  const row = (label: string, value: string) => `
+                <tr>
+                  <td style="padding:8px 16px;color:#6b7280;font-size:12px;vertical-align:top;width:36%;border-bottom:1px solid #e5e7eb;">${escapeHtml(label)}</td>
+                  <td style="padding:8px 16px;color:#111827;font-size:13px;vertical-align:top;border-bottom:1px solid #e5e7eb;">${escapeHtml(value).replace(/\n/g, '<br>')}</td>
+                </tr>`
+  inputRows.push(row('お名前', `${params.name}${params.customerFurigana ? `（${params.customerFurigana}）` : ''}`))
+  inputRows.push(row('申込内容', typeLabel))
+  if (params.customerPhone) inputRows.push(row('電話番号', params.customerPhone))
+  if (params.customerEmail) inputRows.push(row('メールアドレス', params.customerEmail))
+  if (params.customerPostalCode || params.customerAddress) {
+    const addr = `${params.customerPostalCode ? `〒${params.customerPostalCode}\n` : ''}${params.customerAddress ?? ''}`
+    inputRows.push(row('ご住所', addr))
+  }
+  if (params.customerDetails) inputRows.push(row('相談内容', params.customerDetails))
+
+  const inputSection = `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1f2937;padding:10px 16px;">
+                    <p style="margin:0;color:#ffffff;font-size:12px;font-weight:600;">ご入力内容（ご確認）</p>
+                  </td>
+                </tr>
+                ${inputRows.join('')}
+              </table>
+              <style>
+                table tr:last-child td { border-bottom: 0 !important; }
+              </style>
+  `
+
+  // 店舗連絡先セクション（HTML）
+  const contactRows: string[] = []
+  if (params.storePhone) contactRows.push(row('電話', params.storePhone))
+  if (params.storeEmail) contactRows.push(row('メール', params.storeEmail))
+  if (params.storePostalCode || params.storeAddress) {
+    const addr = `${params.storePostalCode ? `〒${params.storePostalCode}\n` : ''}${params.storeAddress ?? ''}`
+    contactRows.push(row('住所', addr))
+  }
+  const contactSection = contactRows.length > 0 ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1f2937;padding:10px 16px;">
+                    <p style="margin:0;color:#ffffff;font-size:12px;font-weight:600;">${escapeHtml(params.storeName)} 連絡先</p>
+                  </td>
+                </tr>
+                ${contactRows.join('')}
+              </table>
+  ` : ''
 
   const html = `
 <!DOCTYPE html>
@@ -677,7 +737,7 @@ export async function sendInquiryAutoReply(params: {
           <!-- ヘッダー -->
           <tr>
             <td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
-              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル ${params.storeName}</p>
+              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル ${escapeHtml(params.storeName)}</p>
               <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">お問い合わせありがとうございます</h1>
             </td>
           </tr>
@@ -686,16 +746,29 @@ export async function sendInquiryAutoReply(params: {
           <tr>
             <td style="background-color:#ffffff;padding:32px;">
               <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
-                ${params.name} 様<br><br>
-                このたびは ${params.storeName} へお問い合わせいただき、誠にありがとうございます。<br>
-                <strong>「${typeLabel}」</strong>のご依頼を承りました。<br>
+                ${escapeHtml(params.name)} 様<br><br>
+                このたびは ${escapeHtml(params.storeName)} へお問い合わせいただき、誠にありがとうございます。<br>
+                <strong>「${escapeHtml(typeLabel)}」</strong>のお問い合わせを承りました。<br>
                 担当者より改めてご連絡いたしますので、しばらくお待ちください。
               </p>
 
-              ${actionSection}
-              <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
-                ご不明な点がございましたら、${params.storeName}までお気軽にお問い合わせください。
+              ${inputSection}
+              ${contactSection}
+
+              <p style="margin:0 0 16px;color:#6b7280;font-size:13px;line-height:1.7;">
+                ご不明な点がございましたら、${escapeHtml(params.storeName)}までお気軽にお問い合わせください。
               </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border-radius:10px;border:1px solid #fcd34d;overflow:hidden;margin-top:8px;">
+                <tr>
+                  <td style="padding:12px 16px;">
+                    <p style="margin:0;color:#92400e;font-size:12px;line-height:1.6;">
+                      ⚠ このメールは送信専用アドレスから自動送信されています。<br>
+                      このメールに直接ご返信いただいても受付できませんのでご了承ください。
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
@@ -716,6 +789,28 @@ export async function sendInquiryAutoReply(params: {
 </html>
 `
 
+  // テキスト版
+  const inputLines: string[] = ['■ ご入力内容（ご確認）',
+    `お名前: ${params.name}${params.customerFurigana ? `（${params.customerFurigana}）` : ''}`,
+    `申込内容: ${typeLabel}`,
+  ]
+  if (params.customerPhone) inputLines.push(`電話番号: ${params.customerPhone}`)
+  if (params.customerEmail) inputLines.push(`メールアドレス: ${params.customerEmail}`)
+  if (params.customerPostalCode || params.customerAddress) {
+    inputLines.push(`ご住所: ${params.customerPostalCode ? `〒${params.customerPostalCode} ` : ''}${params.customerAddress ?? ''}`)
+  }
+  if (params.customerDetails) inputLines.push(`相談内容: ${params.customerDetails}`)
+
+  const contactLines: string[] = []
+  if (params.storePhone || params.storeEmail || params.storeAddress) {
+    contactLines.push('', `■ ${params.storeName} 連絡先`)
+    if (params.storePhone) contactLines.push(`電話: ${params.storePhone}`)
+    if (params.storeEmail) contactLines.push(`メール: ${params.storeEmail}`)
+    if (params.storePostalCode || params.storeAddress) {
+      contactLines.push(`住所: ${params.storePostalCode ? `〒${params.storePostalCode} ` : ''}${params.storeAddress ?? ''}`)
+    }
+  }
+
   await transporter.sendMail({
     from,
     to: params.to,
@@ -724,11 +819,16 @@ export async function sendInquiryAutoReply(params: {
     text: [
       `${params.name} 様`,
       '',
-      `${params.storeName}へお問い合わせいただきありがとうございます。`,
-      `「${typeLabel}」のご依頼を承りました。`,
+      `このたびは ${params.storeName} へお問い合わせいただき、誠にありがとうございます。`,
+      `「${typeLabel}」のお問い合わせを承りました。`,
       '担当者より改めてご連絡いたしますので、しばらくお待ちください。',
       '',
+      ...inputLines,
+      ...contactLines,
+      '',
       `ご不明な点がございましたら、${params.storeName}までお気軽にお問い合わせください。`,
+      '',
+      '※ このメールは送信専用アドレスから自動送信されています。直接ご返信いただいても受付できませんのでご了承ください。',
     ].join('\n'),
   })
   return true

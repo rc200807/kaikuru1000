@@ -88,8 +88,17 @@ export async function POST(request: NextRequest) {
           storeName: store.name,
           inquiryType,
           isExisting: false,
+          customerFurigana: furigana,
+          customerPhone: normalizedPhone,
+          customerEmail: email,
+          customerPostalCode: postalCode || null,
+          customerAddress: address,
+          customerDetails: details || null,
+          storePhone: store.phone ?? null,
+          storeEmail: store.email ?? null,
+          storeAddress: store.address ?? null,
+          storePostalCode: store.postalCode ?? null,
           setupUrl,
-          itemCount: Array.isArray(items) ? items.filter((i: any) => i.title).length : 0,
         }).catch(() => {}) // メール送信失敗は握りつぶす
       }
 
@@ -104,8 +113,17 @@ export async function POST(request: NextRequest) {
           storeName: store.name,
           inquiryType,
           isExisting: true,
+          customerFurigana: furigana,
+          customerPhone: normalizedPhone,
+          customerEmail: email,
+          customerPostalCode: postalCode || null,
+          customerAddress: address,
+          customerDetails: details || null,
+          storePhone: store.phone ?? null,
+          storeEmail: store.email ?? null,
+          storeAddress: store.address ?? null,
+          storePostalCode: store.postalCode ?? null,
           loginUrl,
-          itemCount: Array.isArray(items) ? items.filter((i: any) => i.title).length : 0,
         }).catch(() => {})
       }
     }

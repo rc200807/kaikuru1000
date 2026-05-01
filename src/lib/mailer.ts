@@ -800,6 +800,177 @@ export async function sendInquiryAutoReply(params: {
   return true
 }
 
+/**
+ * 店舗専用問い合わせフォームから問い合わせが入った時、店舗に通知メールを送信する
+ */
+export async function sendStoreInquiryNotification(params: {
+  storeEmail: string
+  storeName: string
+  customerName: string
+  customerFurigana: string
+  customerPhone: string
+  customerEmail: string | null
+  customerPostalCode: string | null
+  customerAddress: string
+  inquiryType: string
+  details: string | null
+  itemCount: number
+  inquiryAdminUrl: string  // /store/inquiries への遷移URL
+  receivedAt: Date
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+
+  const { transporter, from } = result
+
+  const inquiryTypeLabels: Record<string, string> = {
+    assessment: '査定のお申込み',
+    purchase: '買取のお申込み',
+    estate: '遺品整理のご相談',
+    other: 'その他のお問い合わせ',
+  }
+  const typeLabel = inquiryTypeLabels[params.inquiryType] || params.inquiryType
+
+  const dateStr = params.receivedAt.toLocaleString('ja-JP', {
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+
+  const escape = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新しいお問い合わせ</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+
+          <!-- ヘッダー -->
+          <tr>
+            <td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+              <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル ${escape(params.storeName)}</p>
+              <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">新しいお問い合わせが届きました</h1>
+            </td>
+          </tr>
+
+          <!-- 本文 -->
+          <tr>
+            <td style="background-color:#ffffff;padding:32px;">
+              <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+                ${escape(params.storeName)} 様<br><br>
+                店舗専用問い合わせフォームから新しいお問い合わせを受信しました。<br>
+                内容を確認の上、お客様への対応をお願いいたします。
+              </p>
+
+              <!-- 種別 -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border-radius:10px;border:1px solid #fcd34d;overflow:hidden;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:14px 20px;">
+                    <p style="margin:0;color:#92400e;font-size:11px;font-weight:600;letter-spacing:0.05em;">申込内容</p>
+                    <p style="margin:4px 0 0;color:#78350f;font-size:15px;font-weight:600;">${escape(typeLabel)}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- お客様情報カード -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1f2937;padding:12px 20px;">
+                    <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">お客様情報</p>
+                  </td>
+                </tr>
+                <tr><td style="padding:12px 20px;border-bottom:1px solid #e5e7eb;"><p style="margin:0;color:#6b7280;font-size:11px;">お名前</p><p style="margin:2px 0 0;color:#111827;font-size:14px;font-weight:600;">${escape(params.customerName)}（${escape(params.customerFurigana)}）</p></td></tr>
+                <tr><td style="padding:12px 20px;border-bottom:1px solid #e5e7eb;"><p style="margin:0;color:#6b7280;font-size:11px;">電話番号</p><p style="margin:2px 0 0;color:#111827;font-size:14px;"><a href="tel:${escape(params.customerPhone)}" style="color:#991b1b;text-decoration:none;">${escape(params.customerPhone)}</a></p></td></tr>
+                ${params.customerEmail ? `<tr><td style="padding:12px 20px;border-bottom:1px solid #e5e7eb;"><p style="margin:0;color:#6b7280;font-size:11px;">メール</p><p style="margin:2px 0 0;color:#111827;font-size:14px;"><a href="mailto:${escape(params.customerEmail)}" style="color:#991b1b;text-decoration:none;">${escape(params.customerEmail)}</a></p></td></tr>` : ''}
+                <tr><td style="padding:12px 20px;${params.itemCount > 0 ? 'border-bottom:1px solid #e5e7eb;' : ''}"><p style="margin:0;color:#6b7280;font-size:11px;">住所</p><p style="margin:2px 0 0;color:#111827;font-size:14px;">${params.customerPostalCode ? `〒${escape(params.customerPostalCode)}<br>` : ''}${escape(params.customerAddress)}</p></td></tr>
+                ${params.itemCount > 0 ? `<tr><td style="padding:12px 20px;"><p style="margin:0;color:#6b7280;font-size:11px;">買取品目</p><p style="margin:2px 0 0;color:#111827;font-size:14px;font-weight:600;">${params.itemCount} 点</p></td></tr>` : ''}
+              </table>
+
+              ${params.details ? `
+              <!-- 相談内容 -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:24px;">
+                <tr>
+                  <td style="background-color:#1f2937;padding:12px 20px;">
+                    <p style="margin:0;color:#ffffff;font-size:13px;font-weight:600;">相談内容</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 20px;">
+                    <p style="margin:0;color:#374151;font-size:13px;line-height:1.7;white-space:pre-wrap;">${escape(params.details)}</p>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
+
+              <!-- アクションボタン -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                <tr>
+                  <td align="center">
+                    <a href="${params.inquiryAdminUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
+                      問い合わせ詳細を確認
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.7;text-align:center;">
+                受信日時: ${dateStr}
+              </p>
+            </td>
+          </tr>
+
+          <!-- フッター -->
+          <tr>
+            <td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;">
+              <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">
+                このメールは買いクル管理システムから自動送信されています
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`
+
+  await transporter.sendMail({
+    from,
+    to: params.storeEmail,
+    subject: `【買いクル】新しいお問い合わせ - ${params.customerName} 様（${typeLabel}）`,
+    html,
+    text: [
+      `${params.storeName} 様`,
+      '',
+      '店舗専用問い合わせフォームから新しいお問い合わせを受信しました。',
+      `受信日時: ${dateStr}`,
+      '',
+      `■ 申込内容: ${typeLabel}`,
+      '',
+      '■ お客様情報',
+      `お名前: ${params.customerName}（${params.customerFurigana}）`,
+      `電話: ${params.customerPhone}`,
+      ...(params.customerEmail ? [`メール: ${params.customerEmail}`] : []),
+      `住所: ${params.customerPostalCode ? `〒${params.customerPostalCode} ` : ''}${params.customerAddress}`,
+      ...(params.itemCount > 0 ? [`買取品目: ${params.itemCount}点`] : []),
+      '',
+      ...(params.details ? ['■ 相談内容', params.details, ''] : []),
+      `詳細確認: ${params.inquiryAdminUrl}`,
+    ].join('\n'),
+  })
+  return true
+}
+
 /** テストメールを送信する */
 export async function sendTestEmail(toEmail: string) {
   const result = await createTransporter()

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { sendInquiryAutoReply } from '@/lib/mailer'
+import { sendInquiryAutoReply, sendStoreInquiryNotification } from '@/lib/mailer'
 
 function getBaseUrl() {
   if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
@@ -142,6 +142,28 @@ export async function POST(request: NextRequest) {
         })
         itemCount++
       }
+    }
+
+    // --- 店舗への通知メール送信（メール登録があれば、非同期・失敗無視） ---
+    if (store.email) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+      sendStoreInquiryNotification({
+        storeEmail: store.email,
+        storeName: store.name,
+        customerName: name,
+        customerFurigana: furigana,
+        customerPhone: normalizedPhone,
+        customerEmail: email || null,
+        customerPostalCode: postalCode || null,
+        customerAddress: address,
+        inquiryType,
+        details: details || null,
+        itemCount,
+        inquiryAdminUrl: `${baseUrl}/store/inquiries`,
+        receivedAt: inquiry.createdAt,
+      }).catch(err => {
+        console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err)
+      })
     }
 
     return NextResponse.json({

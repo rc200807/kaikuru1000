@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { ENTITY_TYPE_LABEL, formalName, type EntityType } from '@/lib/operator-utils'
 
+type ImportResult = {
+  created: number
+  errors: { row: number; message: string }[]
+}
+
 type Operator = {
   id: string
   entityType: string
@@ -27,6 +32,37 @@ export default function OperatorListPage() {
   const [operators, setOperators] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importError, setImportError] = useState('')
+
+  function refresh() {
+    fetch('/api/admin/operators')
+      .then(r => r.ok ? r.json() : [])
+      .then(setOperators)
+  }
+
+  async function handleImport(file: File) {
+    setImporting(true)
+    setImportError('')
+    setImportResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/operators/import', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok && !data.created) {
+        setImportError(data.error ?? 'インポートに失敗しました')
+        if (Array.isArray(data.errors)) setImportResult({ created: 0, errors: data.errors })
+        return
+      }
+      setImportResult({ created: data.created ?? 0, errors: data.errors ?? [] })
+      if (data.created > 0) refresh()
+    } finally {
+      setImporting(false)
+    }
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
@@ -62,12 +98,20 @@ export default function OperatorListPage() {
             会社情報・古物営業許可・契約書を一元管理（{filtered.length}件 / 全{operators.length}件）
           </p>
         </div>
-        <button
-          onClick={() => router.push('/admin/operators/new')}
-          style={{ padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600 }}
-        >
-          + 新規追加
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => { setImportResult(null); setImportError(''); setImportOpen(true) }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600 }}
+          >
+            CSVインポート
+          </button>
+          <button
+            onClick={() => router.push('/admin/operators/new')}
+            style={{ padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600 }}
+          >
+            + 新規追加
+          </button>
+        </div>
       </div>
 
       {/* 検索 */}
@@ -89,6 +133,98 @@ export default function OperatorListPage() {
           />
         </div>
       </div>
+
+      {/* CSVインポートモーダル */}
+      {importOpen && (
+        <div
+          onClick={() => !importing && setImportOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--md-sys-color-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>運営者情報をCSVインポート</h2>
+              <button onClick={() => !importing && setImportOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              CSVファイルから運営者情報を一括登録できます。サンプルCSVをダウンロードして列構成をご確認ください。
+            </p>
+
+            <div style={{ marginBottom: 16 }}>
+              <a
+                href="/api/admin/operators/import"
+                download="operators-import-template.csv"
+                style={{ display: 'inline-block', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', textDecoration: 'none', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+              >
+                ⬇ サンプルCSVをダウンロード
+              </a>
+            </div>
+
+            <div style={{ marginBottom: 16, padding: 12, background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--md-sys-color-on-surface)' }}>列の指定:</strong><br />
+              ・<strong>会社形態</strong>: 「法人」または「個人事業主」<br />
+              ・<strong>形態位置</strong>: 「前」または「後」（法人時のみ）<br />
+              ・<strong>インボイス登録</strong>: 「はい」「いいえ」（または true/false）<br />
+              ・必須列: 会社形態 / 会社名 / 代表者氏名<br />
+              ・契約書PDFと運営店舗紐付けはインポート対象外です（個別画面から設定）
+            </div>
+
+            {!importResult && (
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', borderRadius: 12, border: '2px dashed var(--md-sys-color-outline-variant)', cursor: importing ? 'wait' : 'pointer', fontSize: 13, opacity: importing ? 0.6 : 1 }}>
+                {importing ? 'インポート中…' : '📎 CSVファイルを選択'}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  hidden
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImport(f) }}
+                />
+              </label>
+            )}
+
+            {importError && (
+              <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', color: '#f87171', fontSize: 13 }}>
+                {importError}
+              </div>
+            )}
+
+            {importResult && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ padding: '12px 14px', borderRadius: 8, background: importResult.created > 0 ? 'rgba(74,222,128,0.15)' : 'rgba(251,191,36,0.15)', color: importResult.created > 0 ? '#4ade80' : '#fbbf24', fontSize: 13, marginBottom: 12 }}>
+                  ✓ {importResult.created} 件の運営者を登録しました
+                  {importResult.errors.length > 0 && `（${importResult.errors.length} 件はエラーでスキップ）`}
+                </div>
+                {importResult.errors.length > 0 && (
+                  <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>エラー詳細:</div>
+                    {importResult.errors.map((e, i) => (
+                      <div key={i} style={{ fontSize: 12, color: '#f87171', marginBottom: 4 }}>
+                        行 {e.row}: {e.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                  <button
+                    onClick={() => { setImportResult(null); setImportError('') }}
+                    style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
+                  >
+                    続けてインポート
+                  </button>
+                  <button
+                    onClick={() => setImportOpen(false)}
+                    style={{ padding: '8px 22px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 700 }}
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 一覧 */}
       <div style={{ background: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 12, overflow: 'hidden' }}>

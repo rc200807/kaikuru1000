@@ -706,14 +706,10 @@ export async function sendInquiryAutoReply(params: {
               </style>
   `
 
-  // 店舗連絡先セクション（HTML）
+  // 店舗連絡先セクション（HTML）— 住所は顧客向けには表示しない
   const contactRows: string[] = []
   if (params.storePhone) contactRows.push(row('電話', params.storePhone))
   if (params.storeEmail) contactRows.push(row('メール', params.storeEmail))
-  if (params.storePostalCode || params.storeAddress) {
-    const addr = `${params.storePostalCode ? `〒${params.storePostalCode}\n` : ''}${params.storeAddress ?? ''}`
-    contactRows.push(row('住所', addr))
-  }
   const contactSection = contactRows.length > 0 ? `
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:24px;">
                 <tr>
@@ -807,13 +803,10 @@ export async function sendInquiryAutoReply(params: {
   if (params.customerDetails) inputLines.push(`相談内容: ${params.customerDetails}`)
 
   const contactLines: string[] = []
-  if (params.storePhone || params.storeEmail || params.storeAddress) {
+  if (params.storePhone || params.storeEmail) {
     contactLines.push('', `■ ${params.storeName} 連絡先`)
     if (params.storePhone) contactLines.push(`電話: ${params.storePhone}`)
     if (params.storeEmail) contactLines.push(`メール: ${params.storeEmail}`)
-    if (params.storePostalCode || params.storeAddress) {
-      contactLines.push(`住所: ${params.storePostalCode ? `〒${params.storePostalCode} ` : ''}${params.storeAddress ?? ''}`)
-    }
   }
 
   await transporter.sendMail({

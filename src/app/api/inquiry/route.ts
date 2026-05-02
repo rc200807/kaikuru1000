@@ -42,16 +42,38 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = phone.replace(/[-ー\s]/g, '')
 
     // --- ユーザー紐付けロジック ---
+    // メール送信は後段でまとめて並列実行するため、ここではメール送信パラメータの組み立てのみ行う
     let userId: string | null = null
     let isExisting: boolean | null = null
+    let customerEmailParams: Parameters<typeof sendInquiryAutoReply>[0] | null = null
 
     if (email) {
       const existingUser = await prisma.user.findUnique({ where: { email } })
+      const baseUrl = getBaseUrl()
 
       if (existingUser) {
         // 既存ユーザー
         userId = existingUser.id
         isExisting = true
+
+        customerEmailParams = {
+          to: email,
+          name,
+          storeName: store.name,
+          inquiryType,
+          isExisting: true,
+          customerFurigana: furigana,
+          customerPhone: normalizedPhone,
+          customerEmail: email,
+          customerPostalCode: postalCode || null,
+          customerAddress: address,
+          customerDetails: details || null,
+          storePhone: store.phone ?? null,
+          storeEmail: store.email ?? null,
+          storeAddress: store.address ?? null,
+          storePostalCode: store.postalCode ?? null,
+          loginUrl: `${baseUrl}/login`,
+        }
       } else {
         // 新規ユーザー作成（パスワードなし — 後でセットアップ）
         const newUser = await prisma.user.create({
@@ -81,11 +103,7 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // セットアップURL付きの自動返信メール
-        const baseUrl = getBaseUrl()
-        const setupUrl = `${baseUrl}/setup-password?token=${token}`
-
-        await sendInquiryAutoReply({
+        customerEmailParams = {
           to: email,
           name,
           storeName: store.name,
@@ -101,33 +119,8 @@ export async function POST(request: NextRequest) {
           storeEmail: store.email ?? null,
           storeAddress: store.address ?? null,
           storePostalCode: store.postalCode ?? null,
-          setupUrl,
-        }).catch(() => {}) // メール送信失敗は握りつぶす
-      }
-
-      // 既存ユーザーにはログイン案内メール
-      if (isExisting) {
-        const baseUrl = getBaseUrl()
-        const loginUrl = `${baseUrl}/login`
-
-        await sendInquiryAutoReply({
-          to: email,
-          name,
-          storeName: store.name,
-          inquiryType,
-          isExisting: true,
-          customerFurigana: furigana,
-          customerPhone: normalizedPhone,
-          customerEmail: email,
-          customerPostalCode: postalCode || null,
-          customerAddress: address,
-          customerDetails: details || null,
-          storePhone: store.phone ?? null,
-          storeEmail: store.email ?? null,
-          storeAddress: store.address ?? null,
-          storePostalCode: store.postalCode ?? null,
-          loginUrl,
-        }).catch(() => {})
+          setupUrl: `${baseUrl}/setup-password?token=${token}`,
+        }
       }
     }
 
@@ -165,17 +158,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- 店舗への通知メール送信 ---
+    // --- メール送信（顧客自動返信＋店舗通知を並列実行） ---
     // 店舗メール未登録時は本部のフォールバック宛先に送信
-    // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
-    // メール送信が中断されるため、必ず await する
+    // ⚠️ Vercelサーバーレスでは fire-and-forget だと関数終了で送信中断するため必ず await する
+    // ⚠️ 顧客と店舗を直列で送ると店舗メールが2〜5秒遅延するため Promise.allSettled で並列化
     const FALLBACK_NOTIFICATION_EMAIL = 'contact@kaikuru4.com'
     const notifyTo = store.email || FALLBACK_NOTIFICATION_EMAIL
     const isFallback = !store.email
-    const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-    console.log(`[inquiry] 店舗通知メール送信を試行: to=${notifyTo} store=${store.name}${isFallback ? ' (fallback)' : ''}`)
-    try {
-      const sent = await sendStoreInquiryNotification({
+    const inquiryBaseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+    console.log(`[inquiry] メール送信開始: customer=${customerEmailParams ? 'yes' : 'skip'} store=${notifyTo}${isFallback ? ' (fallback)' : ''}`)
+
+    const mailTasks: Promise<unknown>[] = []
+
+    // 顧客向け自動返信
+    if (customerEmailParams) {
+      mailTasks.push(
+        sendInquiryAutoReply(customerEmailParams)
+          .then(() => console.log(`[inquiry] 顧客向け自動返信メール送信成功: ${customerEmailParams!.to}`))
+          .catch((err: any) => console.error('[inquiry] 顧客向け自動返信メール送信失敗:', err?.message ?? err))
+      )
+    }
+
+    // 店舗向け通知
+    mailTasks.push(
+      sendStoreInquiryNotification({
         storeEmail: notifyTo,
         storeName: store.name,
         isFallbackRecipient: isFallback,
@@ -188,18 +194,18 @@ export async function POST(request: NextRequest) {
         inquiryType,
         details: details || null,
         itemCount,
-        inquiryAdminUrl: `${baseUrl}/store/inquiries`,
+        inquiryAdminUrl: `${inquiryBaseUrl}/store/inquiries`,
         receivedAt: inquiry.createdAt,
       })
-      if (sent) {
-        console.log(`[inquiry] 店舗通知メール送信成功: ${notifyTo}${isFallback ? ' (fallback)' : ''}`)
-      } else {
-        console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
-      }
-    } catch (err: any) {
-      // 送信失敗してもお問い合わせ自体は成功扱いにする（DB保存済みのため）
-      console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err)
-    }
+        .then(sent => {
+          if (sent) console.log(`[inquiry] 店舗通知メール送信成功: ${notifyTo}${isFallback ? ' (fallback)' : ''}`)
+          else console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
+        })
+        .catch((err: any) => console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err))
+    )
+
+    // 並列実行を待機（個別の失敗はcatch済みなのでallSettledで全完了を待つ）
+    await Promise.allSettled(mailTasks)
 
     return NextResponse.json({
       success: true,

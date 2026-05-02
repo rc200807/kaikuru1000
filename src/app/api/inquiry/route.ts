@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           customerPostalCode: postalCode || null,
           customerAddress: address,
           customerDetails: details || null,
-          storePhone: store.phone ?? null,
+          storePhone: store.phone || '0120-22-8196', // 店舗電話番号未設定時は本部代表番号
           storeEmail: store.email ?? null,
           storeAddress: store.address ?? null,
           storePostalCode: store.postalCode ?? null,
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
           customerPostalCode: postalCode || null,
           customerAddress: address,
           customerDetails: details || null,
-          storePhone: store.phone ?? null,
+          storePhone: store.phone || '0120-22-8196', // 店舗電話番号未設定時は本部代表番号
           storeEmail: store.email ?? null,
           storeAddress: store.address ?? null,
           storePostalCode: store.postalCode ?? null,

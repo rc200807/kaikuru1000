@@ -65,6 +65,19 @@ export default function AdminStoresPage() {
   // パスワード再発行中の店舗ID
   const [resettingId, setResettingId] = useState<string | null>(null)
 
+  // 店舗情報サイドバー
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null)
+
+  // ESCキーでサイドバーを閉じる
+  useEffect(() => {
+    if (!selectedStore) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedStore(null)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [selectedStore])
+
   // スプレッドシートURL設定
   const [storeSheetUrl, setStoreSheetUrl] = useState('')
   const [storeSheetName, setStoreSheetName] = useState('店舗マスター')
@@ -354,13 +367,15 @@ export default function AdminStoresPage() {
       key: 'actions',
       header: '',
       render: (store) => (
-        <Button
-          size="sm"
-          variant="text"
-          onClick={() => router.push(`/admin/stores/${store.id}`)}
-        >
-          詳細
-        </Button>
+        <span onClick={(e) => e.stopPropagation()} className="inline-block">
+          <Button
+            size="sm"
+            variant="text"
+            onClick={() => router.push(`/admin/stores/${store.id}`)}
+          >
+            詳細
+          </Button>
+        </span>
       ),
     },
   ]
@@ -612,6 +627,7 @@ export default function AdminStoresPage() {
             data={filtered}
             rowKey={(store) => store.id}
             emptyTitle={searchQ ? `「${searchQ}」に一致する店舗がありません` : '店舗データがありません'}
+            onRowClick={(store) => setSelectedStore(store)}
           />
           {searchQ && filtered.length > 0 && filtered.length < stores.length && (
             <div className="px-4 py-2.5 bg-[var(--md-sys-color-surface-container-low)] border-t border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)]">
@@ -1021,6 +1037,186 @@ export default function AdminStoresPage() {
           </div>
         )}
       </div>
+
+      {/* 店舗情報サイドバー */}
+      {selectedStore && (
+        <>
+          {/* バックドロップ */}
+          <div
+            className="fixed inset-0 bg-black/40 z-40 transition-opacity"
+            onClick={() => setSelectedStore(null)}
+            aria-hidden="true"
+          />
+          {/* サイドバー本体 */}
+          <aside
+            className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[480px] bg-[var(--md-sys-color-surface,#fff)] shadow-2xl overflow-y-auto"
+            role="dialog"
+            aria-label="店舗情報"
+          >
+            {/* ヘッダー */}
+            <div className="sticky top-0 bg-[var(--md-sys-color-surface,#fff)] border-b border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex items-start justify-between gap-3 z-10">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">店舗情報</p>
+                <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)] truncate">
+                  {selectedStore.name}
+                </h2>
+                <code className="text-xs bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded mt-1 inline-block">
+                  {selectedStore.code}
+                </code>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedStore(null)}
+                className="p-2 rounded-full hover:bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] transition-colors flex-shrink-0"
+                aria-label="閉じる"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* 本文 */}
+            <div className="px-6 py-5 space-y-5">
+              {/* ステータス・顧客数 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">ステータス</p>
+                  <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                    {selectedStore.storeStatus === 'closed' ? '閉店' : '営業中'}
+                  </p>
+                </div>
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">顧客数</p>
+                  <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                    {selectedStore._count.customers} 名
+                  </p>
+                </div>
+              </div>
+
+              {/* 基本情報 */}
+              <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                  <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">基本情報</p>
+                </div>
+                <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">都道府県</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)]">{selectedStore.prefecture || '—'}</span>
+                  </div>
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">住所</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">
+                      {selectedStore.postalCode && <>〒{selectedStore.postalCode}<br /></>}
+                      {selectedStore.address || '—'}
+                    </span>
+                  </div>
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">電話</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">{selectedStore.phone || '—'}</span>
+                  </div>
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">メール</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">{selectedStore.email || '—'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 営業情報 */}
+              <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                  <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">営業情報</p>
+                </div>
+                <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">開業日</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                      {selectedStore.openingDate ? new Date(selectedStore.openingDate).toLocaleDateString('ja-JP') : '—'}
+                    </span>
+                  </div>
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">閉店日</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                      {selectedStore.closingDate ? new Date(selectedStore.closingDate).toLocaleDateString('ja-JP') : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 外部リンク */}
+              {(selectedStore.googleBusinessUrl || selectedStore.oikuraPageUrl) && (
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                    <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">外部リンク</p>
+                  </div>
+                  <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
+                    {selectedStore.googleBusinessUrl && (
+                      <div className="px-4 py-2.5 flex">
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-32 flex-shrink-0">Google Business</span>
+                        <a
+                          href={selectedStore.googleBusinessUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-[var(--portal-primary,#374151)] underline break-all hover:opacity-80"
+                        >
+                          {selectedStore.googleBusinessUrl}
+                        </a>
+                      </div>
+                    )}
+                    {selectedStore.oikuraPageUrl && (
+                      <div className="px-4 py-2.5 flex">
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-32 flex-shrink-0">おいくらページ</span>
+                        <a
+                          href={selectedStore.oikuraPageUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-[var(--portal-primary,#374151)] underline break-all hover:opacity-80"
+                        >
+                          {selectedStore.oikuraPageUrl}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 各種番号 */}
+              {(selectedStore.invoiceNumber || selectedStore.antiquePermitNumber) && (
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                    <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">各種番号</p>
+                  </div>
+                  <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
+                    {selectedStore.invoiceNumber && (
+                      <div className="px-4 py-2.5 flex">
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-32 flex-shrink-0">インボイス番号</span>
+                        <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">{selectedStore.invoiceNumber}</span>
+                      </div>
+                    )}
+                    {selectedStore.antiquePermitNumber && (
+                      <div className="px-4 py-2.5 flex">
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-32 flex-shrink-0">古物商番号</span>
+                        <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">{selectedStore.antiquePermitNumber}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 詳細ページへ */}
+              <div className="pt-2">
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={() => router.push(`/admin/stores/${selectedStore.id}`)}
+                >
+                  詳細ページを開く
+                </Button>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
     </>
   )
 }

@@ -35,6 +35,10 @@ async function sendImmediately(type: string, params: any): Promise<boolean> {
       await sendInquiryAutoReply(params)
       return true
     case 'storeInquiryNotification':
+      // ⚠️ JSON.stringify で Date が string になるため、復元する必要がある
+      if (params.receivedAt && typeof params.receivedAt === 'string') {
+        params.receivedAt = new Date(params.receivedAt)
+      }
       return await sendStoreInquiryNotification(params)
     default:
       throw new Error(`Unknown email type: ${type}`)

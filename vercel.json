@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/cleanup-id-documents",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-tokens",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/process-email-queue",
+      "schedule": "*/2 * * * *"
     }
   ]
 }

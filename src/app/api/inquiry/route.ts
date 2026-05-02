@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { sendInquiryAutoReply, sendStoreInquiryNotification } from '@/lib/mailer'
+import { sendInquiryAutoReply } from '@/lib/mailer'
+import { enqueueEmail } from '@/lib/email-queue'
+import { checkInquiryRateLimit, getClientIp } from '@/lib/inquiry-rate-limit'
+import { verifyTurnstile } from '@/lib/turnstile'
 
 // SMTP送信を await するため、関数の最大実行時間を延ばす（Pro/Enterprise必須）
 export const maxDuration = 60
@@ -15,7 +19,7 @@ function getBaseUrl() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { storeCode, name, furigana, phone, email, postalCode, address, inquiryType, details, items } = body
+    const { storeCode, name, furigana, phone, email, postalCode, address, inquiryType, details, items, turnstileToken } = body
 
     // --- バリデーション ---
     const missing: string[] = []
@@ -29,6 +33,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `必須項目が不足しています: ${missing.join(', ')}` },
         { status: 400 }
+      )
+    }
+
+    // --- CAPTCHA検証（Cloudflare Turnstile）---
+    const ip = getClientIp(request.headers)
+    const captchaResult = await verifyTurnstile(turnstileToken, ip)
+    if (!captchaResult.success) {
+      return NextResponse.json(
+        { error: '認証に失敗しました。ページを再読み込みしてもう一度お試しください。' },
+        { status: 400 }
+      )
+    }
+
+    // --- レート制限チェック ---
+    const rateLimit = await checkInquiryRateLimit({ ip, email })
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: rateLimit.reason || '送信回数の上限に達しました。しばらくしてからお試しください。' },
+        { status: 429 }
       )
     }
 
@@ -76,19 +99,63 @@ export async function POST(request: NextRequest) {
         }
       } else {
         // 新規ユーザー作成（パスワードなし — 後でセットアップ）
-        const newUser = await prisma.user.create({
-          data: {
-            name,
-            furigana,
-            phone: normalizedPhone,
-            address,
-            email,
-            password: '', // パスワード未設定
-            customerType: 'regular',
-            customerTypes: JSON.stringify(['regular']),
-            storeId: store.id,
-          },
-        })
+        // ⚠️ 競合状態対策：同じメアドで同時送信された場合、unique制約で失敗するので
+        //    P2002エラーをキャッチして既存ユーザーとして扱う
+        let newUser
+        try {
+          newUser = await prisma.user.create({
+            data: {
+              name,
+              furigana,
+              phone: normalizedPhone,
+              address,
+              email,
+              password: '', // パスワード未設定
+              customerType: 'regular',
+              customerTypes: JSON.stringify(['regular']),
+              storeId: store.id,
+            },
+          })
+        } catch (e: any) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+            // 競合により既に作成済み → 既存ユーザーとして再取得
+            const concurrent = await prisma.user.findUnique({ where: { email } })
+            if (concurrent) {
+              userId = concurrent.id
+              isExisting = true
+              // 既存ユーザー扱いでメールパラメータを組み立てる（後段でセット）
+              const baseUrlExisting = getBaseUrl()
+              customerEmailParams = {
+                to: email,
+                name,
+                storeName: store.name,
+                inquiryType,
+                isExisting: true,
+                customerFurigana: furigana,
+                customerPhone: normalizedPhone,
+                customerEmail: email,
+                customerPostalCode: postalCode || null,
+                customerAddress: address,
+                customerDetails: details || null,
+                storePhone: store.phone || '0120-22-8196',
+                storeEmail: store.email ?? null,
+                storeAddress: store.address ?? null,
+                storePostalCode: store.postalCode ?? null,
+                loginUrl: `${baseUrlExisting}/login`,
+              }
+              // 早期リターン：以降の新規ユーザー処理はスキップ
+            } else {
+              throw e
+            }
+          } else {
+            throw e
+          }
+        }
+
+        // 競合で既存扱いになった場合は新規ユーザー処理をスキップ
+        if (!newUser) {
+          // すでに上の catch で customerEmailParams を設定済み
+        } else {
         userId = newUser.id
         isExisting = false
 
@@ -121,6 +188,7 @@ export async function POST(request: NextRequest) {
           storePostalCode: store.postalCode ?? null,
           setupUrl: `${baseUrl}/setup-password?token=${token}`,
         }
+        } // else block end (newUser exists)
       }
     }
 
@@ -158,30 +226,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- メール送信（顧客自動返信＋店舗通知を並列実行） ---
-    // 店舗メール未登録時は本部のフォールバック宛先に送信
-    // ⚠️ Vercelサーバーレスでは fire-and-forget だと関数終了で送信中断するため必ず await する
-    // ⚠️ 顧客と店舗を直列で送ると店舗メールが2〜5秒遅延するため Promise.allSettled で並列化
+    // --- メール送信をキューに投入 ---
+    // ⚠️ APIリクエスト中にSMTP送信を待たず、cronで2分間隔でバッチ処理する
+    // - Vercel関数の同時実行数を圧迫しない
+    // - SMTPレート制限・障害時はキューで自動リトライ（最大3回）
+    // - 顧客・店舗とも同じタイミングで送信される
     const FALLBACK_NOTIFICATION_EMAIL = 'contact@kaikuru4.com'
     const notifyTo = store.email || FALLBACK_NOTIFICATION_EMAIL
     const isFallback = !store.email
     const inquiryBaseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-    console.log(`[inquiry] メール送信開始: customer=${customerEmailParams ? 'yes' : 'skip'} store=${notifyTo}${isFallback ? ' (fallback)' : ''}`)
 
-    const mailTasks: Promise<unknown>[] = []
-
-    // 顧客向け自動返信
+    // 顧客向け自動返信（キュー投入）
     if (customerEmailParams) {
-      mailTasks.push(
-        sendInquiryAutoReply(customerEmailParams)
-          .then(() => console.log(`[inquiry] 顧客向け自動返信メール送信成功: ${customerEmailParams!.to}`))
-          .catch((err: any) => console.error('[inquiry] 顧客向け自動返信メール送信失敗:', err?.message ?? err))
-      )
+      await enqueueEmail({ type: 'inquiryAutoReply', params: customerEmailParams })
     }
 
-    // 店舗向け通知
-    mailTasks.push(
-      sendStoreInquiryNotification({
+    // 店舗向け通知（キュー投入）
+    await enqueueEmail({
+      type: 'storeInquiryNotification',
+      params: {
         storeEmail: notifyTo,
         storeName: store.name,
         isFallbackRecipient: isFallback,
@@ -196,16 +259,10 @@ export async function POST(request: NextRequest) {
         itemCount,
         inquiryAdminUrl: `${inquiryBaseUrl}/store/inquiries`,
         receivedAt: inquiry.createdAt,
-      })
-        .then(sent => {
-          if (sent) console.log(`[inquiry] 店舗通知メール送信成功: ${notifyTo}${isFallback ? ' (fallback)' : ''}`)
-          else console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
-        })
-        .catch((err: any) => console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err))
-    )
+      },
+    })
 
-    // 並列実行を待機（個別の失敗はcatch済みなのでallSettledで全完了を待つ）
-    await Promise.allSettled(mailTasks)
+    console.log(`[inquiry] メールキューに登録完了: customer=${customerEmailParams ? 'yes' : 'skip'} store=${notifyTo}${isFallback ? ' (fallback)' : ''}`)
 
     return NextResponse.json({
       success: true,

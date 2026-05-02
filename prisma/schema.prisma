@@ -466,6 +466,34 @@ model LoginAttempt {
   @@index([key])
 }
 
+// 汎用レート制限（問い合わせフォームなど）
+model RateLimit {
+  id           String    @id @default(cuid())
+  key          String    @unique  // "inquiry:ip:1.2.3.4" / "inquiry:email:foo@bar"
+  count        Int       @default(0)
+  windowStart  DateTime  @default(now())
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@index([key])
+}
+
+// メール送信キュー（SMTPの遅延・失敗対応）
+model EmailQueue {
+  id          String    @id @default(cuid())
+  type        String    // "inquiryAutoReply" | "storeInquiry" | ...
+  payload     String    @db.Text  // JSON-serialized params
+  status      String    @default("pending")  // pending | processing | sent | failed
+  attempts    Int       @default(0)
+  lastError   String?   @db.Text
+  scheduledAt DateTime  @default(now())
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, scheduledAt])
+}
+
 // iPhone中古相場価格（Gemini AIによる月次取得）
 model PhoneMarketPrice {
   id        String   @id @default(cuid())

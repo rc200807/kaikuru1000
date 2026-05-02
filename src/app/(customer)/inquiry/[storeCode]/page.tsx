@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
 import MessageBanner from '@/components/MessageBanner'
+import TurnstileWidget from '@/components/TurnstileWidget'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
 const INQUIRY_TYPES = [
@@ -57,6 +58,11 @@ export default function InquiryPage() {
   const [hadEmail, setHadEmail] = useState(false)
   const [registeredItemCount, setRegisteredItemCount] = useState(0)
   const [postalLoading, setPostalLoading] = useState(false)
+
+  // Turnstile (CAPTCHA) トークン
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const handleTurnstileVerify = useCallback((token: string) => setTurnstileToken(token), [])
+  const handleTurnstileExpire = useCallback(() => setTurnstileToken(null), [])
 
   const showItemSection = ITEM_TYPES.includes(inquiryType)
 
@@ -207,6 +213,7 @@ export default function InquiryPage() {
           inquiryType,
           details: details || undefined,
           items: uploadedItems.length > 0 ? uploadedItems : undefined,
+          turnstileToken: turnstileToken || undefined,
         }),
       })
 
@@ -507,8 +514,28 @@ export default function InquiryPage() {
           placeholder="ご質問やご要望があればご記入ください（任意）"
         />
 
+        {/* CAPTCHA（NEXT_PUBLIC_TURNSTILE_SITE_KEY 未設定の場合は何も表示されない） */}
+        <div className="flex justify-center pt-2">
+          <TurnstileWidget
+            onVerify={handleTurnstileVerify}
+            onExpire={handleTurnstileExpire}
+            theme="auto"
+          />
+        </div>
+
         <div className="pt-2">
-          <GlassButton type="submit" variant="primary" loading={loading} disabled={loading || !name.trim() || !furigana.trim() || !phone.trim() || !email.trim() || !postalCode.trim() || !address.trim()}>
+          <GlassButton
+            type="submit"
+            variant="primary"
+            loading={loading}
+            disabled={
+              loading
+              || !name.trim() || !furigana.trim() || !phone.trim()
+              || !email.trim() || !postalCode.trim() || !address.trim()
+              // CAPTCHAキー設定時のみトークンを必須にする
+              || (!!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken)
+            }
+          >
             {loading ? '送信中...' : 'お問い合わせを送信'}
           </GlassButton>
         </div>

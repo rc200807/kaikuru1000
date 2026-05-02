@@ -955,17 +955,6 @@ export async function sendStoreInquiryNotification(params: {
               </table>
               ` : ''}
 
-              <!-- アクションボタン -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-                <tr>
-                  <td align="center">
-                    <a href="${params.inquiryAdminUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 40px;border-radius:8px;">
-                      問い合わせ詳細を確認
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
               <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.7;text-align:center;">
                 受信日時: ${dateStr}
               </p>

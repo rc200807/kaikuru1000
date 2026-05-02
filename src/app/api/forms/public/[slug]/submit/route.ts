@@ -146,19 +146,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
   const formatted = formatAnswersForDisplay(schema, parsed.data as Record<string, unknown>)
 
-  // メール通知（非同期・握り潰し）
+  // メール通知（失敗は握り潰し）
+  // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
+  // メール送信が中断されるため、必ず await する
   if (form.notifyEmails) {
     const recipients = form.notifyEmails.split(',').map(s => s.trim()).filter(Boolean)
     if (recipients.length > 0) {
       const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-      sendFormSubmissionNotification({
-        to: recipients,
-        formTitle: form.title,
-        submissionId: submission.id,
-        submittedAt: submission.createdAt,
-        fields: formatted,
-        reviewUrl: `${baseUrl}/admin/forms/${form.id}/submissions`,
-      }).catch(err => console.error('[FormSubmit] notification mail error:', err?.message))
+      try {
+        await sendFormSubmissionNotification({
+          to: recipients,
+          formTitle: form.title,
+          submissionId: submission.id,
+          submittedAt: submission.createdAt,
+          fields: formatted,
+          reviewUrl: `${baseUrl}/admin/forms/${form.id}/submissions`,
+        })
+      } catch (err: any) {
+        console.error('[FormSubmit] notification mail error:', err?.message)
+      }
     }
   }
 

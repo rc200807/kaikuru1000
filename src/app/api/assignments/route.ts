@@ -40,34 +40,40 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // 店舗にメール通知を送信（非同期・エラーは握りつぶして割り当て自体は成功させる）
+  // 店舗にメール通知を送信（エラーは握りつぶして割り当て自体は成功させる）
+  // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
+  // メール送信が中断されるため、必ず await する
   if (fullUser && user.store?.email) {
-    sendAssignmentNotification({
-      storeEmail: user.store.email,
-      storeName: user.store.name,
-      customerName: fullUser.name,
-      customerFurigana: fullUser.furigana,
-      customerEmail: fullUser.email || '',
-      customerPhone: fullUser.phone,
-      customerAddress: fullUser.address,
-      registeredAt: fullUser.createdAt,
-    }).catch((err) => {
+    try {
+      await sendAssignmentNotification({
+        storeEmail: user.store.email,
+        storeName: user.store.name,
+        customerName: fullUser.name,
+        customerFurigana: fullUser.furigana,
+        customerEmail: fullUser.email || '',
+        customerPhone: fullUser.phone,
+        customerAddress: fullUser.address,
+        registeredAt: fullUser.createdAt,
+      })
+    } catch (err: any) {
       console.error('[Assignment] メール通知の送信に失敗しました:', err.message)
-    })
+    }
   }
 
   // 顧客にも割り当て完了メールを送信
   if (fullUser?.email && user.store) {
     const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-    sendStoreAssignmentNotification({
-      to: fullUser.email,
-      name: fullUser.name,
-      storeName: user.store.name,
-      customerType: user.customerType,
-      loginUrl: `${baseUrl}/login`,
-    }).catch((err) => {
+    try {
+      await sendStoreAssignmentNotification({
+        to: fullUser.email,
+        name: fullUser.name,
+        storeName: user.store.name,
+        customerType: user.customerType,
+        loginUrl: `${baseUrl}/login`,
+      })
+    } catch (err: any) {
       console.error('[Assignment] 顧客通知メールの送信に失敗しました:', err.message)
-    })
+    }
   }
 
   return NextResponse.json({ userId, storeId, storeName: user.store?.name })

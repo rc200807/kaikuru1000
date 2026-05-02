@@ -3,6 +3,9 @@ import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { sendInquiryAutoReply, sendStoreInquiryNotification } from '@/lib/mailer'
 
+// SMTP送信を await するため、関数の最大実行時間を延ばす（Pro/Enterprise必須）
+export const maxDuration = 60
+
 function getBaseUrl() {
   if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
@@ -162,37 +165,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- 店舗への通知メール送信（非同期・失敗無視） ---
+    // --- 店舗への通知メール送信 ---
     // 店舗メール未登録時は本部のフォールバック宛先に送信
+    // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
+    // メール送信が中断されるため、必ず await する
     const FALLBACK_NOTIFICATION_EMAIL = 'contact@kaikuru4.com'
     const notifyTo = store.email || FALLBACK_NOTIFICATION_EMAIL
     const isFallback = !store.email
     const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
     console.log(`[inquiry] 店舗通知メール送信を試行: to=${notifyTo} store=${store.name}${isFallback ? ' (fallback)' : ''}`)
-    sendStoreInquiryNotification({
-      storeEmail: notifyTo,
-      storeName: store.name,
-      isFallbackRecipient: isFallback,
-      customerName: name,
-      customerFurigana: furigana,
-      customerPhone: normalizedPhone,
-      customerEmail: email || null,
-      customerPostalCode: postalCode || null,
-      customerAddress: address,
-      inquiryType,
-      details: details || null,
-      itemCount,
-      inquiryAdminUrl: `${baseUrl}/store/inquiries`,
-      receivedAt: inquiry.createdAt,
-    }).then(sent => {
+    try {
+      const sent = await sendStoreInquiryNotification({
+        storeEmail: notifyTo,
+        storeName: store.name,
+        isFallbackRecipient: isFallback,
+        customerName: name,
+        customerFurigana: furigana,
+        customerPhone: normalizedPhone,
+        customerEmail: email || null,
+        customerPostalCode: postalCode || null,
+        customerAddress: address,
+        inquiryType,
+        details: details || null,
+        itemCount,
+        inquiryAdminUrl: `${baseUrl}/store/inquiries`,
+        receivedAt: inquiry.createdAt,
+      })
       if (sent) {
         console.log(`[inquiry] 店舗通知メール送信成功: ${notifyTo}${isFallback ? ' (fallback)' : ''}`)
       } else {
         console.warn(`[inquiry] 店舗通知メール送信スキップ: SMTP設定が無効または未構成です`)
       }
-    }).catch(err => {
+    } catch (err: any) {
+      // 送信失敗してもお問い合わせ自体は成功扱いにする（DB保存済みのため）
       console.error('[inquiry] 店舗通知メール送信失敗:', err?.message ?? err)
-    })
+    }
 
     return NextResponse.json({
       success: true,

@@ -31,6 +31,11 @@ async function createTransporter() {
         user: config.smtpUser,
         pass: decrypt(config.smtpPass ?? ''), // AES-256-GCM暗号化済みを復号
       },
+      // ⚠️ Vercelサーバーレスでは関数のタイムアウトに引っかからないよう短めに設定
+      // SMTPサーバー無応答で関数がハングするのを防ぐ
+      connectionTimeout: 10_000, // 接続確立まで10秒
+      greetingTimeout: 10_000,   // SMTP greeting待ち10秒
+      socketTimeout: 20_000,     // 通信全体で20秒
     }),
     from: `"${config.fromName}" <${config.fromAddress || config.smtpUser}>`,
   }

@@ -792,16 +792,6 @@ export default function AdminCustomersPage() {
       ),
     },
     {
-      key: 'licenseKey',
-      header: 'ライセンスキー',
-      hideOnMobile: true,
-      render: (user) => (
-        <code className="text-xs bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded-[var(--md-sys-shape-extra-small)]">
-          {user.licenseKey?.key || '—'}
-        </code>
-      ),
-    },
-    {
       key: 'store',
       header: '担当店舗',
       render: (user) => user.store ? (
@@ -835,39 +825,6 @@ export default function AdminCustomersPage() {
           </div>
         )
       },
-    },
-    {
-      key: 'nextVisit',
-      header: '次回訪問',
-      hideOnMobile: true,
-      render: (user) => {
-        if (user.customerType === 'delivery') {
-          return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">定期宅配</span>
-        }
-        const nextVisit = user.visitSchedules?.[0]
-        return nextVisit ? (
-          <span className="text-sm text-[var(--status-scheduled-text)]">
-            {format(new Date(nextVisit.visitDate), 'M/d（E）', { locale: ja })}
-          </span>
-        ) : (
-          <span className="text-sm text-[var(--md-sys-color-outline)]">未定</span>
-        )
-      },
-    },
-    {
-      key: 'idDoc',
-      header: '身分証',
-      hideOnMobile: true,
-      render: (user) => user.idDocumentPath ? (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] px-2 py-0.5 rounded-full">提出済</span>
-          {user.idOcrIssueReport && (
-            <span className="text-[10px] font-medium text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full">要確認</span>
-          )}
-        </div>
-      ) : (
-        <span className="text-xs font-medium text-[var(--status-pending-text)] bg-[var(--status-pending-bg)] px-2 py-0.5 rounded-full">未提出</span>
-      ),
     },
     {
       key: 'actions',

@@ -17,7 +17,10 @@ export async function GET() {
     include: {
       videos: {
         where: { isPublished: true },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { publishedAt: { sort: 'desc', nulls: 'last' } },
+          { createdAt: 'desc' },
+        ],
         select: {
           id: true,
           title: true,

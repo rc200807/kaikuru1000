@@ -50,8 +50,18 @@ export async function PATCH(
 
   if (body.isPublished !== undefined) {
     updateData.isPublished = body.isPublished
-    if (body.isPublished && !existing.publishedAt) {
+    if (body.isPublished && !existing.publishedAt && body.publishedAt === undefined) {
       updateData.publishedAt = new Date()
+    }
+  }
+
+  // 公開日の明示更新（null クリア / 日付指定）
+  if (body.publishedAt !== undefined) {
+    if (body.publishedAt === null || body.publishedAt === '') {
+      updateData.publishedAt = null
+    } else {
+      const d = new Date(body.publishedAt)
+      if (!isNaN(d.getTime())) updateData.publishedAt = d
     }
   }
 

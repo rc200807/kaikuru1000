@@ -65,7 +65,7 @@ export default function AdminTrainingVideosPage() {
   const [showVideoForm, setShowVideoForm] = useState(false)
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null)
   const [videoForm, setVideoForm] = useState({
-    title: '', description: '', videoUrl: '', thumbnailUrl: '', fileSize: 0, categoryId: '', isPublished: false,
+    title: '', description: '', videoUrl: '', thumbnailUrl: '', fileSize: 0, categoryId: '', isPublished: false, publishedAt: '',
   })
   const [videoSubmitting, setVideoSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -213,10 +213,14 @@ export default function AdminTrainingVideosPage() {
     try {
       const url = editingVideoId ? `/api/admin/training-videos/${editingVideoId}` : '/api/admin/training-videos'
       const method = editingVideoId ? 'PATCH' : 'POST'
+      // 公開日を ISO 文字列に変換（空欄なら null）
+      const publishedAtIso = videoForm.publishedAt
+        ? new Date(videoForm.publishedAt).toISOString()
+        : null
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...videoForm, isPublished: publish }),
+        body: JSON.stringify({ ...videoForm, isPublished: publish, publishedAt: publishedAtIso }),
       })
       if (res.ok) {
         setMessage({ type: 'success', text: editingVideoId ? '更新しました' : (publish ? '公開しました' : '下書き保存しました') })
@@ -283,6 +287,7 @@ export default function AdminTrainingVideosPage() {
       fileSize: v.fileSize || 0,
       categoryId: v.categoryId,
       isPublished: v.isPublished,
+      publishedAt: v.publishedAt ? format(new Date(v.publishedAt), 'yyyy-MM-dd') : '',
     })
     setShowVideoForm(true)
     setMessage(null)
@@ -291,7 +296,7 @@ export default function AdminTrainingVideosPage() {
   function resetVideoForm() {
     setShowVideoForm(false)
     setEditingVideoId(null)
-    setVideoForm({ title: '', description: '', videoUrl: '', thumbnailUrl: '', fileSize: 0, categoryId: categories[0]?.id || '', isPublished: false })
+    setVideoForm({ title: '', description: '', videoUrl: '', thumbnailUrl: '', fileSize: 0, categoryId: categories[0]?.id || '', isPublished: false, publishedAt: '' })
   }
 
   const filteredVideos = filterCatId === 'all' ? videos : videos.filter(v => v.categoryId === filterCatId)
@@ -565,6 +570,19 @@ export default function AdminTrainingVideosPage() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">公開日（任意）</label>
+                  <input
+                    type="date"
+                    value={videoForm.publishedAt}
+                    onChange={e => setVideoForm({ ...videoForm, publishedAt: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-[var(--md-sys-color-surface-container-highest)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)] focus:border-[var(--admin-primary)] outline-none text-sm"
+                  />
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                    動画一覧はこの公開日の新しい順に並びます。空欄の場合は公開時の日時を自動でセットします。
+                  </p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">説明（任意）</label>
                   <textarea
                     value={videoForm.description}
@@ -680,7 +698,9 @@ export default function AdminTrainingVideosPage() {
                       <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] line-clamp-2 mt-1">{v.description}</p>
                     )}
                     <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
-                      {format(new Date(v.createdAt), 'M/d', { locale: ja })} · {v.admin.name}
+                      {v.publishedAt
+                        ? `公開日 ${format(new Date(v.publishedAt), 'yyyy/M/d', { locale: ja })}`
+                        : `登録 ${format(new Date(v.createdAt), 'M/d', { locale: ja })}`} · {v.admin.name}
                     </p>
 
                     {/* 公開トグル + アクション */}
@@ -773,7 +793,9 @@ export default function AdminTrainingVideosPage() {
                   <span className="text-xs text-[var(--md-sys-color-outline)]">{formatFileSize(detailVideo.fileSize)}</span>
                 )}
                 <span className="text-xs text-[var(--md-sys-color-outline)] ml-auto">
-                  {format(new Date(detailVideo.createdAt), 'yyyy年M月d日', { locale: ja })} · {detailVideo.admin.name}
+                  {detailVideo.publishedAt
+                    ? `公開日 ${format(new Date(detailVideo.publishedAt), 'yyyy年M月d日', { locale: ja })}`
+                    : `登録 ${format(new Date(detailVideo.createdAt), 'yyyy年M月d日', { locale: ja })}`} · {detailVideo.admin.name}
                 </span>
               </div>
 

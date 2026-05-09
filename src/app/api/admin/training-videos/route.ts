@@ -12,7 +12,10 @@ export async function GET() {
   }
 
   const videos = await prisma.trainingVideo.findMany({
-    orderBy: [{ category: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+    orderBy: [
+      { publishedAt: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'desc' },
+    ],
     include: {
       category: { select: { id: true, name: true } },
       admin: { select: { name: true } },
@@ -31,10 +34,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { title, description, videoUrl, thumbnailUrl, fileSize, categoryId, isPublished } = body
+  const { title, description, videoUrl, thumbnailUrl, fileSize, categoryId, isPublished, publishedAt } = body
 
   if (!title?.trim() || !videoUrl?.trim() || !categoryId) {
     return NextResponse.json({ error: 'タイトル、動画ファイル、カテゴリは必須です' }, { status: 400 })
+  }
+
+  // 公開日: 明示指定があればそれを使用、なければ公開時のみ now() をセット
+  let publishedAtValue: Date | null = null
+  if (publishedAt) {
+    const d = new Date(publishedAt)
+    if (!isNaN(d.getTime())) publishedAtValue = d
+  } else if (isPublished) {
+    publishedAtValue = new Date()
   }
 
   const video = await prisma.trainingVideo.create({
@@ -46,7 +58,7 @@ export async function POST(request: NextRequest) {
       fileSize: fileSize || null,
       categoryId,
       isPublished: !!isPublished,
-      publishedAt: isPublished ? new Date() : null,
+      publishedAt: publishedAtValue,
       adminId: user.id,
     },
     include: {

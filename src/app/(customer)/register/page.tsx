@@ -1,19 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import MessageBanner from '@/components/MessageBanner'
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
+import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
+
+const DOC_TYPES = [
+  { value: '運転免許証', label: '運転免許証（裏面も必要）' },
+  { value: 'マイナンバーカード', label: 'マイナンバーカード（表面のみ）' },
+  { value: 'パスポート', label: 'パスポート' },
+  { value: '健康保険証', label: '健康保険証' },
+  { value: '在留カード', label: '在留カード' },
+  { value: 'その他', label: 'その他' },
+]
+const DOC_TYPES_REQUIRING_BACK = ['運転免許証']
 
 export default function RegisterPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
 
   const [formData, setFormData] = useState({
     licenseKey: '',
@@ -26,10 +39,20 @@ export default function RegisterPage() {
     passwordConfirm: '',
   })
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
-    setError('')
-  }
+  // 登録済みユーザーID（身分証アップロード用）
+  const [registeredUserId, setRegisteredUserId] = useState<string | null>(null)
+
+  // 身分証アップロード state
+  const [selectedDocType, setSelectedDocType] = useState('')
+  const [frontFile, setFrontFile] = useState<File | null>(null)
+  const [frontPreview, setFrontPreview] = useState('')
+  const [backFile, setBackFile] = useState<File | null>(null)
+  const [backPreview, setBackPreview] = useState('')
+  const frontInputRef = useRef<HTMLInputElement>(null)
+  const backInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+
+  const needsBackImage = DOC_TYPES_REQUIRING_BACK.includes(selectedDocType)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -60,18 +83,99 @@ export default function RegisterPage() {
     })
 
     const data = await res.json()
-    setLoading(false)
 
     if (!res.ok) {
+      setLoading(false)
       setError(data.error || '登録に失敗しました')
+      return
+    }
+
+    // 自動サインインして身分証アップロードへ
+    const signInResult = await signIn('customer', {
+      email: formData.email,
+      password: formData.password,
+      redirect: false,
+    })
+
+    setLoading(false)
+
+    setRegisteredUserId(data.id)
+
+    if (signInResult?.error) {
+      // サインイン失敗時はスキップして完了画面へ（ログインページから入り直し）
+      setInfo('登録は完了しましたが自動ログインに失敗しました。ログイン後に身分証明書をアップロードしてください。')
+      setStep(4)
       return
     }
 
     setStep(3)
   }
 
-  // Step 3: Registration complete
-  if (step === 3) {
+  async function handleFileSelect(
+    e: React.ChangeEvent<HTMLInputElement>,
+    side: 'front' | 'back'
+  ) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      setError('ファイルサイズは10MB以下にしてください')
+      return
+    }
+    setError('')
+    const converted = await convertToJpegIfNeeded(file)
+    if (side === 'front') {
+      setFrontFile(converted)
+      setFrontPreview(URL.createObjectURL(converted))
+    } else {
+      setBackFile(converted)
+      setBackPreview(URL.createObjectURL(converted))
+    }
+  }
+
+  async function handleSubmitIdDocument() {
+    if (!registeredUserId || !frontFile || !selectedDocType) return
+    setError('')
+    setUploadingDoc(true)
+
+    const formDataUpload = new FormData()
+    formDataUpload.append('file', frontFile)
+    formDataUpload.append('documentType', selectedDocType)
+
+    const res = await fetch(`/api/users/${registeredUserId}/id-document`, {
+      method: 'POST',
+      body: formDataUpload,
+    })
+
+    if (!res.ok) {
+      setUploadingDoc(false)
+      const d = await res.json().catch(() => ({}))
+      setError(d.error || 'アップロードに失敗しました')
+      return
+    }
+
+    // 裏面（必要な場合）
+    if (backFile && needsBackImage) {
+      const backFormData = new FormData()
+      backFormData.append('file', backFile)
+      backFormData.append('documentType', selectedDocType)
+      await fetch(`/api/users/${registeredUserId}/id-document/back`, {
+        method: 'POST',
+        body: backFormData,
+      })
+    }
+
+    setUploadingDoc(false)
+    setInfo('登録および身分証明書のアップロードが完了しました。')
+    setStep(4)
+  }
+
+  function handleSkipIdDocument() {
+    setInfo('登録は完了しました。身分証明書はマイページから後でアップロードできます。')
+    setStep(4)
+  }
+
+  // Step 4: 完了
+  if (step === 4) {
     return (
       <GlassBackground>
         <div className="text-center">
@@ -83,12 +187,11 @@ export default function RegisterPage() {
           <h2 className="text-xl font-semibold text-gray-800 mb-3">
             登録完了
           </h2>
-          <p className="text-sm text-gray-500 mb-7 leading-relaxed">
-            会員登録が完了しました。<br />
-            担当店舗が決まり次第、ご連絡いたします。
+          <p className="text-sm text-gray-500 mb-7 leading-relaxed whitespace-pre-line">
+            {info || '会員登録が完了しました。\n担当店舗が決まり次第、ご連絡いたします。'}
           </p>
-          <GlassButton variant="primary" onClick={() => router.push('/login')}>
-            ログインする
+          <GlassButton variant="primary" onClick={() => router.push(registeredUserId ? '/mypage' : '/login')}>
+            {registeredUserId ? 'マイページへ' : 'ログインする'}
           </GlassButton>
         </div>
       </GlassBackground>
@@ -98,6 +201,7 @@ export default function RegisterPage() {
   const steps = [
     { num: 1, label: 'ライセンス確認' },
     { num: 2, label: '基本情報' },
+    { num: 3, label: '身分証登録' },
   ]
 
   return (
@@ -137,7 +241,7 @@ export default function RegisterPage() {
             {i < steps.length - 1 && (
               <div
                 className={`
-                  w-16 h-0.5 mx-3 -mt-5 transition-colors duration-200
+                  w-12 h-0.5 mx-2 -mt-5 transition-colors duration-200
                   ${step > s.num
                     ? 'bg-gradient-to-r from-red-500 to-rose-400'
                     : 'bg-white/60'
@@ -269,15 +373,115 @@ export default function RegisterPage() {
         </form>
       )}
 
+      {/* Step 3: ID Document */}
+      {step === 3 && (
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-base font-semibold text-gray-700 mb-1">
+              身分証明書の登録
+            </h3>
+            <p className="text-sm text-gray-500">
+              買取サービスのご利用には身分証明書の登録が必要です。<br />
+              （後でマイページからも登録できます）
+            </p>
+          </div>
+
+          {/* 書類種別 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">
+              書類の種類
+            </label>
+            <select
+              value={selectedDocType}
+              onChange={(e) => { setSelectedDocType(e.target.value); setError('') }}
+              className="w-full px-3 py-2.5 text-sm bg-white/50 border border-white/60 rounded-lg backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-red-400/50"
+            >
+              <option value="">選択してください</option>
+              {DOC_TYPES.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 表面 */}
+          {selectedDocType && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                {needsBackImage ? '表面の画像' : '画像'}
+              </label>
+              <input
+                ref={frontInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileSelect(e, 'front')}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => frontInputRef.current?.click()}
+                className="w-full px-3 py-2.5 text-sm bg-white/50 border border-white/60 border-dashed rounded-lg hover:bg-white/70 transition-colors text-gray-700"
+              >
+                {frontFile ? `選択済: ${frontFile.name}` : '画像を選択'}
+              </button>
+              {frontPreview && (
+                <img src={frontPreview} alt="表面プレビュー" className="mt-2 max-h-40 rounded-md border border-white/60" />
+              )}
+            </div>
+          )}
+
+          {/* 裏面 */}
+          {selectedDocType && needsBackImage && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                裏面の画像
+              </label>
+              <input
+                ref={backInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileSelect(e, 'back')}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => backInputRef.current?.click()}
+                className="w-full px-3 py-2.5 text-sm bg-white/50 border border-white/60 border-dashed rounded-lg hover:bg-white/70 transition-colors text-gray-700"
+              >
+                {backFile ? `選択済: ${backFile.name}` : '画像を選択'}
+              </button>
+              {backPreview && (
+                <img src={backPreview} alt="裏面プレビュー" className="mt-2 max-h-40 rounded-md border border-white/60" />
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <GlassButton variant="secondary" onClick={handleSkipIdDocument} disabled={uploadingDoc}>
+              スキップ
+            </GlassButton>
+            <GlassButton
+              variant="primary"
+              onClick={handleSubmitIdDocument}
+              disabled={uploadingDoc || !selectedDocType || !frontFile || (needsBackImage && !backFile)}
+              loading={uploadingDoc}
+            >
+              {uploadingDoc ? 'アップロード中...' : 'アップロード'}
+            </GlassButton>
+          </div>
+        </div>
+      )}
+
       {/* Login link */}
-      <div className="text-center mt-5">
-        <p className="text-sm text-gray-500">
-          すでにアカウントをお持ちの方は{' '}
-          <Link href="/login" className="text-red-500/80 hover:text-red-600 font-medium">
-            ログイン
-          </Link>
-        </p>
-      </div>
+      {step !== 3 && (
+        <div className="text-center mt-5">
+          <p className="text-sm text-gray-500">
+            すでにアカウントをお持ちの方は{' '}
+            <Link href="/login" className="text-red-500/80 hover:text-red-600 font-medium">
+              ログイン
+            </Link>
+          </p>
+        </div>
+      )}
     </GlassBackground>
   )
 }

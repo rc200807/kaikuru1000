@@ -9,7 +9,7 @@ import { ENTITY_TYPES, PREFIX_POSITIONS, CORPORATE_PREFIXES } from '@/lib/operat
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
   const user = session?.user as any
-  if (!session || user?.role !== 'admin') return null
+  if (!session || !['admin','superadmin','hr'].includes(user?.role)) return null
   return user
 }
 

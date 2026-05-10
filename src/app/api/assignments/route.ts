@@ -8,7 +8,7 @@ import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/l
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

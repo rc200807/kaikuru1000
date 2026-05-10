@@ -883,7 +883,7 @@ export default function LineManagePage() {
   useEffect(() => {
     if (status === 'authenticated') {
       const user = session?.user as any
-      if (user?.role !== 'admin') router.push('/')
+      if (!['admin','superadmin','hr'].includes(user?.role)) router.push('/')
     }
   }, [status, session, router])
 

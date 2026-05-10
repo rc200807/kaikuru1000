@@ -9,7 +9,7 @@ import { postToSheetWebhook } from '@/lib/forms/sheetWebhook'
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string; subId: string }> }) {
   const session = await getServerSession(authOptions)
   const user = session?.user as any
-  if (!session || user?.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session || !['admin','superadmin','hr'].includes(user?.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, subId } = await params
 

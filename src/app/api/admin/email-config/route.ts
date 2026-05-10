@@ -8,7 +8,7 @@ import { encrypt, decrypt } from '@/lib/encrypt'
 export async function GET() {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -42,7 +42,7 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const sessionUser = session.user as any
-  if (sessionUser.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['admin','superadmin','hr'].includes(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const currentEmail = sessionUser.email
 

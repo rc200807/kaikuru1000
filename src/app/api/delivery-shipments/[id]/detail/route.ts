@@ -26,7 +26,7 @@ export async function GET(
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const sessionUser = session.user as any
-  if (sessionUser.role !== 'store' && sessionUser.role !== 'admin') {
+  if (sessionUser.role !== 'store' && !['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

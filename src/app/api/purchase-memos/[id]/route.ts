@@ -52,7 +52,7 @@ export async function PATCH(
     if (body.imageUrls !== undefined) {
       updateData.imageUrls = JSON.stringify(Array.isArray(body.imageUrls) ? body.imageUrls : [])
     }
-  } else if (sessionUser.role === 'store' || sessionUser.role === 'admin') {
+  } else if (sessionUser.role === 'store' || ['admin','superadmin','hr'].includes(sessionUser.role)) {
     // 店舗・管理者はステータスとstoreNoteを更新可
     if (sessionUser.role === 'store') {
       // 自店舗の顧客のメモのみ
@@ -94,7 +94,7 @@ export async function DELETE(
     if (memo.userId !== sessionUser.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-  } else if (sessionUser.role !== 'admin') {
+  } else if (!['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

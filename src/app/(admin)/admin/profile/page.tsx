@@ -30,7 +30,7 @@ export default function AdminProfilePage() {
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
     if (status === 'authenticated') {
-      if (sessionUser?.role !== 'admin') { router.push('/'); return }
+      if (!['admin','superadmin','hr'].includes(sessionUser?.role)) { router.push('/'); return }
       setName(sessionUser?.name || '')
       setEmail(sessionUser?.email || '')
       setAvatarPreview(sessionUser?.avatar || null)

@@ -4,6 +4,7 @@ import { useEffect, useState, use as usePromise } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import ProductImageUploader from '@/components/admin/ProductImageUploader'
 
 type Variant = {
   id: string
@@ -19,6 +20,7 @@ type Product = {
   sellingPrice: number
   stock: number
   hasVariants: boolean
+  imageUrl: string | null
   supplierUrl: string | null
   supplierEmail: string | null
   supplierNote: string | null
@@ -63,6 +65,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
   const [purchasePrice, setPurchasePrice] = useState('0')
   const [sellingPrice, setSellingPrice] = useState('0')
   const [stock, setStock] = useState('0')
+  const [imageUrl, setImageUrl] = useState('')
   const [supplierUrl, setSupplierUrl] = useState('')
   const [supplierEmail, setSupplierEmail] = useState('')
   const [supplierNote, setSupplierNote] = useState('')
@@ -86,6 +89,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
           setPurchasePrice(String(p.purchasePrice))
           setSellingPrice(String(p.sellingPrice))
           setStock(String(p.stock))
+          setImageUrl(p.imageUrl ?? '')
           setSupplierUrl(p.supplierUrl ?? '')
           setSupplierEmail(p.supplierEmail ?? '')
           setSupplierNote(p.supplierNote ?? '')
@@ -116,6 +120,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
           purchasePrice: Number(purchasePrice),
           sellingPrice: Number(sellingPrice),
           stock: Number(stock),
+          imageUrl: imageUrl || null,
           supplierUrl: supplierUrl || null,
           supplierEmail: supplierEmail || null,
           supplierNote: supplierNote || null,
@@ -200,6 +205,16 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
 
       <section style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 20, marginBottom: 20, border: '1px solid var(--md-sys-color-outline-variant)' }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px' }}>基本情報</h2>
+        <div style={{ marginBottom: 16 }}>
+          <Field label="商品画像">
+            <ProductImageUploader
+              value={imageUrl}
+              onChange={setImageUrl}
+              onError={text => flash('error', text)}
+              disabled={!canEdit}
+            />
+          </Field>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="商品名"><input value={name} onChange={e => setName(e.target.value)} style={inputStyle} disabled={!canEdit} /></Field>
           <Field label="在庫数（バリアントなし時）"><input type="number" value={stock} onChange={e => setStock(e.target.value)} style={inputStyle} disabled={!canEdit || product.hasVariants} /></Field>

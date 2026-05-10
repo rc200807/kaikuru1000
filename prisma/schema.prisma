@@ -791,6 +791,7 @@ model Product {
   sellingPrice  Int              // 販売価格（円）
   stock         Int              @default(0)  // hasVariants=false 時の在庫
   hasVariants   Boolean          @default(false)
+  imageUrl      String?          @db.Text  // 商品画像URL（Vercel Blob）
   supplierUrl   String?          @db.Text
   supplierEmail String?
   supplierNote  String?          @db.Text

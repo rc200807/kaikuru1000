@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import ProductImageUploader from '@/components/admin/ProductImageUploader'
 
 type Variant = {
   id: string
@@ -19,6 +20,7 @@ type Product = {
   sellingPrice: number
   stock: number
   hasVariants: boolean
+  imageUrl: string | null
   supplierUrl: string | null
   supplierEmail: string | null
   supplierNote: string | null
@@ -31,6 +33,7 @@ type FormState = {
   purchasePrice: string
   sellingPrice: string
   stock: string
+  imageUrl: string
   supplierUrl: string
   supplierEmail: string
   supplierNote: string
@@ -41,6 +44,7 @@ const EMPTY: FormState = {
   purchasePrice: '',
   sellingPrice: '',
   stock: '0',
+  imageUrl: '',
   supplierUrl: '',
   supplierEmail: '',
   supplierNote: '',
@@ -113,6 +117,7 @@ export default function InventoryListPage() {
           purchasePrice,
           sellingPrice,
           stock,
+          imageUrl: form.imageUrl.trim() || null,
           supplierUrl: form.supplierUrl.trim() || null,
           supplierEmail: form.supplierEmail.trim() || null,
           supplierNote: form.supplierNote.trim() || null,
@@ -172,6 +177,7 @@ export default function InventoryListPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
           <thead>
             <tr style={{ background: 'var(--md-sys-color-surface-container)', textAlign: 'left' }}>
+              <th style={{ padding: '12px 16px', fontWeight: 600, width: 64 }}></th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>商品名</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>仕入れ価格</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>販売価格</th>
@@ -184,7 +190,7 @@ export default function InventoryListPage() {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
                   商品が登録されていません
                 </td>
               </tr>
@@ -195,6 +201,11 @@ export default function InventoryListPage() {
                 : p.stock
               return (
                 <tr key={p.id} style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+                  <td style={{ padding: '8px 16px' }}>
+                    {p.imageUrl
+                      ? <img src={p.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />
+                      : <div style={{ width: 48, height: 48, borderRadius: 6, background: 'var(--md-sys-color-surface-container)', border: '1px solid var(--md-sys-color-outline-variant)' }} />}
+                  </td>
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{p.name}</td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>¥{p.purchasePrice.toLocaleString()}</td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>¥{p.sellingPrice.toLocaleString()}</td>
@@ -236,6 +247,13 @@ export default function InventoryListPage() {
             <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700 }}>商品を追加</h2>
             {error && <p style={{ color: 'var(--md-sys-color-error)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Field label="商品画像">
+                <ProductImageUploader
+                  value={form.imageUrl}
+                  onChange={url => setForm({ ...form, imageUrl: url })}
+                  onError={msg => setError(msg)}
+                />
+              </Field>
               <Field label="商品名 *">
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
               </Field>

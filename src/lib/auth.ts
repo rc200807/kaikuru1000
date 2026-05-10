@@ -190,12 +190,13 @@ export const authOptions: NextAuthOptions = {
         }
 
         await resetLoginFailures(key)
+        const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
         return {
           id: admin.id,
           email: admin.email,
           name: admin.name,
           avatar: admin.avatar || null,
-          role: 'admin' as const,
+          role: adminRole,
         }
       },
     }),

@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     targetUserId = userId
-  } else if (sessionUser.role === 'admin') {
+  } else if (['admin','superadmin','hr'].includes(sessionUser.role)) {
     if (!userId) return NextResponse.json({ error: 'userId が必要です' }, { status: 400 })
     targetUserId = userId
   } else {

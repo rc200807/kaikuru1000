@@ -184,7 +184,7 @@ export default function AdminCustomersPage() {
   useEffect(() => {
     if (status === 'authenticated') {
       const sessionUser = session.user as any
-      if (sessionUser.role !== 'admin') {
+      if (!['admin','superadmin','hr'].includes(sessionUser.role)) {
         router.push('/')
         return
       }

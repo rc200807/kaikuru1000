@@ -125,7 +125,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (status !== 'authenticated') return
     const user = session.user as any
-    if (user.role !== 'admin') { router.push('/'); return }
+    if (!['admin','superadmin','hr'].includes(user.role)) { router.push('/'); return }
     setLoading(true)
     fetch('/api/admin/dashboard')
       .then(r => r.json())

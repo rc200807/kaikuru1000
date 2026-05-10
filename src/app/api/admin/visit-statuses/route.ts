@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any).role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes((session.user as any).role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any).role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes((session.user as any).role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

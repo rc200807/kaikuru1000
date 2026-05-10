@@ -16,7 +16,7 @@ import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
  */
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any).role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes((session.user as any).role)) {
     return NextResponse.json({ error: '権限がありません' }, { status: 403 })
   }
 

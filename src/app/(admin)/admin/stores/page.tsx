@@ -116,7 +116,7 @@ export default function AdminStoresPage() {
   useEffect(() => {
     if (status === 'authenticated') {
       const sessionUser = session.user as any
-      if (sessionUser.role !== 'admin') { router.push('/'); return }
+      if (!['admin','superadmin','hr'].includes(sessionUser.role)) { router.push('/'); return }
 
       Promise.all([
         fetch('/api/stores').then(r => r.json()),

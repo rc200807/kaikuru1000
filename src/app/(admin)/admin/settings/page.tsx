@@ -96,7 +96,7 @@ function AdminSettingsContent() {
   useEffect(() => {
     if (status === 'authenticated') {
       const sessionUser = session.user as any
-      if (sessionUser.role !== 'admin') { router.push('/'); return }
+      if (!['admin','superadmin','hr'].includes(sessionUser.role)) { router.push('/'); return }
       fetchConfig()
       fetchEmailConfig()
       fetchSiteConfig()

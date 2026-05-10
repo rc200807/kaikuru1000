@@ -15,7 +15,7 @@ function extractSpreadsheetId(input: string): string {
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
+  if (!session || !['admin','superadmin','hr'].includes(sessionUser.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

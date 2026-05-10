@@ -85,7 +85,7 @@ export async function PATCH(
     const updated = await prisma.deliveryShipment.update({ where: { id }, data: updateData })
     return NextResponse.json(toClientShipment(updated))
 
-  } else if (sessionUser.role === 'admin') {
+  } else if (['admin','superadmin','hr'].includes(sessionUser.role)) {
     const updateData: any = {}
     const validStatuses = ['registered', 'shipped', 'received', 'appraised', 'transferred']
     if (body.status !== undefined) {

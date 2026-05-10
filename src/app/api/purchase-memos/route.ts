@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ memos: memos.map(toClientMemo), total, page, limit })
   }
 
-  if (sessionUser.role === 'admin') {
+  if (['admin','superadmin','hr'].includes(sessionUser.role)) {
     const where: any = {}
     if (targetUserId) where.userId = targetUserId
     const [memos, total] = await Promise.all([

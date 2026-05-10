@@ -16,7 +16,7 @@ const updateSchema = z.object({
 async function requireAdmin(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const user = session?.user as any
-  if (!user || user.role !== 'admin') return null
+  if (!user || !['admin','superadmin','hr'].includes(user.role)) return null
   return user
 }
 

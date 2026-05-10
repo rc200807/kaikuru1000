@@ -294,7 +294,7 @@ model Admin {
   name          String
   email         String         @unique
   password      String
-  role          String         @default("admin") // admin, superadmin
+  role          String         @default("admin") // admin, superadmin, hr
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
   announcements  Announcement[]
   trainingVideos TrainingVideo[]
@@ -781,4 +781,75 @@ model FormSubmission {
 
   @@index([formId, createdAt])
   @@index([userId])
+}
+
+// 備品（社内商品）
+model Product {
+  id            String           @id @default(cuid())
+  name          String
+  purchasePrice Int              // 仕入れ価格（円）
+  sellingPrice  Int              // 販売価格（円）
+  stock         Int              @default(0)  // hasVariants=false 時の在庫
+  hasVariants   Boolean          @default(false)
+  supplierUrl   String?          @db.Text
+  supplierEmail String?
+  supplierNote  String?          @db.Text
+  variants      ProductVariant[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model ProductVariant {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizeName     String
+  stock        Int      @default(0)
+  sellingPrice Int?     // null の場合は Product.sellingPrice を使う
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([productId])
+}
+
+// 社員情報
+model Employee {
+  id                          String    @id @default(cuid())
+  employeeNumber              String    @unique
+  lastName                    String
+  firstName                   String
+  lastNameKana                String?
+  firstNameKana               String?
+  hireDate                    DateTime?
+  hireType                    String?   // 中途/新卒/その他
+  employmentType              String?   // 正社員/契約/パート/業務委託
+  department                  String?
+  jobTitle                    String?
+  jobCategory                 String?
+  jobDescription              String?   @db.Text
+  resignDate                  DateTime?
+  resignType                  String?
+  gender                      String?
+  workEmail                   String?
+  workPhone                   String?
+  dateOfBirth                 DateTime?
+  address                     String?   @db.Text
+  emergencyContact            String?   @db.Text
+  personalPhone               String?
+  // 暗号化フィールド（AES-256-GCM、@/lib/encrypt）
+  basicPensionNumberEnc        String?   @db.Text
+  healthInsuranceNumberEnc     String?   @db.Text
+  employmentInsuranceNumberEnc String?   @db.Text
+  residenceCardNumberEnc       String?   @db.Text
+  payrollBankInfoEnc           String?   @db.Text
+  qualifications              String?   @db.Text
+  resumeDriveUrl              String?   @db.Text
+  businessCardDriveUrl        String?   @db.Text
+  profilePhotoDriveUrl        String?   @db.Text
+  maritalStatus               String?   // single / married
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  @@index([department])
+  @@index([resignDate])
 }

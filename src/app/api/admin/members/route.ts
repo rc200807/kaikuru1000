@@ -6,34 +6,40 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { sendWelcomeWithPasswordEmail } from '@/lib/mailer'
 import { generateSecurePassword } from '@/lib/password-utils'
+import { ADMIN_ROLES } from '@/lib/admin-auth'
 
 const createMemberSchema = z.object({
   name:  z.string().min(1, '氏名は必須です').max(100),
   email: z.string().email('有効なメールアドレスを入力してください'),
+  role:  z.enum(['admin', 'superadmin', 'hr']).optional(),
 })
 
-// 管理者メンバー一覧取得
-export async function GET() {
+async function requireAnyAdmin() {
   const session = await getServerSession(authOptions)
-  const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = session?.user as any
+  if (!session || !ADMIN_ROLES.includes(user?.role)) return null
+  return user as { id: string; role: 'admin' | 'superadmin' | 'hr' }
+}
+
+// 管理者メンバー一覧取得（admin/superadmin/hr 共通で閲覧可）
+export async function GET() {
+  const user = await requireAnyAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const members = await prisma.admin.findMany({
-    select: { id: true, name: true, email: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
 
   return NextResponse.json(members)
 }
 
-// 管理者メンバー追加
+// 管理者メンバー追加（superadmin のみ）
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  const sessionUser = session?.user as any
-  if (!session || sessionUser.role !== 'admin') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await requireAnyAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (user.role !== 'superadmin') {
+    return NextResponse.json({ error: '管理者の追加は superadmin のみ実行できます' }, { status: 403 })
   }
 
   const body = await request.json()
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, email } = parsed.data
+  const { name, email, role } = parsed.data
 
   const existing = await prisma.admin.findUnique({ where: { email } })
   if (existing) {
@@ -53,8 +59,8 @@ export async function POST(request: NextRequest) {
   const rawPassword = generateSecurePassword()
   const hashed = await bcrypt.hash(rawPassword, 10)
   const member = await prisma.admin.create({
-    data: { name, email, password: hashed },
-    select: { id: true, name: true, email: true, createdAt: true },
+    data: { name, email, password: hashed, role: role ?? 'admin' },
+    select: { id: true, name: true, email: true, role: true, createdAt: true },
   })
 
   // 招待メール送信（ログイン情報を通知）

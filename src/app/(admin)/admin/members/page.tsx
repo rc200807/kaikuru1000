@@ -14,11 +14,26 @@ import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 
+type AdminRole = 'admin' | 'superadmin' | 'hr'
+
 type AdminMember = {
   id: string
   name: string
   email: string
+  role: AdminRole
   createdAt: string
+}
+
+const ROLE_LABEL: Record<AdminRole, string> = {
+  superadmin: 'Super Admin',
+  hr: 'HR（人事）',
+  admin: '管理者',
+}
+
+const ROLE_BADGE_STYLE: Record<AdminRole, string> = {
+  superadmin: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+  hr: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+  admin: 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] border border-transparent',
 }
 
 export default function AdminMembersPage() {
@@ -35,6 +50,9 @@ export default function AdminMembersPage() {
   // 削除確認モーダル
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
 
+  // ロール変更
+  const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null)
+
   // パスワード再発行
   const [resetTarget, setResetTarget] = useState<{ id: string; name: string; email: string } | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
@@ -45,7 +63,8 @@ export default function AdminMembersPage() {
     if (status === 'unauthenticated') router.push('/admin/login')
     if (status === 'authenticated') {
       const sessionUser = session.user as any
-      if (sessionUser.role !== 'admin') router.push('/')
+      const allowed = ['admin', 'superadmin', 'hr']
+      if (!allowed.includes(sessionUser.role)) router.push('/')
     }
   }, [status, session, router])
 
@@ -130,8 +149,30 @@ export default function AdminMembersPage() {
     }
   }
 
+  async function handleChangeRole(id: string, newRole: AdminRole) {
+    setRoleUpdatingId(id)
+    setMessage(null)
+    const res = await fetch(`/api/admin/members/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole }),
+    })
+    setRoleUpdatingId(null)
+    if (res.ok) {
+      const updated = await res.json()
+      setMembers(prev => prev.map(m => (m.id === id ? { ...m, role: updated.role } : m)))
+      setMessage({ type: 'success', text: `${updated.name} さんのロールを ${ROLE_LABEL[updated.role as AdminRole]} に変更しました` })
+    } else {
+      const d = await res.json().catch(() => ({}))
+      setMessage({ type: 'error', text: d.error || 'ロール変更に失敗しました' })
+    }
+  }
+
   const sessionUser = session?.user as any
+  const sessionRole = sessionUser?.role as AdminRole | undefined
+  const canManageRoles = sessionRole === 'superadmin'
   const otherMembers = members.filter(m => m.id !== sessionUser?.id)
+  const myMember = members.find(m => m.id === sessionUser?.id)
 
   if (status === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
@@ -143,18 +184,20 @@ export default function AdminMembersPage() {
         title="メンバー管理"
         subtitle="管理ポータル"
         actions={
-          <Button
-            variant="filled"
-            size="sm"
-            onClick={() => { setShowForm(true); setMessage(null) }}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            }
-          >
-            メンバー追加
-          </Button>
+          canManageRoles ? (
+            <Button
+              variant="filled"
+              size="sm"
+              onClick={() => { setShowForm(true); setMessage(null) }}
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              }
+            >
+              メンバー追加
+            </Button>
+          ) : null
         }
       />
 
@@ -188,6 +231,11 @@ export default function AdminMembersPage() {
               <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{sessionUser?.name}</p>
               <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{sessionUser?.email}</p>
             </div>
+            {myMember && (
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${ROLE_BADGE_STYLE[myMember.role]}`}>
+                {ROLE_LABEL[myMember.role]}
+              </span>
+            )}
             <span className="text-xs font-medium bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] px-2.5 py-1 rounded-full">
               ログイン中
             </span>
@@ -220,6 +268,22 @@ export default function AdminMembersPage() {
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 hidden sm:block">
                   {format(new Date(member.createdAt), 'yyyy/M/d 追加', { locale: ja })}
                 </p>
+                {canManageRoles ? (
+                  <select
+                    value={member.role}
+                    disabled={roleUpdatingId === member.id}
+                    onChange={e => handleChangeRole(member.id, e.target.value as AdminRole)}
+                    className={`text-xs font-medium px-2 py-1 rounded-full ${ROLE_BADGE_STYLE[member.role]} cursor-pointer disabled:opacity-50`}
+                  >
+                    <option value="superadmin">Super Admin</option>
+                    <option value="hr">HR（人事）</option>
+                    <option value="admin">管理者</option>
+                  </select>
+                ) : (
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${ROLE_BADGE_STYLE[member.role]}`}>
+                    {ROLE_LABEL[member.role]}
+                  </span>
+                )}
                 <Button
                   variant="text"
                   size="sm"
@@ -229,16 +293,18 @@ export default function AdminMembersPage() {
                 >
                   PW再発行
                 </Button>
-                <Button
-                  variant="text"
-                  size="sm"
-                  danger
-                  disabled={deletingId === member.id || resettingId === member.id}
-                  loading={deletingId === member.id}
-                  onClick={() => setDeleteTarget({ id: member.id, name: member.name })}
-                >
-                  削除
-                </Button>
+                {canManageRoles && (
+                  <Button
+                    variant="text"
+                    size="sm"
+                    danger
+                    disabled={deletingId === member.id || resettingId === member.id}
+                    loading={deletingId === member.id}
+                    onClick={() => setDeleteTarget({ id: member.id, name: member.name })}
+                  >
+                    削除
+                  </Button>
+                )}
               </div>
             ))
           ) : (

@@ -37,6 +37,27 @@ type TrainingVideo = {
   keyPoints: string | null
   admin: { name: string }
   createdAt: string
+  viewedStoreCount?: number
+  totalActiveStores?: number
+  totalPlays?: number
+}
+
+type ViewStat = {
+  storeId: string
+  storeName: string
+  storeCode: string
+  viewed: boolean
+  playCount: number
+  firstViewedAt: string | null
+  lastViewedAt: string | null
+}
+
+type ViewsResponse = {
+  video: { id: string; title: string }
+  viewedCount: number
+  totalStores: number
+  totalPlays: number
+  stats: ViewStat[]
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -79,6 +100,25 @@ export default function AdminTrainingVideosPage() {
   const [filterCatId, setFilterCatId] = useState<string>('all')
   // 詳細モーダル
   const [detailVideo, setDetailVideo] = useState<TrainingVideo | null>(null)
+
+  // 視聴状況モーダル
+  const [viewsModalVideo, setViewsModalVideo] = useState<TrainingVideo | null>(null)
+  const [viewsData, setViewsData] = useState<ViewsResponse | null>(null)
+  const [viewsLoading, setViewsLoading] = useState(false)
+  const [viewsFilter, setViewsFilter] = useState<'all' | 'viewed' | 'unviewed'>('all')
+
+  async function openViewsModal(v: TrainingVideo) {
+    setViewsModalVideo(v)
+    setViewsData(null)
+    setViewsFilter('all')
+    setViewsLoading(true)
+    try {
+      const res = await fetch(`/api/admin/training-videos/${v.id}/views`)
+      if (res.ok) setViewsData(await res.json())
+    } finally {
+      setViewsLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
@@ -729,6 +769,23 @@ export default function AdminTrainingVideosPage() {
                       </div>
                     </div>
 
+                    {/* 視聴状況サマリ */}
+                    {typeof v.totalActiveStores === 'number' && v.totalActiveStores > 0 && (
+                      <button
+                        onClick={() => openViewsModal(v)}
+                        className="mt-3 w-full px-3 py-2 rounded-xl border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container)] flex items-center justify-between transition-colors"
+                      >
+                        <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">店舗視聴状況</span>
+                        <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
+                          <span className="text-emerald-600 dark:text-emerald-400">{v.viewedStoreCount ?? 0}</span>
+                          <span className="text-[var(--md-sys-color-on-surface-variant)]"> / {v.totalActiveStores} 店舗</span>
+                          {typeof v.totalPlays === 'number' && v.totalPlays > 0 && (
+                            <span className="text-[var(--md-sys-color-on-surface-variant)]"> ・ {v.totalPlays}回再生</span>
+                          )}
+                        </span>
+                      </button>
+                    )}
+
                     {/* 詳細を見る */}
                     <button
                       onClick={() => setDetailVideo(v)}
@@ -861,6 +918,109 @@ export default function AdminTrainingVideosPage() {
                 <div className="flex gap-2 ml-auto">
                   <Button size="sm" variant="tonal" onClick={() => { startEditVideo(detailVideo); setDetailVideo(null) }}>編集</Button>
                 </div>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* ===== 視聴状況モーダル ===== */}
+      <Modal
+        open={!!viewsModalVideo}
+        onClose={() => { setViewsModalVideo(null); setViewsData(null) }}
+        title={viewsModalVideo ? `店舗視聴状況: ${viewsModalVideo.title}` : '視聴状況'}
+        size="lg"
+      >
+        {viewsLoading && (
+          <div className="py-10 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">読み込み中...</div>
+        )}
+        {!viewsLoading && viewsData && (() => {
+          const filtered = viewsData.stats.filter(s => {
+            if (viewsFilter === 'viewed') return s.viewed
+            if (viewsFilter === 'unviewed') return !s.viewed
+            return true
+          })
+          return (
+            <div className="space-y-4">
+              {/* サマリカード */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl px-4 py-3 bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-400 font-bold">視聴済み</p>
+                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                    {viewsData.viewedCount}
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] font-normal ml-1">/ {viewsData.totalStores}</span>
+                  </p>
+                </div>
+                <div className="rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400 font-bold">未視聴</p>
+                  <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                    {viewsData.totalStores - viewsData.viewedCount}
+                  </p>
+                </div>
+                <div className="rounded-xl px-4 py-3 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)]">
+                  <p className="text-[10px] uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)] font-bold">合計再生回数</p>
+                  <p className="text-xl font-bold text-[var(--md-sys-color-on-surface)] mt-1">{viewsData.totalPlays}</p>
+                </div>
+              </div>
+
+              {/* フィルター */}
+              <div className="flex gap-2">
+                {([
+                  { key: 'all', label: 'すべて' },
+                  { key: 'viewed', label: '視聴済み' },
+                  { key: 'unviewed', label: '未視聴' },
+                ] as const).map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setViewsFilter(t.key)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      viewsFilter === t.key
+                        ? 'bg-[var(--admin-primary)] text-[var(--admin-on-primary)]'
+                        : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* 店舗別テーブル */}
+              <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">店舗</th>
+                      <th className="px-3 py-2 text-left font-semibold w-24">状態</th>
+                      <th className="px-3 py-2 text-right font-semibold w-20">再生回数</th>
+                      <th className="px-3 py-2 text-left font-semibold w-36">最終視聴</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-8 text-center text-xs text-[var(--md-sys-color-on-surface-variant)]">該当する店舗がありません</td>
+                      </tr>
+                    ) : (
+                      filtered.map(s => (
+                        <tr key={s.storeId} className="border-t border-[var(--md-sys-color-outline-variant)]">
+                          <td className="px-3 py-2">
+                            <div className="font-medium">{s.storeName}</div>
+                            <div className="text-[10px] font-mono text-[var(--md-sys-color-on-surface-variant)]">{s.storeCode}</div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.viewed ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'}`}>
+                              {s.viewed ? '視聴済み' : '未視聴'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">{s.playCount || '—'}</td>
+                          <td className="px-3 py-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            {s.lastViewedAt ? format(new Date(s.lastViewedAt), 'yyyy/M/d HH:mm', { locale: ja }) : '—'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )

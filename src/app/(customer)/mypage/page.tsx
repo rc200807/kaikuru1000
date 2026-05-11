@@ -2316,6 +2316,15 @@ function MyPageContent() {
                   </svg>
                   注意事項
                 </h3>
+
+                {/* クーリングオフ対象外 */}
+                <div className="mb-3 px-3 py-2 rounded-md bg-amber-100/70 border border-amber-300/70">
+                  <p className="text-xs font-bold text-amber-900">宅配買取はクーリングオフ制度の対象外です</p>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    特定商取引法上、お客様ご自身で商品を送付いただく宅配買取は「訪問購入」に該当しないため、契約後の解除（クーリングオフ）はできません。送付前に内容をご確認ください。
+                  </p>
+                </div>
+
                 <p className="text-xs text-amber-700 mb-2">以下のようなものは箱に入れていただくことができません。</p>
                 <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
                   <li>当社規定の「<button type="button" onClick={() => setShowWorthlessModal(true)} className="text-[#B91C1C] underline font-medium hover:text-red-700">無価値</button>」となる商品</li>

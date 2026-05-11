@@ -105,6 +105,7 @@ model Store {
   businessHoursStart  String?   @default("10:00") // 営業開始時間
   businessHoursEnd    String?   @default("19:00") // 営業終了時間
   businessDays        String?   @default("[0,1,2,3,4,5,6]") // 営業曜日 JSON配列 (0=日,1=月,...6=土)
+  stripeCustomerId    String?   @unique  // Stripe Customer ID（カード情報のオーナー識別子）
   customers  User[]
   visitSchedules VisitSchedule[]
   visitRequests  VisitRequest[]

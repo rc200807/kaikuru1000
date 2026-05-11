@@ -15,6 +15,9 @@ type Video = {
   thumbnailUrl: string | null
   fileSize: number | null
   publishedAt: string
+  viewed: boolean
+  playCount: number
+  lastViewedAt: string | null
 }
 
 type CategoryWithVideos = {
@@ -127,6 +130,16 @@ export default function StoreTrainingVideosPage() {
                             <svg className="w-7 h-7 text-[var(--store-primary)] ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                           </div>
                         </div>
+                        {/* 視聴ステータスバッジ */}
+                        <span
+                          className={`absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded-full shadow-md ${
+                            video.viewed
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-amber-500 text-white'
+                          }`}
+                        >
+                          {video.viewed ? '✓ 閲覧済み' : '未閲覧'}
+                        </span>
                       </div>
                       <div className="p-4">
                         <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] line-clamp-2 group-hover:text-[var(--store-primary)] transition-colors">

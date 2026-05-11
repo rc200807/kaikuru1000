@@ -19,10 +19,29 @@ export async function GET() {
     include: {
       category: { select: { id: true, name: true } },
       admin: { select: { name: true } },
+      _count: { select: { views: true } },
     },
   })
 
-  return NextResponse.json(videos)
+  // 全店舗数を取得（視聴率の分母として）
+  const totalActiveStores = await prisma.store.count({ where: { isActive: true } })
+
+  // 各動画の合計再生回数を集計
+  const playSums = await prisma.trainingVideoView.groupBy({
+    by: ['trainingVideoId'],
+    _sum: { playCount: true },
+    where: { trainingVideoId: { in: videos.map(v => v.id) } },
+  })
+  const totalPlayMap = new Map(playSums.map(p => [p.trainingVideoId, p._sum.playCount ?? 0]))
+
+  const result = videos.map(v => ({
+    ...v,
+    viewedStoreCount: v._count.views,
+    totalActiveStores,
+    totalPlays: totalPlayMap.get(v.id) ?? 0,
+  }))
+
+  return NextResponse.json(result)
 }
 
 /** 動画作成 */

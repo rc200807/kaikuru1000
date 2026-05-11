@@ -11,6 +11,8 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const storeId = user.id as string
+
   // カテゴリごとにグループ化して返す
   const categories = await prisma.videoCategory.findMany({
     orderBy: { sortOrder: 'asc' },
@@ -29,18 +31,31 @@ export async function GET() {
           thumbnailUrl: true,
           fileSize: true,
           publishedAt: true,
+          views: {
+            where: { storeId },
+            select: { playCount: true, lastViewedAt: true },
+          },
         },
       },
     },
   })
 
-  // 動画があるカテゴリのみ返す
+  // 動画があるカテゴリのみ返し、各動画に viewed フラグを付与
   const result = categories
     .filter(c => c.videos.length > 0)
     .map(c => ({
       id: c.id,
       name: c.name,
-      videos: c.videos,
+      videos: c.videos.map(v => {
+        const view = v.views[0]
+        const { views, ...rest } = v
+        return {
+          ...rest,
+          viewed: !!view,
+          playCount: view?.playCount ?? 0,
+          lastViewedAt: view?.lastViewedAt ?? null,
+        }
+      }),
     }))
 
   return NextResponse.json(result)

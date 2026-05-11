@@ -118,6 +118,7 @@ model Store {
   inquiries  Inquiry[]
   lineChannels LineChannel[]
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
+  trainingVideoViews   TrainingVideoView[]
   // 運営者（複数店舗を1運営者が運営できる）
   operatorId String?
   operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
@@ -587,12 +588,29 @@ model TrainingVideo {
   keyPoints     String?        @db.Text   // 重要ポイント(JSON配列)
   adminId       String
   admin         Admin          @relation(fields: [adminId], references: [id])
+  views         TrainingVideoView[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
   @@index([categoryId])
   @@index([isPublished])
   @@index([adminId])
+}
+
+// 研修動画の店舗別視聴ステータス（店舗×動画でユニーク、再生回数を保持）
+model TrainingVideoView {
+  id              String        @id @default(cuid())
+  trainingVideoId String
+  trainingVideo   TrainingVideo @relation(fields: [trainingVideoId], references: [id], onDelete: Cascade)
+  storeId         String
+  store           Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  playCount       Int           @default(0)
+  firstViewedAt   DateTime      @default(now())
+  lastViewedAt    DateTime      @default(now())
+
+  @@unique([trainingVideoId, storeId])
+  @@index([storeId])
+  @@index([trainingVideoId])
 }
 
 // コミュニティスレッド

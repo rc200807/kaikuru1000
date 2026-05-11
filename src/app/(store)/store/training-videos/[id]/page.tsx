@@ -28,6 +28,17 @@ export default function StoreTrainingVideoDetailPage() {
   const [video, setVideo] = useState<VideoDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [viewRecorded, setViewRecorded] = useState(false)
+
+  function handlePlay() {
+    // 1回の表示につき1回だけ記録（巻き戻し再生で多重カウントを避ける）
+    if (viewRecorded || !params.id) return
+    setViewRecorded(true)
+    fetch(`/api/store/training-videos/${params.id}/view`, { method: 'POST' }).catch(() => {
+      // 記録失敗しても再生体験は妨げない。次回のチャンスのため flag を戻す
+      setViewRecorded(false)
+    })
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -93,6 +104,7 @@ export default function StoreTrainingVideoDetailPage() {
           preload="metadata"
           poster={video.thumbnailUrl || undefined}
           controlsList="nodownload"
+          onPlay={handlePlay}
         />
       </div>
 

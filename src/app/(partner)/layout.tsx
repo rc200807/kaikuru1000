@@ -36,7 +36,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
 
   return (
     <div data-portal="partner" className="flex min-h-screen bg-[#0f1115] text-[#ededed]">
-      <aside className="hidden lg:flex w-60 flex-col bg-[#0a0a0a] shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.06)]">
+      <aside className="hidden lg:flex w-60 flex-col flex-shrink-0 h-screen sticky top-0 bg-[#0a0a0a] shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.06)]">
         {/* ヘッダー */}
         <div className="px-5 pt-5 pb-4">
           <p className="text-sm font-semibold">セールスパートナー</p>

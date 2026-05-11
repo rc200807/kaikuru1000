@@ -200,6 +200,49 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // セールスパートナーログイン
+    CredentialsProvider({
+      id: 'partner',
+      name: 'セールスパートナー',
+      credentials: {
+        email: { label: 'メールアドレス', type: 'email' },
+        password: { label: 'パスワード', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null
+
+        const key = `partner:${credentials.email}`
+        const { blocked, remainingMs } = await isLoginBlocked(key)
+        if (blocked) {
+          const mins = Math.ceil((remainingMs ?? 0) / 60000)
+          throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
+        }
+
+        const partner = await prisma.salesPartner.findUnique({
+          where: { email: credentials.email },
+        })
+
+        if (!partner || !partner.isActive || !partner.password) {
+          await recordLoginFailure(key)
+          return null
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, partner.password)
+        if (!isValid) {
+          await recordLoginFailure(key)
+          return null
+        }
+
+        await resetLoginFailures(key)
+        return {
+          id: partner.id,
+          email: partner.email,
+          name: partner.name,
+          avatar: null,
+          role: 'partner' as const,
+        }
+      },
+    }),
     // マジックリンクログイン（顧客用）
     CredentialsProvider({
       id: 'magic-link',

@@ -73,6 +73,7 @@ model User {
   inquiries         Inquiry[]
   lineUsers         LineUser[]
   formSubmissions   FormSubmission[]
+  partnerNotes      SalesPartnerCustomerNote[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -300,6 +301,8 @@ model Admin {
   announcements  Announcement[]
   trainingVideos TrainingVideo[]
   forms          Form[]
+  invitedPartners SalesPartner[]           @relation("SalesPartnerInvitedBy")
+  partnerInvitationsCreated SalesPartnerInvitation[] @relation("SalesPartnerInvCreatedBy")
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -871,4 +874,53 @@ model Employee {
 
   @@index([department])
   @@index([resignDate])
+}
+
+// セールスパートナー（紹介営業担当者）
+model SalesPartner {
+  id           String                       @id @default(cuid())
+  name         String
+  email        String                       @unique
+  password     String?                      // 招待受諾時に設定。未受諾はnull
+  isActive     Boolean                      @default(true)
+  invitedById  String?                      // 招待発行した Admin
+  invitedBy    Admin?                       @relation("SalesPartnerInvitedBy", fields: [invitedById], references: [id])
+  acceptedAt   DateTime?                    // 招待受諾日時
+  invitations  SalesPartnerInvitation[]
+  customerNotes SalesPartnerCustomerNote[]
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+}
+
+// セールスパートナー招待リンク（管理者が発行）
+model SalesPartnerInvitation {
+  id             String        @id @default(cuid())
+  token          String        @unique
+  email          String                                       // 招待先メールアドレス
+  name           String?                                       // 想定名（省略可）
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdById    String                                        // 発行した Admin
+  createdBy      Admin         @relation("SalesPartnerInvCreatedBy", fields: [createdById], references: [id])
+  salesPartnerId String?                                       // 受諾後にセット
+  salesPartner   SalesPartner? @relation(fields: [salesPartnerId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+
+  @@index([email])
+}
+
+// セールスパートナー独自の顧客メモ・タグ
+model SalesPartnerCustomerNote {
+  id             String       @id @default(cuid())
+  salesPartnerId String
+  salesPartner   SalesPartner @relation(fields: [salesPartnerId], references: [id], onDelete: Cascade)
+  userId         String                                         // 対象顧客
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note           String?      @db.Text
+  tag            String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([salesPartnerId, userId])
+  @@index([userId])
 }

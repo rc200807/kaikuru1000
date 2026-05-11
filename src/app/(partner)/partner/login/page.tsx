@@ -14,7 +14,7 @@ export default function PartnerLoginPage() {
 
   useEffect(() => {
     if (status === 'authenticated' && (session?.user as any)?.role === 'partner') {
-      router.push('/partner/dashboard')
+      router.push('/partner/customers')
     }
   }, [status, session, router])
 
@@ -27,7 +27,7 @@ export default function PartnerLoginPage() {
     if (result?.error) {
       setError(result.error === 'CredentialsSignin' ? 'メールまたはパスワードが正しくありません' : result.error)
     } else if (result?.ok) {
-      router.push('/partner/dashboard')
+      router.push('/partner/customers')
     }
   }
 

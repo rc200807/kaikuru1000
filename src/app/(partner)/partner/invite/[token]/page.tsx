@@ -46,7 +46,7 @@ export default function PartnerInviteAcceptPage({ params }: { params: Promise<{ 
     // 自動ログイン
     const result = await signIn('partner', { redirect: false, email: data.email, password })
     setSubmitting(false)
-    if (result?.ok) router.push('/partner/dashboard')
+    if (result?.ok) router.push('/partner/customers')
     else router.push('/partner/login')
   }
 

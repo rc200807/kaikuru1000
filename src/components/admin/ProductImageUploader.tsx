@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { compressImageIfNeeded } from '@/lib/image-utils'
 
 type Props = {
   value: string
@@ -13,16 +14,22 @@ export default function ProductImageUploader({ value, onChange, onError, disable
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
-  async function handleFile(file: File) {
-    if (!file.type.startsWith('image/')) {
+  async function handleFile(rawFile: File) {
+    if (!rawFile.type.startsWith('image/') && !rawFile.name.match(/\.(heic|heif)$/i)) {
       onError?.('画像ファイルのみアップロードできます')
       return
     }
     setUploading(true)
     try {
+      // クライアント側でリサイズ + JPEG 再エンコード（Vercel の 4.5MB body 上限対策）
+      const file = await compressImageIfNeeded(rawFile)
       const fd = new FormData()
       fd.append('file', file)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      if (res.status === 413) {
+        onError?.('画像のサイズが大きすぎます。別の画像をお試しください。')
+        return
+      }
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.url) {
         onError?.(data.error ?? 'アップロードに失敗しました')

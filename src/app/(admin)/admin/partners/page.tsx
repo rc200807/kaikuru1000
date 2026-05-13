@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
@@ -31,6 +31,18 @@ type Invitation = {
   salesPartner: { id: string; name: string } | null
 }
 
+type ImportLog = {
+  id: string
+  fileName: string
+  totalRows: number
+  createdCount: number
+  updatedCount: number
+  errorCount: number
+  errors: { row: number; licenseKey?: string; message: string }[] | null
+  createdAt: string
+  partner: { id: string; name: string; email: string } | null
+}
+
 const inputStyle: React.CSSProperties = {
   padding: '8px 10px', borderRadius: 6,
   border: '1px solid var(--md-sys-color-outline-variant)',
@@ -42,9 +54,11 @@ const inputStyle: React.CSSProperties = {
 export default function AdminPartnersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [tab, setTab] = useState<'partners' | 'invitations'>('partners')
+  const [tab, setTab] = useState<'partners' | 'invitations' | 'imports'>('partners')
   const [partners, setPartners] = useState<Partner[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [imports, setImports] = useState<ImportLog[]>([])
+  const [expandedImportId, setExpandedImportId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
@@ -65,9 +79,11 @@ export default function AdminPartnersPage() {
     Promise.all([
       fetch('/api/admin/partners').then(r => r.ok ? r.json() : []),
       fetch('/api/admin/partners/invitations').then(r => r.ok ? r.json() : []),
-    ]).then(([p, inv]) => {
+      fetch('/api/admin/partners/imports').then(r => r.ok ? r.json() : []),
+    ]).then(([p, inv, imp]) => {
       setPartners(p)
       setInvitations(inv)
+      setImports(imp)
     }).finally(() => setLoading(false))
   }
 
@@ -223,6 +239,12 @@ export default function AdminPartnersPage() {
         >
           招待リンク ({invitations.length})
         </button>
+        <button
+          onClick={() => setTab('imports')}
+          style={{ padding: '8px 16px', background: 'transparent', border: 'none', borderBottom: tab === 'imports' ? '2px solid var(--md-sys-color-primary)' : '2px solid transparent', color: tab === 'imports' ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-on-surface-variant)', fontWeight: 600, cursor: 'pointer' }}
+        >
+          インポート履歴 ({imports.length})
+        </button>
       </div>
 
       {tab === 'partners' && (
@@ -261,6 +283,83 @@ export default function AdminPartnersPage() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === 'imports' && (
+        <div style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, border: '1px solid var(--md-sys-color-outline-variant)', overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr style={{ background: 'var(--md-sys-color-surface-container)', textAlign: 'left' }}>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>実行日時</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>パートナー</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>ファイル名</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>合計</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>新規</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>更新</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>エラー</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {imports.length === 0 ? (
+                <tr><td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>インポート履歴はありません</td></tr>
+              ) : imports.map(log => {
+                const expanded = expandedImportId === log.id
+                const hasErrors = log.errorCount > 0 && log.errors && log.errors.length > 0
+                return (
+                  <Fragment key={log.id}>
+                    <tr style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+                      <td style={{ padding: '12px 16px', fontSize: 12 }}>{format(new Date(log.createdAt), 'yyyy/M/d HH:mm', { locale: ja })}</td>
+                      <td style={{ padding: '12px 16px', fontSize: 13 }}>
+                        <div style={{ fontWeight: 600 }}>{log.partner?.name ?? '—'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>{log.partner?.email ?? ''}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: 12, fontFamily: 'monospace' }}>{log.fileName}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace' }}>{log.totalRows}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#66bb6a' }}>{log.createdCount}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', color: '#42a5f5' }}>{log.updatedCount}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', color: log.errorCount > 0 ? '#ef5350' : 'var(--md-sys-color-on-surface-variant)' }}>{log.errorCount}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        {hasErrors && (
+                          <button
+                            onClick={() => setExpandedImportId(expanded ? null : log.id)}
+                            style={{ padding: '6px 12px', borderRadius: 6, background: 'transparent', color: 'var(--md-sys-color-primary)', border: '1px solid var(--md-sys-color-outline)', fontSize: 12, cursor: 'pointer' }}
+                          >
+                            {expanded ? '閉じる' : 'エラー詳細'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {expanded && hasErrors && (
+                      <tr style={{ background: 'var(--md-sys-color-surface-container)' }}>
+                        <td colSpan={8} style={{ padding: '12px 16px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                            <thead>
+                              <tr style={{ textAlign: 'left', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                                <th style={{ padding: '6px 8px', width: 60 }}>行</th>
+                                <th style={{ padding: '6px 8px', width: 220 }}>ライセンスキー</th>
+                                <th style={{ padding: '6px 8px' }}>エラー内容</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {log.errors!.map((e, i) => (
+                                <tr key={i}>
+                                  <td style={{ padding: '4px 8px', fontFamily: 'monospace' }}>{e.row}</td>
+                                  <td style={{ padding: '4px 8px', fontFamily: 'monospace' }}>{e.licenseKey ?? '—'}</td>
+                                  <td style={{ padding: '4px 8px', color: '#ef5350' }}>{e.message}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>

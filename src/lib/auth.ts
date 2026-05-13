@@ -147,6 +147,7 @@ export const authOptions: NextAuthOptions = {
               name: member.name,
               avatar: member.avatar || null,
               role: 'store' as const,
+              isSubAccount: true,
             }
           }
         }
@@ -288,6 +289,7 @@ export const authOptions: NextAuthOptions = {
         token.avatar = (user as any).avatar ?? null
         token.customerType = (user as any).customerType ?? null
         token.customerTypes = (user as any).customerTypes ?? null
+        token.isSubAccount = (user as any).isSubAccount ?? false
       }
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
@@ -319,6 +321,7 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).avatar = token.avatar ?? null
         ;(session.user as any).customerType = token.customerType ?? null
         ;(session.user as any).customerTypes = token.customerTypes ?? null
+        ;(session.user as any).isSubAccount = (token as any).isSubAccount ?? false
         if (token.name) session.user.name = token.name as string
         if (token.email) session.user.email = token.email as string
       }

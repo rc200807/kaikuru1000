@@ -888,6 +888,7 @@ model SalesPartner {
   acceptedAt   DateTime?                    // 招待受諾日時
   invitations  SalesPartnerInvitation[]
   customerNotes SalesPartnerCustomerNote[]
+  customerImports PartnerCustomerImport[]
   createdAt    DateTime                     @default(now())
   updatedAt    DateTime                     @updatedAt
 }
@@ -923,4 +924,21 @@ model SalesPartnerCustomerNote {
 
   @@unique([salesPartnerId, userId])
   @@index([userId])
+}
+
+// セールスパートナーによる顧客CSVインポート履歴
+model PartnerCustomerImport {
+  id            String       @id @default(cuid())
+  partnerId     String
+  partner       SalesPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  fileName      String
+  totalRows     Int                                              // ヘッダー除くデータ行数
+  createdCount  Int                                              // 新規作成行数
+  updatedCount  Int                                              // 更新行数
+  errorCount    Int                                              // エラー行数
+  errors        Json?                                            // [{row, licenseKey?, message}]
+  createdAt     DateTime     @default(now())
+
+  @@index([partnerId])
+  @@index([createdAt])
 }

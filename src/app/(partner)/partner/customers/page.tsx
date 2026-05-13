@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 type Customer = {
   id: string
@@ -56,7 +57,15 @@ export default function PartnerCustomersPage() {
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">ライセンスキー顧客</h1>
+      <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+        <h1 className="text-2xl font-bold">ライセンスキー顧客</h1>
+        <Link
+          href="/partner/customers/import"
+          className="px-3 py-1.5 rounded-md bg-white text-black text-xs font-semibold hover:bg-[#e5e5e5]"
+        >
+          + CSV インポート
+        </Link>
+      </div>
       <p className="text-sm text-[#a3a3a3] mb-6">{filtered.length} 件 / 全 {customers.length} 件</p>
 
       <input

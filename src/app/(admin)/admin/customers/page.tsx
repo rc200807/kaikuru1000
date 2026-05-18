@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
-import SummaryCard from '@/components/SummaryCard'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import DataTable, { type Column } from '@/components/DataTable'
 import Modal from '@/components/Modal'
@@ -89,6 +88,21 @@ const DEFAULT_STATUS_OPTIONS = [
 
 type DetailTab = 'info' | 'add' | 'history'
 
+function KpiCard({ label, value, unit, icon }: { label: string; value: string; unit?: string; icon: React.ReactNode }) {
+  return (
+    <div className="relative rounded-2xl p-4 overflow-hidden" style={{ background: '#171717', border: '1px solid #262626' }}>
+      <div className="flex items-start justify-between mb-3">
+        <span className="text-[11px] font-normal" style={{ color: '#a3a3a3' }}>{label}</span>
+        <span style={{ color: '#525252' }}>{icon}</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-2xl tracking-tight" style={{ color: '#ffffff', fontWeight: 600 }}>{value}</span>
+        {unit && <span className="text-xs" style={{ color: '#a3a3a3' }}>{unit}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminCustomersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -110,6 +124,9 @@ export default function AdminCustomersPage() {
   const [usersPage, setUsersPage] = useState(1)
   const [usersHasMore, setUsersHasMore] = useState(false)
   const [usersTotal, setUsersTotal] = useState(0)
+  // 全件集計
+  const [statsUnassigned, setStatsUnassigned] = useState(0)
+  const [statsIdMissing, setStatsIdMissing] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const USERS_LIMIT = 50
 
@@ -194,16 +211,22 @@ export default function AdminCustomersPage() {
       params.set('page', '1')
       params.set('limit', String(USERS_LIMIT))
       const usersUrl = `/api/admin/users?${params.toString()}`
+      const statsUrl = `/api/admin/users/stats?${showInactive ? 'includeInactive=true' : ''}`
       Promise.all([
         fetch(usersUrl).then(r => r.json()),
         fetch('/api/stores').then(r => r.json()),
-      ]).then(([usersData, storesData]) => {
+        fetch(statsUrl).then(r => r.ok ? r.json() : null),
+      ]).then(([usersData, storesData, statsData]) => {
         const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
         setUsers(list)
         setUsersTotal(usersData?.total ?? list.length)
         setUsersPage(1)
         setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
         setStores(Array.isArray(storesData) ? storesData : [])
+        if (statsData) {
+          setStatsUnassigned(statsData.unassigned ?? 0)
+          setStatsIdMissing(statsData.idMissing ?? 0)
+        }
         setLoading(false)
       }).catch(() => setLoading(false))
     }
@@ -755,7 +778,6 @@ export default function AdminCustomersPage() {
     return <LoadingSpinner size="lg" fullPage />
   }
 
-  const unassignedCount = users.filter(u => !u.store).length
   const sortedDetailSchedules = [...detailSchedules].sort(
     (a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime()
   )
@@ -852,11 +874,47 @@ export default function AdminCustomersPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* 統計 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <SummaryCard label="登録顧客数" value={users.length} accentColor="bg-[#E8927C]" />
-          <SummaryCard label="未割り当て" value={unassignedCount} accentColor={unassignedCount > 0 ? 'bg-orange-500' : 'bg-[var(--md-sys-color-outline)]'} />
-          <SummaryCard label="担当店舗数" value={stores.length} accentColor="bg-green-600" />
-          <SummaryCard label="身分証未提出" value={users.filter(u => !u.idDocumentPath).length} accentColor="bg-red-500" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <KpiCard
+            label="登録顧客数"
+            value={usersTotal.toLocaleString()}
+            unit="名"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+              </svg>
+            }
+          />
+          <KpiCard
+            label="未割り当て"
+            value={statsUnassigned.toLocaleString()}
+            unit="名"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            }
+          />
+          <KpiCard
+            label="担当店舗数"
+            value={stores.length.toLocaleString()}
+            unit="店舗"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" />
+              </svg>
+            }
+          />
+          <KpiCard
+            label="身分証未提出"
+            value={statsIdMissing.toLocaleString()}
+            unit="名"
+            icon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+              </svg>
+            }
+          />
         </div>
 
         {message && (

@@ -9,6 +9,7 @@ import { prisma } from './prisma'
 import {
   sendInquiryAutoReply,
   sendStoreInquiryNotification,
+  sendBugReportNotification,
 } from './mailer'
 
 const MAX_ATTEMPTS = 3
@@ -16,6 +17,7 @@ const MAX_ATTEMPTS = 3
 type QueueablePayload =
   | { type: 'inquiryAutoReply'; params: Parameters<typeof sendInquiryAutoReply>[0] }
   | { type: 'storeInquiryNotification'; params: Parameters<typeof sendStoreInquiryNotification>[0] }
+  | { type: 'bugReportNotification'; params: Parameters<typeof sendBugReportNotification>[0] }
 
 /** メールをキューに登録（非同期） */
 export async function enqueueEmail(payload: QueueablePayload): Promise<void> {
@@ -40,6 +42,11 @@ async function sendImmediately(type: string, params: any): Promise<boolean> {
         params.receivedAt = new Date(params.receivedAt)
       }
       return await sendStoreInquiryNotification(params)
+    case 'bugReportNotification':
+      if (params.createdAt && typeof params.createdAt === 'string') {
+        params.createdAt = new Date(params.createdAt)
+      }
+      return await sendBugReportNotification(params)
     default:
       throw new Error(`Unknown email type: ${type}`)
   }

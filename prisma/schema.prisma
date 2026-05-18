@@ -117,6 +117,7 @@ model Store {
   storeLinksTo   StoreLink[] @relation("StoreLinkTo")
   announcementReads AnnouncementRead[]
   inquiries  Inquiry[]
+  bugReports BugReport[]
   lineChannels LineChannel[]
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
   trainingVideoViews   TrainingVideoView[]
@@ -458,6 +459,39 @@ model Inquiry {
 
   @@index([storeId])
   @@index([status])
+}
+
+// 店舗→運営の不具合報告
+model BugReport {
+  id           String   @id @default(cuid())
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id])
+  reporterName String?            // 報告者の名前（StoreMember 名 or 店舗名）
+  title        String              // 件名
+  category     String              // 種別: system/ui/operation/other
+  details      String   @db.Text   // 詳細
+  imageUrls    String   @default("[]") // JSON 配列
+  status       String   @default("open") // open/in_progress/resolved
+  comments     BugReportComment[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+}
+
+// 不具合報告のコメント（店舗←→運営のやりとり）
+model BugReportComment {
+  id          String    @id @default(cuid())
+  bugReportId String
+  bugReport   BugReport @relation(fields: [bugReportId], references: [id], onDelete: Cascade)
+  authorType  String                       // "store" | "admin"
+  authorName  String?
+  body        String    @db.Text
+  imageUrls   String    @default("[]")     // JSON 配列
+  createdAt   DateTime  @default(now())
+
+  @@index([bugReportId])
 }
 
 // ログイン試行回数制限（DB実装: サーバーレス対応）

@@ -1161,3 +1161,71 @@ export async function sendFormSubmissionNotification(params: {
   })
   return true
 }
+
+// 不具合報告の受付通知（運営宛）
+export async function sendBugReportNotification(params: {
+  to: string
+  storeName: string
+  reporterName: string | null
+  title: string
+  category: string
+  details: string
+  imageCount: number
+  adminUrl: string
+  createdAt: Date
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const categoryLabels: Record<string, string> = {
+    system: 'システム不具合',
+    ui: 'UI/表示の問題',
+    operation: 'オペレーション',
+    other: 'その他',
+  }
+  const categoryLabel = categoryLabels[params.category] || params.category
+  const createdAt = params.createdAt instanceof Date ? params.createdAt : new Date(params.createdAt)
+  const dateStr = createdAt.toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const escape = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const html = `<!DOCTYPE html><html lang="ja"><body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:8px;overflow:hidden;">
+<tr><td style="padding:24px 28px;background:#7c2d12;color:#fff;"><h1 style="margin:0;font-size:18px;">不具合報告が届きました</h1><p style="margin:6px 0 0;font-size:13px;color:#fed7aa;">${escape(params.storeName)}</p></td></tr>
+<tr><td style="padding:20px 28px;color:#333;font-size:14px;">
+<p style="margin:0 0 8px;color:#666;">受信日時: ${escape(dateStr)}</p>
+<p style="margin:0 0 12px;color:#666;">報告者: ${escape(params.reporterName || params.storeName)}</p>
+<table cellpadding="0" cellspacing="0" style="width:100%;border-top:1px solid #eee;font-size:13px;margin-top:8px;">
+<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#555;width:25%;font-weight:600;">件名</td><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#222;">${escape(params.title)}</td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#555;font-weight:600;">種別</td><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#222;">${escape(categoryLabel)}</td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#555;font-weight:600;">画像</td><td style="padding:8px 12px;border-bottom:1px solid #eee;color:#222;">${params.imageCount} 枚</td></tr>
+<tr><td style="padding:8px 12px;color:#555;font-weight:600;vertical-align:top;">詳細</td><td style="padding:8px 12px;color:#222;white-space:pre-wrap;">${escape(params.details)}</td></tr>
+</table>
+<p style="margin:24px 0 0;"><a href="${escape(params.adminUrl)}" style="display:inline-block;background:#7c2d12;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;">管理画面で確認する</a></p>
+</td></tr></table></td></tr></table></body></html>`
+
+  const text = [
+    `不具合報告が届きました`,
+    `店舗: ${params.storeName}`,
+    `報告者: ${params.reporterName || params.storeName}`,
+    `受信日時: ${dateStr}`,
+    `件名: ${params.title}`,
+    `種別: ${categoryLabel}`,
+    `画像: ${params.imageCount} 枚`,
+    '',
+    '詳細:',
+    params.details,
+    '',
+    `管理画面: ${params.adminUrl}`,
+  ].join('\n')
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `【買いクル】不具合報告: ${params.title}`,
+    html,
+    text,
+  })
+  return true
+}

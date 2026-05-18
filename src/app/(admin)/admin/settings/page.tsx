@@ -20,6 +20,8 @@ type GoogleConfig = {
   sheetName: string
   keyColumn: string
   tokenExpiry: string | null
+  inquirySpreadsheetId?: string | null
+  inquirySheetName?: string
 } | null
 
 type EmailConfig = {
@@ -49,6 +51,8 @@ function AdminSettingsContent() {
 
   // スプレッドシート設定フォーム
   const [sheetForm, setSheetForm] = useState({ spreadsheetUrl: '', sheetName: 'ライセンスキー', keyColumn: 'A' })
+  const [inquirySheetForm, setInquirySheetForm] = useState({ spreadsheetUrl: '', sheetName: 'お問い合わせ' })
+  const [inquirySaving, setInquirySaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
 
@@ -172,6 +176,10 @@ function AdminSettingsContent() {
             sheetName: data.sheetName || 'ライセンスキー',
             keyColumn: data.keyColumn || 'A',
           })
+          setInquirySheetForm({
+            spreadsheetUrl: data.inquirySpreadsheetId || '',
+            sheetName: data.inquirySheetName || 'お問い合わせ',
+          })
         }
         setLoading(false)
       })
@@ -265,6 +273,28 @@ function AdminSettingsContent() {
 
     if (res.ok) {
       setMessage({ type: 'success', text: 'スプレッドシート設定を保存しました' })
+      fetchConfig()
+    } else {
+      setMessage({ type: 'error', text: '保存に失敗しました' })
+    }
+  }
+
+  async function handleSaveInquirySheetConfig(e: React.FormEvent) {
+    e.preventDefault()
+    setInquirySaving(true)
+    setMessage(null)
+    const spreadsheetId = extractSpreadsheetId(inquirySheetForm.spreadsheetUrl)
+    const res = await fetch('/api/admin/google-config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inquirySpreadsheetId: spreadsheetId || null,
+        inquirySheetName: inquirySheetForm.sheetName || 'お問い合わせ',
+      }),
+    })
+    setInquirySaving(false)
+    if (res.ok) {
+      setMessage({ type: 'success', text: 'お問い合わせスプレッドシート設定を保存しました' })
       fetchConfig()
     } else {
       setMessage({ type: 'error', text: '保存に失敗しました' })
@@ -453,6 +483,42 @@ function AdminSettingsContent() {
               type="submit"
               loading={saving}
               disabled={!sheetForm.spreadsheetUrl.trim()}
+            >
+              設定を保存
+            </Button>
+          </form>
+        </Card>
+
+        {/* ─── お問い合わせ スプレッドシート設定 ─── */}
+        <Card variant="elevated" padding="md">
+          <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] mb-1">お問い合わせ スプレッドシート設定</h3>
+          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5">
+            お問い合わせデータを自動・手動で記録するGoogleスプレッドシートを指定します。サービスアカウントに編集権限を共有してください。
+          </p>
+
+          <form onSubmit={handleSaveInquirySheetConfig} className="space-y-5 max-w-lg">
+            <TextField
+              label="スプレッドシートURL または ID"
+              value={inquirySheetForm.spreadsheetUrl}
+              onChange={(v) => setInquirySheetForm({ ...inquirySheetForm, spreadsheetUrl: v })}
+              placeholder="https://docs.google.com/spreadsheets/d/xxxxx/edit"
+              helper="URLからIDを自動抽出します。未設定の場合、自動記録・エクスポートは無効になります。"
+            />
+            <TextField
+              label="シート名（タブ）"
+              value={inquirySheetForm.sheetName}
+              onChange={(v) => setInquirySheetForm({ ...inquirySheetForm, sheetName: v })}
+              placeholder="お問い合わせ"
+            />
+            {config?.inquirySpreadsheetId && (
+              <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] p-3 border border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)] font-mono break-all">
+                ID: {config.inquirySpreadsheetId}
+              </div>
+            )}
+            <Button
+              variant="filled"
+              type="submit"
+              loading={inquirySaving}
             >
               設定を保存
             </Button>

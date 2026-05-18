@@ -73,6 +73,141 @@ function extractSpreadsheetId(input: string): string {
   return match ? match[1] : input
 }
 
+// お問い合わせシート列ヘッダー（並び順がそのまま列順）
+const INQUIRY_SHEET_HEADERS = [
+  '受付日時',
+  '店舗コード',
+  '店舗名',
+  '氏名',
+  'フリガナ',
+  '電話',
+  'メール',
+  '郵便番号',
+  '住所',
+  '申込み内容',
+  '相談内容',
+  'ステータス',
+  '買取品目',
+]
+
+type InquiryForSheet = {
+  createdAt: Date | string
+  store: { code: string | null; name: string | null } | null
+  name: string
+  furigana: string | null
+  phone: string | null
+  email: string | null
+  postalCode: string | null
+  address: string | null
+  inquiryType: string | null
+  details: string | null
+  status: string | null
+  purchaseMemos?: { title: string | null }[]
+}
+
+function formatInquiryRow(inq: InquiryForSheet): string[] {
+  const dt = typeof inq.createdAt === 'string' ? new Date(inq.createdAt) : inq.createdAt
+  const formatted = isNaN(dt.getTime())
+    ? ''
+    : new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+      }).format(dt)
+  const STATUS_LABEL: Record<string, string> = { new: '新規', contacted: '対応中', completed: '完了' }
+  const items = (inq.purchaseMemos ?? []).map(m => m.title ?? '').filter(Boolean).join(' / ')
+  return [
+    formatted,
+    inq.store?.code ?? '',
+    inq.store?.name ?? '',
+    inq.name ?? '',
+    inq.furigana ?? '',
+    inq.phone ?? '',
+    inq.email ?? '',
+    inq.postalCode ?? '',
+    inq.address ?? '',
+    inq.inquiryType ?? '',
+    inq.details ?? '',
+    inq.status ? (STATUS_LABEL[inq.status] ?? inq.status) : '',
+    items,
+  ]
+}
+
+// ヘッダー行が存在しなければ追加する
+async function ensureInquiryHeader(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  sheetName: string,
+): Promise<void> {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A1:M1`,
+  })
+  const row = res.data.values?.[0] ?? []
+  if (row.length === 0 || row[0] !== INQUIRY_SHEET_HEADERS[0]) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [INQUIRY_SHEET_HEADERS] },
+    })
+  }
+}
+
+async function appendInquiryRows(rows: string[][]): Promise<{ success: boolean; message: string; appended: number }> {
+  if (!rows.length) return { success: true, message: '追記対象なし', appended: 0 }
+
+  const config = await prisma.googleSheetsConfig.findFirst()
+  const rawId = config?.inquirySpreadsheetId
+  if (!rawId) return { success: false, message: 'お問い合わせ用スプレッドシートIDが設定されていません', appended: 0 }
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+    return { success: false, message: 'サービスアカウントが設定されていません', appended: 0 }
+  }
+
+  const spreadsheetId = extractSpreadsheetId(rawId)
+  const sheetName = config?.inquirySheetName || 'お問い合わせ'
+
+  try {
+    const auth = getWriteAuth()
+    const sheets = google.sheets({ version: 'v4', auth })
+    await ensureInquiryHeader(sheets, spreadsheetId, sheetName)
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: rows },
+    })
+    return { success: true, message: `${rows.length}件をスプレッドシートに追記しました`, appended: rows.length }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { success: false, message, appended: 0 }
+  }
+}
+
+// 単一のお問い合わせをシートへ追記（自動記録用）
+export async function appendInquiryToSheet(inquiryId: string): Promise<{ success: boolean; message: string }> {
+  const inq = await prisma.inquiry.findUnique({
+    where: { id: inquiryId },
+    include: { store: true, purchaseMemos: true },
+  })
+  if (!inq) return { success: false, message: 'お問い合わせが見つかりません' }
+  const { appended: _appended, ...rest } = await appendInquiryRows([formatInquiryRow(inq as InquiryForSheet)])
+  return rest
+}
+
+// 複数のお問い合わせをシートへ追記（エクスポート用）
+export async function appendInquiriesToSheet(inquiryIds?: string[]): Promise<{ success: boolean; message: string; appended: number }> {
+  const inquiries = await prisma.inquiry.findMany({
+    where: inquiryIds && inquiryIds.length > 0 ? { id: { in: inquiryIds } } : {},
+    include: { store: true, purchaseMemos: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const rows = inquiries.map(i => formatInquiryRow(i as InquiryForSheet))
+  return appendInquiryRows(rows)
+}
+
 interface StoreRow {
   rowId: string
   code: string

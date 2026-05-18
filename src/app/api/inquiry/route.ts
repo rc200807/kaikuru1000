@@ -264,6 +264,17 @@ export async function POST(request: NextRequest) {
 
     console.log(`[inquiry] メールキューに登録完了: customer=${customerEmailParams ? 'yes' : 'skip'} store=${notifyTo}${isFallback ? ' (fallback)' : ''}`)
 
+    // --- Google Sheets へ自動追記（失敗してもお問い合わせ自体は成功させる） ---
+    try {
+      const { appendInquiryToSheet } = await import('@/lib/google-sheets')
+      const result = await appendInquiryToSheet(inquiry.id)
+      if (!result.success) {
+        console.warn(`[inquiry] Sheets append skipped: ${result.message}`)
+      }
+    } catch (e) {
+      console.error('[inquiry] Sheets append failed', e)
+    }
+
     return NextResponse.json({
       success: true,
       inquiryId: inquiry.id,

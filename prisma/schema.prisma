@@ -343,6 +343,8 @@ model GoogleSheetsConfig {
   storeSpreadsheetId  String?             // 店舗マスター用スプレッドシートID
   storeSheetName      String    @default("店舗マスター")
   storeColumnMapping  String?     // JSON: {"code":"A","name":"B",...}
+  inquirySpreadsheetId String?            // お問い合わせ用スプレッドシートID
+  inquirySheetName    String    @default("お問い合わせ")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }

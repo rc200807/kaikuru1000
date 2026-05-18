@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
     storeSpreadsheetId: config.storeSpreadsheetId,
     storeSheetName: config.storeSheetName,
     storeColumnMapping: config.storeColumnMapping ? JSON.parse(config.storeColumnMapping) : null,
+    inquirySpreadsheetId: config.inquirySpreadsheetId,
+    inquirySheetName: config.inquirySheetName,
   })
 }
 
@@ -36,7 +38,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { spreadsheetId, sheetName, keyColumn, storeSpreadsheetId, storeSheetName, storeColumnMapping } = await request.json()
+  const { spreadsheetId, sheetName, keyColumn, storeSpreadsheetId, storeSheetName, storeColumnMapping, inquirySpreadsheetId, inquirySheetName } = await request.json()
 
   const existing = await prisma.googleSheetsConfig.findFirst()
   if (existing) {
@@ -49,6 +51,8 @@ export async function PATCH(request: NextRequest) {
         ...(storeSpreadsheetId !== undefined && { storeSpreadsheetId }),
         ...(storeSheetName !== undefined && { storeSheetName }),
         ...(storeColumnMapping !== undefined && { storeColumnMapping: JSON.stringify(storeColumnMapping) }),
+        ...(inquirySpreadsheetId !== undefined && { inquirySpreadsheetId }),
+        ...(inquirySheetName !== undefined && { inquirySheetName }),
       },
     })
   } else {
@@ -60,6 +64,8 @@ export async function PATCH(request: NextRequest) {
         storeSpreadsheetId,
         storeSheetName: storeSheetName || '店舗マスター',
         ...(storeColumnMapping && { storeColumnMapping: JSON.stringify(storeColumnMapping) }),
+        ...(inquirySpreadsheetId !== undefined && { inquirySpreadsheetId }),
+        ...(inquirySheetName !== undefined && { inquirySheetName: inquirySheetName || 'お問い合わせ' }),
       },
     })
   }

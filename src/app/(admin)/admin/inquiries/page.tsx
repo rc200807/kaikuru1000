@@ -52,8 +52,10 @@ export default function AdminInquiriesPage() {
   const [searchText, setSearchText] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [inquiryTypeFilter, setInquiryTypeFilter] = useState('')
   const [selected, setSelected] = useState<Inquiry | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [allStores, setAllStores] = useState<{ id: string; name: string; code: string }[]>([])
 
   useEffect(() => {
@@ -86,18 +88,49 @@ export default function AdminInquiriesPage() {
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [inquiries])
 
+  const inquiryTypes = useMemo(() => {
+    const set = new Set<string>()
+    inquiries.forEach(i => { if (i.inquiryType) set.add(i.inquiryType) })
+    return [...set].sort()
+  }, [inquiries])
+
   const filtered = useMemo(() => {
     const q = searchText.trim().toLowerCase()
     return inquiries.filter(i => {
       if (storeFilter && i.storeId !== storeFilter) return false
       if (statusFilter && i.status !== statusFilter) return false
+      if (inquiryTypeFilter && i.inquiryType !== inquiryTypeFilter) return false
       if (q) {
-        const hay = [i.name, i.furigana, i.phone, i.email ?? '', i.address].join(' ').toLowerCase()
+        const hay = [i.name, i.furigana, i.phone, i.email ?? '', i.address, i.details ?? ''].join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
     })
-  }, [inquiries, searchText, storeFilter, statusFilter])
+  }, [inquiries, searchText, storeFilter, statusFilter, inquiryTypeFilter])
+
+  async function handleExportToSheet() {
+    if (exporting) return
+    const ids = filtered.map(f => f.id)
+    if (ids.length === 0) {
+      alert('エクスポート対象がありません')
+      return
+    }
+    if (!confirm(`現在の絞り込み結果 ${ids.length} 件をスプレッドシートへ追記しますか？`)) return
+    setExporting(true)
+    try {
+      const res = await fetch('/api/admin/inquiries/export-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inquiryIds: ids }),
+      })
+      const data = await res.json()
+      alert(data.message || (res.ok ? 'エクスポートしました' : 'エクスポートに失敗しました'))
+    } catch (e) {
+      alert('エクスポートに失敗しました')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function updateStatus(inquiry: Inquiry, newStatus: string) {
     const res = await fetch(`/api/admin/inquiries/${inquiry.id}`, {
@@ -126,12 +159,21 @@ export default function AdminInquiriesPage() {
             全店舗の問い合わせフォームから受け付けた依頼（{filtered.length}件 / 全{inquiries.length}件）
           </p>
         </div>
-        <button
-          onClick={() => setImportOpen(true)}
-          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
-        >
-          CSVインポート
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={handleExportToSheet}
+            disabled={exporting}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: exporting ? 'wait' : 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: exporting ? 0.6 : 1 }}
+          >
+            {exporting ? 'エクスポート中...' : 'スプレッドシートへエクスポート'}
+          </button>
+          <button
+            onClick={() => setImportOpen(true)}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+          >
+            CSVインポート
+          </button>
+        </div>
       </div>
 
       {/* CSVインポートモーダル */}
@@ -166,7 +208,7 @@ export default function AdminInquiriesPage() {
                 type="text"
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
-                placeholder="検索（氏名/電話/メール/住所）"
+                placeholder="検索（氏名/電話/メール/住所/相談内容）"
                 style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px 8px 36px', borderRadius: 999, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
               />
             </div>
@@ -190,6 +232,14 @@ export default function AdminInquiriesPage() {
                 <option value="completed">完了</option>
               </select>
             </div>
+            <select
+              value={inquiryTypeFilter}
+              onChange={e => setInquiryTypeFilter(e.target.value)}
+              style={{ width: '100%', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 12 }}
+            >
+              <option value="">すべての申込み内容</option>
+              {inquiryTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
 
           {/* リスト */}

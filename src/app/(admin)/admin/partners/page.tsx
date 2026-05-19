@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 /**
@@ -8,6 +8,14 @@ import { useRouter, useSearchParams } from 'next/navigation'
  * 既存の ?tab=licenses 等のクエリは ?tab=partners&sub=licenses に変換してから遷移。
  */
 export default function AdminPartnersRedirectPage() {
+  return (
+    <Suspense fallback={null}>
+      <Redirector />
+    </Suspense>
+  )
+}
+
+function Redirector() {
   const router = useRouter()
   const searchParams = useSearchParams()
   useEffect(() => {

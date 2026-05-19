@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppBar from '@/components/AppBar'
@@ -14,6 +14,14 @@ type TabKey = 'deliveries' | 'visit' | 'delivery' | 'visits' | 'partners'
 const ALL_TABS: TabKey[] = ['deliveries', 'visit', 'delivery', 'visits', 'partners']
 
 export default function AdminEcoBoxPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner size="lg" fullPage />}>
+      <AdminEcoBoxPageContent />
+    </Suspense>
+  )
+}
+
+function AdminEcoBoxPageContent() {
   const { status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()

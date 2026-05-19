@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   const status  = searchParams.get('status')  || ''    // ステータス
   const from    = searchParams.get('from')    || ''    // 開始日（ISO）
   const to      = searchParams.get('to')      || ''    // 終了日（ISO）
+  const customerTypesParam = searchParams.get('customerTypes') || '' // カンマ区切り（visit,delivery 等）
   const page    = Math.max(1, parseInt(searchParams.get('page') || '1'))
   const limit   = Math.min(200, parseInt(searchParams.get('limit') || '100'))
 
@@ -37,16 +38,33 @@ export async function GET(request: NextRequest) {
       where.visitDate.lte = toDate
     }
   }
+
+  // user 条件
+  const userConditions: any[] = []
   if (q) {
-    where.user = {
-      ...(where.user || {}),
+    userConditions.push({
       OR: [
         { name:     { contains: q, mode: 'insensitive' } },
         { furigana: { contains: q, mode: 'insensitive' } },
         { email:    { contains: q, mode: 'insensitive' } },
         { phone:    { contains: q } },
       ],
+    })
+  }
+  if (customerTypesParam) {
+    const types = customerTypesParam.split(',').map(t => t.trim()).filter(Boolean)
+    if (types.length > 0) {
+      // 主タイプ or customerTypes JSON 配列のどちらかに含まれていればマッチ
+      userConditions.push({
+        OR: [
+          { customerType: { in: types } },
+          ...types.map(t => ({ customerTypes: { contains: `"${t}"` } })),
+        ],
+      })
     }
+  }
+  if (userConditions.length > 0) {
+    where.user = userConditions.length === 1 ? userConditions[0] : { AND: userConditions }
   }
 
   const [total, records] = await Promise.all([

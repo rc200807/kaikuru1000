@@ -12,11 +12,19 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const includeInactive = searchParams.get('includeInactive') === 'true'
+  const customerType = searchParams.get('customerType') || ''
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
 
   const where: any = {}
   if (!includeInactive) where.isActive = true
+  if (customerType) {
+    // 主タイプ or customerTypes JSON 配列のどちらかに含まれていればマッチ
+    where.OR = [
+      { customerType },
+      { customerTypes: { contains: `"${customerType}"` } },
+    ]
+  }
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({

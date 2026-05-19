@@ -66,14 +66,17 @@ function AdminEcoBoxPageContent() {
               onClick={() => changeTab(t.key)}
               style={{
                 padding: '10px 18px',
-                background: 'transparent',
+                background: tab === t.key ? 'rgba(96,165,250,0.12)' : 'transparent',
                 border: 'none',
-                borderBottom: tab === t.key ? '2px solid var(--md-sys-color-primary)' : '2px solid transparent',
-                color: tab === t.key ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-on-surface-variant)',
-                fontWeight: 600,
+                borderBottom: tab === t.key ? '2px solid #60a5fa' : '2px solid transparent',
+                color: tab === t.key ? '#60a5fa' : 'var(--md-sys-color-on-surface-variant)',
+                fontWeight: tab === t.key ? 700 : 600,
                 fontSize: 14,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
+                borderTopLeftRadius: 8,
+                borderTopRightRadius: 8,
+                transition: 'background 0.15s, color 0.15s',
               }}
             >
               {t.label}

@@ -236,46 +236,106 @@ export default function AdminPurchaseItemsPage() {
           <p style={{ textAlign: 'center', padding: 60, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>該当する買取品目がありません</p>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
-              {items.map(item => {
+            <div style={{ borderRadius: 12, border: '1px solid var(--md-sys-color-outline-variant)', overflow: 'hidden', background: 'var(--md-sys-color-surface-container)' }}>
+              {/* ヘッダー行（デスクトップのみ） */}
+              <div
+                className="purchase-items-header"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '64px 1.6fr 1fr 0.6fr 0.9fr 1.3fr 1fr',
+                  gap: 12,
+                  padding: '10px 14px',
+                  fontSize: 11,
+                  color: 'var(--md-sys-color-on-surface-variant)',
+                  borderBottom: '1px solid var(--md-sys-color-outline-variant)',
+                  background: 'var(--md-sys-color-surface-container-high)',
+                }}
+              >
+                <span>画像</span>
+                <span>品名</span>
+                <span>カテゴリ</span>
+                <span style={{ textAlign: 'right' }}>数量</span>
+                <span style={{ textAlign: 'right' }}>買取金額</span>
+                <span>店舗</span>
+                <span>訪問日</span>
+              </div>
+              {items.map((item, i) => {
                 const images = parseUrls(item.imageUrls)
                 const hasAi = !!item.aiResearchedAt
                 return (
                   <button
                     key={item.id}
                     onClick={() => setSelectedId(item.id)}
-                    style={{ textAlign: 'left', padding: 0, borderRadius: 12, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                    className="purchase-items-row"
+                    style={{
+                      textAlign: 'left',
+                      padding: '10px 14px',
+                      border: 'none',
+                      borderTop: i === 0 ? 'none' : '1px solid var(--md-sys-color-outline-variant)',
+                      background: 'transparent',
+                      color: 'var(--md-sys-color-on-surface)',
+                      cursor: 'pointer',
+                      width: '100%',
+                      display: 'grid',
+                      gridTemplateColumns: '64px 1.6fr 1fr 0.6fr 0.9fr 1.3fr 1fr',
+                      gap: 12,
+                      alignItems: 'center',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--md-sys-color-surface-container-high)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <div style={{ position: 'relative', aspectRatio: '1 / 1', background: 'var(--md-sys-color-surface-container-high)' }}>
+                    {/* 画像 */}
+                    <div style={{ position: 'relative', width: 64, height: 64, borderRadius: 8, overflow: 'hidden', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0 }}>
                       {images[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={images[0]} alt={item.itemName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 11 }}>画像なし</div>
-                      )}
-                      {hasAi && (
-                        <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 10, padding: '2px 8px', borderRadius: 999, background: 'rgba(96,165,250,0.95)', color: 'white', fontWeight: 600 }}>
-                          AI査定済
-                        </span>
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 10 }}>—</div>
                       )}
                       {images.length > 1 && (
-                        <span style={{ position: 'absolute', bottom: 6, right: 6, fontSize: 10, padding: '2px 8px', borderRadius: 999, background: 'rgba(0,0,0,0.6)', color: 'white' }}>
-                          {images.length}枚
+                        <span style={{ position: 'absolute', bottom: 2, right: 2, fontSize: 9, padding: '1px 5px', borderRadius: 999, background: 'rgba(0,0,0,0.6)', color: 'white', lineHeight: 1.3 }}>
+                          {images.length}
                         </span>
                       )}
                     </div>
-                    <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.itemName}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12 }}>
-                        <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>×{item.quantity}</span>
-                        <span style={{ fontWeight: 700 }}>{fmtYen(item.purchasePrice)}</span>
+                    {/* 品名 */}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.itemName}</span>
+                        {hasAi && (
+                          <span style={{ flexShrink: 0, fontSize: 9, padding: '1px 6px', borderRadius: 999, background: 'rgba(96,165,250,0.2)', color: '#60a5fa', fontWeight: 600 }}>
+                            AI
+                          </span>
+                        )}
                       </div>
-                      <div style={{ fontSize: 10, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.visitSchedule.store.name} ・ {new Date(item.visitSchedule.visitDate).toLocaleDateString('ja-JP')}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.purchaseCategory?.name || item.category || '-'}
-                      </div>
+                      {item.janCode && (
+                        <div style={{ fontSize: 10, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          JAN: {item.janCode}
+                        </div>
+                      )}
+                    </div>
+                    {/* カテゴリ */}
+                    <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.purchaseCategory?.name || item.category || '-'}
+                    </div>
+                    {/* 数量 */}
+                    <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'right' }}>
+                      ×{item.quantity}
+                    </div>
+                    {/* 買取金額 */}
+                    <div style={{ fontSize: 13, fontWeight: 700, textAlign: 'right' }}>
+                      {fmtYen(item.purchasePrice)}
+                    </div>
+                    {/* 店舗 */}
+                    <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.visitSchedule.store.name}
+                      {item.visitSchedule.user?.name ? (
+                        <span style={{ opacity: 0.7 }}> ・ {item.visitSchedule.user.name}</span>
+                      ) : null}
+                    </div>
+                    {/* 訪問日 */}
+                    <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                      {new Date(item.visitSchedule.visitDate).toLocaleDateString('ja-JP')}
                     </div>
                   </button>
                 )

@@ -5,7 +5,9 @@ import {
   getDecryptedSecret,
   getDecryptedAccessToken,
   getUserProfile,
+  getMessageContent,
 } from '@/lib/line'
+import { uploadFile } from '@/lib/storage'
 
 export async function POST(
   request: NextRequest,
@@ -107,7 +109,22 @@ async function handleEvent(
       break
     case 'image':
       messageType = 'image'
-      imageUrl = null // 画像バイナリは保存しない（参照のみ）
+      // LINE は受信後24時間しか画像本体を保持しないため、Webhook受信時に取得して保存する
+      if (msg.id) {
+        try {
+          const content = await getMessageContent(accessToken, msg.id)
+          if (content) {
+            const ext = content.contentType.includes('png') ? 'png'
+              : content.contentType.includes('gif') ? 'gif'
+              : content.contentType.includes('webp') ? 'webp'
+              : 'jpg'
+            const filename = `line-images/${msg.id}.${ext}`
+            imageUrl = await uploadFile(content.buffer, filename, content.contentType)
+          }
+        } catch (err) {
+          console.error('[line-webhook] image fetch failed', err)
+        }
+      }
       break
     case 'sticker':
       messageType = 'sticker'

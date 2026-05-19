@@ -49,6 +49,7 @@ type Message = {
   direction: string
   messageType: string
   content: string | null
+  imageUrl?: string | null
   sentAt: string
   status?: string // "sent" | "failed" | "sending"
 }
@@ -1287,16 +1288,46 @@ export default function LineManagePage() {
                       <div key={msg.id} style={{ display: 'flex', justifyContent: isOutbound ? 'flex-end' : 'flex-start', flexDirection: 'column', alignItems: isOutbound ? 'flex-end' : 'flex-start' }}>
                         <div
                           style={{
-                            maxWidth: '72%', padding: '10px 14px', borderRadius: isOutbound ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                            maxWidth: '72%', padding: msg.messageType === 'image' ? 4 : '10px 14px', borderRadius: isOutbound ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
                             background: isFailed ? 'rgba(248,113,113,0.15)' : isOutbound ? '#4f8ef7' : 'var(--md-sys-color-surface-container-high)',
                             color: isFailed ? '#f87171' : isOutbound ? '#ffffff' : 'var(--md-sys-color-on-surface)',
                             fontSize: 14, lineHeight: 1.5,
                             border: isFailed ? '1px solid rgba(248,113,113,0.4)' : 'none',
+                            overflow: 'hidden',
                           }}
                         >
-                          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                            {msg.content ?? `[${msg.messageType}]`}
-                          </div>
+                          {msg.messageType === 'image' ? (
+                            (() => {
+                              const src = msg.imageUrl || `/api/admin/line/messages/${msg.id}/image`
+                              return (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <a href={src} target="_blank" rel="noopener noreferrer" style={{ display: 'block' }}>
+                                  <img
+                                    src={src}
+                                    alt="LINE画像"
+                                    style={{ display: 'block', maxWidth: 240, maxHeight: 320, borderRadius: 12, objectFit: 'cover' }}
+                                    onError={e => {
+                                      const target = e.currentTarget
+                                      target.style.display = 'none'
+                                      const parent = target.parentElement?.parentElement
+                                      if (parent) {
+                                        const fallback = document.createElement('div')
+                                        fallback.textContent = '画像を取得できませんでした'
+                                        fallback.style.padding = '8px 12px'
+                                        fallback.style.fontSize = '12px'
+                                        fallback.style.opacity = '0.7'
+                                        parent.appendChild(fallback)
+                                      }
+                                    }}
+                                  />
+                                </a>
+                              )
+                            })()
+                          ) : (
+                            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              {msg.content ?? `[${msg.messageType}]`}
+                            </div>
+                          )}
                           <div style={{ fontSize: 11, marginTop: 4, opacity: 0.7, textAlign: isOutbound ? 'right' : 'left', display: 'flex', gap: 6, justifyContent: isOutbound ? 'flex-end' : 'flex-start', alignItems: 'center' }}>
                             {isFailed && <span style={{ color: '#f87171', opacity: 1 }}>送信失敗</span>}
                             {new Date(msg.sentAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}

@@ -90,6 +90,24 @@ export async function getUserProfile(
   return res.json()
 }
 
+/**
+ * LINE のメッセージ ID から画像・動画・音声などのバイナリコンテンツを取得する。
+ * 取得可能期間は受信から 24 時間以内。
+ */
+export async function getMessageContent(
+  channelAccessToken: string,
+  messageId: string,
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  const res = await fetch(
+    `https://api-data.line.me/v2/bot/message/${messageId}/content`,
+    { headers: { Authorization: `Bearer ${channelAccessToken}` } },
+  )
+  if (!res.ok) return null
+  const arrayBuffer = await res.arrayBuffer()
+  const contentType = res.headers.get('content-type') || 'application/octet-stream'
+  return { buffer: Buffer.from(arrayBuffer), contentType }
+}
+
 /* ─── Insights / 分析 API ────────────────────────── */
 
 /** YYYYMMDD 形式に変換 */

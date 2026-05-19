@@ -111,6 +111,7 @@ export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStore, setFilterStore] = useState('')
+  const [filterCustomerType, setFilterCustomerType] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [showInactive, setShowInactive] = useState(false)
 
@@ -774,7 +775,13 @@ export default function AdminCustomersPage() {
       || u.furigana?.includes(search)
       || (u.email ?? '').includes(search)
     const matchStore = !filterStore || (filterStore === 'unassigned' ? !u.store : u.store?.id === filterStore)
-    return matchSearch && matchStore
+    const types = filterCustomerType
+      ? parseCustomerTypes((u as any).customerTypes, u.customerType)
+      : []
+    const matchCustomerType = !filterCustomerType
+      || types.includes(filterCustomerType as CustomerType)
+      || u.customerType === filterCustomerType
+    return matchSearch && matchStore && matchCustomerType
   })
 
   if (status === 'loading' || loading) {
@@ -961,13 +968,18 @@ export default function AdminCustomersPage() {
                 ...stores.map(s => ({ value: s.id, label: s.name })),
               ],
             },
+            {
+              key: 'customerType', label: '顧客タイプ', type: 'select',
+              options: CUSTOMER_TYPES.map(t => ({ value: t, label: CUSTOMER_TYPE_LABEL[t] })),
+            },
           ]}
-          values={{ search, store: filterStore }}
+          values={{ search, store: filterStore, customerType: filterCustomerType }}
           onChange={(key, value) => {
             if (key === 'search') setSearch(value)
             if (key === 'store') setFilterStore(value)
+            if (key === 'customerType') setFilterCustomerType(value)
           }}
-          onClear={() => { setSearch(''); setFilterStore('') }}
+          onClear={() => { setSearch(''); setFilterStore(''); setFilterCustomerType('') }}
           className="mb-4"
         />
 

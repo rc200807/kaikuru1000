@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
@@ -86,7 +87,31 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'cancelled',   label: 'キャンセル' },
 ]
 
-type DetailTab = 'info' | 'add' | 'history'
+type DetailTab = 'info' | 'add' | 'history' | 'inquiries'
+
+type CustomerInquiry = {
+  id: string
+  storeId: string
+  store: { id: string; name: string; code: string }
+  name: string
+  furigana: string
+  phone: string
+  email: string | null
+  postalCode: string | null
+  address: string
+  inquiryType: string
+  details: string | null
+  status: string
+  purchaseMemos: { id: string; title: string; imageUrls: string; status: string }[]
+  createdAt: string
+}
+
+const INQUIRY_STATUS_LABEL: Record<string, string> = { new: '新規', contacted: '対応中', completed: '完了' }
+const INQUIRY_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
+  new:       { bg: 'rgba(248,113,113,0.15)', fg: '#f87171' },
+  contacted: { bg: 'rgba(251,191,36,0.15)',  fg: '#fbbf24' },
+  completed: { bg: 'rgba(74,222,128,0.15)',  fg: '#4ade80' },
+}
 
 function KpiCard({ label, value, unit, icon }: { label: string; value: string; unit?: string; icon: React.ReactNode }) {
   return (
@@ -145,6 +170,9 @@ export default function AdminCustomersPage() {
   // 顧客詳細モーダル
   const [detailUser, setDetailUser] = useState<User | null>(null)
   const [detailTab, setDetailTab] = useState<DetailTab>('info')
+  // 顧客に紐づくお問い合わせ
+  const [customerInquiries, setCustomerInquiries] = useState<CustomerInquiry[]>([])
+  const [inquiriesLoading, setInquiriesLoading] = useState(false)
   const [detailSchedules, setDetailSchedules] = useState<VisitSchedule[]>([])
   const [detailSchedulesLoading, setDetailSchedulesLoading] = useState(false)
   const [scheduleForm, setScheduleForm] = useState({ storeId: '', visitDate: '', note: '' })
@@ -243,7 +271,7 @@ export default function AdminCustomersPage() {
     if (customerId) {
       const user = users.find(u => u.id === customerId)
       if (user) {
-        if (tab && ['info', 'add', 'history'].includes(tab)) {
+        if (tab && ['info', 'add', 'history', 'inquiries'].includes(tab)) {
           restoringFromUrl.current = true
           setDetailTab(tab)
         }
@@ -295,6 +323,14 @@ export default function AdminCustomersPage() {
         setDetailSchedulesLoading(false)
       })
       .catch(() => setDetailSchedulesLoading(false))
+
+    // 顧客に紐づくお問い合わせを取得
+    setInquiriesLoading(true)
+    setCustomerInquiries([])
+    fetch(`/api/admin/users/${detailUser.id}/inquiries`)
+      .then(r => r.ok ? r.json() : { inquiries: [] })
+      .then((data: { inquiries: CustomerInquiry[] }) => setCustomerInquiries(data.inquiries || []))
+      .finally(() => setInquiriesLoading(false))
   }, [detailUser])
 
   async function handleAssign() {
@@ -1050,6 +1086,7 @@ export default function AdminCustomersPage() {
             <Tabs
               tabs={[
                 { key: 'info', label: '基本情報' },
+                { key: 'inquiries', label: customerInquiries.length > 0 ? `お問い合わせ（${customerInquiries.length}）` : 'お問い合わせ' },
                 { key: 'add', label: 'スケジュール追加' },
                 { key: 'history', label: detailSchedules.length > 0 ? `訪問履歴（${detailSchedules.length}）` : '訪問履歴' },
               ]}
@@ -1614,6 +1651,69 @@ export default function AdminCustomersPage() {
                       )}
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* お問い合わせ履歴 */}
+            {detailTab === 'inquiries' && (
+              <div className="space-y-3">
+                {inquiriesLoading ? (
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-6">読み込み中...</p>
+                ) : customerInquiries.length === 0 ? (
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-6">この顧客に紐づくお問い合わせはありません</p>
+                ) : (
+                  customerInquiries.map(inq => {
+                    const sc = INQUIRY_STATUS_COLOR[inq.status] ?? INQUIRY_STATUS_COLOR.new
+                    return (
+                      <div
+                        key={inq.id}
+                        className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            {new Date(inq.createdAt).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
+                            <span className="mx-1.5">・</span>
+                            {inq.store?.name ?? ''}
+                          </div>
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: sc.bg, color: sc.fg }}
+                          >
+                            {INQUIRY_STATUS_LABEL[inq.status] ?? inq.status}
+                          </span>
+                        </div>
+                        <div className="text-sm font-semibold mb-1">{inq.inquiryType}</div>
+                        {inq.details && (
+                          <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed mb-2">{inq.details}</p>
+                        )}
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          <div><dt className="inline font-medium">氏名:</dt> <dd className="inline">{inq.name}（{inq.furigana}）</dd></div>
+                          <div><dt className="inline font-medium">電話:</dt> <dd className="inline">{inq.phone}</dd></div>
+                          {inq.email && <div><dt className="inline font-medium">メール:</dt> <dd className="inline">{inq.email}</dd></div>}
+                          <div className="sm:col-span-2"><dt className="inline font-medium">住所:</dt> <dd className="inline">{inq.postalCode ? `〒${inq.postalCode} ` : ''}{inq.address}</dd></div>
+                        </dl>
+                        {inq.purchaseMemos && inq.purchaseMemos.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                            <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">買取希望品（{inq.purchaseMemos.length}件）</div>
+                            <ul className="list-disc pl-4 text-xs space-y-0.5">
+                              {inq.purchaseMemos.map(m => (
+                                <li key={m.id}>{m.title}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] flex justify-end">
+                          <Link
+                            href={`/admin/inquiries?id=${inq.id}`}
+                            className="text-xs text-[var(--portal-primary,#374151)] hover:underline"
+                          >
+                            お問い合わせ管理で開く →
+                          </Link>
+                        </div>
+                      </div>
+                    )
+                  })
                 )}
               </div>
             )}

@@ -135,7 +135,29 @@ const TYPE_MAP: Record<string, { label: string; cls: string }> = {
   visit: { label: '定期訪問', cls: 'bg-green-100 text-green-700' },
 }
 
-type TabKey = 'info' | 'memos' | 'add' | 'history' | 'shipments'
+type TabKey = 'info' | 'memos' | 'add' | 'history' | 'shipments' | 'inquiries'
+
+type CustomerInquiry = {
+  id: string
+  name: string
+  furigana: string
+  phone: string
+  email: string | null
+  postalCode: string | null
+  address: string
+  inquiryType: string
+  details: string | null
+  status: string
+  purchaseMemos: { id: string; title: string; imageUrls: string; status: string }[]
+  createdAt: string
+}
+
+const INQUIRY_STATUS_LABEL: Record<string, string> = { new: '新規', contacted: '対応中', completed: '完了' }
+const INQUIRY_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
+  new:       { bg: 'rgba(248,113,113,0.15)', fg: '#f87171' },
+  contacted: { bg: 'rgba(251,191,36,0.15)',  fg: '#fbbf24' },
+  completed: { bg: 'rgba(74,222,128,0.15)',  fg: '#4ade80' },
+}
 
 export default function StoreCustomerDetailPage() {
   const { data: session, status: authStatus } = useSession()
@@ -163,6 +185,11 @@ export default function StoreCustomerDetailPage() {
   const [memosList, setMemosList] = useState<PurchaseMemo[]>([])
   const [memosLoading, setMemosLoading] = useState(false)
   const [memosLoaded, setMemosLoaded] = useState(false)
+
+  // お問い合わせ履歴
+  const [inquiriesList, setInquiriesList] = useState<CustomerInquiry[]>([])
+  const [inquiriesLoading, setInquiriesLoading] = useState(false)
+  const [inquiriesLoaded, setInquiriesLoaded] = useState(false)
   const [memoStoreNotes, setMemoStoreNotes] = useState<Record<string, string>>({})
   const [savingMemoNote, setSavingMemoNote] = useState<string | null>(null)
 
@@ -209,6 +236,14 @@ export default function StoreCustomerDetailPage() {
         const found = list.find((c: Customer) => c.id === id)
         if (found) {
           setCustomer(found)
+          // バッジ表示のため問い合わせ件数をプリロード
+          fetch(`/api/store/customers/${found.id}/inquiries`)
+            .then(r => r.ok ? r.json() : { inquiries: [] })
+            .then((d: { inquiries: CustomerInquiry[] }) => {
+              setInquiriesList(d.inquiries || [])
+              setInquiriesLoaded(true)
+            })
+            .catch(() => {})
         }
         setLoading(false)
       })
@@ -241,6 +276,21 @@ export default function StoreCustomerDetailPage() {
     if (tab === 'shipments' && !shipmentsLoaded && customer) {
       loadShipments()
     }
+    if (tab === 'inquiries' && !inquiriesLoaded && customer) {
+      loadInquiries()
+    }
+  }
+
+  function loadInquiries() {
+    if (!customer) return
+    setInquiriesLoading(true)
+    fetch(`/api/store/customers/${customer.id}/inquiries`)
+      .then(r => r.ok ? r.json() : { inquiries: [] })
+      .then((data: { inquiries: CustomerInquiry[] }) => {
+        setInquiriesList(data.inquiries || [])
+        setInquiriesLoaded(true)
+      })
+      .finally(() => setInquiriesLoading(false))
   }
 
   function loadSchedules() {
@@ -505,10 +555,12 @@ export default function StoreCustomerDetailPage() {
   const tabs = isDelivery
     ? [
         { key: 'info', label: '基本情報' },
+        { key: 'inquiries', label: inquiriesList.length > 0 ? `お問い合わせ（${inquiriesList.length}）` : 'お問い合わせ' },
         { key: 'shipments', label: shipmentsList.length > 0 ? `送付履歴（${shipmentsList.length}）` : '送付履歴' },
       ]
     : [
         { key: 'info', label: '基本情報' },
+        { key: 'inquiries', label: inquiriesList.length > 0 ? `お問い合わせ（${inquiriesList.length}）` : 'お問い合わせ' },
         { key: 'memos', label: memosList.length > 0 ? `買取トライ（${memosList.length}）` : '買取トライ' },
         { key: 'add', label: 'スケジュール追加' },
         { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
@@ -696,6 +748,60 @@ export default function StoreCustomerDetailPage() {
                   </div>
                 )}
               </Card>
+            )}
+          </div>
+        )}
+
+        {/* ===== お問い合わせタブ ===== */}
+        {activeTab === 'inquiries' && (
+          <div>
+            {inquiriesLoading ? (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-12">読み込み中...</p>
+            ) : inquiriesList.length === 0 ? (
+              <Card className="p-6 text-center">
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">この顧客に紐づくお問い合わせはありません</p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {inquiriesList.map(inq => {
+                  const sc = INQUIRY_STATUS_COLOR[inq.status] ?? INQUIRY_STATUS_COLOR.new
+                  return (
+                    <Card key={inq.id} className="p-4">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          {new Date(inq.createdAt).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </div>
+                        <span
+                          className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={{ background: sc.bg, color: sc.fg }}
+                        >
+                          {INQUIRY_STATUS_LABEL[inq.status] ?? inq.status}
+                        </span>
+                      </div>
+                      <div className="text-sm font-semibold mb-1">{inq.inquiryType}</div>
+                      {inq.details && (
+                        <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed mb-2">{inq.details}</p>
+                      )}
+                      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                        <div><dt className="inline font-medium">氏名:</dt> <dd className="inline">{inq.name}（{inq.furigana}）</dd></div>
+                        <div><dt className="inline font-medium">電話:</dt> <dd className="inline">{inq.phone}</dd></div>
+                        {inq.email && <div><dt className="inline font-medium">メール:</dt> <dd className="inline">{inq.email}</dd></div>}
+                        <div className="sm:col-span-2"><dt className="inline font-medium">住所:</dt> <dd className="inline">{inq.postalCode ? `〒${inq.postalCode} ` : ''}{inq.address}</dd></div>
+                      </dl>
+                      {inq.purchaseMemos && inq.purchaseMemos.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">買取希望品（{inq.purchaseMemos.length}件）</div>
+                          <ul className="list-disc pl-4 text-xs space-y-0.5">
+                            {inq.purchaseMemos.map(m => (
+                              <li key={m.id}>{m.title}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </Card>
+                  )
+                })}
+              </div>
             )}
           </div>
         )}

@@ -769,7 +769,10 @@ export default function AdminCustomersPage() {
     : []
 
   const filtered = users.filter(u => {
-    const matchSearch = !search || u.name.includes(search) || u.furigana.includes(search) || u.email.includes(search)
+    const matchSearch = !search
+      || u.name?.includes(search)
+      || u.furigana?.includes(search)
+      || (u.email ?? '').includes(search)
     const matchStore = !filterStore || (filterStore === 'unassigned' ? !u.store : u.store?.id === filterStore)
     return matchSearch && matchStore
   })

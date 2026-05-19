@@ -4556,7 +4556,7 @@ function ShipmentCard({
                     {/* Buttons */}
                     <div className="flex gap-3 pt-1">
                       <Button onClick={handleCompleteStep2} disabled={submitting} loading={submitting}>
-                        {submitting ? '登録中...' : '送付登録を完了する'}
+                        {submitting ? '登録中...' : '次へ'}
                       </Button>
                       <Button variant="tonal" onClick={() => setDraftStep(1)}>
                         戻る

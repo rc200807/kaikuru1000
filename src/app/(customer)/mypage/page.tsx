@@ -4390,9 +4390,19 @@ function ShipmentCard({
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-3 pt-1">
+                    <div className="flex flex-wrap gap-3 pt-1">
                       <Button onClick={handleSaveEditedStep} disabled={submitting} loading={submitting}>
                         {submitting ? '保存中...' : '変更を保存'}
+                      </Button>
+                      <Button
+                        variant="tonal"
+                        disabled={submitting}
+                        onClick={() => {
+                          setSlipImages(shipment.trackingImageUrls || [])
+                          setEditingStep(0)
+                        }}
+                      >
+                        前のステップに戻る
                       </Button>
                       <Button variant="tonal" onClick={() => { setEditingStep(null); setSlipImages(shipment.trackingImageUrls || []) }}>
                         キャンセル

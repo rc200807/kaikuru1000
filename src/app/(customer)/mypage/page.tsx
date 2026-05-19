@@ -4602,6 +4602,18 @@ function ShipmentCard({
                       )}
                       {updating ? '更新中...' : '発送完了を報告する'}
                     </button>
+                    {/* 前のステップに戻って修正 */}
+                    <button
+                      type="button"
+                      onClick={() => setEditingStep(1)}
+                      disabled={updating}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      前のステップに戻って修正
+                    </button>
                   </div>
                 )}
 

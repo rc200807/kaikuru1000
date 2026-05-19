@@ -2,10 +2,11 @@
 
 import { Fragment, useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import LicenseKeysSection from '@/components/admin/LicenseKeysSection'
 
 type Partner = {
   id: string
@@ -54,7 +55,11 @@ const inputStyle: React.CSSProperties = {
 export default function AdminPartnersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [tab, setTab] = useState<'partners' | 'invitations' | 'imports'>('partners')
+  const searchParams = useSearchParams()
+  const initialTab = (searchParams.get('tab') as 'partners' | 'invitations' | 'imports' | 'licenses' | null) || 'partners'
+  const [tab, setTab] = useState<'partners' | 'invitations' | 'imports' | 'licenses'>(
+    ['partners', 'invitations', 'imports', 'licenses'].includes(initialTab) ? initialTab : 'partners',
+  )
   const [partners, setPartners] = useState<Partner[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [imports, setImports] = useState<ImportLog[]>([])
@@ -245,6 +250,12 @@ export default function AdminPartnersPage() {
         >
           インポート履歴 ({imports.length})
         </button>
+        <button
+          onClick={() => setTab('licenses')}
+          style={{ padding: '8px 16px', background: 'transparent', border: 'none', borderBottom: tab === 'licenses' ? '2px solid var(--md-sys-color-primary)' : '2px solid transparent', color: tab === 'licenses' ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-on-surface-variant)', fontWeight: 600, cursor: 'pointer' }}
+        >
+          ライセンスキー
+        </button>
       </div>
 
       {tab === 'partners' && (
@@ -413,6 +424,10 @@ export default function AdminPartnersPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {tab === 'licenses' && (
+        <LicenseKeysSection />
       )}
     </div>
   )

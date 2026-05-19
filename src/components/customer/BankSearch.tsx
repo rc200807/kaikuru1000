@@ -167,7 +167,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
       if (debounceTimerBranch.current) clearTimeout(debounceTimerBranch.current)
       debounceTimerBranch.current = setTimeout(() => {
         if (!q.trim()) {
-          setFilteredBranches(branches.slice(0, 30))
+          setFilteredBranches(branches)
           return
         }
         const lower = q.toLowerCase()
@@ -178,7 +178,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
             b.hira?.toLowerCase().includes(lower) ||
             b.code.includes(q)
         )
-        setFilteredBranches(results.slice(0, 30))
+        setFilteredBranches(results)
       }, 300)
     },
     [branches, selectedBranch]
@@ -301,7 +301,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
                 if (selectedBank && !selectedBranch) {
                   setShowBranchDropdown(true)
                   if (!branchQuery.trim()) {
-                    setFilteredBranches(branches.slice(0, 30))
+                    setFilteredBranches(branches)
                   }
                 }
               }}

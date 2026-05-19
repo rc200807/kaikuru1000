@@ -15,13 +15,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(cached.data)
     }
 
-    const res = await fetch(`https://bank.teraren.com/banks/${bankCode}/branches.json`, {
-      next: { revalidate: 86400 },
-    })
-    if (!res.ok) throw new Error('Failed to fetch branches')
-    const data = await res.json()
-    branchCache.set(bankCode, { data, at: Date.now() })
-    return NextResponse.json(data)
+    // teraren API はページネーション式（デフォルト50件/ページ）。
+    // 全支店を取得するため、最終ページに達するまで順次取得する。
+    const PER_PAGE = 200
+    const MAX_PAGES = 50 // 念のため上限（200*50=10000支店）
+    const all: any[] = []
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const res = await fetch(
+        `https://bank.teraren.com/banks/${bankCode}/branches.json?page=${page}&per=${PER_PAGE}`,
+        { next: { revalidate: 86400 } },
+      )
+      if (!res.ok) throw new Error('Failed to fetch branches')
+      const data = await res.json()
+      if (!Array.isArray(data) || data.length === 0) break
+      all.push(...data)
+      if (data.length < PER_PAGE) break
+    }
+    branchCache.set(bankCode, { data: all, at: Date.now() })
+    return NextResponse.json(all)
   } catch {
     return NextResponse.json([], { status: 500 })
   }

@@ -16,6 +16,8 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const canDelete = role === 'superadmin'
 
   const [form, setForm] = useState<EmployeeFormState>(EMPTY_EMPLOYEE)
+  const [savedForm, setSavedForm] = useState<EmployeeFormState>(EMPTY_EMPLOYEE)
+  const [editMode, setEditMode] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
@@ -32,7 +34,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
       .then(api => {
         if (api) {
           setInternalId(api.id)
-          setForm(fromEmployeeApi(api))
+          const next = fromEmployeeApi(api)
+          setForm(next)
+          setSavedForm(next)
         }
       })
       .finally(() => setLoading(false))
@@ -57,9 +61,17 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         return
       }
       flash('success', '保存しました')
+      setSavedForm(form)
+      setEditMode(false)
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleCancelEdit() {
+    setForm(savedForm)
+    setEditMode(false)
+    setMsg(null)
   }
 
   async function handleDelete() {
@@ -81,8 +93,18 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         ← 一覧に戻る
       </button>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>{form.lastName} {form.firstName}</h1>
-        <code style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>社員ID: {internalId}</code>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>{savedForm.lastName} {savedForm.firstName}</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <code style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>社員ID: {internalId}</code>
+          {canEdit && !editMode && (
+            <button
+              onClick={() => setEditMode(true)}
+              style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+            >
+              編集
+            </button>
+          )}
+        </div>
       </div>
 
       {!canSensitive && (
@@ -96,20 +118,33 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </div>
       )}
 
-      <EmployeeForm value={form} onChange={setForm} showSensitive={canSensitive} disabled={!canEdit} />
+      <EmployeeForm value={form} onChange={setForm} showSensitive={canSensitive} disabled={!editMode} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
         <div>
-          {canDelete && (
+          {canDelete && !editMode && (
             <button onClick={handleDelete} style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--md-sys-color-error)', color: 'var(--md-sys-color-on-error)', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               削除
             </button>
           )}
         </div>
-        {canEdit && (
-          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-            {saving ? '保存中…' : '保存'}
-          </button>
+        {canEdit && editMode && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={handleCancelEdit}
+              disabled={saving}
+              style={{ padding: '8px 16px', borderRadius: 6, background: 'transparent', color: 'var(--md-sys-color-on-surface)', border: '1px solid var(--md-sys-color-outline)', fontSize: 14, fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 14, fontWeight: 600, cursor: saving ? 'wait' : 'pointer' }}
+            >
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
         )}
       </div>
     </div>

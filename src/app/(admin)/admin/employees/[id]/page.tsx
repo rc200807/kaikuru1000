@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmployeeForm, { EMPTY_EMPLOYEE, EmployeeFormState, buildEmployeePayload, fromEmployeeApi } from '@/components/admin/EmployeeForm'
+import EmployeeView from '@/components/admin/EmployeeView'
 
 export default function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params)
@@ -118,7 +119,11 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
         </div>
       )}
 
-      <EmployeeForm value={form} onChange={setForm} showSensitive={canSensitive} disabled={!editMode} />
+      {editMode ? (
+        <EmployeeForm value={form} onChange={setForm} showSensitive={canSensitive} />
+      ) : (
+        <EmployeeView value={savedForm} showSensitive={canSensitive} />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
         <div>

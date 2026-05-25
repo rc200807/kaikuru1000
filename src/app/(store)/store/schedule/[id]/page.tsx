@@ -9,6 +9,7 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
+import Modal from '@/components/Modal'
 import dynamic from 'next/dynamic'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
@@ -1271,39 +1272,36 @@ export default function VisitDetailPage() {
                   </div>
                 )}
 
-                {/* インライン編集フォーム */}
-                {showPurchaseForm && editingPurchase?.id === item.id && (
-                  <div className="mx-3 mb-3 p-3 rounded-[var(--md-sys-shape-small,8px)] border border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest)] space-y-3">
-                    <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">品目を編集</h3>
-                    {renderPurchaseFormFields()}
-                  </div>
-                )}
               </div>
             ))}
           </div>
         )}
-
-        {/* 品目追加フォーム（新規のみ） */}
-        {showPurchaseForm && !editingPurchase && (
-          <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">品目を追加</h3>
-              {!purchaseForm.janCode && (
-                <button
-                  onClick={() => setShowScanner(true)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                  バーコードで入力
-                </button>
-              )}
-            </div>
-            {renderPurchaseFormFields()}
-          </div>
-        )}
       </Card>
+
+      {/* 品目追加/編集モーダル */}
+      <Modal
+        open={showPurchaseForm}
+        onClose={() => { if (!savingPurchase) resetPurchaseForm() }}
+        title={editingPurchase ? '品目を編集' : '品目を追加'}
+        size="lg"
+      >
+        <div className="space-y-3">
+          {!editingPurchase && !purchaseForm.janCode && (
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowScanner(true)}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                バーコードで入力
+              </button>
+            </div>
+          )}
+          {renderPurchaseFormFields()}
+        </div>
+      </Modal>
 
       {/* ────────── 作業品目セクション ────────── */}
       <Card variant="elevated" padding="md">
@@ -1344,57 +1342,60 @@ export default function VisitDetailPage() {
           </div>
         )}
 
-        {/* 作業追加/編集フォーム */}
-        {showWorkForm && (
-          <div className="p-3 rounded-[var(--md-sys-shape-small,8px)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] space-y-3">
-            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
-              {editingWork ? '作業を編集' : '作業を追加'}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-3">
-                <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業名 *</label>
-                <input
-                  className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
-                  value={workForm.workName}
-                  onChange={(e) => setWorkForm({ ...workForm, workName: e.target.value })}
-                  placeholder="例: 搬出作業 / 清掃"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">単価（円）</label>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
-                  value={workForm.unitPrice}
-                  onChange={(e) => setWorkForm({ ...workForm, unitPrice: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">数量</label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
-                  value={workForm.quantity}
-                  onChange={(e) => setWorkForm({ ...workForm, quantity: parseInt(e.target.value) || 1 })}
-                />
-              </div>
-              <div className="flex items-end">
-                <span className="text-sm text-[var(--md-sys-color-on-surface)]">
-                  小計: <strong>{fmtYen(workForm.unitPrice * workForm.quantity)}</strong>
-                </span>
-              </div>
+      </Card>
+
+      {/* 作業追加/編集モーダル */}
+      <Modal
+        open={showWorkForm}
+        onClose={() => { if (!savingWork) resetWorkForm() }}
+        title={editingWork ? '作業を編集' : '作業を追加'}
+        size="md"
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-3">
+              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業名 *</label>
+              <input
+                className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+                value={workForm.workName}
+                onChange={(e) => setWorkForm({ ...workForm, workName: e.target.value })}
+                placeholder="例: 搬出作業 / 清掃"
+              />
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="text" size="sm" onClick={resetWorkForm}>キャンセル</Button>
-              <Button size="sm" onClick={saveWorkItem} disabled={savingWork} loading={savingWork}>
-                {savingWork ? '保存中...' : '保存'}
-              </Button>
+            <div>
+              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">単価（円）</label>
+              <input
+                type="number"
+                min={0}
+                className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+                value={workForm.unitPrice}
+                onChange={(e) => setWorkForm({ ...workForm, unitPrice: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">数量</label>
+              <input
+                type="number"
+                min={1}
+                className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+                value={workForm.quantity}
+                onChange={(e) => setWorkForm({ ...workForm, quantity: parseInt(e.target.value) || 1 })}
+              />
+            </div>
+            <div className="flex items-end">
+              <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                小計: <strong>{fmtYen(workForm.unitPrice * workForm.quantity)}</strong>
+              </span>
             </div>
           </div>
-        )}
-      </Card>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button variant="text" size="sm" onClick={resetWorkForm} disabled={savingWork}>キャンセル</Button>
+            <Button size="sm" onClick={saveWorkItem} disabled={savingWork} loading={savingWork}>
+              {savingWork ? '保存中...' : '保存'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ────────── 集計カード ────────── */}
       <Card variant="elevated" padding="md">

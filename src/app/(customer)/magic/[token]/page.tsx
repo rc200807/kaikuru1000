@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { use } from 'react'
 import Link from 'next/link'
@@ -11,6 +11,8 @@ import GlassButton from '@/components/customer/GlassButton'
 export default function MagicLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const requirePasswordSetup = searchParams.get('setup') === '1'
   const [error, setError] = useState('')
   const [verifying, setVerifying] = useState(true)
 
@@ -43,8 +45,11 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
           return
         }
 
-        // contractIdがある場合は契約書閲覧ページへ、なければマイページへ
-        if (infoData.contractId) {
+        // setup=1 の場合はパスワード設定ページへ
+        if (requirePasswordSetup) {
+          const next = infoData.contractId ? `/contract-view?id=${infoData.contractId}` : '/mypage'
+          router.replace(`/account-setup?next=${encodeURIComponent(next)}`)
+        } else if (infoData.contractId) {
           router.replace(`/contract-view?id=${infoData.contractId}`)
         } else {
           router.replace('/mypage')
@@ -56,7 +61,7 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
     }
 
     verify()
-  }, [token, router])
+  }, [token, router, requirePasswordSetup])
 
   if (verifying) {
     return (

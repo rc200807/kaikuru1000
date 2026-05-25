@@ -291,6 +291,7 @@ export async function sendContractEmail(params: {
   storeName: string
   visitDate: Date
   pdfBase64: string
+  magicLinkUrl?: string
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
@@ -348,10 +349,36 @@ export async function sendContractEmail(params: {
                 </tr>
               </table>
 
-              <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
+              <p style="margin:0 0 ${params.magicLinkUrl ? '24px' : '0'};color:#6b7280;font-size:13px;line-height:1.7;">
                 添付のPDFファイルを大切に保管してください。<br>
                 ご不明な点がございましたら、${params.storeName}までお問い合わせください。
               </p>
+
+              ${params.magicLinkUrl ? `
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;padding-top:24px;">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 12px;color:#374151;font-size:14px;font-weight:600;">マイページでの確認</p>
+                    <p style="margin:0 0 16px;color:#6b7280;font-size:13px;line-height:1.7;">
+                      下のボタンから、買取金額・契約内容・身分証明情報の確認やパスワードの登録ができます。
+                    </p>
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="background-color:#991b1b;border-radius:8px;">
+                          <a href="${params.magicLinkUrl}" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">
+                            マイページを開く
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:12px 0 0;color:#9ca3af;font-size:11px;line-height:1.6;">
+                      ※ このリンクは72時間有効です。<br>
+                      ※ リンクからアクセス後、マイページ用のパスワードを設定していただきます。
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
             </td>
           </tr>
 
@@ -388,6 +415,12 @@ export async function sendContractEmail(params: {
       'ご不明点は消費生活センター（局番なし 188）にご相談ください。',
       '',
       '添付のPDFファイルを大切に保管してください。',
+      ...(params.magicLinkUrl ? [
+        '',
+        '■ マイページでの確認',
+        '下のリンクから契約内容の確認やパスワードの登録ができます（72時間有効）',
+        params.magicLinkUrl,
+      ] : []),
     ].join('\n'),
     attachments: [
       {

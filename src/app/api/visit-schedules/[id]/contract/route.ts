@@ -37,13 +37,27 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { signatureData, pdfBase64 } = body
+  const { signatureData, pdfBase64, email: inputEmail } = body
 
   if (!signatureData) {
     return NextResponse.json({ error: '署名データが必要です' }, { status: 400 })
   }
 
-  const customerEmail = schedule.user.email || ''
+  // フロントから受け取ったメールアドレスを優先（無ければ既存のUser.email）
+  let customerEmail: string = (typeof inputEmail === 'string' ? inputEmail.trim() : '') || schedule.user.email || ''
+
+  // 入力されたメアドが既存と異なる場合は User.email を更新
+  if (inputEmail && typeof inputEmail === 'string' && inputEmail.trim() && inputEmail.trim() !== schedule.user.email) {
+    try {
+      await prisma.user.update({
+        where: { id: schedule.user.id },
+        data: { email: inputEmail.trim() },
+      })
+      customerEmail = inputEmail.trim()
+    } catch (e) {
+      console.error('User.email 更新失敗:', e)
+    }
+  }
 
   // 既存の契約書があれば上書き、なければ新規作成
   const contract = await prisma.salesContract.upsert({
@@ -64,6 +78,28 @@ export async function POST(
     },
   })
 
+  // パスワード設定誘導用のマジックリンクを生成
+  let magicLinkUrl: string | undefined
+  if (customerEmail) {
+    try {
+      const crypto = await import('crypto')
+      const token = crypto.randomBytes(32).toString('hex')
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+      await prisma.magicLink.create({
+        data: {
+          token,
+          userId: schedule.user.id,
+          contractId: id,
+          expiresAt,
+        },
+      })
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+      magicLinkUrl = `${baseUrl}/magic/${token}?setup=1`
+    } catch (e) {
+      console.error('マジックリンク生成失敗:', e)
+    }
+  }
+
   // メール送信（顧客にPDF添付）
   let emailSent = false
   if (customerEmail && pdfBase64) {
@@ -74,6 +110,7 @@ export async function POST(
         storeName: schedule.store.name,
         visitDate: schedule.visitDate,
         pdfBase64,
+        magicLinkUrl,
       })
       if (emailSent) {
         await prisma.salesContract.update({
@@ -86,7 +123,7 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ success: true, contractId: contract.id, emailSent })
+  return NextResponse.json({ success: true, contractId: contract.id, emailSent, magicLinkUrl })
 }
 
 /** 契約書取得（既存チェック用） */

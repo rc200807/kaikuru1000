@@ -282,6 +282,7 @@ export default function FinalAgreementPage() {
   const [existingContract, setExistingContract] = useState<ExistingContract | null>(null)
   const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null)
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
+  const [customerEmailInput, setCustomerEmailInput] = useState('')
   const contractRef = useRef<HTMLDivElement>(null)
 
   // PIN lock state
@@ -354,6 +355,8 @@ export default function FinalAgreementPage() {
     if (visitRes.ok) {
       const data = await visitRes.json()
       setVisit(data)
+      // 既存ユーザー登録メールアドレスを初期値にセット（未入力時のみ）
+      setCustomerEmailInput((prev) => prev || data?.user?.email || '')
     }
     if (contractRes.ok) {
       const contract = await contractRes.json()
@@ -402,6 +405,11 @@ export default function FinalAgreementPage() {
 
   const handleSubmit = async () => {
     if (!agreed || !signature || !visit) return
+    const emailTrimmed = customerEmailInput.trim()
+    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setMessage({ type: 'error', text: 'メールアドレスを正しく入力してください' })
+      return
+    }
     setSubmitting(true)
     setMessage(null)
 
@@ -461,7 +469,7 @@ export default function FinalAgreementPage() {
       const res = await fetch(`/api/visit-schedules/${scheduleId}/contract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData: signature, pdfBase64 }),
+        body: JSON.stringify({ signatureData: signature, pdfBase64, email: emailTrimmed }),
       })
 
       if (!res.ok) {
@@ -870,6 +878,23 @@ export default function FinalAgreementPage() {
 
       </div>{/* /contractRef */}
 
+      {/* メール送付先 */}
+      <Card variant="elevated" padding="md">
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">売買契約書の内容をお送りするメールアドレス</h2>
+        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3 leading-relaxed">
+          提出するとPDFファイルとマイページへのリンクをこのメールアドレス宛にお送りします。
+        </p>
+        <input
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={customerEmailInput}
+          onChange={(e) => setCustomerEmailInput(e.target.value)}
+          placeholder="example@example.com"
+          className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+        />
+      </Card>
+
       {/* 操作ボタン */}
       <div className="flex gap-3 justify-end pt-2">
         <Button
@@ -881,7 +906,7 @@ export default function FinalAgreementPage() {
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={!agreed || !signature || submitting}
+          disabled={!agreed || !signature || !customerEmailInput.trim() || submitting}
         >
           {submitting ? (
             <span className="flex items-center gap-2">

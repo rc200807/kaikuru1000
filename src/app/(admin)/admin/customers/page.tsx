@@ -25,7 +25,10 @@ type User = {
   furigana: string
   email: string
   phone: string
+  phone2?: string | null
+  phone3?: string | null
   address: string
+  internalNote?: string | null
   idDocumentPath: string | null
   createdAt: string
   licenseKey: { key: string } | null
@@ -181,7 +184,7 @@ export default function AdminCustomersPage() {
 
   // 顧客情報編集
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; furigana: string; email: string; phone: string; address: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number }>({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1 })
+  const [editForm, setEditForm] = useState<{ name: string; furigana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number }>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1 })
   const [changingFrequency, setChangingFrequency] = useState<string | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
@@ -415,7 +418,7 @@ export default function AdminCustomersPage() {
     if (res.ok) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, customerType: newType } : u))
       setDetailUser(prev => prev && prev.id === userId ? { ...prev, customerType: newType } : prev)
-      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '定期宅配' : newType === 'regular' ? '通常買取' : '定期訪問'}」に変更しました` })
+      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '宅配型' : newType === 'regular' ? '通常買取' : '訪問型'}」に変更しました` })
     } else {
       setMessage({ type: 'error', text: 'タイプ変更に失敗しました' })
     }
@@ -446,7 +449,10 @@ export default function AdminCustomersPage() {
       furigana: detailUser.furigana,
       email: detailUser.email || '',
       phone: detailUser.phone,
+      phone2: (detailUser as any).phone2 || '',
+      phone3: (detailUser as any).phone3 || '',
       address: detailUser.address,
+      internalNote: (detailUser as any).internalNote || '',
       customerType: detailUser.customerType,
       customerTypes: types.length > 0 ? types : [detailUser.customerType],
       visitFrequencyMonths: detailUser.visitFrequencyMonths ?? 1,
@@ -466,7 +472,10 @@ export default function AdminCustomersPage() {
           furigana: editForm.furigana,
           email: editForm.email,
           phone: editForm.phone,
+          phone2: editForm.phone2,
+          phone3: editForm.phone3,
           address: editForm.address,
+          internalNote: editForm.internalNote,
           customerType: editForm.customerType,
           customerTypes: editForm.customerTypes,
           visitFrequencyMonths: editForm.visitFrequencyMonths,
@@ -479,7 +488,10 @@ export default function AdminCustomersPage() {
           furigana: updated.furigana ?? editForm.furigana,
           email: updated.email ?? editForm.email,
           phone: updated.phone ?? editForm.phone,
+          phone2: updated.phone2 ?? editForm.phone2,
+          phone3: updated.phone3 ?? editForm.phone3,
           address: updated.address ?? editForm.address,
+          internalNote: updated.internalNote ?? editForm.internalNote,
           customerType: updated.customerType ?? editForm.customerType,
           visitFrequencyMonths: updated.visitFrequencyMonths ?? editForm.visitFrequencyMonths,
         }
@@ -1133,10 +1145,33 @@ export default function AdminCustomersPage() {
                       required
                     />
                     <TextField
+                      label="電話番号 2（任意）"
+                      value={editForm.phone2}
+                      onChange={v => setEditForm(prev => ({ ...prev, phone2: v }))}
+                    />
+                    <TextField
+                      label="電話番号 3（任意）"
+                      value={editForm.phone3}
+                      onChange={v => setEditForm(prev => ({ ...prev, phone3: v }))}
+                    />
+                    <TextField
                       label="住所（任意）"
                       value={editForm.address}
                       onChange={v => setEditForm(prev => ({ ...prev, address: v }))}
                     />
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                        内部メモ（顧客には非公開）
+                      </label>
+                      <textarea
+                        value={editForm.internalNote}
+                        onChange={e => setEditForm(prev => ({ ...prev, internalNote: e.target.value }))}
+                        rows={3}
+                        placeholder="どのような顧客なのか・訪問時の注意点など"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40 resize-y"
+                      />
+                      <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">店舗・管理者のみに表示されます。お客様には公開されません。</p>
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
                         顧客タイプ（複数選択可）
@@ -1224,6 +1259,8 @@ export default function AdminCustomersPage() {
                     {[
                       { label: 'メール', value: detailUser.email },
                       { label: '電話番号', value: detailUser.phone },
+                      ...(detailUser.phone2 ? [{ label: '電話番号 2', value: detailUser.phone2 }] : []),
+                      ...(detailUser.phone3 ? [{ label: '電話番号 3', value: detailUser.phone3 }] : []),
                       { label: '訪問先住所', value: detailUser.address },
                       { label: 'ライセンスキー', value: detailUser.licenseKey?.key || '—', mono: true },
                       { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
@@ -1234,6 +1271,14 @@ export default function AdminCustomersPage() {
                         <dd className={`text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 ${(item as any).mono ? 'font-mono text-xs' : ''}`}>{item.value}</dd>
                       </div>
                     ))}
+                    {detailUser.internalNote && (
+                      <div className="flex gap-3">
+                        <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">内部メモ</dt>
+                        <dd className="text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 whitespace-pre-wrap bg-amber-50 dark:bg-amber-950/30 rounded p-2 border border-amber-200 dark:border-amber-800">
+                          {detailUser.internalNote}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 )}
 

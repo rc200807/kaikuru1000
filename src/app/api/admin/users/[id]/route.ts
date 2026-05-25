@@ -86,7 +86,10 @@ export async function PATCH(
 
     if (typeof body.furigana === 'string') data.furigana = body.furigana.trim()
     if (typeof body.phone === 'string') data.phone = body.phone.replace(/[-ー\s]/g, '')
+    if (typeof body.phone2 === 'string') data.phone2 = body.phone2.replace(/[-ー\s]/g, '') || null
+    if (typeof body.phone3 === 'string') data.phone3 = body.phone3.replace(/[-ー\s]/g, '') || null
     if (typeof body.address === 'string') data.address = body.address.trim()
+    if (typeof body.internalNote === 'string') data.internalNote = body.internalNote.trim() || null
 
     // email: 空文字なら null にする
     if (typeof body.email === 'string') {
@@ -111,7 +114,7 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true, customerTypes: true, visitFrequencyMonths: true },
+      select: { id: true, name: true, furigana: true, email: true, phone: true, phone2: true, phone3: true, address: true, internalNote: true, customerType: true, customerTypes: true, visitFrequencyMonths: true },
     })
     return NextResponse.json(updated)
   }

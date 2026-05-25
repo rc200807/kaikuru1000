@@ -29,7 +29,8 @@ export async function GET(
       where,
       select: {
       id: true, name: true, furigana: true,
-      email: true, phone: true, address: true,
+      email: true, phone: true, phone2: true, phone3: true, address: true,
+      internalNote: true,
       idDocumentPath: true, createdAt: true,
       // 顧客タイプ
       customerType: true,

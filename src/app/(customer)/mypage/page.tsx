@@ -1605,8 +1605,8 @@ function MyPageContent() {
                     }] : []),
                     ...(user.customerType !== 'delivery' ? [{
                       key: 'visit',
-                      label: '定期訪問の予約',
-                      sub: 'お近くの店舗が定期訪問',
+                      label: '訪問型の予約',
+                      sub: 'お近くの店舗が訪問',
                       done: user.visitSchedules.length > 0,
                       action: () => handleTabChange('visit-request'),
                       icon: (

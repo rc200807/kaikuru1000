@@ -10,10 +10,14 @@ const updateUserSchema = z.object({
   name:             z.string().min(1).max(100).optional(),
   furigana:         z.string().min(1).max(100).optional(),
   phone:            z.string().min(1).max(20).optional(),
+  phone2:           z.string().max(20).nullable().optional(),
+  phone3:           z.string().max(20).nullable().optional(),
   address:          z.string().min(1).max(200).optional(),
   currentPassword:  z.string().optional(),
   newPassword:      z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional(),
   idOcrIssueReport: z.string().max(1000).nullable().optional(), // 顧客によるOCR誤り報告
+  // 内部メモ（store / admin のみ）
+  internalNote:     z.string().max(2000).nullable().optional(),
   // 振込先口座情報
   bankName:      z.string().max(50).nullable().optional(),
   branchName:    z.string().max(50).nullable().optional(),
@@ -52,9 +56,11 @@ export async function GET(
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   // パスワードは除外 / 身分証 Blob URL をプロキシ URL に変換（URL 露出防止）
-  const { password: _, ...userWithoutPassword } = user
+  const { password: _, internalNote, ...userWithoutPassword } = user
   return NextResponse.json({
     ...userWithoutPassword,
+    // 内部メモは顧客には返さない（店舗・管理者のみ）
+    ...(sessionUser.role !== 'customer' ? { internalNote } : {}),
     idDocumentPath: user.idDocumentPath ? `/api/users/${id}/id-document` : null,
   })
 }
@@ -79,8 +85,8 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, furigana, phone, address, currentPassword, newPassword, idOcrIssueReport,
-          bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
+  const { name, furigana, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
+          internalNote, bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -89,9 +95,15 @@ export async function PATCH(
   if (name) updateData.name = name
   if (furigana) updateData.furigana = furigana
   if (phone) updateData.phone = phone
+  if (phone2 !== undefined) updateData.phone2 = phone2 ? phone2.trim() : null
+  if (phone3 !== undefined) updateData.phone3 = phone3 ? phone3.trim() : null
   if (address) updateData.address = address
   // OCR誤り報告（null は削除、文字列は更新）
   if (idOcrIssueReport !== undefined) updateData.idOcrIssueReport = idOcrIssueReport
+  // 内部メモ（顧客自身は更新不可。店舗/管理者のみ）
+  if (internalNote !== undefined && sessionUser.role !== 'customer') {
+    updateData.internalNote = internalNote ? internalNote.trim() : null
+  }
   // 振込先口座情報
   if (bankName      !== undefined) updateData.bankName      = bankName
   if (branchName    !== undefined) updateData.branchName    = branchName

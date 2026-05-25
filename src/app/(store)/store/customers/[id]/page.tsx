@@ -22,7 +22,10 @@ type Customer = {
   furigana: string
   email: string
   phone: string
+  phone2: string | null
+  phone3: string | null
   address: string
+  internalNote: string | null
   idDocumentPath: string | null
   idDocumentType: string | null
   idName: string | null
@@ -130,9 +133,9 @@ function getStoreStepsDone(status: string): number {
 }
 
 const TYPE_MAP: Record<string, { label: string; cls: string }> = {
-  delivery: { label: '定期宅配', cls: 'bg-blue-100 text-blue-700' },
+  delivery: { label: '宅配型', cls: 'bg-blue-100 text-blue-700' },
   regular: { label: '通常買取', cls: 'bg-purple-100 text-purple-700' },
-  visit: { label: '定期訪問', cls: 'bg-green-100 text-green-700' },
+  visit: { label: '訪問型', cls: 'bg-green-100 text-green-700' },
 }
 
 type TabKey = 'info' | 'memos' | 'add' | 'history' | 'shipments' | 'inquiries'
@@ -180,6 +183,64 @@ export default function StoreCustomerDetailPage() {
   const [addForm, setAddForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // 内部メモ編集 state
+  const [editingNote, setEditingNote] = useState(false)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+
+  // 電話番号編集 state
+  const [editingPhones, setEditingPhones] = useState(false)
+  const [phonesDraft, setPhonesDraft] = useState<{ phone: string; phone2: string; phone3: string }>({ phone: '', phone2: '', phone3: '' })
+  const [savingPhones, setSavingPhones] = useState(false)
+
+  async function saveInternalNote() {
+    if (!customer) return
+    setSavingNote(true)
+    try {
+      const res = await fetch(`/api/users/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ internalNote: noteDraft }),
+      })
+      if (res.ok) {
+        setCustomer(prev => prev ? { ...prev, internalNote: noteDraft || null } : prev)
+        setEditingNote(false)
+        setMsg({ type: 'success', text: '内部メモを保存しました' })
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setMsg({ type: 'error', text: d.error || '保存に失敗しました' })
+      }
+    } finally {
+      setSavingNote(false)
+    }
+  }
+
+  async function savePhones() {
+    if (!customer) return
+    setSavingPhones(true)
+    try {
+      const res = await fetch(`/api/users/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: phonesDraft.phone,
+          phone2: phonesDraft.phone2 || null,
+          phone3: phonesDraft.phone3 || null,
+        }),
+      })
+      if (res.ok) {
+        setCustomer(prev => prev ? { ...prev, phone: phonesDraft.phone, phone2: phonesDraft.phone2 || null, phone3: phonesDraft.phone3 || null } : prev)
+        setEditingPhones(false)
+        setMsg({ type: 'success', text: '電話番号を保存しました' })
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setMsg({ type: 'error', text: d.error || '保存に失敗しました' })
+      }
+    } finally {
+      setSavingPhones(false)
+    }
+  }
 
   // 買取トライ
   const [memosList, setMemosList] = useState<PurchaseMemo[]>([])
@@ -651,13 +712,67 @@ export default function StoreCustomerDetailPage() {
         {activeTab === 'info' && (
           <div className="space-y-6">
             <Card>
-              <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">顧客情報</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">顧客情報</h2>
+                {!editingPhones && (
+                  <button
+                    onClick={() => {
+                      setPhonesDraft({
+                        phone: customer.phone,
+                        phone2: customer.phone2 || '',
+                        phone3: customer.phone3 || '',
+                      })
+                      setEditingPhones(true)
+                    }}
+                    className="text-xs text-[var(--portal-primary)] hover:underline"
+                  >
+                    電話番号を編集
+                  </button>
+                )}
+              </div>
+              {editingPhones ? (
+                <div className="space-y-3 mb-4 p-3 rounded-lg border border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest)]">
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">電話番号（主）</label>
+                    <input
+                      type="tel"
+                      value={phonesDraft.phone}
+                      onChange={e => setPhonesDraft(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">電話番号 2（任意）</label>
+                    <input
+                      type="tel"
+                      value={phonesDraft.phone2}
+                      onChange={e => setPhonesDraft(prev => ({ ...prev, phone2: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">電話番号 3（任意）</label>
+                    <input
+                      type="tel"
+                      value={phonesDraft.phone3}
+                      onChange={e => setPhonesDraft(prev => ({ ...prev, phone3: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditingPhones(false)} disabled={savingPhones} className="text-xs px-3 py-1.5 rounded text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]">キャンセル</button>
+                    <button onClick={savePhones} disabled={savingPhones || !phonesDraft.phone} className="text-xs px-3 py-1.5 rounded bg-[var(--portal-primary)] text-white disabled:opacity-50">{savingPhones ? '保存中...' : '保存'}</button>
+                  </div>
+                </div>
+              ) : null}
               <dl className="space-y-3">
                 {[
                   { label: '氏名', value: customer.name },
                   { label: 'ふりがな', value: customer.furigana },
                   { label: 'メール', value: customer.email || '未登録' },
                   { label: '電話番号', value: customer.phone },
+                  ...(customer.phone2 ? [{ label: '電話番号 2', value: customer.phone2 }] : []),
+                  ...(customer.phone3 ? [{ label: '電話番号 3', value: customer.phone3 }] : []),
                   { label: '訪問先住所', value: customer.address },
                   { label: '顧客タイプ', value: typeInfo.label },
                   { label: '登録日', value: format(new Date(customer.createdAt), 'yyyy年M月d日', { locale: ja }) },
@@ -677,6 +792,45 @@ export default function StoreCustomerDetailPage() {
                   </dd>
                 </div>
               </dl>
+            </Card>
+
+            {/* 内部メモ（店舗・管理者のみ閲覧可。お客様には非公開） */}
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] flex items-center gap-2">
+                  内部メモ
+                  <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">店舗・管理者のみ</span>
+                </h2>
+                {!editingNote && (
+                  <button
+                    onClick={() => { setNoteDraft(customer.internalNote || ''); setEditingNote(true) }}
+                    className="text-xs text-[var(--portal-primary)] hover:underline"
+                  >
+                    {customer.internalNote ? '編集' : 'メモを追加'}
+                  </button>
+                )}
+              </div>
+              {editingNote ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={noteDraft}
+                    onChange={e => setNoteDraft(e.target.value)}
+                    rows={4}
+                    placeholder="どのような顧客なのか・訪問時の注意点など。お客様には公開されません。"
+                    className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] resize-y"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditingNote(false)} disabled={savingNote} className="text-xs px-3 py-1.5 rounded text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]">キャンセル</button>
+                    <button onClick={saveInternalNote} disabled={savingNote} className="text-xs px-3 py-1.5 rounded bg-[var(--portal-primary)] text-white disabled:opacity-50">{savingNote ? '保存中...' : '保存'}</button>
+                  </div>
+                </div>
+              ) : customer.internalNote ? (
+                <div className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap bg-amber-50 dark:bg-amber-950/30 rounded p-3 border border-amber-200 dark:border-amber-800">
+                  {customer.internalNote}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">未記入</p>
+              )}
             </Card>
 
             {/* 口座情報 */}

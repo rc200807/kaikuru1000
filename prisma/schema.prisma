@@ -26,7 +26,10 @@ model User {
   furigana       String
   email          String?   @unique
   phone          String
+  phone2         String?   // 追加連絡先 1（任意）
+  phone3         String?   // 追加連絡先 2（任意）
   address        String
+  internalNote   String?   @db.Text  // 店舗・管理者のみ閲覧可能な内部メモ（顧客には非公開）
   password       String
   licenseKeyId   String?   @unique
   licenseKey     LicenseKey? @relation(fields: [licenseKeyId], references: [id])

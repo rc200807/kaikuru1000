@@ -1077,7 +1077,7 @@ export async function sendStoreAssignmentNotification(params: {
 
   const { transporter, from } = result
 
-  const typeLabel = params.customerType === 'delivery' ? '定期宅配' : params.customerType === 'visit' ? '定期訪問' : '通常買取'
+  const typeLabel = params.customerType === 'delivery' ? '宅配型' : params.customerType === 'visit' ? '訪問型' : '通常買取'
 
   const html = `
 <!DOCTYPE html>

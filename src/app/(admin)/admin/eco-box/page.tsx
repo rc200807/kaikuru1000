@@ -56,8 +56,8 @@ function AdminEcoBoxPageContent() {
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--md-sys-color-outline-variant)', overflowX: 'auto' }}>
           {([
             { key: 'deliveries', label: '宅配買取' },
-            { key: 'visit',      label: '定期訪問顧客' },
-            { key: 'delivery',   label: '定期宅配顧客' },
+            { key: 'visit',      label: '訪問型顧客' },
+            { key: 'delivery',   label: '宅配型顧客' },
             { key: 'visits',     label: '訪問記録' },
             { key: 'partners',   label: 'パートナー / ライセンス' },
           ] as { key: TabKey; label: string }[]).map(t => (

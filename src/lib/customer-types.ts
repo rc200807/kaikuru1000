@@ -7,8 +7,8 @@ export const CUSTOMER_TYPES = ['visit', 'delivery', 'regular', 'akikuru'] as con
 export type CustomerType = typeof CUSTOMER_TYPES[number]
 
 export const CUSTOMER_TYPE_LABEL: Record<CustomerType, string> = {
-  visit:    '定期訪問',
-  delivery: '定期宅配',
+  visit:    '訪問型',
+  delivery: '宅配型',
   regular:  '通常買取',
   akikuru:  'アキクル',
 }

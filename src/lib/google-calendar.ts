@@ -113,9 +113,9 @@ export async function createCalendarEvent(
       endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
     }
 
-    const typeLabel = visitSchedule.customerType === 'delivery' ? '定期宅配'
+    const typeLabel = visitSchedule.customerType === 'delivery' ? '宅配型'
       : visitSchedule.customerType === 'regular' ? '通常買取'
-      : '定期訪問'
+      : '訪問型'
 
     const descriptionParts: string[] = []
     if (visitSchedule.startTime || visitSchedule.endTime) {
@@ -186,9 +186,9 @@ export async function updateCalendarEvent(
     const startTime = new Date(visitSchedule.visitDate)
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000)
 
-    const typeLabel = visitSchedule.customerType === 'delivery' ? '定期宅配'
+    const typeLabel = visitSchedule.customerType === 'delivery' ? '宅配型'
       : visitSchedule.customerType === 'regular' ? '通常買取'
-      : '定期訪問'
+      : '訪問型'
 
     const descriptionParts: string[] = []
     if (visitSchedule.note) {

@@ -481,9 +481,17 @@ export default function FinalAgreementPage() {
       await fetchVisit()
 
       if (result.emailSent) {
-        setMessage({ type: 'success', text: `契約書を保存し、${visit.user.idName || visit.user.name}様にメールで送信しました。` })
+        const pdfNote = result.pdfIncluded ? 'PDFを添付して' : 'マイページへのリンクを記載して'
+        setMessage({ type: 'success', text: `契約書を保存し、${pdfNote}${visit.user.idName || visit.user.name}様にメールで送信しました。` })
       } else {
-        setMessage({ type: 'success', text: '契約書を保存しました。（メール設定が未構成のためメール送信はスキップされました）' })
+        const reasonText = result.emailErrorReason === 'smtp-error'
+          ? 'メール送信中にエラーが発生しました'
+          : result.emailErrorReason === 'smtp-disabled'
+          ? 'メール設定が未構成のためメール送信はスキップされました'
+          : result.emailErrorReason === 'no-email'
+          ? '送信先メールアドレスが指定されていません'
+          : 'メール送信に失敗しました'
+        setMessage({ type: 'error', text: `契約書は保存しましたが、${reasonText}。再提出を試してください。` })
       }
 
       generateMagicLink()

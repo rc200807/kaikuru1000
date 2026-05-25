@@ -100,16 +100,20 @@ export async function POST(
     }
   }
 
-  // メール送信（顧客にPDF添付）
+  // メール送信（PDFは任意。PDFが無くてもマジックリンクと本文だけは送る）
   let emailSent = false
-  if (customerEmail && pdfBase64) {
+  let emailErrorReason: string | null = null
+  if (!customerEmail) {
+    emailErrorReason = 'no-email'
+    console.warn('[contract POST] メール送信スキップ: customerEmail が空です')
+  } else {
     try {
       emailSent = await sendContractEmail({
         customerEmail,
         customerName: schedule.user.name,
         storeName: schedule.store.name,
         visitDate: schedule.visitDate,
-        pdfBase64,
+        pdfBase64: pdfBase64 ?? '',
         magicLinkUrl,
       })
       if (emailSent) {
@@ -117,13 +121,24 @@ export async function POST(
           where: { id: contract.id },
           data: { emailSentAt: new Date() },
         })
+      } else {
+        emailErrorReason = 'smtp-disabled'
+        console.warn('[contract POST] メール送信失敗: SMTP未構成またはトランスポーターnull')
       }
     } catch (e) {
-      console.error('契約書メール送信失敗:', e)
+      emailErrorReason = 'smtp-error'
+      console.error('[contract POST] 契約書メール送信失敗:', e)
     }
   }
 
-  return NextResponse.json({ success: true, contractId: contract.id, emailSent, magicLinkUrl })
+  return NextResponse.json({
+    success: true,
+    contractId: contract.id,
+    emailSent,
+    emailErrorReason,
+    pdfIncluded: !!pdfBase64,
+    magicLinkUrl,
+  })
 }
 
 /** 契約書取得（既存チェック用） */

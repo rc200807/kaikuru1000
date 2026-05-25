@@ -304,7 +304,7 @@ export async function sendContractEmail(params: {
     day: 'numeric',
   })
 
-  const pdfBuffer = Buffer.from(params.pdfBase64, 'base64')
+  const pdfBuffer = params.pdfBase64 ? Buffer.from(params.pdfBase64, 'base64') : null
 
   const html = `
 <!DOCTYPE html>
@@ -422,13 +422,13 @@ export async function sendContractEmail(params: {
         params.magicLinkUrl,
       ] : []),
     ].join('\n'),
-    attachments: [
+    attachments: pdfBuffer ? [
       {
         filename: `売買契約書_${visitDateStr}.pdf`,
         content: pdfBuffer,
         contentType: 'application/pdf',
       },
-    ],
+    ] : [],
   })
 
   return true

@@ -66,6 +66,7 @@ export default function OperatorDetailPage() {
   const [operator, setOperator] = useState<Operator | null>(null)
   const [allStores, setAllStores] = useState<StoreLite[]>([])
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set())
+  const [storeSearch, setStoreSearch] = useState('')
   const [form, setForm] = useState<OperatorFormState | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -330,8 +331,35 @@ export default function OperatorDetailPage() {
           <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>店舗がまだ登録されていません。</p>
         ) : (
           <>
+            <div style={{ position: 'relative', marginBottom: 8 }}>
+              <input
+                type="text"
+                value={storeSearch}
+                onChange={e => setStoreSearch(e.target.value)}
+                placeholder="店舗名・コードで絞り込み"
+                style={{ width: '100%', padding: '8px 32px 8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, outline: 'none' }}
+              />
+              {storeSearch && (
+                <button
+                  onClick={() => setStoreSearch('')}
+                  aria-label="検索条件をクリア"
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', cursor: 'pointer', fontSize: 16, padding: 4, lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            {(() => {
+              const q = storeSearch.trim().toLowerCase()
+              const filteredStores = q
+                ? allStores.filter(s => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+                : allStores
+              if (filteredStores.length === 0) {
+                return <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', padding: 12 }}>該当する店舗が見つかりません</p>
+              }
+              return (
             <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 12, maxHeight: 320, overflowY: 'auto' }}>
-              {allStores.map(s => {
+              {filteredStores.map(s => {
                 const checked = linkedIds.has(s.id)
                 const linkedToOther = !checked && s.operatorId && s.operatorId !== id
                 return (
@@ -356,6 +384,8 @@ export default function OperatorDetailPage() {
                 )
               })}
             </div>
+              )
+            })()}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
               <button
                 onClick={() => setLinkedIds(new Set(operator.stores.map(s => s.id)))}

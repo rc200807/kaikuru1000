@@ -165,11 +165,11 @@ const DOC_TYPES = [
 ]
 const DOC_TYPES_REQUIRING_BACK = ['運転免許証']
 
-type IdUploadResult = {
-  documentType?: string | null
-  name?: string | null
-  address?: string | null
-  birthDate?: string | null
+type IdEditState = {
+  documentType: string
+  name: string
+  address: string
+  birthDate: string
 }
 
 function IdDocumentUploadModal({
@@ -183,25 +183,30 @@ function IdDocumentUploadModal({
   userId: string
   initialDocType?: string | null
   onClose: () => void
-  onSuccess: (result: IdUploadResult) => void
+  onSuccess: () => void
 }) {
+  const [step, setStep] = useState<'upload' | 'confirm'>('upload')
   const [docType, setDocType] = useState('')
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [frontPreview, setFrontPreview] = useState('')
   const [backFile, setBackFile] = useState<File | null>(null)
   const [backPreview, setBackPreview] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [result, setResult] = useState<IdUploadResult | null>(null)
+  const [edit, setEdit] = useState<IdEditState>({ documentType: '', name: '', address: '', birthDate: '' })
+  const [ocrWarning, setOcrWarning] = useState('')
 
   const needsBack = DOC_TYPES_REQUIRING_BACK.includes(docType)
 
   useEffect(() => {
     if (open) {
+      setStep('upload')
       setDocType(initialDocType || '')
       setFrontFile(null); setFrontPreview('')
       setBackFile(null); setBackPreview('')
-      setError(''); setResult(null)
+      setError(''); setOcrWarning('')
+      setEdit({ documentType: '', name: '', address: '', birthDate: '' })
     }
   }, [open, initialDocType])
 
@@ -223,7 +228,7 @@ function IdDocumentUploadModal({
     }
   }
 
-  async function handleSubmit() {
+  async function handleUpload() {
     if (!frontFile || !docType) {
       setError('書類種別と前面画像を選択してください')
       return
@@ -233,6 +238,7 @@ function IdDocumentUploadModal({
       return
     }
     setError('')
+    setOcrWarning('')
     setUploading(true)
 
     try {
@@ -253,13 +259,20 @@ function IdDocumentUploadModal({
         await fetch(`/api/users/${userId}/id-document/back`, { method: 'POST', body: backFd })
       }
 
-      const ocr: IdUploadResult = {
+      setEdit({
         documentType: data?.documentType ?? data?.ocr?.idDocumentType ?? docType,
-        name: data?.ocr?.idName ?? null,
-        address: data?.ocr?.idAddress ?? null,
-        birthDate: data?.ocr?.idBirthDate ?? null,
+        name:         data?.ocr?.idName ?? '',
+        address:      data?.ocr?.idAddress ?? '',
+        birthDate:    data?.ocr?.idBirthDate ?? '',
+      })
+
+      if (data?.ocrError) {
+        setOcrWarning('OCRが失敗しました。お手数ですが、手入力で情報を入力してください。')
+      } else if (!data?.ocr?.idName || !data?.ocr?.idAddress) {
+        setOcrWarning('一部の情報が読み取れませんでした。空欄を手入力で補完してください。')
       }
-      setResult(ocr)
+
+      setStep('confirm')
     } catch (e: any) {
       setError(e?.message || 'アップロードに失敗しました')
     } finally {
@@ -267,14 +280,41 @@ function IdDocumentUploadModal({
     }
   }
 
-  function handleFinish() {
-    if (result) onSuccess(result)
-    onClose()
+  async function handleConfirm(applyToProfile: boolean) {
+    if (!edit.name.trim() || !edit.address.trim()) {
+      setError('氏名と住所は必須です')
+      return
+    }
+    setError('')
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/users/${userId}/id-document/confirm`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idName:         edit.name.trim(),
+          idAddress:      edit.address.trim(),
+          idBirthDate:    edit.birthDate.trim() || null,
+          idDocumentType: edit.documentType || null,
+          applyToProfile,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || '保存に失敗しました')
+      }
+      onSuccess()
+      onClose()
+    } catch (e: any) {
+      setError(e?.message || '保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <Modal open={open} onClose={onClose} title="お客様の身分証明証アップロード" size="lg">
-      {!result ? (
+      {step === 'upload' ? (
         <div className="space-y-4">
           {error && <MessageBanner severity="error">{error}</MessageBanner>}
 
@@ -330,29 +370,89 @@ function IdDocumentUploadModal({
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="text" onClick={onClose} disabled={uploading}>キャンセル</Button>
-            <Button onClick={handleSubmit} disabled={uploading || !frontFile || !docType || (needsBack && !backFile)}>
+            <Button onClick={handleUpload} disabled={uploading || !frontFile || !docType || (needsBack && !backFile)}>
               {uploading ? 'アップロード中...' : 'アップロードしてOCR実行'}
             </Button>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="p-3 rounded-lg bg-green-50 border border-green-300">
-            <p className="text-sm font-bold text-green-800 mb-1 flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              アップロード完了
+          <div className="p-3 rounded-lg bg-blue-50 border border-blue-300">
+            <p className="text-sm font-bold text-blue-800 mb-1 flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              読み取り結果の確認
             </p>
-            <p className="text-xs text-green-700">OCRで以下の情報を抽出しました。最終契約書ではこの情報がお客様情報として記載されます。</p>
+            <p className="text-xs text-blue-700">身分証から読み取った情報です。誤りがあれば下記の欄を修正してください。</p>
           </div>
-          <dl className="space-y-2 text-xs">
-            <div className="flex gap-2"><dt className="font-semibold w-20 flex-shrink-0">書類種別</dt><dd className="text-[var(--md-sys-color-on-surface)]">{result.documentType || '—'}</dd></div>
-            <div className="flex gap-2"><dt className="font-semibold w-20 flex-shrink-0">氏名</dt><dd className="text-[var(--md-sys-color-on-surface)]">{result.name || '—'}</dd></div>
-            <div className="flex gap-2"><dt className="font-semibold w-20 flex-shrink-0">住所</dt><dd className="text-[var(--md-sys-color-on-surface)]">{result.address || '—'}</dd></div>
-            <div className="flex gap-2"><dt className="font-semibold w-20 flex-shrink-0">生年月日</dt><dd className="text-[var(--md-sys-color-on-surface)]">{result.birthDate || '—'}</dd></div>
-          </dl>
-          <div className="flex justify-end pt-2">
-            <Button onClick={handleFinish}>閉じる</Button>
+
+          {ocrWarning && <MessageBanner severity="warning">{ocrWarning}</MessageBanner>}
+          {error && <MessageBanner severity="error">{error}</MessageBanner>}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">書類種別</label>
+              <select
+                value={edit.documentType}
+                onChange={(e) => setEdit({ ...edit, documentType: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              >
+                <option value="">選択してください</option>
+                {DOC_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.value}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">生年月日</label>
+              <input
+                type="text"
+                value={edit.birthDate}
+                onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })}
+                placeholder="例: 1990-01-23"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              />
+            </div>
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+              氏名 <span className="text-[var(--md-sys-color-error)]">*</span>
+            </label>
+            <input
+              type="text"
+              value={edit.name}
+              onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+              住所 <span className="text-[var(--md-sys-color-error)]">*</span>
+            </label>
+            <textarea
+              value={edit.address}
+              onChange={(e) => setEdit({ ...edit, address: e.target.value })}
+              rows={2}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40 resize-y"
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Button variant="text" onClick={() => setStep('upload')} disabled={saving}>
+              ← 画像を選び直す
+            </Button>
+            <div className="flex-1" />
+            <Button variant="outlined" onClick={() => handleConfirm(false)} disabled={saving}>
+              {saving ? '保存中...' : '本人確認情報のみ保存'}
+            </Button>
+            <Button onClick={() => handleConfirm(true)} disabled={saving}>
+              {saving ? '保存中...' : '顧客情報に反映して保存'}
+            </Button>
+          </div>
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] text-right">
+            「顧客情報に反映」を選ぶと、お客様の氏名・住所が上の値で上書きされます。
+          </p>
         </div>
       )}
     </Modal>

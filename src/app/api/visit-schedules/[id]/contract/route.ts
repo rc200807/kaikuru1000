@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendContractEmail } from '@/lib/mailer'
+import { buildContractBodyHtml, buildContractBodyText } from '@/lib/contract-email-template'
 
 /** 売買契約書を保存してメール送信 */
 export async function POST(
@@ -20,8 +21,27 @@ export async function POST(
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, email: true, address: true, phone: true } },
-      store: { select: { id: true, name: true } },
+      user: {
+        select: {
+          id: true, name: true, email: true, address: true, phone: true,
+          idName: true, idAddress: true, idDocumentType: true,
+        },
+      },
+      store: {
+        select: {
+          id: true, name: true, address: true, phone: true,
+          operator: {
+            select: {
+              entityType: true,
+              corporatePrefix: true,
+              prefixPosition: true,
+              name: true,
+              address: true,
+              representativeName: true,
+            },
+          },
+        },
+      },
       purchaseItems: { orderBy: { createdAt: 'asc' } },
       workItems: { orderBy: { createdAt: 'asc' } },
     },
@@ -100,6 +120,37 @@ export async function POST(
     }
   }
 
+  // 契約書本文（HTML/Text）を組み立て: 売買契約書 + 請求書 + 特商法書面 + 同意の記録
+  const contractTemplateParams = {
+    customerName: schedule.user.idName || schedule.user.name,
+    customerAddress: schedule.user.idAddress || schedule.user.address || '',
+    customerPhone: schedule.user.phone,
+    customerIdType: schedule.user.idDocumentType,
+    storeName: schedule.store.name,
+    storeAddress: schedule.store.address,
+    storePhone: schedule.store.phone,
+    operator: schedule.store.operator || null,
+    staffName: schedule.staffName || undefined,
+    visitDate: schedule.visitDate,
+    contractDate: new Date(contract.agreedAt),
+    contractNo: `KK-${id.slice(-8).toUpperCase()}`,
+    invoiceNo: `INV-${id.slice(-8).toUpperCase()}`,
+    purchaseItems: schedule.purchaseItems.map(i => ({
+      itemName: i.itemName,
+      category: i.category,
+      quantity: i.quantity,
+      price: i.purchasePrice,
+    })),
+    workItems: schedule.workItems.map(w => ({
+      workName: w.workName,
+      quantity: w.quantity,
+      unitPrice: w.unitPrice,
+    })),
+    agreedAt: new Date(contract.agreedAt),
+  }
+  const contractBodyHtml = buildContractBodyHtml(contractTemplateParams)
+  const contractBodyText = buildContractBodyText(contractTemplateParams)
+
   // メール送信（PDFは任意。PDFが無くてもマジックリンクと本文だけは送る）
   let emailSent = false
   let emailErrorReason: string | null = null
@@ -110,11 +161,13 @@ export async function POST(
     try {
       emailSent = await sendContractEmail({
         customerEmail,
-        customerName: schedule.user.name,
+        customerName: schedule.user.idName || schedule.user.name,
         storeName: schedule.store.name,
         visitDate: schedule.visitDate,
         pdfBase64: pdfBase64 ?? '',
         magicLinkUrl,
+        contractBodyHtml,
+        contractBodyText,
       })
       if (emailSent) {
         await prisma.salesContract.update({

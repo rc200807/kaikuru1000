@@ -292,6 +292,10 @@ export async function sendContractEmail(params: {
   visitDate: Date
   pdfBase64: string
   magicLinkUrl?: string
+  /** 契約書本体HTML（売買契約書・請求書・特商法書面・同意の記録）。指定時は導入の挨拶のあとに差し込む */
+  contractBodyHtml?: string
+  /** 契約書本体テキスト版（HTMLが表示できないメーラ用） */
+  contractBodyText?: string
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
@@ -349,10 +353,12 @@ export async function sendContractEmail(params: {
                 </tr>
               </table>
 
-              <p style="margin:0 0 ${params.magicLinkUrl ? '24px' : '0'};color:#6b7280;font-size:13px;line-height:1.7;">
-                添付のPDFファイルを大切に保管してください。<br>
+              <p style="margin:0 0 ${(params.magicLinkUrl || params.contractBodyHtml) ? '24px' : '0'};color:#6b7280;font-size:13px;line-height:1.7;">
+                本メールの下部に契約書の全内容を記載しております。証拠としてこのメールを保管してください。<br>
                 ご不明な点がございましたら、${params.storeName}までお問い合わせください。
               </p>
+
+              ${params.contractBodyHtml || ''}
 
               ${params.magicLinkUrl ? `
               <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;padding-top:24px;">
@@ -408,13 +414,10 @@ export async function sendContractEmail(params: {
       `${params.customerName} 様`,
       '',
       `${params.storeName}の定期訪問サービスをご利用いただき、ありがとうございます。`,
-      `${visitDateStr}の訪問にかかる売買契約書を添付ファイルにてお送りいたします。`,
+      `${visitDateStr}の訪問にかかる売買契約書をお送りいたします。`,
       '',
-      '■ クーリングオフについて',
-      '本契約書面の受領日から8日以内であれば、書面によるクーリングオフが可能です。',
-      'ご不明点は消費生活センター（局番なし 188）にご相談ください。',
-      '',
-      '添付のPDFファイルを大切に保管してください。',
+      '本メール本文下部に契約書の全内容を記載しております。証拠としてこのメールを保管してください。',
+      ...(params.contractBodyText ? ['', params.contractBodyText] : []),
       ...(params.magicLinkUrl ? [
         '',
         '■ マイページでの確認',

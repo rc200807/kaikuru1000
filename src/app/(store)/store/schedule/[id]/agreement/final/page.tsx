@@ -9,6 +9,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import { formalName } from '@/lib/operator-utils'
 
 /* ─── PINロック解除モーダル ─── */
 function PinUnlockModal({
@@ -148,7 +149,21 @@ type VisitDetail = {
   status: string
   note: string | null
   user: VisitUser
-  store: { id: string; name: string; address?: string | null; phone?: string | null }
+  store: {
+    id: string
+    name: string
+    address?: string | null
+    phone?: string | null
+    operator?: {
+      id: string
+      entityType: string | null
+      corporatePrefix: string | null
+      prefixPosition: string | null
+      name: string
+      address: string | null
+      representativeName: string
+    } | null
+  }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
 }
@@ -713,7 +728,16 @@ export default function FinalAgreementPage() {
           <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 space-y-1">
             <div><span className="font-medium">請求日:</span> {today}</div>
             <div><span className="font-medium">請求宛先:</span> {customerName} 様</div>
-            <div><span className="font-medium">請求元:</span> {visit.store.name}</div>
+            {visit.store.operator ? (
+              <>
+                <div><span className="font-medium">請求元:</span> {formalName(visit.store.operator)}</div>
+                {visit.store.operator.address && (
+                  <div><span className="font-medium">所在地:</span> {visit.store.operator.address}</div>
+                )}
+              </>
+            ) : (
+              <div><span className="font-medium">請求元:</span> {visit.store.name}</div>
+            )}
           </div>
 
           <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] mb-2">作業項目</h3>

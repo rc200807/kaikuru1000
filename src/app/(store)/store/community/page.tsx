@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import Modal from '@/components/Modal'
+import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
 type StoreInfo = { id: string; name: string; avatar: string | null }
 type Reaction = { emoji: string; count: number; reacted: boolean }
@@ -184,8 +185,9 @@ export default function CommunityPage() {
     setUploading(true)
     for (const file of Array.from(files).slice(0, 3 - newImages.length)) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name}: 10MB以下にしてください`); continue }
+      const converted = await convertToJpegIfNeeded(file)
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', converted)
       try {
         const res = await fetch('/api/store/community/images', { method: 'POST', body: fd })
         if (res.ok) { const { url } = await res.json(); setNewImages(p => [...p, url]) }

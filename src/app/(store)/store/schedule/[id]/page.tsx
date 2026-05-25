@@ -10,6 +10,7 @@ import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import dynamic from 'next/dynamic'
+import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false })
 
@@ -275,8 +276,9 @@ export default function VisitDetailPage() {
     const newUrls = [...purchaseForm.imageUrls]
 
     for (let i = 0; i < Math.min(files.length, remaining); i++) {
+      const converted = await convertToJpegIfNeeded(files[i])
       const fd = new FormData()
-      fd.append('file', files[i])
+      fd.append('file', converted)
       const res = await fetch('/api/purchase-items/images', { method: 'POST', body: fd })
       if (res.ok) {
         const { url } = await res.json()

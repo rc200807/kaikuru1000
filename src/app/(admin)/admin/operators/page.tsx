@@ -36,6 +36,10 @@ export default function OperatorListPage() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [importError, setImportError] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState<string>('')
 
   function refresh() {
     fetch('/api/admin/operators')
@@ -85,6 +89,52 @@ export default function OperatorListPage() {
     })
   }, [operators, search])
 
+  const filteredIds = useMemo(() => filtered.map(o => o.id), [filtered])
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.has(id))
+  const someFilteredSelected = !allFilteredSelected && filteredIds.some(id => selectedIds.has(id))
+
+  function toggleSelectAll() {
+    const next = new Set(selectedIds)
+    if (allFilteredSelected) {
+      filteredIds.forEach(id => next.delete(id))
+    } else {
+      filteredIds.forEach(id => next.add(id))
+    }
+    setSelectedIds(next)
+  }
+
+  function toggleSelect(id: string) {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    setBulkDeleting(true)
+    setBulkMessage('')
+    try {
+      const res = await fetch('/api/admin/operators/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setBulkMessage(data.error ?? '削除に失敗しました')
+        return
+      }
+      const data = await res.json()
+      setBulkMessage(`${data.deleted}件の運営者を削除しました`)
+      setSelectedIds(new Set())
+      setConfirmDeleteOpen(false)
+      refresh()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   if (status === 'loading' || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><LoadingSpinner /></div>
   }
@@ -133,6 +183,71 @@ export default function OperatorListPage() {
           />
         </div>
       </div>
+
+      {/* 一括選択アクションバー */}
+      {selectedIds.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 14px', marginBottom: 12, borderRadius: 10, background: 'rgba(79,142,247,0.12)', border: '1px solid rgba(79,142,247,0.4)' }}>
+          <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface)' }}>
+            <strong>{selectedIds.size}</strong> 件選択中
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 12, cursor: 'pointer' }}
+            >
+              選択解除
+            </button>
+            <button
+              onClick={() => setConfirmDeleteOpen(true)}
+              style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              削除
+            </button>
+          </div>
+        </div>
+      )}
+
+      {bulkMessage && (
+        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, background: 'rgba(74,222,128,0.15)', color: '#4ade80', fontSize: 13 }}>
+          {bulkMessage}
+        </div>
+      )}
+
+      {/* 削除確認モーダル */}
+      {confirmDeleteOpen && (
+        <div
+          onClick={() => !bulkDeleting && setConfirmDeleteOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--md-sys-color-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440 }}
+          >
+            <h2 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700 }}>選択した運営者を削除しますか？</h2>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.6 }}>
+              <strong>{selectedIds.size}</strong> 件の運営者情報を削除します。<br />
+              紐付いている店舗の運営者欄は空になります（店舗自体は削除されません）。<br />
+              アップロード済みの契約書PDFも削除されます。<span style={{ color: '#f87171' }}>この操作は元に戻せません。</span>
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setConfirmDeleteOpen(false)}
+                disabled={bulkDeleting}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, cursor: bulkDeleting ? 'wait' : 'pointer' }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: bulkDeleting ? 'wait' : 'pointer', opacity: bulkDeleting ? 0.7 : 1 }}
+              >
+                {bulkDeleting ? '削除中...' : '削除する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSVインポートモーダル */}
       {importOpen && (
@@ -237,6 +352,16 @@ export default function OperatorListPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                  <th style={{ padding: '10px 14px', width: 32 }}>
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      ref={el => { if (el) el.indeterminate = someFilteredSelected }}
+                      onChange={toggleSelectAll}
+                      aria-label="すべて選択"
+                      style={{ cursor: 'pointer', width: 16, height: 16 }}
+                    />
+                  </th>
                   <Th>会社形態</Th>
                   <Th>正式名称</Th>
                   <Th>代表者</Th>
@@ -246,12 +371,27 @@ export default function OperatorListPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(op => (
+                {filtered.map(op => {
+                  const isSelected = selectedIds.has(op.id)
+                  return (
                   <tr
                     key={op.id}
                     onClick={() => router.push(`/admin/operators/${op.id}`)}
-                    style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', cursor: 'pointer' }}
+                    style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', cursor: 'pointer', background: isSelected ? 'rgba(79,142,247,0.08)' : undefined }}
                   >
+                    <td
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(op.id) }}
+                      style={{ padding: '10px 14px', verticalAlign: 'middle', width: 32 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(op.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`${op.name} を選択`}
+                        style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      />
+                    </td>
                     <Td>
                       <span style={{
                         fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999,
@@ -273,7 +413,7 @@ export default function OperatorListPage() {
                     </Td>
                     <Td>{new Date(op.updatedAt).toLocaleDateString('ja-JP')}</Td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

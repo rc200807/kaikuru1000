@@ -108,6 +108,11 @@ model Store {
   businessHoursStart  String?   @default("10:00") // 営業開始時間
   businessHoursEnd    String?   @default("19:00") // 営業終了時間
   businessDays        String?   @default("[0,1,2,3,4,5,6]") // 営業曜日 JSON配列 (0=日,1=月,...6=土)
+  // 店舗別問い合わせ記録シート
+  inquirySpreadsheetId      String?               // 発行済みスプレッドシートID
+  inquirySheetUrl           String?  @db.Text     // 共有用URL
+  inquirySheetSharedEmails  String?  @db.Text     // JSON配列: 共有許可済みのメールアドレス
+  inquirySheetIssuedAt      DateTime?             // 発行日時
   customers  User[]
   visitSchedules VisitSchedule[]
   visitRequests  VisitRequest[]

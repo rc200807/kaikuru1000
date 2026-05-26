@@ -50,6 +50,7 @@ export default function StoreInquiriesPage() {
   const router = useRouter()
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [storeCode, setStoreCode] = useState('')
+  const [inquirySheetUrl, setInquirySheetUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchText, setSearchText] = useState('')
@@ -74,6 +75,7 @@ export default function StoreInquiriesPage() {
       if (res.ok) {
         const data = await res.json()
         setInquiries(data.inquiries ?? [])
+        setInquirySheetUrl(data.inquirySheetUrl ?? null)
         setStoreCode(data.storeCode ?? '')
       }
     } catch {
@@ -154,6 +156,31 @@ export default function StoreInquiriesPage() {
             >
               {copied ? '✓ コピー済み' : 'URLをコピー'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 問い合わせ記録シート */}
+      {inquirySheetUrl && (
+        <div className="px-4 sm:px-6 pt-2">
+          <div className="rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-emerald-700 dark:text-emerald-300">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6zM3.75 9h16.5M3.75 12h16.5M3.75 15h16.5M9 3.75v16.5" />
+              </svg>
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">問い合わせ記録シート</p>
+            </div>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300 flex-1 min-w-0">
+              この店舗宛の問い合わせはGoogleスプレッドシートに自動記録されています
+            </p>
+            <a
+              href={inquirySheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
+            >
+              📄 シートを開く
+            </a>
           </div>
         </div>
       )}

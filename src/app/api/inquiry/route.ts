@@ -266,10 +266,17 @@ export async function POST(request: NextRequest) {
 
     // --- Google Sheets へ自動追記（失敗してもお問い合わせ自体は成功させる） ---
     try {
-      const { appendInquiryToSheet } = await import('@/lib/google-sheets')
+      const { appendInquiryToSheet, appendInquiryToStoreSheet } = await import('@/lib/google-sheets')
       const result = await appendInquiryToSheet(inquiry.id)
       if (!result.success) {
         console.warn(`[inquiry] Sheets append skipped: ${result.message}`)
+      }
+      // 店舗別シートが発行済みなら、そちらにも追記
+      if (store.inquirySpreadsheetId) {
+        const storeRes = await appendInquiryToStoreSheet(store.inquirySpreadsheetId, inquiry.id)
+        if (!storeRes.success) {
+          console.warn(`[inquiry] Store sheet append skipped (${store.code}): ${storeRes.message}`)
+        }
       }
     } catch (e) {
       console.error('[inquiry] Sheets append failed', e)

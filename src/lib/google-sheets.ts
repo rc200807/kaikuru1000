@@ -27,6 +27,20 @@ function getWriteAuth() {
   })
 }
 
+// スプレッドシート作成 + 共有用（Sheets + Drive scope）
+function getCreateAuth() {
+  return new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      private_key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    },
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file', // サービスアカウントが作成したファイルのみ操作
+    ],
+  })
+}
+
 // ライセンスキーをスプレッドシートに追記する
 export async function appendLicenseKeysToSheet(keys: string[]): Promise<{ success: boolean; message: string }> {
   if (!keys.length) return { success: true, message: '追加するキーなし' }
@@ -206,6 +220,222 @@ export async function appendInquiriesToSheet(inquiryIds?: string[]): Promise<{ s
   })
   const rows = inquiries.map(i => formatInquiryRow(i as InquiryForSheet))
   return appendInquiryRows(rows)
+}
+
+// =============================================================
+// 店舗別 問い合わせ記録スプレッドシート
+// =============================================================
+
+/** 店舗別ヘッダー（店舗自身の問い合わせなので「店舗コード/店舗名」列は省略） */
+const STORE_INQUIRY_HEADERS = [
+  '受付日時',
+  '氏名',
+  'フリガナ',
+  '電話',
+  'メール',
+  '郵便番号',
+  '住所',
+  '申込み内容',
+  '相談内容',
+  'ステータス',
+  '買取品目',
+]
+
+function formatStoreInquiryRow(inq: InquiryForSheet): string[] {
+  const dt = typeof inq.createdAt === 'string' ? new Date(inq.createdAt) : inq.createdAt
+  const formatted = isNaN(dt.getTime())
+    ? ''
+    : new Intl.DateTimeFormat('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+      }).format(dt)
+  const STATUS_LABEL: Record<string, string> = { new: '新規', contacted: '対応中', completed: '完了' }
+  const items = (inq.purchaseMemos ?? []).map(m => m.title ?? '').filter(Boolean).join(' / ')
+  return [
+    formatted,
+    inq.name ?? '',
+    inq.furigana ?? '',
+    inq.phone ?? '',
+    inq.email ?? '',
+    inq.postalCode ?? '',
+    inq.address ?? '',
+    inq.inquiryType ?? '',
+    inq.details ?? '',
+    inq.status ? (STATUS_LABEL[inq.status] ?? inq.status) : '',
+    items,
+  ]
+}
+
+/**
+ * 店舗用の新規スプレッドシートを作成し、ヘッダー行を書き込み、
+ * 指定メールアドレスに編集権限を付与する。
+ * 返り値: { spreadsheetId, url, sharedEmails }
+ */
+export async function createStoreInquirySpreadsheet(params: {
+  storeName: string
+  storeCode: string
+  shareEmails: string[]
+}): Promise<{ success: boolean; message: string; spreadsheetId?: string; url?: string; sharedEmails?: string[] }> {
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+    return { success: false, message: 'Googleサービスアカウントが設定されていません（GOOGLE_SHEETS_CLIENT_EMAIL）' }
+  }
+
+  try {
+    const auth = getCreateAuth()
+    const sheets = google.sheets({ version: 'v4', auth })
+    const drive  = google.drive({ version: 'v3', auth })
+
+    // 1) スプレッドシート作成
+    const title = `【買いクル】${params.storeName}（${params.storeCode}） 問い合わせ記録`
+    const createRes = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: { title, locale: 'ja_JP', timeZone: 'Asia/Tokyo' },
+        sheets: [{ properties: { title: '問い合わせ' } }],
+      },
+      fields: 'spreadsheetId,spreadsheetUrl',
+    })
+
+    const spreadsheetId = createRes.data.spreadsheetId
+    const url = createRes.data.spreadsheetUrl
+    if (!spreadsheetId || !url) {
+      return { success: false, message: 'スプレッドシートの作成結果からIDを取得できませんでした' }
+    }
+
+    // 2) ヘッダー行を書き込み + 太字化
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: '問い合わせ!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values: [STORE_INQUIRY_HEADERS] },
+    })
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
+              cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: { red: 0.95, green: 0.95, blue: 0.95 } } },
+              fields: 'userEnteredFormat(textFormat,backgroundColor)',
+            },
+          },
+          { updateSheetProperties: { properties: { sheetId: 0, gridProperties: { frozenRowCount: 1 } }, fields: 'gridProperties.frozenRowCount' } },
+        ],
+      },
+    })
+
+    // 3) 共有許可を付与
+    const sharedEmails: string[] = []
+    for (const rawEmail of params.shareEmails) {
+      const email = rawEmail.trim()
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue
+      try {
+        await drive.permissions.create({
+          fileId: spreadsheetId,
+          sendNotificationEmail: true,
+          requestBody: { type: 'user', role: 'writer', emailAddress: email },
+        })
+        sharedEmails.push(email)
+      } catch (err) {
+        console.error(`[google-sheets] 共有失敗 (${email}):`, err)
+      }
+    }
+
+    return { success: true, message: 'スプレッドシートを発行しました', spreadsheetId, url, sharedEmails }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[google-sheets] createStoreInquirySpreadsheet 失敗:', message)
+    return { success: false, message }
+  }
+}
+
+/** 既存スプレッドシートに新しいメールアドレスを編集権限で追加 */
+export async function shareStoreInquirySpreadsheet(spreadsheetId: string, emails: string[]): Promise<{ success: boolean; message: string; sharedEmails: string[] }> {
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+    return { success: false, message: 'サービスアカウント未設定', sharedEmails: [] }
+  }
+  try {
+    const auth = getCreateAuth()
+    const drive = google.drive({ version: 'v3', auth })
+    const sharedEmails: string[] = []
+    for (const rawEmail of emails) {
+      const email = rawEmail.trim()
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue
+      try {
+        await drive.permissions.create({
+          fileId: spreadsheetId,
+          sendNotificationEmail: true,
+          requestBody: { type: 'user', role: 'writer', emailAddress: email },
+        })
+        sharedEmails.push(email)
+      } catch (err) {
+        console.error(`[google-sheets] 共有失敗 (${email}):`, err)
+      }
+    }
+    return { success: true, message: `${sharedEmails.length}件のメールに共有しました`, sharedEmails }
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : String(error), sharedEmails: [] }
+  }
+}
+
+/** 店舗別シートに1件の問い合わせを追記（ベストエフォート） */
+export async function appendInquiryToStoreSheet(spreadsheetId: string, inquiryId: string): Promise<{ success: boolean; message: string }> {
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+    return { success: false, message: 'サービスアカウント未設定' }
+  }
+  const inq = await prisma.inquiry.findUnique({
+    where: { id: inquiryId },
+    include: { store: true, purchaseMemos: true },
+  })
+  if (!inq) return { success: false, message: 'お問い合わせが見つかりません' }
+
+  try {
+    const auth = getWriteAuth()
+    const sheets = google.sheets({ version: 'v4', auth })
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: '問い合わせ!A1',
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: [formatStoreInquiryRow(inq as InquiryForSheet)] },
+    })
+    return { success: true, message: '追記しました' }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[google-sheets] appendInquiryToStoreSheet 失敗:', message)
+    return { success: false, message }
+  }
+}
+
+/** 店舗の既存問い合わせを全件、シートに書き込む（発行時バックフィル用） */
+export async function backfillStoreInquiriesToSheet(spreadsheetId: string, storeId: string): Promise<{ success: boolean; message: string; appended: number }> {
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+    return { success: false, message: 'サービスアカウント未設定', appended: 0 }
+  }
+  const inquiries = await prisma.inquiry.findMany({
+    where: { storeId },
+    include: { store: true, purchaseMemos: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (inquiries.length === 0) return { success: true, message: '既存の問い合わせはありません', appended: 0 }
+
+  try {
+    const auth = getWriteAuth()
+    const sheets = google.sheets({ version: 'v4', auth })
+    const rows = inquiries.map(i => formatStoreInquiryRow(i as InquiryForSheet))
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: '問い合わせ!A1',
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: rows },
+    })
+    return { success: true, message: `${rows.length}件をバックフィルしました`, appended: rows.length }
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : String(error), appended: 0 }
+  }
 }
 
 interface StoreRow {

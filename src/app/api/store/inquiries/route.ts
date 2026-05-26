@@ -35,11 +35,16 @@ export async function GET(request: NextRequest) {
     }),
     prisma.store.findUnique({
       where: { id: storeId },
-      select: { code: true },
+      select: { code: true, inquirySheetUrl: true, inquirySheetIssuedAt: true },
     }),
   ])
 
-  return NextResponse.json({ inquiries, storeCode: store?.code ?? '' })
+  return NextResponse.json({
+    inquiries,
+    storeCode: store?.code ?? '',
+    inquirySheetUrl: store?.inquirySheetUrl ?? null,
+    inquirySheetIssuedAt: store?.inquirySheetIssuedAt ?? null,
+  })
 }
 
 // PATCH: 問い合わせのステータス更新

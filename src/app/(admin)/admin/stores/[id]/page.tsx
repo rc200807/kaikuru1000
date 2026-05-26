@@ -70,6 +70,15 @@ export default function StoreDetailPage() {
   const storeId = params.id
 
   const [store, setStore] = useState<Store | null>(null)
+
+  /* 問い合わせ記録シート state */
+  type InquirySheet = { spreadsheetId: string | null; url: string | null; sharedEmails: string[]; issuedAt: string | null }
+  const [inquirySheet, setInquirySheet] = useState<InquirySheet | null>(null)
+  const [sheetIssuing, setSheetIssuing] = useState(false)
+  const [sheetModalOpen, setSheetModalOpen] = useState(false)
+  const [sheetShareInput, setSheetShareInput] = useState('')
+  const [sheetMessage, setSheetMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   const [channels, setChannels] = useState<LineChannel[]>([])
   const [lineUsers, setLineUsers] = useState<LineUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -105,9 +114,10 @@ export default function StoreDetailPage() {
   /* 店舗データ＋LINE情報 */
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [storeRes, lineRes] = await Promise.all([
+    const [storeRes, lineRes, sheetRes] = await Promise.all([
       fetch(`/api/admin/stores/${storeId}`),
       fetch(`/api/admin/stores/${storeId}/line`),
+      fetch(`/api/admin/stores/${storeId}/inquiry-sheet`),
     ])
     if (storeRes.ok) setStore(await storeRes.json())
     if (lineRes.ok) {
@@ -115,8 +125,74 @@ export default function StoreDetailPage() {
       setChannels(d.channels)
       setLineUsers(d.lineUsers)
     }
+    if (sheetRes.ok) setInquirySheet(await sheetRes.json())
     setLoading(false)
   }, [storeId])
+
+  /* シート発行 */
+  async function handleIssueSheet() {
+    if (!store) return
+    setSheetIssuing(true)
+    setSheetMessage(null)
+    const shareEmails = sheetShareInput
+      .split(/[\s,;\n]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+    try {
+      const res = await fetch(`/api/admin/stores/${storeId}/inquiry-sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shareEmails }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSheetMessage({ type: 'error', text: data.error || '発行に失敗しました' })
+        return
+      }
+      setInquirySheet({
+        spreadsheetId: data.spreadsheetId,
+        url: data.url,
+        sharedEmails: data.sharedEmails || [],
+        issuedAt: new Date().toISOString(),
+      })
+      setSheetModalOpen(false)
+      setSheetShareInput('')
+      const note = data.backfilledCount > 0 ? `（既存${data.backfilledCount}件をシートへ書き込み）` : ''
+      setSheetMessage({ type: 'success', text: `シートを発行しました${note}` })
+    } finally {
+      setSheetIssuing(false)
+    }
+  }
+
+  /* 共有メール追加 */
+  async function handleAddShare() {
+    if (!store || !inquirySheet?.spreadsheetId) return
+    setSheetIssuing(true)
+    setSheetMessage(null)
+    const emails = sheetShareInput
+      .split(/[\s,;\n]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+    if (emails.length === 0) { setSheetIssuing(false); return }
+    try {
+      const res = await fetch(`/api/admin/stores/${storeId}/inquiry-sheet`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shareEmails: emails }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSheetMessage({ type: 'error', text: data.error || '共有追加に失敗しました' })
+        return
+      }
+      setInquirySheet(prev => prev ? { ...prev, sharedEmails: data.sharedEmails || prev.sharedEmails } : prev)
+      setSheetModalOpen(false)
+      setSheetShareInput('')
+      setSheetMessage({ type: 'success', text: `${data.addedCount ?? 0}件のメールに共有しました` })
+    } finally {
+      setSheetIssuing(false)
+    }
+  }
 
   useEffect(() => {
     if (status === 'authenticated') fetchData()
@@ -386,6 +462,105 @@ export default function StoreDetailPage() {
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>銀行情報</div>
             <pre style={{ fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12, margin: 0 }}>{store.bankInfo}</pre>
+          </div>
+        )}
+      </Section>
+
+      {/* 問い合わせ記録シート */}
+      <Section title="問い合わせ記録シート（Googleスプレッドシート）">
+        {sheetMessage && (
+          <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 13, background: sheetMessage.type === 'success' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)', color: sheetMessage.type === 'success' ? '#4ade80' : '#f87171' }}>
+            {sheetMessage.text}
+          </div>
+        )}
+        {inquirySheet?.spreadsheetId ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 999, background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>発行済み</span>
+              {inquirySheet.issuedAt && <span style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>発行日: {new Date(inquirySheet.issuedAt).toLocaleString('ja-JP')}</span>}
+            </div>
+            {inquirySheet.url && (
+              <a href={inquirySheet.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: '#1f7a4d', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', alignSelf: 'flex-start' }}>
+                📄 シートを開く
+              </a>
+            )}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--md-sys-color-on-surface-variant)' }}>共有中のメールアドレス（{inquirySheet.sharedEmails.length}件）</div>
+              {inquirySheet.sharedEmails.length > 0 ? (
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--md-sys-color-on-surface)', lineHeight: 1.7 }}>
+                  {inquirySheet.sharedEmails.map(e => <li key={e}>{e}</li>)}
+                </ul>
+              ) : (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>共有メール未登録</p>
+              )}
+            </div>
+            <button
+              onClick={() => { setSheetShareInput(''); setSheetMessage(null); setSheetModalOpen(true) }}
+              style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, cursor: 'pointer', alignSelf: 'flex-start' }}
+            >
+              + 共有メールを追加
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.7 }}>
+              この店舗専用のGoogleスプレッドシートを発行し、指定のメールアドレスに共有します。<br />
+              発行後は、この店舗宛の新規問い合わせが自動でシートに追記されます。
+            </p>
+            <button
+              onClick={() => {
+                setSheetShareInput(store?.email || '')
+                setSheetMessage(null)
+                setSheetModalOpen(true)
+              }}
+              style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#4f8ef7', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}
+            >
+              📄 シートを発行する
+            </button>
+          </div>
+        )}
+
+        {/* 発行/共有モーダル */}
+        {sheetModalOpen && (
+          <div
+            onClick={() => !sheetIssuing && setSheetModalOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: 'var(--md-sys-color-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 480 }}
+            >
+              <h2 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>
+                {inquirySheet?.spreadsheetId ? '共有メールを追加' : 'シートを発行'}
+              </h2>
+              <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.7 }}>
+                共有したいメールアドレスを改行・カンマ・空白で区切って入力してください。
+                {!inquirySheet?.spreadsheetId && '（店舗アカウントのメールが初期値として入っています）'}
+              </p>
+              <textarea
+                value={sheetShareInput}
+                onChange={e => setSheetShareInput(e.target.value)}
+                rows={5}
+                placeholder="store@example.com&#10;manager@example.com"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <button
+                  onClick={() => setSheetModalOpen(false)}
+                  disabled={sheetIssuing}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, cursor: sheetIssuing ? 'wait' : 'pointer' }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={inquirySheet?.spreadsheetId ? handleAddShare : handleIssueSheet}
+                  disabled={sheetIssuing}
+                  style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600, cursor: sheetIssuing ? 'wait' : 'pointer', opacity: sheetIssuing ? 0.7 : 1 }}
+                >
+                  {sheetIssuing ? '処理中...' : inquirySheet?.spreadsheetId ? '共有を追加' : '発行する'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </Section>

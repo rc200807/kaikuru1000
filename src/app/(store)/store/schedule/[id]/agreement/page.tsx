@@ -152,6 +152,10 @@ type VisitDetail = {
   store: { id: string; name: string; address?: string | null; phone?: string | null }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
+  revisitDate?: string | null
+  revisitStart?: string | null
+  revisitEnd?: string | null
+  revisitNote?: string | null
 }
 
 /* ─── 身分証アップロードモーダル ─── */
@@ -473,6 +477,11 @@ export default function AgreementPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [idModalOpen, setIdModalOpen] = useState(false)
 
+  // 再訪問日（後日引取）設定
+  const [showRevisitForm, setShowRevisitForm] = useState(false)
+  const [revisitForm, setRevisitForm] = useState({ date: '', start: '', end: '', note: '' })
+  const [savingRevisit, setSavingRevisit] = useState(false)
+
   // PIN lock state
   const [pinLocked, setPinLocked] = useState(true)
   const [hasPin, setHasPin] = useState<boolean | null>(null)
@@ -548,6 +557,64 @@ export default function AgreementPage() {
   const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
   const hasIdDocument = !!visit?.user.idDocumentPath
+
+  function openRevisitForm() {
+    if (!visit) return
+    setRevisitForm({
+      date: visit.revisitDate ? new Date(visit.revisitDate).toISOString().slice(0, 10) : '',
+      start: visit.revisitStart || '',
+      end: visit.revisitEnd || '',
+      note: visit.revisitNote || '',
+    })
+    setShowRevisitForm(true)
+  }
+
+  async function saveRevisit() {
+    if (!visit) return
+    setSavingRevisit(true)
+    try {
+      const res = await fetch(`/api/visit-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          revisitDate: revisitForm.date || null,
+          revisitStart: revisitForm.start || null,
+          revisitEnd: revisitForm.end || null,
+          revisitNote: revisitForm.note || null,
+        }),
+      })
+      if (res.ok) {
+        await fetchVisit()
+        setShowRevisitForm(false)
+        setMessage({ type: 'success', text: '再訪問日を保存しました' })
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setMessage({ type: 'error', text: d.error || '再訪問日の保存に失敗しました' })
+      }
+    } finally {
+      setSavingRevisit(false)
+    }
+  }
+
+  async function clearRevisit() {
+    if (!visit) return
+    if (!confirm('再訪問日の設定をクリアしますか？')) return
+    setSavingRevisit(true)
+    try {
+      const res = await fetch(`/api/visit-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revisitDate: null, revisitStart: null, revisitEnd: null, revisitNote: null }),
+      })
+      if (res.ok) {
+        await fetchVisit()
+        setShowRevisitForm(false)
+        setMessage({ type: 'success', text: '再訪問日をクリアしました' })
+      }
+    } finally {
+      setSavingRevisit(false)
+    }
+  }
 
   const goToFinal = () => {
     if (!hasIdDocument) {
@@ -712,12 +779,56 @@ export default function AgreementPage() {
         )}
       </Card>
 
-      {/* ──── お支払い金額 ──── */}
+      {/* ──── 再訪問日（後日引取） ──── */}
       <Card variant="elevated" padding="md">
-        <div className="flex justify-between items-center">
-          <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">お支払い金額（買取額 − 作業費）</span>
-          <span className="text-2xl font-bold text-[var(--portal-primary)]">{fmtYen(purchaseTotal - workTotal)}</span>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">再訪問日（後日引取）</h2>
+          {!showRevisitForm && (
+            <button onClick={openRevisitForm} className="text-xs text-[var(--portal-primary)] hover:underline">
+              {visit.revisitDate ? '編集' : '設定'}
+            </button>
+          )}
         </div>
+        {showRevisitForm ? (
+          <div className="space-y-3 p-3 rounded-lg border border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest)]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">再訪問日</label>
+                <input type="date" value={revisitForm.date} onChange={e => setRevisitForm(p => ({ ...p, date: e.target.value }))} className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">開始時間</label>
+                <input type="time" value={revisitForm.start} onChange={e => setRevisitForm(p => ({ ...p, start: e.target.value }))} className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">終了時間</label>
+                <input type="time" value={revisitForm.end} onChange={e => setRevisitForm(p => ({ ...p, end: e.target.value }))} className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">メモ（任意）</label>
+              <textarea value={revisitForm.note} onChange={e => setRevisitForm(p => ({ ...p, note: e.target.value }))} rows={2} className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] resize-y" placeholder="集荷時の注意点など" />
+            </div>
+            <div className="flex justify-between gap-2">
+              {visit.revisitDate ? (
+                <button onClick={clearRevisit} disabled={savingRevisit} className="text-xs text-[var(--md-sys-color-error)] hover:underline">クリア</button>
+              ) : <span />}
+              <div className="flex gap-2">
+                <button onClick={() => setShowRevisitForm(false)} disabled={savingRevisit} className="text-xs px-3 py-1.5 rounded text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]">キャンセル</button>
+                <button onClick={saveRevisit} disabled={savingRevisit} className="text-xs px-3 py-1.5 rounded bg-[var(--portal-primary)] text-white disabled:opacity-50">{savingRevisit ? '保存中...' : '保存'}</button>
+              </div>
+            </div>
+          </div>
+        ) : visit.revisitDate ? (
+          <div className="text-xs text-[var(--md-sys-color-on-surface)] space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
+            <div>日付: <strong>{format(new Date(visit.revisitDate), 'yyyy年M月d日（E）', { locale: ja })}</strong>
+              {(visit.revisitStart || visit.revisitEnd) && <span className="ml-2">{visit.revisitStart} 〜 {visit.revisitEnd}</span>}
+            </div>
+            {visit.revisitNote && <div className="text-[var(--md-sys-color-on-surface-variant)]">メモ: {visit.revisitNote}</div>}
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">後日引取の予定があれば設定してください。設定すると売買契約書にも記載されます。</p>
+        )}
       </Card>
 
       {/* ──── 身分証明証 ──── */}

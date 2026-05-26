@@ -7,7 +7,6 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
-import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import Modal from '@/components/Modal'
 import dynamic from 'next/dynamic'
@@ -125,6 +124,7 @@ export default function VisitDetailPage() {
   // バーコードスキャン
   const [showScanner, setShowScanner] = useState(false)
   const [staffName, setStaffName] = useState('')
+  const [storeMembers, setStoreMembers] = useState<{ id: string; name: string }[]>([])
   const [janLookupLoading, setJanLookupLoading] = useState(false)
   const [janLookupError, setJanLookupError] = useState<string | null>(null)
 
@@ -150,11 +150,6 @@ export default function VisitDetailPage() {
   // メモ編集
   const [editNote, setEditNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
-
-  // 再訪問日
-  const [showRevisitForm, setShowRevisitForm] = useState(false)
-  const [revisitForm, setRevisitForm] = useState({ date: '', start: '', end: '', note: '' })
-  const [savingRevisit, setSavingRevisit] = useState(false)
 
   const fetchVisit = useCallback(async () => {
     const res = await fetch(`/api/visit-schedules/${scheduleId}`)
@@ -189,6 +184,22 @@ export default function VisitDetailPage() {
       .then(data => setPurchaseCategories(data))
       .catch(() => {})
   }, [])
+
+  // 店舗メンバー一覧を取得し、未入力ならログインユーザー名をデフォルト選択
+  useEffect(() => {
+    if (!session) return
+    fetch('/api/store/members')
+      .then(res => res.ok ? res.json() : [])
+      .then((list: { id: string; name: string }[]) => {
+        if (Array.isArray(list)) setStoreMembers(list)
+      })
+      .catch(() => {})
+    // ログインユーザー名をデフォルトに（既に値があれば上書きしない）
+    const sessionName = (session.user as any)?.name as string | undefined
+    if (sessionName) {
+      setStaffName(prev => prev || sessionName)
+    }
+  }, [session])
 
   useEffect(() => {
     fetch('/api/visit-statuses')
@@ -449,45 +460,6 @@ export default function VisitDetailPage() {
     setSavingNote(false)
     fetchVisit()
     setMessage({ type: 'success', text: 'メモを保存しました' })
-  }
-
-  /* ─── 再訪問日保存 ─── */
-  async function saveRevisit() {
-    if (!revisitForm.date) return
-    setSavingRevisit(true)
-    await fetch(`/api/visit-schedules/${scheduleId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        revisitDate: revisitForm.date,
-        revisitStart: revisitForm.start || null,
-        revisitEnd: revisitForm.end || null,
-        revisitNote: revisitForm.note || null,
-      }),
-    })
-    setSavingRevisit(false)
-    setShowRevisitForm(false)
-    fetchVisit()
-    setMessage({ type: 'success', text: '再訪問日を設定しました' })
-  }
-
-  async function deleteRevisit() {
-    setSavingRevisit(true)
-    await fetch(`/api/visit-schedules/${scheduleId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        revisitDate: null,
-        revisitStart: null,
-        revisitEnd: null,
-        revisitNote: null,
-      }),
-    })
-    setSavingRevisit(false)
-    setShowRevisitForm(false)
-    setRevisitForm({ date: '', start: '', end: '', note: '' })
-    fetchVisit()
-    setMessage({ type: 'success', text: '再訪問日を削除しました' })
   }
 
   /* ─── ステータス変更 ─── */
@@ -873,14 +845,25 @@ export default function VisitDetailPage() {
                 <p className="indent-4">また、いただきました個人情報については、個人情報保護法に従い取り扱い、適切に管理させていただきます。</p>
               </div>
 
-              {/* 担当者名 */}
+              {/* 担当者名（店舗メンバーから選択） */}
               <div className="mb-4">
-                <TextField
-                  label="担当者名"
+                <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">担当者名</label>
+                <select
+                  className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
                   value={staffName}
-                  onChange={v => setStaffName(v)}
-                  placeholder="査定担当者のお名前"
-                />
+                  onChange={(e) => setStaffName(e.target.value)}
+                >
+                  <option value="">担当者を選択</option>
+                  {(() => {
+                    const sessionName = (session?.user as any)?.name as string | undefined
+                    const names = new Set<string>()
+                    if (sessionName) names.add(sessionName)
+                    for (const m of storeMembers) names.add(m.name)
+                    return Array.from(names).map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))
+                  })()}
+                </select>
               </div>
 
               {/* 署名欄 */}
@@ -915,115 +898,6 @@ export default function VisitDetailPage() {
           </div>
         </div>
       )}
-
-      {/* ────────── 再訪問日セクション ────────── */}
-      <Card variant="elevated" padding="md">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">再訪問日（後日引取）</h3>
-          </div>
-
-          {visit.revisitDate && !showRevisitForm ? (
-            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                    {format(new Date(visit.revisitDate), 'yyyy年M月d日（E）', { locale: ja })}
-                    {visit.revisitStart && visit.revisitEnd && (
-                      <span className="ml-2 text-orange-600 dark:text-orange-400">{visit.revisitStart}〜{visit.revisitEnd}</span>
-                    )}
-                  </p>
-                  {visit.revisitNote && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400">{visit.revisitNote}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outlined"
-                    size="sm"
-                    onClick={() => {
-                      setRevisitForm({
-                        date: visit.revisitDate ? new Date(visit.revisitDate).toISOString().split('T')[0] : '',
-                        start: visit.revisitStart || '',
-                        end: visit.revisitEnd || '',
-                        note: visit.revisitNote || '',
-                      })
-                      setShowRevisitForm(true)
-                    }}
-                  >
-                    編集
-                  </Button>
-                  <Button
-                    variant="text"
-                    size="sm"
-                    onClick={deleteRevisit}
-                    disabled={savingRevisit}
-                  >
-                    削除
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : showRevisitForm ? (
-            <div className="space-y-3 bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3">
-              <div>
-                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">再訪問日 *</label>
-                <input
-                  type="date"
-                  className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2"
-                  value={revisitForm.date}
-                  onChange={e => setRevisitForm({ ...revisitForm, date: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">開始時間</label>
-                  <input
-                    type="time"
-                    className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2"
-                    value={revisitForm.start}
-                    onChange={e => setRevisitForm({ ...revisitForm, start: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">終了時間</label>
-                  <input
-                    type="time"
-                    className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2"
-                    value={revisitForm.end}
-                    onChange={e => setRevisitForm({ ...revisitForm, end: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">メモ</label>
-                <textarea
-                  className="w-full mt-1 text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small,8px)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-2 min-h-[50px] resize-y"
-                  value={revisitForm.note}
-                  onChange={e => setRevisitForm({ ...revisitForm, note: e.target.value })}
-                  placeholder="例: 大型家具の引取、要トラック"
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="text" size="sm" onClick={() => { setShowRevisitForm(false); setRevisitForm({ date: '', start: '', end: '', note: '' }) }}>
-                  キャンセル
-                </Button>
-                <Button variant="filled" size="sm" onClick={saveRevisit} disabled={savingRevisit || !revisitForm.date} loading={savingRevisit}>
-                  {savingRevisit ? '保存中...' : '保存'}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              variant="tonal"
-              size="sm"
-              onClick={() => setShowRevisitForm(true)}
-            >
-              再訪問日を設定
-            </Button>
-          )}
-        </div>
-      </Card>
 
       {/* ────────── 買取品目セクション ────────── */}
       <Card variant="elevated" padding="md">
@@ -1398,16 +1272,30 @@ export default function VisitDetailPage() {
       {visit.purchaseItems.length > 0 && (
         <Card variant="elevated" padding="md">
           <div className="space-y-3">
-            <TextField
-              label="担当者名"
-              value={staffName}
-              onChange={v => setStaffName(v)}
-              placeholder="契約書に記載する担当者名を入力"
-            />
+            <div>
+              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">担当者名（契約書に記載）</label>
+              <select
+                className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+                value={staffName}
+                onChange={(e) => setStaffName(e.target.value)}
+              >
+                <option value="">担当者を選択</option>
+                {(() => {
+                  const sessionName = (session?.user as any)?.name as string | undefined
+                  const names = new Set<string>()
+                  if (sessionName) names.add(sessionName)
+                  for (const m of storeMembers) names.add(m.name)
+                  return Array.from(names).map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))
+                })()}
+              </select>
+            </div>
             <div className="flex justify-center">
               <Button
                 onClick={() => router.push(`/store/schedule/${scheduleId}/agreement?staff=${encodeURIComponent(staffName)}`)}
                 className="w-full sm:w-auto"
+                disabled={!staffName}
               >
                 📝 売買契約書を作成
               </Button>

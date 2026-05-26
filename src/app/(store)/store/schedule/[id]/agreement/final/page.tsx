@@ -148,6 +148,10 @@ type VisitDetail = {
   visitDate: string
   status: string
   note: string | null
+  revisitDate?: string | null
+  revisitStart?: string | null
+  revisitEnd?: string | null
+  revisitNote?: string | null
   user: VisitUser
   store: {
     id: string
@@ -290,8 +294,10 @@ export default function FinalAgreementPage() {
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [signature, setSignature] = useState<string | null>(null)
-  const [agreed, setAgreed] = useState(false)
+  const [saleSignature, setSaleSignature] = useState<string | null>(null)
+  const [invoiceSignature, setInvoiceSignature] = useState<string | null>(null)
+  const [agreedSale, setAgreedSale] = useState(false)
+  const [agreedInvoice, setAgreedInvoice] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [existingContract, setExistingContract] = useState<ExistingContract | null>(null)
@@ -419,7 +425,7 @@ export default function FinalAgreementPage() {
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
 
   const handleSubmit = async () => {
-    if (!agreed || !signature || !visit) return
+    if (!agreedSale || !saleSignature || !agreedInvoice || !invoiceSignature || !visit) return
     const emailTrimmed = customerEmailInput.trim()
     if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
       setMessage({ type: 'error', text: 'メールアドレスを正しく入力してください' })
@@ -484,7 +490,12 @@ export default function FinalAgreementPage() {
       const res = await fetch(`/api/visit-schedules/${scheduleId}/contract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData: signature, pdfBase64, email: emailTrimmed }),
+        body: JSON.stringify({
+          signatureData: saleSignature,
+          invoiceSignatureData: invoiceSignature,
+          pdfBase64,
+          email: emailTrimmed,
+        }),
       })
 
       if (!res.ok) {
@@ -663,7 +674,21 @@ export default function FinalAgreementPage() {
               <div className="sm:col-span-2 flex flex-wrap gap-x-6 gap-y-1">
                 <div><span className="font-medium">契約日:</span> {today}</div>
                 <div><span className="font-medium">訪問日:</span> {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}</div>
+                {visit.revisitDate && (
+                  <div>
+                    <span className="font-medium">再訪問日:</span>{' '}
+                    {format(new Date(visit.revisitDate), 'yyyy年M月d日（E）', { locale: ja })}
+                    {visit.revisitStart && visit.revisitEnd && (
+                      <span className="ml-1">{visit.revisitStart}〜{visit.revisitEnd}</span>
+                    )}
+                  </div>
+                )}
               </div>
+              {visit.revisitNote && (
+                <div className="sm:col-span-2 text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="font-medium">再訪問メモ:</span> {visit.revisitNote}
+                </div>
+              )}
               <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
                 <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">お客様情報（売主）</div>
                 <div><span className="font-medium">氏名:</span> {customerName}</div>
@@ -716,72 +741,6 @@ export default function FinalAgreementPage() {
           ) : (
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">買取品目は登録されていません</p>
           )}
-        </Card>
-
-        {/* ──── 請求書 ──── */}
-        <Card variant="elevated" padding="md">
-          <div className="flex items-baseline justify-between mb-3 pb-2 border-b-2 border-[var(--md-sys-color-on-surface)]">
-            <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">請求書</h2>
-            <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">請求番号: {invoiceNo}</span>
-          </div>
-
-          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 space-y-1">
-            <div><span className="font-medium">請求日:</span> {today}</div>
-            <div><span className="font-medium">請求宛先:</span> {customerName} 様</div>
-            {visit.store.operator ? (
-              <>
-                <div><span className="font-medium">請求元:</span> {formalName(visit.store.operator)}</div>
-                {visit.store.operator.address && (
-                  <div><span className="font-medium">所在地:</span> {visit.store.operator.address}</div>
-                )}
-              </>
-            ) : (
-              <div><span className="font-medium">請求元:</span> {visit.store.name}</div>
-            )}
-          </div>
-
-          <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] mb-2">作業項目</h3>
-          {visit.workItems.length > 0 ? (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-                  <th className="text-left py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">作業名</th>
-                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">数量</th>
-                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">単価</th>
-                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">小計</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visit.workItems.map((item) => (
-                  <tr key={item.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
-                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{item.workName}</td>
-                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{item.quantity}</td>
-                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{fmtYen(item.unitPrice)}</td>
-                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(item.unitPrice * item.quantity)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={3} className="py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">請求金額合計</td>
-                  <td className="py-2 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          ) : (
-            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業項目は登録されていません</p>
-          )}
-        </Card>
-
-        {/* ──── お支払い金額 ──── */}
-        <Card variant="elevated" padding="md">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">お支払い金額</p>
-              <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">買取金額 {fmtYen(purchaseTotal)} − 作業費 {fmtYen(workTotal)}</p>
-            </div>
-            <span className="text-2xl font-bold text-[var(--portal-primary)]">{fmtYen(purchaseTotal - workTotal)}</span>
-          </div>
         </Card>
 
         {/* ──── 特商法書面・クーリングオフ全文 ──── */}
@@ -882,28 +841,109 @@ export default function FinalAgreementPage() {
           </div>
         </Card>
 
-        {/* ──── 同意と署名 ──── */}
+        {/* ──── 売買契約への同意と署名 ──── */}
         <Card variant="elevated" padding="md">
-          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">同意と署名</h2>
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">売買契約への同意</h2>
 
           <div className="space-y-4">
             <label className="flex items-start gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
+                checked={agreedSale}
+                onChange={(e) => setAgreedSale(e.target.checked)}
                 className="mt-0.5 w-4 h-4 rounded border-[var(--md-sys-color-outline)] accent-[var(--portal-primary)]"
               />
               <span className="text-xs text-[var(--md-sys-color-on-surface)] leading-relaxed">
-                上記の売買契約・請求内容およびクーリングオフに関する説明を理解し、売買に同意します。
+                上記の売買契約の内容、特定商取引法に基づく書面およびクーリングオフに関する説明を理解し、売買契約に同意します。
               </span>
             </label>
 
             <div>
               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">
-                お客様署名（下の枠内に指またはペンで署名してください）
+                お客様署名（売買契約 / 下の枠内に指またはペンで署名してください）
               </label>
-              <SignaturePad onSignatureChange={setSignature} />
+              <SignaturePad onSignatureChange={setSaleSignature} />
+            </div>
+          </div>
+        </Card>
+
+        {/* ──── 請求書 ──── */}
+        <Card variant="elevated" padding="md">
+          <div className="flex items-baseline justify-between mb-3 pb-2 border-b-2 border-[var(--md-sys-color-on-surface)]">
+            <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">請求書</h2>
+            <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">請求番号: {invoiceNo}</span>
+          </div>
+
+          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 space-y-1">
+            <div><span className="font-medium">請求日:</span> {today}</div>
+            <div><span className="font-medium">請求宛先:</span> {customerName} 様</div>
+            {visit.store.operator ? (
+              <>
+                <div><span className="font-medium">請求元:</span> {formalName(visit.store.operator)}</div>
+                {visit.store.operator.address && (
+                  <div><span className="font-medium">所在地:</span> {visit.store.operator.address}</div>
+                )}
+              </>
+            ) : (
+              <div><span className="font-medium">請求元:</span> {visit.store.name}</div>
+            )}
+          </div>
+
+          <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] mb-2">作業項目</h3>
+          {visit.workItems.length > 0 ? (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
+                  <th className="text-left py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">作業名</th>
+                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">数量</th>
+                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">単価</th>
+                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">小計</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visit.workItems.map((item) => (
+                  <tr key={item.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
+                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{item.workName}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{item.quantity}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{fmtYen(item.unitPrice)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(item.unitPrice * item.quantity)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3} className="py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">請求金額合計</td>
+                  <td className="py-2 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業項目は登録されていません</p>
+          )}
+        </Card>
+
+        {/* ──── 請求書への同意と署名 ──── */}
+        <Card variant="elevated" padding="md">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">請求書への同意</h2>
+
+          <div className="space-y-4">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedInvoice}
+                onChange={(e) => setAgreedInvoice(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-[var(--md-sys-color-outline)] accent-[var(--portal-primary)]"
+              />
+              <span className="text-xs text-[var(--md-sys-color-on-surface)] leading-relaxed">
+                上記の請求書の内容を確認し、請求金額の支払いに同意します。
+              </span>
+            </label>
+
+            <div>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">
+                お客様署名（請求書 / 下の枠内に指またはペンで署名してください）
+              </label>
+              <SignaturePad onSignatureChange={setInvoiceSignature} />
             </div>
           </div>
         </Card>
@@ -938,7 +978,7 @@ export default function FinalAgreementPage() {
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={!agreed || !signature || !customerEmailInput.trim() || submitting}
+          disabled={!agreedSale || !saleSignature || !agreedInvoice || !invoiceSignature || !customerEmailInput.trim() || submitting}
         >
           {submitting ? (
             <span className="flex items-center gap-2">

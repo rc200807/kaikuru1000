@@ -57,10 +57,13 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { signatureData, pdfBase64, email: inputEmail } = body
+  const { signatureData, invoiceSignatureData, pdfBase64, email: inputEmail } = body
 
   if (!signatureData) {
-    return NextResponse.json({ error: '署名データが必要です' }, { status: 400 })
+    return NextResponse.json({ error: '売買契約への署名が必要です' }, { status: 400 })
+  }
+  if (!invoiceSignatureData) {
+    return NextResponse.json({ error: '請求書への署名が必要です' }, { status: 400 })
   }
 
   // フロントから受け取ったメールアドレスを優先（無ければ既存のUser.email）
@@ -85,12 +88,14 @@ export async function POST(
     create: {
       visitScheduleId: id,
       signatureData,
+      invoiceSignatureData,
       pdfBase64: pdfBase64 ?? null,
       customerEmail,
       agreedAt: new Date(),
     },
     update: {
       signatureData,
+      invoiceSignatureData,
       pdfBase64: pdfBase64 ?? null,
       customerEmail,
       agreedAt: new Date(),
@@ -132,6 +137,10 @@ export async function POST(
     operator: schedule.store.operator || null,
     staffName: schedule.staffName || undefined,
     visitDate: schedule.visitDate,
+    revisitDate: schedule.revisitDate || null,
+    revisitStart: schedule.revisitStart || null,
+    revisitEnd: schedule.revisitEnd || null,
+    revisitNote: schedule.revisitNote || null,
     contractDate: new Date(contract.agreedAt),
     contractNo: `KK-${id.slice(-8).toUpperCase()}`,
     invoiceNo: `INV-${id.slice(-8).toUpperCase()}`,

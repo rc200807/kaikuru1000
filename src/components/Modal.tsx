@@ -10,6 +10,8 @@ type ModalProps = {
   children: React.ReactNode
   footer?: React.ReactNode
   className?: string
+  /** true にすると背景（バックドロップ）クリックでモーダルが閉じない。誤タップ防止用。 */
+  disableBackdropClose?: boolean
 }
 
 const sizeClass = {
@@ -27,6 +29,7 @@ export default function Modal({
   children,
   footer,
   className = '',
+  disableBackdropClose = false,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -54,14 +57,15 @@ export default function Modal({
     return () => dialog.removeEventListener('cancel', handler)
   }, [onClose])
 
-  // Close on backdrop click
+  // Close on backdrop click（disableBackdropClose=true なら抑止）
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
+      if (disableBackdropClose) return
       if (contentRef.current && !contentRef.current.contains(e.target as Node)) {
         onClose()
       }
     },
-    [onClose]
+    [onClose, disableBackdropClose]
   )
 
   // Trap focus & prevent body scroll

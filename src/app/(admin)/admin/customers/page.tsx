@@ -1883,6 +1883,7 @@ export default function AdminCustomersPage() {
         onClose={() => setShowAddCustomer(false)}
         title="新規顧客追加"
         size="lg"
+        disableBackdropClose
       >
         <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
           {/* ブラウザ自動補完抑止用ダミー（多くのブラウザは最初の input を狙うため） */}

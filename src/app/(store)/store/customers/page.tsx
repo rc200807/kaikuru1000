@@ -259,6 +259,7 @@ export default function StoreCustomersPage() {
         open={showAddCustomer}
         onClose={() => setShowAddCustomer(false)}
         title="新規顧客追加"
+        disableBackdropClose
       >
         <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
           <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />

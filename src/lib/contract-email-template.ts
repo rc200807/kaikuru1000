@@ -45,6 +45,11 @@ export type ContractEmailParams = {
   purchaseItems: ContractEmailItem[]
   workItems: ContractEmailWork[]
   agreedAt: Date
+  /** 再訪問日（後日引取の場合に記載） */
+  revisitDate?: Date | null
+  revisitStart?: string | null
+  revisitEnd?: string | null
+  revisitNote?: string | null
 }
 
 const fmtYen = (n: number) => `¥${n.toLocaleString()}`
@@ -98,13 +103,18 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
   const subTitle = (title: string) => `<h3 style="margin:16px 0 8px;font-size:13px;font-weight:600;color:#374151;">${escape(title)}</h3>`
 
   // 売買契約書
+  const revisitDt = p.revisitDate ? (typeof p.revisitDate === 'string' ? new Date(p.revisitDate) : p.revisitDate) : null
+  const revisitDtStr = revisitDt && !isNaN(revisitDt.getTime()) ? fmtDate(revisitDt) : ''
+  const revisitTimeStr = [p.revisitStart, p.revisitEnd].filter(Boolean).join('〜')
   const saleContract = `
     ${sectionTitle('売買契約書', `契約番号: ${p.contractNo}`)}
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
       <tr>
         <td style="font-size:11px;color:#6b7280;padding-bottom:8px;">
           <strong style="color:#111827;">契約日:</strong> ${escape(fmtDate(p.contractDate))}
-          <strong style="color:#111827;">訪問日:</strong> ${escape(fmtDate(p.visitDate))}
+          &nbsp;<strong style="color:#111827;">訪問日:</strong> ${escape(fmtDate(p.visitDate))}
+          ${revisitDtStr ? `&nbsp;<strong style="color:#111827;">再訪問日（引取）:</strong> ${escape(revisitDtStr)}${revisitTimeStr ? `（${escape(revisitTimeStr)}）` : ''}` : ''}
+          ${p.revisitNote ? `<br><span style="font-size:10px;">再訪問メモ: ${escape(p.revisitNote)}</span>` : ''}
         </td>
       </tr>
     </table>
@@ -201,22 +211,6 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
     </table>
     ` : '<p style="font-size:12px;color:#6b7280;">作業項目は登録されていません</p>'}`
 
-  // お支払い金額
-  const payment = `
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;margin:16px 0;">
-      <tr>
-        <td style="padding:14px 16px;">
-          <table width="100%"><tr>
-            <td>
-              <div style="font-size:13px;font-weight:700;color:#991b1b;">お支払い金額</div>
-              <div style="font-size:10px;color:#7f1d1d;margin-top:2px;">買取金額 ${fmtYen(purchaseTotal)} − 作業費 ${fmtYen(workTotal)}</div>
-            </td>
-            <td align="right" style="font-size:20px;font-weight:700;color:#991b1b;white-space:nowrap;">${fmtYen(purchaseTotal - workTotal)}</td>
-          </tr></table>
-        </td>
-      </tr>
-    </table>`
-
   // 特商法書面
   const legal = `
     ${sectionTitle('特定商取引法に基づく書面')}
@@ -295,20 +289,34 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
       <p style="margin:8px 0 0;text-align:center;font-size:11px;color:#6b7280;">本書面は、買取申込書と一体として、売買契約書になるものです。大事に保管下さい。</p>
     </div>`
 
-  // 同意の記録
-  const consent = `
-    ${sectionTitle('同意の記録')}
+  // 売買契約への同意の記録
+  const saleConsent = `
+    ${sectionTitle('売買契約への同意')}
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
       <tr>
         <td style="padding:14px 16px;font-size:12px;color:#14532d;line-height:1.7;">
-          <p style="margin:0 0 6px;font-weight:700;color:#166534;">✓ 上記契約内容に同意済み</p>
-          <p style="margin:0;">${escape(p.customerName)} 様は、上記の売買契約・請求内容およびクーリングオフに関する説明を理解し、売買に同意されました。</p>
+          <p style="margin:0 0 6px;font-weight:700;color:#166534;">✓ 売買契約内容に同意済み</p>
+          <p style="margin:0;">${escape(p.customerName)} 様は、上記の売買契約および特定商取引法に基づく書面の内容を理解し、売買契約に同意・署名されました。</p>
           <p style="margin:6px 0 0;font-size:11px;color:#15803d;">同意日時: ${escape(fmtDateTime(p.agreedAt))}</p>
         </td>
       </tr>
     </table>`
 
-  return saleContract + invoice + payment + legal + consent
+  // 請求書への同意の記録
+  const invoiceConsent = `
+    ${sectionTitle('請求書への同意')}
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
+      <tr>
+        <td style="padding:14px 16px;font-size:12px;color:#14532d;line-height:1.7;">
+          <p style="margin:0 0 6px;font-weight:700;color:#166534;">✓ 請求内容に同意済み</p>
+          <p style="margin:0;">${escape(p.customerName)} 様は、上記の請求書に記載の作業項目と金額を確認し、請求内容に同意・署名されました。</p>
+          <p style="margin:6px 0 0;font-size:11px;color:#15803d;">同意日時: ${escape(fmtDateTime(p.agreedAt))}</p>
+        </td>
+      </tr>
+    </table>`
+
+  // セクション順: 売買契約書 → 特商法 → 売買同意 → 請求書 → 請求書同意
+  return saleContract + legal + saleConsent + invoice + invoiceConsent
 }
 
 /** プレーンテキスト版（HTMLが表示できないメーラ用） */
@@ -338,6 +346,17 @@ export function buildContractBodyText(p: ContractEmailParams): string {
   if (p.storePhone) lines.push(`電話: ${p.storePhone}`)
   if (p.staffName) lines.push(`担当者: ${p.staffName}`)
   lines.push('')
+  // 再訪問日（後日引取）
+  {
+    const revisitDt = p.revisitDate ? (typeof p.revisitDate === 'string' ? new Date(p.revisitDate) : p.revisitDate) : null
+    if (revisitDt && !isNaN(revisitDt.getTime())) {
+      const timeStr = [p.revisitStart, p.revisitEnd].filter(Boolean).join('〜')
+      lines.push(`【再訪問日（後日引取）】`)
+      lines.push(`日付: ${fmtDate(revisitDt)}${timeStr ? `  時間: ${timeStr}` : ''}`)
+      if (p.revisitNote) lines.push(`メモ: ${p.revisitNote}`)
+      lines.push('')
+    }
+  }
   lines.push('【買取品目】')
   if (p.purchaseItems.length === 0) lines.push('(なし)')
   else {
@@ -364,11 +383,6 @@ export function buildContractBodyText(p: ContractEmailParams): string {
     lines.push(`請求金額合計: ${fmtYen(workTotal)}`)
   }
   lines.push('')
-  lines.push('========================================')
-  lines.push(`お支払い金額: ${fmtYen(purchaseTotal - workTotal)}`)
-  lines.push(`（買取金額 ${fmtYen(purchaseTotal)} − 作業費 ${fmtYen(workTotal)}）`)
-  lines.push('========================================')
-  lines.push('')
   lines.push('【特定商取引法に基づく書面】')
   lines.push('本書面は、特定商取引法第58条の8に基づき交付する書面です。')
   lines.push('')
@@ -385,9 +399,15 @@ export function buildContractBodyText(p: ContractEmailParams): string {
   lines.push('（詳細はメール上部のHTML本文または添付PDFをご確認ください）')
   lines.push('')
   lines.push('========================================')
-  lines.push('【同意の記録】')
+  lines.push('【売買契約への同意】')
   lines.push('========================================')
-  lines.push(`${p.customerName} 様は、上記の売買契約・請求内容およびクーリングオフに関する説明を理解し、売買に同意されました。`)
+  lines.push(`${p.customerName} 様は、上記の売買契約および特定商取引法に基づく書面の内容を理解し、売買契約に同意・署名されました。`)
+  lines.push(`同意日時: ${fmtDateTime(p.agreedAt)}`)
+  lines.push('')
+  lines.push('========================================')
+  lines.push('【請求書への同意】')
+  lines.push('========================================')
+  lines.push(`${p.customerName} 様は、上記の請求書に記載の作業項目と金額を確認し、請求内容に同意・署名されました。`)
   lines.push(`同意日時: ${fmtDateTime(p.agreedAt)}`)
   lines.push('')
   return lines.join('\n')

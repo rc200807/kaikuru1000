@@ -412,16 +412,17 @@ model DeliveryShipment {
 
 // 売買契約書（署名・PDF保存）
 model SalesContract {
-  id              String        @id @default(cuid())
-  visitScheduleId String        @unique
-  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
-  signatureData   String        // base64 PNG data URL（顧客署名）
-  pdfBase64       String?       // base64 PDF データ
-  customerEmail   String?       // 送信先メールアドレス（記録用）
-  emailSentAt     DateTime?     // メール送信日時
-  agreedAt        DateTime      @default(now())
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                    String        @id @default(cuid())
+  visitScheduleId       String        @unique
+  visitSchedule         VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  signatureData         String        // 売買契約への顧客署名（base64 PNG data URL）
+  invoiceSignatureData  String?       // 請求書への顧客署名（base64 PNG data URL）
+  pdfBase64             String?       // base64 PDF データ
+  customerEmail         String?       // 送信先メールアドレス（記録用）
+  emailSentAt           DateTime?     // メール送信日時
+  agreedAt              DateTime      @default(now())
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 }
 
 // パスワードリセットトークン

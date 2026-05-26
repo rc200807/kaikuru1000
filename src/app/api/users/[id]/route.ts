@@ -6,18 +6,25 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 
+const VALID_CUSTOMER_TYPES = ['visit', 'delivery', 'regular', 'akikuru'] as const
+
 const updateUserSchema = z.object({
   name:             z.string().min(1).max(100).optional(),
   furigana:         z.string().min(1).max(100).optional(),
-  phone:            z.string().min(1).max(20).optional(),
+  email:            z.string().email().nullable().optional().or(z.literal('')),
+  phone:            z.string().max(20).optional(),
   phone2:           z.string().max(20).nullable().optional(),
   phone3:           z.string().max(20).nullable().optional(),
-  address:          z.string().min(1).max(200).optional(),
+  address:          z.string().max(200).optional(),
   currentPassword:  z.string().optional(),
   newPassword:      z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional(),
   idOcrIssueReport: z.string().max(1000).nullable().optional(), // 顧客によるOCR誤り報告
   // 内部メモ（store / admin のみ）
   internalNote:     z.string().max(2000).nullable().optional(),
+  // 顧客種別（store / admin のみ）
+  customerType:     z.enum(VALID_CUSTOMER_TYPES).optional(),
+  customerTypes:    z.array(z.enum(VALID_CUSTOMER_TYPES)).optional(),
+  visitFrequencyMonths: z.number().int().min(1).max(60).optional(),
   // 振込先口座情報
   bankName:      z.string().max(50).nullable().optional(),
   branchName:    z.string().max(50).nullable().optional(),
@@ -85,8 +92,9 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, furigana, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
-          internalNote, bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
+  const { name, furigana, email, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
+          internalNote, customerType, customerTypes, visitFrequencyMonths,
+          bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -94,15 +102,28 @@ export async function PATCH(
   const updateData: any = {}
   if (name) updateData.name = name
   if (furigana) updateData.furigana = furigana
-  if (phone) updateData.phone = phone
+  // メール: 空文字なら null
+  if (email !== undefined) updateData.email = (email && typeof email === 'string') ? email.trim() : null
+  if (phone !== undefined) updateData.phone = phone.replace(/[-ー\s]/g, '')
   if (phone2 !== undefined) updateData.phone2 = phone2 ? phone2.trim() : null
   if (phone3 !== undefined) updateData.phone3 = phone3 ? phone3.trim() : null
-  if (address) updateData.address = address
+  if (address !== undefined) updateData.address = address.trim()
   // OCR誤り報告（null は削除、文字列は更新）
   if (idOcrIssueReport !== undefined) updateData.idOcrIssueReport = idOcrIssueReport
   // 内部メモ（顧客自身は更新不可。店舗/管理者のみ）
   if (internalNote !== undefined && sessionUser.role !== 'customer') {
     updateData.internalNote = internalNote ? internalNote.trim() : null
+  }
+  // 顧客種別（顧客自身は更新不可。店舗/管理者のみ）
+  if (sessionUser.role !== 'customer') {
+    if (customerType !== undefined) updateData.customerType = customerType
+    if (customerTypes !== undefined) {
+      // 配列を JSON 文字列に変換（主タイプを必ず含める）
+      const primary = customerType ?? user.customerType
+      const set = Array.from(new Set([...(customerTypes ?? []), primary]))
+      updateData.customerTypes = JSON.stringify(set)
+    }
+    if (visitFrequencyMonths !== undefined) updateData.visitFrequencyMonths = visitFrequencyMonths
   }
   // 振込先口座情報
   if (bankName      !== undefined) updateData.bankName      = bankName

@@ -9,18 +9,20 @@ import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
+import Modal from '@/components/Modal'
 import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import MessageBanner from '@/components/MessageBanner'
 import EmptyState from '@/components/EmptyState'
+import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
 
 type Customer = {
   id: string
   name: string
   furigana: string
-  email: string
+  email: string | null
   phone: string
   phone2: string | null
   phone3: string | null
@@ -189,10 +191,84 @@ export default function StoreCustomerDetailPage() {
   const [noteDraft, setNoteDraft] = useState('')
   const [savingNote, setSavingNote] = useState(false)
 
-  // 電話番号編集 state
-  const [editingPhones, setEditingPhones] = useState(false)
-  const [phonesDraft, setPhonesDraft] = useState<{ phone: string; phone2: string; phone3: string }>({ phone: '', phone2: '', phone3: '' })
-  const [savingPhones, setSavingPhones] = useState(false)
+  // 顧客情報編集モーダル state
+  type EditDraft = {
+    name: string
+    furigana: string
+    email: string
+    phone: string
+    phone2: string
+    phone3: string
+    address: string
+    customerType: CustomerType
+    visitFrequencyMonths: number
+  }
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editDraft, setEditDraft] = useState<EditDraft>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1 })
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  function openEditModal() {
+    if (!customer) return
+    setEditDraft({
+      name: customer.name,
+      furigana: customer.furigana,
+      email: customer.email || '',
+      phone: customer.phone || '',
+      phone2: customer.phone2 || '',
+      phone3: customer.phone3 || '',
+      address: customer.address || '',
+      customerType: (CUSTOMER_TYPES.includes(customer.customerType as CustomerType) ? customer.customerType : 'visit') as CustomerType,
+      visitFrequencyMonths: (customer as any).visitFrequencyMonths ?? 1,
+    })
+    setEditModalOpen(true)
+  }
+
+  async function saveCustomerEdit() {
+    if (!customer) return
+    if (!editDraft.name.trim() || !editDraft.furigana.trim()) {
+      setMsg({ type: 'error', text: '氏名とふりがなは必須です' })
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/users/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editDraft.name.trim(),
+          furigana: editDraft.furigana.trim(),
+          email: editDraft.email.trim() || null,
+          phone: editDraft.phone.trim(),
+          phone2: editDraft.phone2.trim() || null,
+          phone3: editDraft.phone3.trim() || null,
+          address: editDraft.address.trim(),
+          customerType: editDraft.customerType,
+          customerTypes: [editDraft.customerType],
+          visitFrequencyMonths: editDraft.visitFrequencyMonths,
+        }),
+      })
+      if (res.ok) {
+        setCustomer(prev => prev ? {
+          ...prev,
+          name: editDraft.name.trim(),
+          furigana: editDraft.furigana.trim(),
+          email: editDraft.email.trim() || null,
+          phone: editDraft.phone.trim(),
+          phone2: editDraft.phone2.trim() || null,
+          phone3: editDraft.phone3.trim() || null,
+          address: editDraft.address.trim(),
+          customerType: editDraft.customerType,
+        } : prev)
+        setEditModalOpen(false)
+        setMsg({ type: 'success', text: '顧客情報を更新しました' })
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setMsg({ type: 'error', text: d.error || '保存に失敗しました' })
+      }
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   async function saveInternalNote() {
     if (!customer) return
@@ -213,32 +289,6 @@ export default function StoreCustomerDetailPage() {
       }
     } finally {
       setSavingNote(false)
-    }
-  }
-
-  async function savePhones() {
-    if (!customer) return
-    setSavingPhones(true)
-    try {
-      const res = await fetch(`/api/users/${customer.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: phonesDraft.phone,
-          phone2: phonesDraft.phone2 || null,
-          phone3: phonesDraft.phone3 || null,
-        }),
-      })
-      if (res.ok) {
-        setCustomer(prev => prev ? { ...prev, phone: phonesDraft.phone, phone2: phonesDraft.phone2 || null, phone3: phonesDraft.phone3 || null } : prev)
-        setEditingPhones(false)
-        setMsg({ type: 'success', text: '電話番号を保存しました' })
-      } else {
-        const d = await res.json().catch(() => ({}))
-        setMsg({ type: 'error', text: d.error || '保存に失敗しました' })
-      }
-    } finally {
-      setSavingPhones(false)
     }
   }
 
@@ -714,57 +764,13 @@ export default function StoreCustomerDetailPage() {
             <Card>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">顧客情報</h2>
-                {!editingPhones && (
-                  <button
-                    onClick={() => {
-                      setPhonesDraft({
-                        phone: customer.phone,
-                        phone2: customer.phone2 || '',
-                        phone3: customer.phone3 || '',
-                      })
-                      setEditingPhones(true)
-                    }}
-                    className="text-xs text-[var(--portal-primary)] hover:underline"
-                  >
-                    電話番号を編集
-                  </button>
-                )}
+                <button
+                  onClick={openEditModal}
+                  className="text-xs text-[var(--portal-primary)] hover:underline"
+                >
+                  顧客情報を編集
+                </button>
               </div>
-              {editingPhones ? (
-                <div className="space-y-3 mb-4 p-3 rounded-lg border border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest)]">
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">電話番号（主）</label>
-                    <input
-                      type="tel"
-                      value={phonesDraft.phone}
-                      onChange={e => setPhonesDraft(prev => ({ ...prev, phone: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">電話番号 2（任意）</label>
-                    <input
-                      type="tel"
-                      value={phonesDraft.phone2}
-                      onChange={e => setPhonesDraft(prev => ({ ...prev, phone2: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">電話番号 3（任意）</label>
-                    <input
-                      type="tel"
-                      value={phonesDraft.phone3}
-                      onChange={e => setPhonesDraft(prev => ({ ...prev, phone3: e.target.value }))}
-                      className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
-                    />
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => setEditingPhones(false)} disabled={savingPhones} className="text-xs px-3 py-1.5 rounded text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]">キャンセル</button>
-                    <button onClick={savePhones} disabled={savingPhones || !phonesDraft.phone} className="text-xs px-3 py-1.5 rounded bg-[var(--portal-primary)] text-white disabled:opacity-50">{savingPhones ? '保存中...' : '保存'}</button>
-                  </div>
-                </div>
-              ) : null}
               <dl className="space-y-3">
                 {[
                   { label: '氏名', value: customer.name },
@@ -1585,6 +1591,58 @@ export default function StoreCustomerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* 顧客情報編集モーダル */}
+      <Modal open={editModalOpen} onClose={() => !savingEdit && setEditModalOpen(false)} title="顧客情報を編集" size="lg">
+        <div className="space-y-4">
+          <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <TextField label="氏名" value={editDraft.name} onChange={v => setEditDraft(d => ({ ...d, name: v }))} required autoComplete="off" name="kk-edit-name" />
+            <TextField label="ふりがな" value={editDraft.furigana} onChange={v => setEditDraft(d => ({ ...d, furigana: v }))} required autoComplete="off" name="kk-edit-furigana" />
+            <TextField label="メールアドレス（任意）" type="email" value={editDraft.email} onChange={v => setEditDraft(d => ({ ...d, email: v }))} autoComplete="off" name="kk-edit-email" />
+            <TextField label="電話番号（任意）" type="tel" value={editDraft.phone} onChange={v => setEditDraft(d => ({ ...d, phone: v }))} autoComplete="off" name="kk-edit-phone" />
+            <TextField label="電話番号 2（任意）" type="tel" value={editDraft.phone2} onChange={v => setEditDraft(d => ({ ...d, phone2: v }))} autoComplete="off" name="kk-edit-phone2" />
+            <TextField label="電話番号 3（任意）" type="tel" value={editDraft.phone3} onChange={v => setEditDraft(d => ({ ...d, phone3: v }))} autoComplete="off" name="kk-edit-phone3" />
+          </div>
+          <TextField label="住所" value={editDraft.address} onChange={v => setEditDraft(d => ({ ...d, address: v }))} autoComplete="off" name="kk-edit-address" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">顧客タイプ</label>
+              <select
+                value={editDraft.customerType}
+                onChange={e => setEditDraft(d => ({ ...d, customerType: e.target.value as CustomerType }))}
+                className="w-full h-12 px-3 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              >
+                {CUSTOMER_TYPES.map(t => (
+                  <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t]}</option>
+                ))}
+              </select>
+            </div>
+            {(editDraft.customerType === 'visit' || editDraft.customerType === 'delivery') && (
+              <div>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">頻度（{editDraft.customerType === 'visit' ? '訪問' : '宅配'}）</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={editDraft.visitFrequencyMonths}
+                    onChange={e => setEditDraft(d => ({ ...d, visitFrequencyMonths: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    className="w-24 h-12 px-3 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                  />
+                  <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">ヶ月に1回</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="text" onClick={() => setEditModalOpen(false)} disabled={savingEdit}>キャンセル</Button>
+            <Button onClick={saveCustomerEdit} disabled={savingEdit || !editDraft.name.trim() || !editDraft.furigana.trim()} loading={savingEdit}>
+              {savingEdit ? '保存中...' : '保存'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   )
 }

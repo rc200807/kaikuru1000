@@ -201,7 +201,7 @@ export default function AdminCustomersPage() {
   // 新規顧客追加モーダル
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [addForm, setAddForm] = useState({
-    name: '', furigana: '', email: '', phone: '', address: '', password: '', customerType: 'visit', storeId: '',
+    name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
 
@@ -629,7 +629,7 @@ export default function AdminCustomersPage() {
           email: addForm.email,
           phone: addForm.phone,
           address: addForm.address,
-          password: addForm.password,
+          // パスワードは未指定にしてAPI側で自動生成させる
           customerType: addForm.customerType,
           skipLicenseKey: true,
         }),
@@ -668,7 +668,7 @@ export default function AdminCustomersPage() {
 
       setMessage({ type: 'success', text: `${addForm.name} を追加しました` })
       setShowAddCustomer(false)
-      setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', password: '', customerType: 'visit', storeId: '' })
+      setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '' })
     } catch {
       setMessage({ type: 'error', text: '顧客の追加に失敗しました' })
     }
@@ -1880,13 +1880,18 @@ export default function AdminCustomersPage() {
         title="新規顧客追加"
         size="lg"
       >
-        <form onSubmit={handleAddCustomer} className="space-y-4">
+        <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
+          {/* ブラウザ自動補完抑止用ダミー（多くのブラウザは最初の input を狙うため） */}
+          <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+          <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
           <TextField
             label="氏名"
             value={addForm.name}
             onChange={v => setAddForm(prev => ({ ...prev, name: v }))}
             required
             placeholder="山田 太郎"
+            autoComplete="off"
+            name="kk-cust-name"
           />
           <TextField
             label="ふりがな"
@@ -1894,6 +1899,8 @@ export default function AdminCustomersPage() {
             onChange={v => setAddForm(prev => ({ ...prev, furigana: v }))}
             required
             placeholder="やまだ たろう"
+            autoComplete="off"
+            name="kk-cust-furigana"
           />
           <TextField
             label="メールアドレス（任意）"
@@ -1901,27 +1908,25 @@ export default function AdminCustomersPage() {
             onChange={v => setAddForm(prev => ({ ...prev, email: v }))}
             type="email"
             placeholder="example@mail.com"
+            autoComplete="off"
+            name="kk-cust-email"
           />
           <TextField
-            label="電話番号"
+            label="電話番号（任意）"
             value={addForm.phone}
             onChange={v => setAddForm(prev => ({ ...prev, phone: v }))}
-            required
+            type="tel"
             placeholder="090-1234-5678"
+            autoComplete="off"
+            name="kk-cust-phone"
           />
           <TextField
             label="住所（任意）"
             value={addForm.address}
             onChange={v => setAddForm(prev => ({ ...prev, address: v }))}
             placeholder="東京都渋谷区..."
-          />
-          <TextField
-            label="パスワード（8文字以上）"
-            value={addForm.password}
-            onChange={v => setAddForm(prev => ({ ...prev, password: v }))}
-            required
-            type="password"
-            placeholder="8文字以上のパスワード"
+            autoComplete="off"
+            name="kk-cust-address"
           />
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
@@ -1961,7 +1966,7 @@ export default function AdminCustomersPage() {
             </Button>
             <Button
               type="submit"
-              disabled={addSubmitting || !addForm.name || !addForm.furigana || !addForm.email || !addForm.phone || addForm.password.length < 8}
+              disabled={addSubmitting || !addForm.name || !addForm.furigana}
               loading={addSubmitting}
             >
               {addSubmitting ? '追加中...' : '顧客を追加'}

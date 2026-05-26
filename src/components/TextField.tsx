@@ -17,6 +17,8 @@ type TextFieldProps = {
   className?: string
   rows?: number // >0 で textarea に変化
   onBlur?: () => void
+  autoComplete?: string // ブラウザの自動補完制御（'off' で抑止）
+  name?: string         // 任意 — autofill 識別子。指定しなければ補完されにくくなる
 }
 
 export default function TextField({
@@ -34,6 +36,8 @@ export default function TextField({
   className = '',
   rows,
   onBlur,
+  autoComplete,
+  name,
 }: TextFieldProps) {
   const id = useId()
   const [focused, setFocused] = useState(false)
@@ -97,6 +101,8 @@ export default function TextField({
         {rows && rows > 0 ? (
           <textarea
             id={id}
+            name={name}
+            autoComplete={autoComplete}
             value={value}
             onChange={e => onChange(e.target.value)}
             onFocus={() => setFocused(true)}
@@ -109,6 +115,8 @@ export default function TextField({
         ) : (
           <input
             id={id}
+            name={name}
+            autoComplete={autoComplete}
             type={inputType}
             value={value}
             onChange={e => onChange(e.target.value)}

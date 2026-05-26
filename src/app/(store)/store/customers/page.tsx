@@ -40,7 +40,7 @@ export default function StoreCustomersPage() {
 
   // 新規顧客追加
   const [showAddCustomer, setShowAddCustomer] = useState(false)
-  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', password: '' })
+  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '' })
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
   const [addCustomerMsg, setAddCustomerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -94,7 +94,7 @@ export default function StoreCustomersPage() {
           email: addCustomerForm.email,
           phone: addCustomerForm.phone,
           address: addCustomerForm.address,
-          password: addCustomerForm.password,
+          // パスワードはAPIで自動生成
           customerType: 'regular',
           skipLicenseKey: true,
         }),
@@ -120,7 +120,7 @@ export default function StoreCustomersPage() {
       setCustomersHasMore((listData?.total ?? list.length) > CUSTOMERS_LIMIT)
 
       setAddCustomerMsg({ type: 'success', text: `${addCustomerForm.name} 様を追加しました` })
-      setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '', password: '' })
+      setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '' })
       setTimeout(() => setShowAddCustomer(false), 1200)
     } catch {
       setAddCustomerMsg({ type: 'error', text: '顧客の作成に失敗しました' })
@@ -218,7 +218,7 @@ export default function StoreCustomersPage() {
             </Button>
             <Button
               variant="filled"
-              onClick={() => { setShowAddCustomer(true); setAddCustomerMsg(null); setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '', password: '' }) }}
+              onClick={() => { setShowAddCustomer(true); setAddCustomerMsg(null); setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '' }) }}
             >
               <span className="flex items-center gap-1.5">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -260,7 +260,9 @@ export default function StoreCustomersPage() {
         onClose={() => setShowAddCustomer(false)}
         title="新規顧客追加"
       >
-        <form onSubmit={handleAddCustomer} className="space-y-4">
+        <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
+          <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+          <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
           {addCustomerMsg && (
             <MessageBanner severity={addCustomerMsg.type} dismissible onDismiss={() => setAddCustomerMsg(null)}>
               {addCustomerMsg.text}
@@ -272,6 +274,8 @@ export default function StoreCustomersPage() {
             onChange={v => setAddCustomerForm(f => ({ ...f, name: v }))}
             required
             placeholder="山田 太郎"
+            autoComplete="off"
+            name="kk-cust-name"
           />
           <TextField
             label="ふりがな"
@@ -279,6 +283,8 @@ export default function StoreCustomersPage() {
             onChange={v => setAddCustomerForm(f => ({ ...f, furigana: v }))}
             required
             placeholder="やまだ たろう"
+            autoComplete="off"
+            name="kk-cust-furigana"
           />
           <TextField
             label="メールアドレス（任意）"
@@ -286,39 +292,35 @@ export default function StoreCustomersPage() {
             value={addCustomerForm.email}
             onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))}
             placeholder="taro@example.com"
+            autoComplete="off"
+            name="kk-cust-email"
           />
           <TextField
-            label="電話番号"
+            label="電話番号（任意）"
             type="tel"
             value={addCustomerForm.phone}
             onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))}
-            required
             placeholder="090-1234-5678"
+            autoComplete="off"
+            name="kk-cust-phone"
           />
           <TextField
-            label="住所"
+            label="住所（任意）"
             value={addCustomerForm.address}
             onChange={v => setAddCustomerForm(f => ({ ...f, address: v }))}
-            required
             placeholder="東京都渋谷区..."
+            autoComplete="off"
+            name="kk-cust-address"
           />
-          <TextField
-            label="パスワード"
-            type="password"
-            value={addCustomerForm.password}
-            onChange={v => setAddCustomerForm(f => ({ ...f, password: v }))}
-            required
-            placeholder="8文字以上"
-          />
-          {addCustomerForm.password.length > 0 && addCustomerForm.password.length < 8 && (
-            <p className="text-xs text-[var(--md-sys-color-error,#B3261E)]">パスワードは8文字以上で入力してください</p>
-          )}
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+            ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
+          </p>
           <div className="flex gap-3 pt-2">
             <Button
               type="submit"
               variant="filled"
               loading={addCustomerSubmitting}
-              disabled={addCustomerSubmitting || addCustomerForm.password.length < 8}
+              disabled={addCustomerSubmitting || !addCustomerForm.name || !addCustomerForm.furigana}
               fullWidth
             >
               {addCustomerSubmitting ? '登録中...' : '登録する'}

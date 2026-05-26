@@ -204,6 +204,8 @@ export default function AdminCustomersPage() {
     name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
+  const [addStoreSearch, setAddStoreSearch] = useState('')
+  const [addStoreOpen, setAddStoreOpen] = useState(false)
 
   // URL同期用: 復元フラグ（URL由来の初回openでtabリセットを抑止）
   const restoringFromUrl = useRef(false)
@@ -669,6 +671,8 @@ export default function AdminCustomersPage() {
       setMessage({ type: 'success', text: `${addForm.name} を追加しました` })
       setShowAddCustomer(false)
       setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '' })
+      setAddStoreSearch('')
+      setAddStoreOpen(false)
     } catch {
       setMessage({ type: 'error', text: '顧客の追加に失敗しました' })
     }
@@ -1947,18 +1951,66 @@ export default function AdminCustomersPage() {
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
               担当店舗（任意）
             </label>
-            <select
-              value={addForm.storeId}
-              onChange={e => setAddForm(prev => ({ ...prev, storeId: e.target.value }))}
-              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-            >
-              <option value="">店舗を選択しない</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.id}>
-                  [{s.code}] {s.name} {s.prefecture ? `（${s.prefecture}）` : ''}
-                </option>
-              ))}
-            </select>
+            {(() => {
+              const selected = stores.find(s => s.id === addForm.storeId)
+              const q = addStoreSearch.trim().toLowerCase()
+              const filtered = q
+                ? stores.filter(s =>
+                    s.code.toLowerCase().includes(q) ||
+                    s.name.toLowerCase().includes(q) ||
+                    (s.prefecture || '').toLowerCase().includes(q)
+                  )
+                : stores
+              return (
+                <div className="relative">
+                  {/* 選択中表示 + クリアボタン */}
+                  {selected && !addStoreOpen && (
+                    <div className="flex items-center justify-between gap-2 h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)]">
+                      <span className="truncate">[{selected.code}] {selected.name}{selected.prefecture ? `（${selected.prefecture}）` : ''}</span>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button type="button" onClick={() => setAddStoreOpen(true)} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">変更</button>
+                        <button type="button" onClick={() => { setAddForm(prev => ({ ...prev, storeId: '' })); setAddStoreSearch('') }} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">クリア</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 検索 + リスト */}
+                  {(!selected || addStoreOpen) && (
+                    <>
+                      <input
+                        type="text"
+                        value={addStoreSearch}
+                        onChange={e => setAddStoreSearch(e.target.value)}
+                        placeholder="店舗名・コード・都道府県で検索（空欄は全店舗から選択）"
+                        autoComplete="off"
+                        className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                      />
+                      <div className="mt-1 max-h-56 overflow-y-auto rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)]">
+                        <button
+                          type="button"
+                          onClick={() => { setAddForm(prev => ({ ...prev, storeId: '' })); setAddStoreSearch(''); setAddStoreOpen(false) }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] ${!addForm.storeId ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
+                        >
+                          店舗を選択しない
+                        </button>
+                        {filtered.length === 0 ? (
+                          <p className="px-3 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">該当する店舗が見つかりません</p>
+                        ) : filtered.map(s => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => { setAddForm(prev => ({ ...prev, storeId: s.id })); setAddStoreSearch(''); setAddStoreOpen(false) }}
+                            className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] border-t border-[var(--md-sys-color-outline-variant)] ${addForm.storeId === s.id ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
+                          >
+                            [{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="outlined" onClick={() => setShowAddCustomer(false)} type="button">

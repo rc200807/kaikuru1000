@@ -43,7 +43,9 @@ export async function POST(request: NextRequest) {
   // 店舗にメール通知を送信（エラーは握りつぶして割り当て自体は成功させる）
   // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
   // メール送信が中断されるため、必ず await する
-  if (fullUser && user.store?.email) {
+  // 顧客タイプが「アキクル」の場合は店舗通知をスキップ
+  const isAkikuru = user.customerType === 'akikuru'
+  if (fullUser && user.store?.email && !isAkikuru) {
     try {
       await sendAssignmentNotification({
         storeEmail: user.store.email,
@@ -58,6 +60,8 @@ export async function POST(request: NextRequest) {
     } catch (err: any) {
       console.error('[Assignment] メール通知の送信に失敗しました:', err.message)
     }
+  } else if (isAkikuru) {
+    console.log(`[Assignment] アキクル顧客のため店舗通知をスキップ: userId=${userId}, storeId=${storeId}`)
   }
 
   // 顧客にも割り当て完了メールを送信

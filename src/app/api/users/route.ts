@@ -82,7 +82,9 @@ export async function POST(request: NextRequest) {
       // 店舗から登録した場合は割り当て通知メールを送信
       // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
       // メール送信が中断されるため、必ず await する
-      if (autoStoreId && user.store?.email) {
+      // 顧客タイプが「アキクル」の場合は店舗通知をスキップ
+      const isAkikuruUser = user.customerType === 'akikuru'
+      if (autoStoreId && user.store?.email && !isAkikuruUser) {
         try {
           await sendAssignmentNotification({
             storeEmail: user.store.email,
@@ -97,6 +99,8 @@ export async function POST(request: NextRequest) {
         } catch (err: any) {
           console.error('[Users] 店舗向け割り当て通知メールの送信に失敗しました:', err.message)
         }
+      } else if (autoStoreId && isAkikuruUser) {
+        console.log(`[Users] アキクル顧客のため店舗通知をスキップ: userId=${user.id}, storeId=${autoStoreId}`)
       }
       if (autoStoreId && user.email && user.store) {
         const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'

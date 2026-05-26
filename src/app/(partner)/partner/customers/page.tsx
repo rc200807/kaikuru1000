@@ -27,6 +27,12 @@ const TYPE_LABEL: Record<string, string> = {
 export default function PartnerCustomersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+
+  // ライセンスキー顧客ページは一旦OFF。ライセンス一覧へリダイレクト。
+  useEffect(() => {
+    router.replace('/partner/license-keys')
+  }, [router])
+
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')

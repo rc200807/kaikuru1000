@@ -6,8 +6,8 @@ import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 
 const navItems = [
-  { href: '/partner/customers',    label: 'ライセンスキー顧客' },
   { href: '/partner/license-keys', label: 'ライセンスキー一覧' },
+  { href: '/partner/stats',        label: '集計' },
   { href: '/partner/members',      label: '参加メンバー' },
 ]
 

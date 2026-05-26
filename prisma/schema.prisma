@@ -14,6 +14,8 @@ model LicenseKey {
   id        String   @id @default(cuid())
   key       String   @unique
   isUsed    Boolean  @default(false)
+  startDate DateTime? // ライセンス利用開始日
+  endDate   DateTime? // ライセンス利用終了日（未終了は null）
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User?

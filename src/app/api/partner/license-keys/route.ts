@@ -33,6 +33,8 @@ export async function GET() {
       id: k.id,
       key: k.key,
       isUsed: k.isUsed,
+      startDate: k.startDate,
+      endDate:   k.endDate,
       createdAt: k.createdAt,
       user: k.user ? {
         id: k.user.id,

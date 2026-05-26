@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import {
-  AreaChart, Area, BarChart, Bar, Cell,
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Legend,
 } from 'recharts'
@@ -62,20 +62,20 @@ export default function PartnerStatsPage() {
       {loading ? (
         <p className="text-sm text-[#a3a3a3]">読み込み中…</p>
       ) : error ? (
-        <p className="text-sm text-rose-400">{error}</p>
+        <p className="text-sm text-[#a3a3a3]">{error}</p>
       ) : !stats ? null : (
         <>
           {/* サマリ */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <StatCard label="稼働中" sub="開始あり・終了なし" value={stats.summary.activeCount} tone="ok" />
+            <StatCard label="稼働中" sub="開始あり・終了なし" value={stats.summary.activeCount} />
             <StatCard label="累計 開始" value={stats.summary.startedTotal} />
-            <StatCard label="累計 終了" value={stats.summary.endedTotal} tone="muted" />
-            <StatCard label="未開始" value={stats.summary.neverStartedCount} tone="warn" />
+            <StatCard label="累計 終了" value={stats.summary.endedTotal} />
+            <StatCard label="未開始" value={stats.summary.neverStartedCount} />
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
-            <StatCard label={`今年の開始`} value={stats.summary.thisYearStarted} tone="ok" />
-            <StatCard label={`今年の終了`} value={stats.summary.thisYearEnded} tone="muted" />
+            <StatCard label="今年の開始" value={stats.summary.thisYearStarted} />
+            <StatCard label="今年の終了" value={stats.summary.thisYearEnded} />
             <StatCard label="発行済キー総数" value={stats.summary.totalKeys} />
           </div>
 
@@ -85,15 +85,15 @@ export default function PartnerStatsPage() {
               <AreaChart data={stats.cumulativeActive} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="activeGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
-                <Area type="monotone" dataKey="active" name="稼働中" stroke="#10b981" strokeWidth={2} fill="url(#activeGrad)" dot={false} activeDot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="active" name="稼働中" stroke="#ffffff" strokeWidth={2} fill="url(#activeGrad)" dot={false} activeDot={{ r: 4, fill: '#ffffff', strokeWidth: 0 }} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -107,8 +107,8 @@ export default function PartnerStatsPage() {
                 <YAxis tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#a3a3a3' }} />
-                <Bar dataKey="started" name="開始" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="ended"   name="終了" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="started" name="開始" fill="#ededed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ended"   name="終了" fill="#666666" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -121,11 +121,7 @@ export default function PartnerStatsPage() {
                 <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="net" name="純増" radius={[4, 4, 0, 0]}>
-                  {stats.monthlyChanges.map((d, i) => (
-                    <Cell key={i} fill={d.net >= 0 ? '#10b981' : '#f43f5e'} />
-                  ))}
-                </Bar>
+                <Bar dataKey="net" name="純増" fill="#a3a3a3" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -139,8 +135,8 @@ export default function PartnerStatsPage() {
                 <YAxis tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#a3a3a3' }} />
-                <Bar dataKey="started" name="開始" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="ended"   name="終了" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="started" name="開始" fill="#ededed" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ended"   name="終了" fill="#666666" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -150,16 +146,11 @@ export default function PartnerStatsPage() {
   )
 }
 
-function StatCard({ label, sub, value, tone }: { label: string; sub?: string; value: number; tone?: 'ok' | 'warn' | 'muted' }) {
-  const color =
-    tone === 'ok'    ? 'text-emerald-300' :
-    tone === 'warn'  ? 'text-amber-300'   :
-    tone === 'muted' ? 'text-rose-300'    :
-    'text-[#ededed]'
+function StatCard({ label, sub, value }: { label: string; sub?: string; value: number }) {
   return (
     <div className="rounded-xl px-4 py-3 bg-[#141414] border border-[rgba(255,255,255,0.06)]">
       <p className="text-[10px] uppercase tracking-wide text-[#a3a3a3] font-bold">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color}`}>{value.toLocaleString()}</p>
+      <p className="text-2xl font-bold mt-1 text-[#ededed]">{value.toLocaleString()}</p>
       {sub && <p className="text-[10px] text-[#666] mt-0.5">{sub}</p>}
     </div>
   )
@@ -183,7 +174,7 @@ function ChartTooltip({ active, payload, label }: any) {
     <div className="rounded-lg px-3 py-2 text-xs bg-[#262626] border border-[#333]">
       <p className="mb-1 text-[#a3a3a3]">{label}</p>
       {payload.map((p: any, i: number) => (
-        <p key={i} className="font-semibold" style={{ color: p.color || p.fill || '#fff' }}>
+        <p key={i} className="font-semibold text-[#ededed]">
           {p.name}: {Number(p.value).toLocaleString()}
         </p>
       ))}

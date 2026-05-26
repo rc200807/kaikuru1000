@@ -170,7 +170,7 @@ export default function AdminMembersPage() {
 
   const sessionUser = session?.user as any
   const sessionRole = sessionUser?.role as AdminRole | undefined
-  const canManageRoles = sessionRole === 'superadmin'
+  const canManageRoles = sessionRole === 'superadmin' || sessionRole === 'admin'
   const otherMembers = members.filter(m => m.id !== sessionUser?.id)
   const myMember = members.find(m => m.id === sessionUser?.id)
 

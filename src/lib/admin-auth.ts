@@ -42,11 +42,11 @@ export async function requireRole(allowed: AdminRole[]): Promise<AdminUser | nul
 }
 
 export function canViewSensitiveEmployee(role: AdminRole): boolean {
-  return role === 'superadmin' || role === 'hr'
+  return role === 'superadmin' || role === 'hr' || role === 'admin'
 }
 
 export function canEditEmployee(role: AdminRole): boolean {
-  return role === 'superadmin' || role === 'hr'
+  return role === 'superadmin' || role === 'hr' || role === 'admin'
 }
 
 export function canViewEmployee(role: AdminRole): boolean {

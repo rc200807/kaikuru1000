@@ -75,7 +75,7 @@ function parseDateLike(v: string): Date | null {
 
 /** GET: サンプルCSV ダウンロード */
 export async function GET() {
-  const user = await requireRole(['superadmin', 'hr'])
+  const user = await requireRole(['superadmin', 'admin', 'hr'])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const headers = COLUMN_MAP.map(c => (c.required ? `${c.header}*` : c.header))
@@ -99,7 +99,7 @@ export async function GET() {
 
 /** POST: CSV をパースして一括登録 */
 export async function POST(req: NextRequest) {
-  const user = await requireRole(['superadmin', 'hr'])
+  const user = await requireRole(['superadmin', 'admin', 'hr'])
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let csvText: string

@@ -34,12 +34,12 @@ export async function GET() {
   return NextResponse.json(members)
 }
 
-// 管理者メンバー追加（superadmin のみ）
+// 管理者メンバー追加（admin / superadmin）
 export async function POST(request: NextRequest) {
   const user = await requireAnyAdmin()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'superadmin') {
-    return NextResponse.json({ error: '管理者の追加は superadmin のみ実行できます' }, { status: 403 })
+  if (user.role !== 'superadmin' && user.role !== 'admin') {
+    return NextResponse.json({ error: '管理者の追加権限がありません' }, { status: 403 })
   }
 
   const body = await request.json()

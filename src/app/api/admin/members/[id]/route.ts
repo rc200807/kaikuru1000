@@ -23,8 +23,8 @@ export async function DELETE(
 ) {
   const user = await requireAnyAdmin()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'superadmin') {
-    return NextResponse.json({ error: '管理者の削除は superadmin のみ実行できます' }, { status: 403 })
+  if (user.role !== 'superadmin' && user.role !== 'admin') {
+    return NextResponse.json({ error: '管理者の削除権限がありません' }, { status: 403 })
   }
 
   const { id } = await params
@@ -45,11 +45,11 @@ export async function DELETE(
     return NextResponse.json({ error: 'メンバーが見つかりません' }, { status: 404 })
   }
 
-  // 最後の superadmin は削除不可（ロックアウト防止）
-  if (admin.role === 'superadmin') {
-    const superadminCount = await prisma.admin.count({ where: { role: 'superadmin' } })
-    if (superadminCount <= 1) {
-      return NextResponse.json({ error: '最後の superadmin は削除できません' }, { status: 400 })
+  // 最後の管理権限保有者（admin / superadmin）は削除不可
+  if (admin.role === 'admin' || admin.role === 'superadmin') {
+    const fullPowerCount = await prisma.admin.count({ where: { role: { in: ['admin', 'superadmin'] } } })
+    if (fullPowerCount <= 1) {
+      return NextResponse.json({ error: '最後の管理者（admin/superadmin）は削除できません' }, { status: 400 })
     }
   }
 
@@ -57,15 +57,15 @@ export async function DELETE(
   return NextResponse.json({ ok: true })
 }
 
-// 管理者メンバーのロール変更（superadmin のみ）
+// 管理者メンバーのロール変更（admin / superadmin）
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await requireAnyAdmin()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'superadmin') {
-    return NextResponse.json({ error: 'ロール変更は superadmin のみ実行できます' }, { status: 403 })
+  if (user.role !== 'superadmin' && user.role !== 'admin') {
+    return NextResponse.json({ error: 'ロール変更の権限がありません' }, { status: 403 })
   }
 
   const { id } = await params
@@ -86,11 +86,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'メンバーが見つかりません' }, { status: 404 })
   }
 
-  // 最後の superadmin の降格は不可
-  if (target.role === 'superadmin' && newRole !== 'superadmin') {
-    const superadminCount = await prisma.admin.count({ where: { role: 'superadmin' } })
-    if (superadminCount <= 1) {
-      return NextResponse.json({ error: '最後の superadmin は降格できません' }, { status: 400 })
+  // 最後の管理権限保有者（admin/superadmin）から hr への降格は不可
+  if ((target.role === 'admin' || target.role === 'superadmin') && newRole === 'hr') {
+    const fullPowerCount = await prisma.admin.count({ where: { role: { in: ['admin', 'superadmin'] } } })
+    if (fullPowerCount <= 1) {
+      return NextResponse.json({ error: '最後の管理者（admin/superadmin）は降格できません' }, { status: 400 })
     }
   }
 

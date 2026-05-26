@@ -24,7 +24,7 @@ export default function EmployeeListPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const role = (session?.user as any)?.role as string | undefined
-  const canEdit = role === 'superadmin' || role === 'hr'
+  const canEdit = role === 'superadmin' || role === 'hr' || role === 'admin'
 
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
@@ -99,9 +99,7 @@ export default function EmployeeListPage() {
         <div>
           <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 700 }}>社員情報</h1>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
-            {role === 'admin'
-              ? '※ 機微情報は閲覧できません（基本情報のみ表示）'
-              : '社員の基本情報・人事情報・機微情報を管理'}
+            社員の基本情報・人事情報・機微情報を管理
             （{filtered.length}件 / 全{employees.length}件）
           </p>
         </div>

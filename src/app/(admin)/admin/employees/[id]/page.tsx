@@ -12,9 +12,9 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const { data: session, status } = useSession()
   const router = useRouter()
   const role = (session?.user as any)?.role as string | undefined
-  const canSensitive = role === 'superadmin' || role === 'hr'
+  const canSensitive = role === 'superadmin' || role === 'hr' || role === 'admin'
   const canEdit = canSensitive
-  const canDelete = role === 'superadmin'
+  const canDelete = role === 'superadmin' || role === 'admin'
 
   const [form, setForm] = useState<EmployeeFormState>(EMPTY_EMPLOYEE)
   const [savedForm, setSavedForm] = useState<EmployeeFormState>(EMPTY_EMPLOYEE)

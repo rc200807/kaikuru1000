@@ -46,8 +46,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await requireAdmin()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (user.role !== 'superadmin') {
-    return NextResponse.json({ error: 'パートナーの削除は superadmin のみ実行できます' }, { status: 403 })
+  if (user.role !== 'superadmin' && user.role !== 'admin') {
+    return NextResponse.json({ error: 'パートナーの削除権限がありません' }, { status: 403 })
   }
   const { id } = await ctx.params
   await prisma.salesPartner.delete({ where: { id } })

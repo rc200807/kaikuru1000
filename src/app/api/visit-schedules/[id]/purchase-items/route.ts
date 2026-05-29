@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { recordAccessLog } from '@/lib/access-log'
 
 /** 買取品目一覧取得 */
 export async function GET(
@@ -93,5 +94,6 @@ export async function POST(
     return created
   })
 
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `買取品目を登録「${item.itemName}」`, req: request })
   return NextResponse.json(item, { status: 201 })
 }

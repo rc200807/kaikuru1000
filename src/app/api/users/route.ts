@@ -7,6 +7,7 @@ import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/l
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { recordAccessLog } from '@/lib/access-log'
 
 const registerSchema = z.object({
   name:         z.string().min(1, '氏名は必須です').max(100),
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, action: `顧客追加「${user.name}」`, req: request })
       return NextResponse.json({
         id: user.id,
         name: user.name,
@@ -155,6 +157,7 @@ export async function POST(request: NextRequest) {
       return newUser
     })
 
+    await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, action: `顧客追加「${user.name}」`, req: request })
     return NextResponse.json({
       id: user.id,
       name: user.name,

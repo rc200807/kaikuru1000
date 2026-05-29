@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createCalendarEvent } from '@/lib/google-calendar'
+import { recordAccessLog } from '@/lib/access-log'
 
 // 訪問スケジュール一覧
 export async function GET(request: NextRequest) {
@@ -96,5 +97,6 @@ export async function POST(request: NextRequest) {
     console.error('[GoogleCalendar] スケジュール作成時のカレンダー同期に失敗:', err)
   }
 
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '訪問予定を作成', req: request })
   return NextResponse.json(schedule, { status: 201 })
 }

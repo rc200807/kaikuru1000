@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendContractEmail } from '@/lib/mailer'
 import { buildContractBodyHtml, buildContractBodyText } from '@/lib/contract-email-template'
+import { recordAccessLog } from '@/lib/access-log'
 
 /** 売買契約書を保存してメール送信 */
 export async function POST(
@@ -193,6 +194,7 @@ export async function POST(
     }
   }
 
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '売買契約書を作成', req: request })
   return NextResponse.json({
     success: true,
     contractId: contract.id,

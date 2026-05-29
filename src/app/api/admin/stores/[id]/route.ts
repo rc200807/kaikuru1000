@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { recordAccessLog } from '@/lib/access-log'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
@@ -95,6 +96,7 @@ export async function PATCH(
         _count: { select: { customers: true } },
       },
     })
+    await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, action: `店舗情報を編集「${updated.name}」`, req: request })
     return NextResponse.json(updated)
   }
 

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
+import { recordAccessLog } from '@/lib/access-log'
 
 const VALID_STATUSES = ['scheduled', 'pending', 'completed', 'rescheduled', 'absent', 'cancelled', 'revisit']
 
@@ -158,5 +159,6 @@ export async function PATCH(
     console.error('[GoogleCalendar] スケジュール更新時のカレンダー同期に失敗:', err)
   }
 
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '訪問記録を更新', req: request })
   return NextResponse.json(updated)
 }

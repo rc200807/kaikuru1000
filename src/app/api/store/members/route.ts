@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { recordAccessLog } from '@/lib/access-log'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -61,5 +62,6 @@ export async function POST(request: NextRequest) {
     select: { id: true, name: true, email: true, createdAt: true },
   })
 
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `店舗メンバー追加「${member.name}」`, req: request })
   return NextResponse.json(member, { status: 201 })
 }

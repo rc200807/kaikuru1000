@@ -19,9 +19,9 @@ type AccessLog = {
 type Resp = { logs: AccessLog[]; total: number; page: number; pageSize: number; totalPages: number }
 
 const TYPE_LABELS: Record<string, string> = {
-  customer: '顧客', store: '店舗', admin: '管理者', superadmin: '管理者(super)', hr: '管理者(HR)', sysadmin: 'システム管理者', partner: 'パートナー',
+  customer: '顧客', store: '店舗', admin: '管理者', superadmin: '管理者(super)', hr: '管理者(HR)', sysadmin: 'システム管理者', partner: 'パートナー', error: 'エラー',
 }
-const TYPES = ['', 'customer', 'store', 'admin', 'superadmin', 'hr', 'sysadmin', 'partner']
+const TYPES = ['', 'customer', 'store', 'admin', 'superadmin', 'hr', 'sysadmin', 'partner', 'error']
 
 export default function SysAdminAccessLogsPage() {
   const { data: session, status } = useSession()

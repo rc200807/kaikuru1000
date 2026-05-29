@@ -100,6 +100,7 @@ export default function StoreDetailPage() {
   const [resetting, setResetting] = useState(false)
   const [pwModal, setPwModal] = useState<{ password: string } | null>(null)
   const [pwCopied, setPwCopied] = useState(false)
+  const [inquiryUrlCopied, setInquiryUrlCopied] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -303,6 +304,26 @@ export default function StoreDetailPage() {
     setTimeout(() => setPwCopied(false), 2000)
   }
 
+  async function handleCopyInquiryUrl() {
+    if (!store) return
+    const url = `${window.location.origin}/inquiry/${store.code}`
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // クリップボードAPIが使えない環境向けのフォールバック
+      const ta = document.createElement('textarea')
+      ta.value = url
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+    }
+    setInquiryUrlCopied(true)
+    setTimeout(() => setInquiryUrlCopied(false), 2000)
+  }
+
   async function handleSendPasswordEmail() {
     if (!pwModal || !store) return
     setSendingEmail(true)
@@ -350,6 +371,8 @@ export default function StoreDetailPage() {
     return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><LoadingSpinner /></div>
   }
   if (!store) return <p style={{ padding: 40, textAlign: 'center' }}>店舗が見つかりません</p>
+
+  const inquiryUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/inquiry/${store.code}`
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: 1200, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
@@ -464,6 +487,37 @@ export default function StoreDetailPage() {
             <pre style={{ fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12, margin: 0 }}>{store.bankInfo}</pre>
           </div>
         )}
+      </Section>
+
+      {/* お問い合わせフォームURL */}
+      <Section title="店舗専用お問い合わせフォームURL">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.7 }}>
+            この店舗専用のお問い合わせフォームのURLです。お客様へのご案内やQRコード化などにご利用ください。
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              readOnly
+              value={inquiryUrl}
+              onFocus={e => e.currentTarget.select()}
+              style={{ flex: 1, minWidth: 240, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'monospace' }}
+            />
+            <button
+              onClick={handleCopyInquiryUrl}
+              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: inquiryUrlCopied ? '#4ade80' : '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+            >
+              {inquiryUrlCopied ? 'コピー済' : 'URLをコピー'}
+            </button>
+            <a
+              href={inquiryUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              開く
+            </a>
+          </div>
+        </div>
       </Section>
 
       {/* 問い合わせ記録シート */}

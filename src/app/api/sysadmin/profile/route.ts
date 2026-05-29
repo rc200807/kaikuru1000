@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { recordAccessLog } from '@/lib/access-log'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -24,11 +25,11 @@ export async function PATCH(req: NextRequest) {
   }
   const { name, email, password } = parsed.data
 
-  // メール重複チェック（自分以外）
+  // メール重複チェック（他のシステム管理者と重複する場合のみ）
   if (email) {
-    const existing = await prisma.admin.findUnique({ where: { email } })
-    if (existing && existing.id !== user.id) {
-      return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
+    const existing = await prisma.admin.findFirst({ where: { email, role: 'sysadmin', NOT: { id: user.id } } })
+    if (existing) {
+      return NextResponse.json({ error: 'このメールアドレスは既に別のシステム管理者が使用しています' }, { status: 409 })
     }
   }
 
@@ -46,5 +47,6 @@ export async function PATCH(req: NextRequest) {
     data,
     select: { id: true, name: true, email: true },
   })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: updated.name, action: 'プロフィール更新', req })
   return NextResponse.json(updated)
 }

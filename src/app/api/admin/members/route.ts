@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
 
   const { name, email, role } = parsed.data
 
-  const existing = await prisma.admin.findUnique({ where: { email } })
+  // 管理ポータルの管理者間でのみ重複を禁止（システム管理者の同一メールは別アカウントとして許容）
+  const existing = await prisma.admin.findFirst({ where: { email, role: { not: 'sysadmin' } } })
   if (existing) {
     return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
   }

@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
 import { generateSecurePassword } from '@/lib/password-utils'
 import { sendWelcomeWithPasswordEmail } from '@/lib/mailer'
+import { recordAccessLog } from '@/lib/access-log'
 
 const createSchema = z.object({
   name: z.string().min(1, '氏名は必須です').max(100),
@@ -40,10 +41,11 @@ export async function POST(req: NextRequest) {
   }
   const { name, email } = parsed.data
 
-  // メール重複チェック（Admin全体で一意）
-  const existing = await prisma.admin.findUnique({ where: { email } })
+  // 既にシステム管理者として登録済みの場合のみ拒否。
+  // 管理ポータル・店舗など他ポータルで使われているメールでも招待できる。
+  const existing = await prisma.admin.findFirst({ where: { email, role: 'sysadmin' } })
   if (existing) {
-    return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
+    return NextResponse.json({ error: 'このメールアドレスは既にシステム管理者として登録されています' }, { status: 409 })
   }
 
   const rawPassword = generateSecurePassword()
@@ -66,6 +68,8 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error('[sysadmin/members] invite email failed:', e)
   }
+
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `メンバー招待「${name}」`, req })
 
   // 初期パスワードは一度だけ返す（メール未設定でも招待者が伝えられるように）
   return NextResponse.json({ ...member, temporaryPassword: rawPassword, emailSent }, { status: 201 })

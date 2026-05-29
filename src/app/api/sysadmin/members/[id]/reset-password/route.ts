@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
 import { generateSecurePassword } from '@/lib/password-utils'
 import { sendWelcomeWithPasswordEmail } from '@/lib/mailer'
+import { recordAccessLog } from '@/lib/access-log'
 
 function baseUrl() {
   return process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
@@ -36,6 +37,8 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   } catch (e) {
     console.error('[sysadmin/members] reset-password email failed:', e)
   }
+
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `パスワード再発行「${target.name}」`, req: _req })
 
   return NextResponse.json({ temporaryPassword: rawPassword, emailSent })
 }

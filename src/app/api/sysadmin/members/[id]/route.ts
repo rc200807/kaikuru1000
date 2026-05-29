@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { recordAccessLog } from '@/lib/access-log'
 
 const patchSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -31,9 +32,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const { name, email } = parsed.data
 
   if (email && email !== target.email) {
-    const existing = await prisma.admin.findUnique({ where: { email } })
+    // 他のシステム管理者と重複する場合のみ拒否（他ポータルのメールは許容）
+    const existing = await prisma.admin.findFirst({ where: { email, role: 'sysadmin', NOT: { id } } })
     if (existing) {
-      return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
+      return NextResponse.json({ error: 'このメールアドレスは既に別のシステム管理者が使用しています' }, { status: 409 })
     }
   }
 
@@ -49,6 +51,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     data,
     select: { id: true, name: true, email: true, createdAt: true },
   })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `メンバー編集「${updated.name}」`, req })
   return NextResponse.json(updated)
 }
 
@@ -73,5 +76,6 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   }
 
   await prisma.admin.delete({ where: { id } })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `メンバー削除「${target.name}」`, req: _req })
   return NextResponse.json({ ok: true })
 }

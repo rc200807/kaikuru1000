@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
 import { stripe } from '@/lib/stripe'
 import { getOrCreateBillingCustomer } from '@/lib/billing'
+import { recordAccessLog } from '@/lib/access-log'
 
 export const runtime = 'nodejs'
 
@@ -151,6 +152,8 @@ export async function POST(req: NextRequest) {
     await prisma.supplyOrder.delete({ where: { id: order.id } }).catch(() => {})
     return NextResponse.json({ error: '決済の準備に失敗しました。Stripe の設定を確認してください' }, { status: 500 })
   }
+
+  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name ?? user.email, action: `備品発注 ${orderNumber}（¥${totalAmount.toLocaleString()}）`, req })
 
   return NextResponse.json({
     orderId: order.id,

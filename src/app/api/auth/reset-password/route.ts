@@ -49,8 +49,8 @@ export async function POST(req: Request) {
 
     // ユーザーのパスワードを更新
     if (resetToken.userType === 'admin') {
-      const admin = await prisma.admin.findUnique({
-        where: { email: resetToken.email },
+      const admin = await prisma.admin.findFirst({
+        where: { email: resetToken.email, role: { not: 'sysadmin' } },
       })
       if (!admin) {
         return NextResponse.json(

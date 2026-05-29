@@ -28,9 +28,9 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください` }, { status: 400 })
   }
 
-  // メールアドレスの重複チェック
+  // メールアドレスの重複チェック（管理ポータルの他の管理者と重複する場合のみ）
   if (email && email !== currentEmail) {
-    const existing = await prisma.admin.findUnique({ where: { email } })
+    const existing = await prisma.admin.findFirst({ where: { email, role: { not: 'sysadmin' }, NOT: { id: sessionUser.id } } })
     if (existing) {
       return NextResponse.json({ error: 'このメールアドレスはすでに使用されています' }, { status: 409 })
     }
@@ -51,7 +51,9 @@ export async function PATCH(request: NextRequest) {
     )
   }
 
-  const admin = await prisma.admin.findUnique({ where: { email: currentEmail } })
+  const admin = sessionUser.id
+    ? await prisma.admin.findUnique({ where: { id: sessionUser.id } })
+    : await prisma.admin.findFirst({ where: { email: currentEmail, role: { not: 'sysadmin' } } })
   if (!admin) return NextResponse.json({ error: 'Admin not found' }, { status: 404 })
 
   const updateData: any = {}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { recordAccessLog } from '@/lib/access-log'
 
 const variantSchema = z.object({
   sizeName: z.string().min(1).max(60),
@@ -57,5 +58,6 @@ export async function POST(req: NextRequest) {
     },
     include: { variants: true },
   })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `備品登録「${product.name}」`, req })
   return NextResponse.json(product, { status: 201 })
 }

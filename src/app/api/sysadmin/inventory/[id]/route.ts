@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { recordAccessLog } from '@/lib/access-log'
 
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     data,
     include: { variants: true },
   })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `備品更新「${updated.name}」`, req })
   return NextResponse.json(updated)
 }
 
@@ -51,6 +53,8 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   const user = await requireSysAdmin()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await ctx.params
+  const existing = await prisma.product.findUnique({ where: { id }, select: { name: true } })
   await prisma.product.delete({ where: { id } })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `備品削除「${existing?.name ?? id}」`, req: _req })
   return NextResponse.json({ ok: true })
 }

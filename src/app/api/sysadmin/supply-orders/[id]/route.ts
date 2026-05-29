@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { recordAccessLog } from '@/lib/access-log'
 
 const updateSchema = z.object({
   status: z.enum(['pending', 'ordered']),
@@ -24,5 +25,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     data: { status: parsed.data.status },
     include: { items: true },
   })
+  const statusLabel = parsed.data.status === 'ordered' ? '発注済み' : '未対応'
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `発注ステータス更新 ${updated.orderNumber}→${statusLabel}`, req })
   return NextResponse.json(updated)
 }

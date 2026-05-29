@@ -179,37 +179,31 @@ export const authOptions: NextAuthOptions = {
           throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
         }
 
-        const admin = await prisma.admin.findUnique({
+        // 同一メールが複数 Admin 行に存在しうる（管理ポータル用とシステム管理者用）。
+        // 管理ポータルからは sysadmin 以外の行のみ対象にする。
+        const admins = await prisma.admin.findMany({
           where: { email: credentials.email },
         })
+        const candidates = admins.filter(a => a.role !== 'sysadmin')
 
-        if (!admin) {
-          await recordLoginFailure(key)
-          return null
+        for (const admin of candidates) {
+          const isValid = await bcrypt.compare(credentials.password, admin.password)
+          if (isValid) {
+            await resetLoginFailures(key)
+            const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
+            await recordAccessLog({ userType: adminRole, userId: admin.id, userName: admin.name, action: 'login', req })
+            return {
+              id: admin.id,
+              email: admin.email,
+              name: admin.name,
+              avatar: admin.avatar || null,
+              role: adminRole,
+            }
+          }
         }
 
-        // システム管理者は管理ポータルからはログインさせない（/sysadmin 専用）
-        if (admin.role === 'sysadmin') {
-          await recordLoginFailure(key)
-          return null
-        }
-
-        const isValid = await bcrypt.compare(credentials.password, admin.password)
-        if (!isValid) {
-          await recordLoginFailure(key)
-          return null
-        }
-
-        await resetLoginFailures(key)
-        const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
-        await recordAccessLog({ userType: adminRole, userId: admin.id, userName: admin.name, action: 'login', req })
-        return {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name,
-          avatar: admin.avatar || null,
-          role: adminRole,
-        }
+        await recordLoginFailure(key)
+        return null
       },
     }),
     // システム管理者ログイン（運営者専用 / role==='sysadmin' のみ）
@@ -230,30 +224,29 @@ export const authOptions: NextAuthOptions = {
           throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
         }
 
-        const admin = await prisma.admin.findUnique({
+        // 同一メールが複数 Admin 行に存在しうるため、sysadmin の行のみ対象にする
+        const admins = await prisma.admin.findMany({
           where: { email: credentials.email },
         })
+        const candidates = admins.filter(a => a.role === 'sysadmin')
 
-        if (!admin || admin.role !== 'sysadmin') {
-          await recordLoginFailure(key)
-          return null
+        for (const admin of candidates) {
+          const isValid = await bcrypt.compare(credentials.password, admin.password)
+          if (isValid) {
+            await resetLoginFailures(key)
+            await recordAccessLog({ userType: 'sysadmin', userId: admin.id, userName: admin.name, action: 'login', req })
+            return {
+              id: admin.id,
+              email: admin.email,
+              name: admin.name,
+              avatar: admin.avatar || null,
+              role: 'sysadmin' as const,
+            }
+          }
         }
 
-        const isValid = await bcrypt.compare(credentials.password, admin.password)
-        if (!isValid) {
-          await recordLoginFailure(key)
-          return null
-        }
-
-        await resetLoginFailures(key)
-        await recordAccessLog({ userType: 'sysadmin', userId: admin.id, userName: admin.name, action: 'login', req })
-        return {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name,
-          avatar: admin.avatar || null,
-          role: 'sysadmin' as const,
-        }
+        await recordLoginFailure(key)
+        return null
       },
     }),
     // セールスパートナーログイン

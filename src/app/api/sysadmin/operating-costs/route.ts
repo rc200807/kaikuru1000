@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { recordAccessLog } from '@/lib/access-log'
 
 const createSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM 形式で入力してください'),
@@ -34,5 +35,6 @@ export async function POST(req: NextRequest) {
   const cost = await prisma.operatingCost.create({
     data: { ...parsed.data, note: parsed.data.note ?? null },
   })
+  await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `運用コスト追加「${cost.label}」¥${cost.amount.toLocaleString()}`, req })
   return NextResponse.json(cost, { status: 201 })
 }

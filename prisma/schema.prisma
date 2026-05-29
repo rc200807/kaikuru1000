@@ -305,9 +305,9 @@ model WorkItem {
 model Admin {
   id            String         @id @default(cuid())
   name          String
-  email         String         @unique
+  email         String                            // 一意制約なし：同一メールで管理ポータルとシステム管理者を別々に持てる
   password      String
-  role          String         @default("admin") // admin, superadmin, hr
+  role          String         @default("admin") // admin, superadmin, hr, sysadmin
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
   announcements  Announcement[]
   trainingVideos TrainingVideo[]

@@ -18,8 +18,8 @@ export async function POST(req: Request) {
     let userName: string | null = null
 
     if (userType === 'admin') {
-      const admin = await prisma.admin.findUnique({
-        where: { email },
+      const admin = await prisma.admin.findFirst({
+        where: { email, role: { not: 'sysadmin' } },
         select: { name: true },
       })
       userName = admin?.name ?? null

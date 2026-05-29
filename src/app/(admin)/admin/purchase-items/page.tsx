@@ -35,10 +35,18 @@ type ListResponse = { items: PurchaseItem[]; total: number; page: number; limit:
 type AiResearchResult = {
   productDetail?: string
   estimatedCondition?: string
-  maxPrice?: number
-  minPrice?: number
-  platforms?: { name?: string; price?: number; note?: string }[] | string[]
+  // AI(Gemini)は相場を文字列で返す（例: "¥10,000〜¥20,000"）。platforms もカンマ区切りの文字列。
+  maxPrice?: string | number
+  minPrice?: string | number
+  platforms?: string | { name?: string; price?: number; note?: string }[] | string[]
   supplement?: string
+}
+
+// 値が表示に値するか（空・不明・-を除外）
+function meaningful(v: unknown): v is string {
+  if (typeof v !== 'string') return false
+  const s = v.trim()
+  return s !== '' && s !== '不明' && s !== '-' && s !== '－'
 }
 
 function parseUrls(json: string): string[] {
@@ -418,14 +426,15 @@ function DetailDrawer({ item, onClose }: { item: PurchaseItem; onClose: () => vo
           <Section title={`AI査定（${item.aiResearchedAt ? new Date(item.aiResearchedAt).toLocaleString('ja-JP') : ''}）`}>
             {ai.productDetail && <Row label="商品詳細" value={ai.productDetail} multiline />}
             {ai.estimatedCondition && <Row label="コンディション" value={ai.estimatedCondition} />}
-            {(ai.minPrice !== undefined || ai.maxPrice !== undefined) && (
-              <Row label="推定相場" value={`${fmtYen(ai.minPrice)} 〜 ${fmtYen(ai.maxPrice)}`} />
-            )}
+            {meaningful(ai.maxPrice) && <Row label="推定相場（美品〜良品）" value={ai.maxPrice as string} />}
+            {meaningful(ai.minPrice) && <Row label="推定相場（難あり）" value={ai.minPrice as string} />}
+            {/* platforms は文字列（カンマ区切り）。旧データの配列形式にも対応 */}
+            {meaningful(ai.platforms) && <Row label="取引プラットフォーム" value={ai.platforms as string} multiline />}
             {Array.isArray(ai.platforms) && ai.platforms.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>プラットフォーム別</div>
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                  {ai.platforms.map((p, i) => {
+                  {(ai.platforms as any[]).map((p, i) => {
                     if (typeof p === 'string') return <li key={i}>{p}</li>
                     return (
                       <li key={i}>

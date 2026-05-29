@@ -229,47 +229,71 @@ export default function SupplyOrderPage() {
               style={{ width: '100%', maxWidth: 360, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)', marginBottom: 16 }}
             />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {filtered.length === 0 && (
-                <p style={{ color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'center', padding: 40 }}>商品がありません</p>
-              )}
-              {filtered.map(p => (
-                <div key={p.id} style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 16, border: '1px solid var(--md-sys-color-outline-variant)' }}>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    {p.imageUrl
-                      ? <img src={p.imageUrl} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)' }} />
-                      : <div style={{ width: 56, height: 56, borderRadius: 8, background: 'var(--md-sys-color-surface-container)', border: '1px solid var(--md-sys-color-outline-variant)' }} />}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600 }}>{p.name}</div>
-                      {!p.hasVariants && (
-                        <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
-                          {yen(p.sellingPrice)} ／ 在庫 {p.stock}
-                        </div>
-                      )}
-                    </div>
-                    {!p.hasVariants && (
-                      <QtyInput value={cart[keyOf(p.id)] ?? 0} onChange={q => setQty(keyOf(p.id), q)} />
-                    )}
-                  </div>
+            {filtered.length === 0 ? (
+              <p style={{ color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'center', padding: 40 }}>商品がありません</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+                {filtered.map(p => {
+                  const inCart = p.hasVariants
+                    ? p.variants.some(v => (cart[keyOf(p.id, v.id)] ?? 0) > 0)
+                    : (cart[keyOf(p.id)] ?? 0) > 0
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        background: 'var(--md-sys-color-surface-container-low)',
+                        borderRadius: 14,
+                        border: inCart ? '2px solid var(--md-sys-color-primary)' : '1px solid var(--md-sys-color-outline-variant)',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}
+                    >
+                      {/* 商品画像（大） */}
+                      <div style={{ width: '100%', aspectRatio: '1 / 1', background: 'var(--md-sys-color-surface-container)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {p.imageUrl
+                          ? <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : (
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--md-sys-color-on-surface-variant)" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                            </svg>
+                          )}
+                      </div>
 
-                  {p.hasVariants && (
-                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {p.variants.map(v => (
-                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 68 }}>
-                          <div style={{ flex: 1, fontSize: 13 }}>
-                            {v.sizeName}
-                            <span style={{ color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 8 }}>
-                              {yen(v.sellingPrice ?? p.sellingPrice)} ／ 在庫 {v.stock}
-                            </span>
+                      {/* 本文 */}
+                      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.4 }}>{p.name}</div>
+
+                        {!p.hasVariants ? (
+                          <>
+                            <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                              {yen(p.sellingPrice)} ／ 在庫 {p.stock}
+                            </div>
+                            <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', paddingTop: 4 }}>
+                              <QtyInput value={cart[keyOf(p.id)] ?? 0} onChange={q => setQty(keyOf(p.id), q)} />
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 'auto' }}>
+                            {p.variants.map(v => (
+                              <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <div style={{ fontSize: 12, minWidth: 0 }}>
+                                  <span style={{ fontWeight: 600 }}>{v.sizeName}</span>
+                                  <span style={{ color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 6 }}>
+                                    {yen(v.sellingPrice ?? p.sellingPrice)}／在庫{v.stock}
+                                  </span>
+                                </div>
+                                <QtyInput value={cart[keyOf(p.id, v.id)] ?? 0} onChange={q => setQty(keyOf(p.id, v.id), q)} />
+                              </div>
+                            ))}
                           </div>
-                          <QtyInput value={cart[keyOf(p.id, v.id)] ?? 0} onChange={q => setQty(keyOf(p.id, v.id), q)} />
-                        </div>
-                      ))}
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* カート */}

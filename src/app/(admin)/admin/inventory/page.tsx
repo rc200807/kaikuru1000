@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import ProductImageUploader from '@/components/admin/ProductImageUploader'
+import SupplyCheckout from '@/components/admin/SupplyCheckout'
 
 type Variant = {
   id: string
@@ -21,270 +21,315 @@ type Product = {
   stock: number
   hasVariants: boolean
   imageUrl: string | null
-  supplierUrl: string | null
-  supplierEmail: string | null
-  supplierNote: string | null
   variants: Variant[]
-  updatedAt: string
 }
 
-type FormState = {
-  name: string
-  purchasePrice: string
-  sellingPrice: string
-  stock: string
-  imageUrl: string
-  supplierUrl: string
-  supplierEmail: string
-  supplierNote: string
+type OrderItem = {
+  id: string
+  productName: string
+  sizeName: string | null
+  unitPrice: number
+  quantity: number
+  subtotal: number
 }
 
-const EMPTY: FormState = {
-  name: '',
-  purchasePrice: '',
-  sellingPrice: '',
-  stock: '0',
-  imageUrl: '',
-  supplierUrl: '',
-  supplierEmail: '',
-  supplierNote: '',
+type SupplyOrder = {
+  id: string
+  orderNumber: string
+  placedByName: string
+  totalAmount: number
+  status: string // pending | ordered
+  paymentStatus: string // pending | paid | failed
+  note: string | null
+  items: OrderItem[]
+  createdAt: string
 }
 
-export default function InventoryListPage() {
+type CheckoutInfo = {
+  orderId: string
+  orderNumber: string
+  totalAmount: number
+  clientSecret: string
+  customerSessionClientSecret: string | null
+}
+
+const yen = (n: number) => `¥${n.toLocaleString()}`
+
+export default function SupplyOrderPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const role = (session?.user as any)?.role as string | undefined
-  const canEdit = role === 'superadmin' || role === 'admin'
 
+  const [tab, setTab] = useState<'order' | 'history'>('order')
   const [products, setProducts] = useState<Product[]>([])
+  const [orders, setOrders] = useState<SupplyOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState<FormState>(EMPTY)
-  const [saving, setSaving] = useState(false)
+
+  // cart: key=`${productId}:${variantId||'_'}` -> quantity
+  const [cart, setCart] = useState<Record<string, number>>({})
+  const [note, setNote] = useState('')
+  const [placing, setPlacing] = useState(false)
   const [error, setError] = useState('')
+  const [checkout, setCheckout] = useState<CheckoutInfo | null>(null)
+  const [successMsg, setSuccessMsg] = useState('')
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
   }, [status, router])
 
-  function refresh() {
-    fetch('/api/admin/inventory')
+  function loadProducts() {
+    return fetch('/api/admin/inventory')
       .then(r => (r.ok ? r.json() : []))
       .then(setProducts)
+  }
+  function loadOrders() {
+    return fetch('/api/admin/supply-orders')
+      .then(r => (r.ok ? r.json() : []))
+      .then(setOrders)
   }
 
   useEffect(() => {
     if (status !== 'authenticated') return
-    fetch('/api/admin/inventory')
-      .then(r => (r.ok ? r.json() : []))
-      .then(setProducts)
-      .finally(() => setLoading(false))
+    Promise.all([loadProducts(), loadOrders()]).finally(() => setLoading(false))
   }, [status])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return products
-    return products.filter(p =>
-      [p.name, p.supplierEmail ?? '', p.supplierUrl ?? ''].join(' ').toLowerCase().includes(q)
-    )
+    return products.filter(p => p.name.toLowerCase().includes(q))
   }, [products, search])
 
-  async function handleCreate() {
+  // 価格解決
+  function priceOf(p: Product, v?: Variant) {
+    if (v) return v.sellingPrice ?? p.sellingPrice
+    return p.sellingPrice
+  }
+  function keyOf(productId: string, variantId?: string) {
+    return `${productId}:${variantId ?? '_'}`
+  }
+  function setQty(key: string, qty: number) {
+    setCart(prev => {
+      const next = { ...prev }
+      if (qty <= 0) delete next[key]
+      else next[key] = qty
+      return next
+    })
+  }
+
+  // カート明細を算出
+  const cartLines = useMemo(() => {
+    const lines: { key: string; productId: string; variantId: string | null; label: string; unitPrice: number; quantity: number; subtotal: number }[] = []
+    for (const [key, qty] of Object.entries(cart)) {
+      const [productId, variantId] = key.split(':')
+      const p = products.find(x => x.id === productId)
+      if (!p) continue
+      const v = variantId !== '_' ? p.variants.find(x => x.id === variantId) : undefined
+      const unitPrice = priceOf(p, v)
+      lines.push({
+        key,
+        productId,
+        variantId: variantId === '_' ? null : variantId,
+        label: v ? `${p.name}（${v.sizeName}）` : p.name,
+        unitPrice,
+        quantity: qty,
+        subtotal: unitPrice * qty,
+      })
+    }
+    return lines
+  }, [cart, products])
+
+  const cartTotal = cartLines.reduce((s, l) => s + l.subtotal, 0)
+
+  async function handlePlaceOrder() {
     setError('')
-    if (!form.name.trim()) {
-      setError('商品名は必須です')
+    if (cartLines.length === 0) {
+      setError('発注する商品を選択してください')
       return
     }
-    const purchasePrice = Number(form.purchasePrice)
-    const sellingPrice = Number(form.sellingPrice)
-    const stock = Number(form.stock || '0')
-    if (!Number.isFinite(purchasePrice) || purchasePrice < 0) {
-      setError('仕入れ価格を正しく入力してください')
+    if (cartTotal <= 0) {
+      setError('合計金額が0円です。販売価格が設定されている商品を選択してください')
       return
     }
-    if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
-      setError('販売価格を正しく入力してください')
-      return
-    }
-    setSaving(true)
+    setPlacing(true)
     try {
-      const res = await fetch('/api/admin/inventory', {
+      const res = await fetch('/api/admin/supply-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: form.name.trim(),
-          purchasePrice,
-          sellingPrice,
-          stock,
-          imageUrl: form.imageUrl.trim() || null,
-          supplierUrl: form.supplierUrl.trim() || null,
-          supplierEmail: form.supplierEmail.trim() || null,
-          supplierNote: form.supplierNote.trim() || null,
+          items: cartLines.map(l => ({ productId: l.productId, variantId: l.variantId, quantity: l.quantity })),
+          note: note.trim() || null,
         }),
       })
+      const j = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        setError(j.error ?? '登録に失敗しました')
+        setError(j.error ?? '発注に失敗しました')
         return
       }
-      setModalOpen(false)
-      setForm(EMPTY)
-      refresh()
+      setCheckout({
+        orderId: j.orderId,
+        orderNumber: j.orderNumber,
+        totalAmount: j.totalAmount,
+        clientSecret: j.clientSecret,
+        customerSessionClientSecret: j.customerSessionClientSecret ?? null,
+      })
     } finally {
-      setSaving(false)
+      setPlacing(false)
     }
   }
 
+  async function handlePaymentSuccess() {
+    const ordered = checkout
+    setCheckout(null)
+    setCart({})
+    setNote('')
+    // 決済状態を同期 → 履歴を更新
+    if (ordered) {
+      await fetch(`/api/admin/supply-orders/${ordered.orderId}`).catch(() => {})
+    }
+    await loadOrders()
+    setSuccessMsg(`発注が完了しました（${ordered?.orderNumber ?? ''}）`)
+    setTab('history')
+    setTimeout(() => setSuccessMsg(''), 5000)
+  }
+
   if (status === 'loading' || loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-        <LoadingSpinner />
-      </div>
-    )
+    return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><LoadingSpinner /></div>
   }
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: 1280, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 700 }}>備品管理</h1>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
-            社内備品の在庫・仕入れ価格・販売価格・発注先を管理（{filtered.length}件 / 全{products.length}件）
-          </p>
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => { setForm(EMPTY); setError(''); setModalOpen(true) }}
-            style={{ padding: '10px 16px', borderRadius: 8, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-          >
-            + 新規追加
-          </button>
-        )}
-      </div>
-
       <div style={{ marginBottom: 16 }}>
-        <input
-          type="search"
-          placeholder="商品名・発注先で検索"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ width: '100%', maxWidth: 360, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)' }}
-        />
+        <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 700 }}>備品発注</h1>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+          備品を発注し、その場で決済できます。発注後のステータスは「発注履歴」で確認できます。
+        </p>
       </div>
 
-      <div style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--md-sys-color-outline-variant)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ background: 'var(--md-sys-color-surface-container)', textAlign: 'left' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 600, width: 64 }}></th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>商品名</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>仕入れ価格</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>販売価格</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>在庫</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>サイズ</th>
-              <th style={{ padding: '12px 16px', fontWeight: 600 }}>発注先</th>
-              <th style={{ padding: '12px 16px' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
-                  商品が登録されていません
-                </td>
-              </tr>
-            )}
-            {filtered.map(p => {
-              const totalStock = p.hasVariants
-                ? p.variants.reduce((s, v) => s + v.stock, 0)
-                : p.stock
-              return (
-                <tr key={p.id} style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
-                  <td style={{ padding: '8px 16px' }}>
-                    {p.imageUrl
-                      ? <img src={p.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />
-                      : <div style={{ width: 48, height: 48, borderRadius: 6, background: 'var(--md-sys-color-surface-container)', border: '1px solid var(--md-sys-color-outline-variant)' }} />}
-                  </td>
-                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>{p.name}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>¥{p.purchasePrice.toLocaleString()}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>¥{p.sellingPrice.toLocaleString()}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>{totalStock}</td>
-                  <td style={{ padding: '12px 16px', fontSize: 12 }}>
-                    {p.hasVariants
-                      ? p.variants.map(v => `${v.sizeName}(${v.stock})`).join(' / ')
-                      : <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: 12 }}>
-                    {p.supplierUrl && <div><a href={p.supplierUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--md-sys-color-primary)' }}>{p.supplierUrl}</a></div>}
-                    {p.supplierEmail && <div>{p.supplierEmail}</div>}
-                    {!p.supplierUrl && !p.supplierEmail && <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <button
-                      onClick={() => router.push(`/admin/inventory/${p.id}`)}
-                      style={{ padding: '6px 12px', borderRadius: 6, background: 'transparent', color: 'var(--md-sys-color-primary)', border: '1px solid var(--md-sys-color-outline)', fontSize: 13, cursor: 'pointer' }}
-                    >
-                      詳細
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      {successMsg && (
+        <div style={{ padding: 12, borderRadius: 8, marginBottom: 16, background: 'rgba(46,125,50,0.15)', color: '#66bb6a', fontSize: 14 }}>
+          {successMsg}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
+        <TabButton active={tab === 'order'} onClick={() => setTab('order')}>発注</TabButton>
+        <TabButton active={tab === 'history'} onClick={() => setTab('history')}>発注履歴</TabButton>
       </div>
 
-      {modalOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}
-          onClick={() => !saving && setModalOpen(false)}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 24, width: '100%', maxWidth: 520, color: 'var(--md-sys-color-on-surface)' }}
-          >
-            <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700 }}>商品を追加</h2>
-            {error && <p style={{ color: 'var(--md-sys-color-error)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+      {tab === 'order' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 20, alignItems: 'start' }}>
+          {/* カタログ */}
+          <div>
+            <input
+              type="search"
+              placeholder="商品名で検索"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', maxWidth: 360, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)', marginBottom: 16 }}
+            />
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Field label="商品画像">
-                <ProductImageUploader
-                  value={form.imageUrl}
-                  onChange={url => setForm({ ...form, imageUrl: url })}
-                  onError={msg => setError(msg)}
-                />
-              </Field>
-              <Field label="商品名 *">
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} />
-              </Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                <Field label="仕入れ価格 *">
-                  <input type="number" min={0} value={form.purchasePrice} onChange={e => setForm({ ...form, purchasePrice: e.target.value })} style={inputStyle} />
-                </Field>
-                <Field label="販売価格 *">
-                  <input type="number" min={0} value={form.sellingPrice} onChange={e => setForm({ ...form, sellingPrice: e.target.value })} style={inputStyle} />
-                </Field>
-                <Field label="在庫数">
-                  <input type="number" min={0} value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} style={inputStyle} />
-                </Field>
+              {filtered.length === 0 && (
+                <p style={{ color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'center', padding: 40 }}>商品がありません</p>
+              )}
+              {filtered.map(p => (
+                <div key={p.id} style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 16, border: '1px solid var(--md-sys-color-outline-variant)' }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    {p.imageUrl
+                      ? <img src={p.imageUrl} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)' }} />
+                      : <div style={{ width: 56, height: 56, borderRadius: 8, background: 'var(--md-sys-color-surface-container)', border: '1px solid var(--md-sys-color-outline-variant)' }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{p.name}</div>
+                      {!p.hasVariants && (
+                        <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                          {yen(p.sellingPrice)} ／ 在庫 {p.stock}
+                        </div>
+                      )}
+                    </div>
+                    {!p.hasVariants && (
+                      <QtyInput value={cart[keyOf(p.id)] ?? 0} onChange={q => setQty(keyOf(p.id), q)} />
+                    )}
+                  </div>
+
+                  {p.hasVariants && (
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {p.variants.map(v => (
+                        <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 68 }}>
+                          <div style={{ flex: 1, fontSize: 13 }}>
+                            {v.sizeName}
+                            <span style={{ color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 8 }}>
+                              {yen(v.sellingPrice ?? p.sellingPrice)} ／ 在庫 {v.stock}
+                            </span>
+                          </div>
+                          <QtyInput value={cart[keyOf(p.id, v.id)] ?? 0} onChange={q => setQty(keyOf(p.id, v.id), q)} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* カート */}
+          <div style={{ position: 'sticky', top: 16, background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 16, border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700 }}>発注内容</h2>
+            {cartLines.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>商品を選択してください</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {cartLines.map(l => (
+                  <div key={l.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>{l.label} × {l.quantity}</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{yen(l.subtotal)}</span>
+                  </div>
+                ))}
               </div>
-              <Field label="発注先URL">
-                <input value={form.supplierUrl} onChange={e => setForm({ ...form, supplierUrl: e.target.value })} style={inputStyle} placeholder="https://..." />
-              </Field>
-              <Field label="発注先メールアドレス">
-                <input type="email" value={form.supplierEmail} onChange={e => setForm({ ...form, supplierEmail: e.target.value })} style={inputStyle} />
-              </Field>
-              <Field label="メモ">
-                <textarea value={form.supplierNote} onChange={e => setForm({ ...form, supplierNote: e.target.value })} style={{ ...inputStyle, minHeight: 60 }} />
-              </Field>
-              <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: 0 }}>
-                ※ サイズバリアントは作成後の詳細ページで追加できます
-              </p>
+            )}
+
+            <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16 }}>
+              <span>合計</span>
+              <span>{yen(cartTotal)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-              <button onClick={() => setModalOpen(false)} disabled={saving} style={cancelBtn}>キャンセル</button>
-              <button onClick={handleCreate} disabled={saving} style={primaryBtn}>{saving ? '保存中…' : '登録'}</button>
-            </div>
+
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="備考（任意）"
+              style={{ width: '100%', boxSizing: 'border-box', marginTop: 12, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, minHeight: 56 }}
+            />
+
+            {error && <p style={{ color: 'var(--md-sys-color-error)', fontSize: 13, margin: '12px 0 0' }}>{error}</p>}
+
+            <button
+              onClick={handlePlaceOrder}
+              disabled={placing || cartLines.length === 0}
+              style={{ width: '100%', marginTop: 12, padding: '12px', borderRadius: 8, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: (placing || cartLines.length === 0) ? 0.6 : 1 }}
+            >
+              {placing ? '準備中…' : '発注して決済'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'history' && (
+        <OrderHistory orders={orders} />
+      )}
+
+      {/* 決済モーダル */}
+      {checkout && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+          <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 24, width: '100%', maxWidth: 480, color: 'var(--md-sys-color-on-surface)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700 }}>お支払い</h2>
+            <SupplyCheckout
+              clientSecret={checkout.clientSecret}
+              customerSessionClientSecret={checkout.customerSessionClientSecret}
+              totalAmount={checkout.totalAmount}
+              orderNumber={checkout.orderNumber}
+              onSuccess={handlePaymentSuccess}
+              onCancel={() => setCheckout(null)}
+            />
           </div>
         </div>
       )}
@@ -292,43 +337,106 @@ export default function InventoryListPage() {
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
-      <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{label}</span>
+    <button
+      onClick={onClick}
+      style={{
+        padding: '10px 16px',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active ? '2px solid var(--md-sys-color-primary)' : '2px solid transparent',
+        color: active ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-on-surface-variant)',
+        fontSize: 14,
+        fontWeight: active ? 700 : 500,
+        cursor: 'pointer',
+        marginBottom: -1,
+      }}
+    >
       {children}
-    </label>
+    </button>
   )
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: '8px 10px',
-  borderRadius: 6,
-  border: '1px solid var(--md-sys-color-outline-variant)',
-  background: 'var(--md-sys-color-surface)',
-  color: 'var(--md-sys-color-on-surface)',
-  fontSize: 14,
-  width: '100%',
-  boxSizing: 'border-box',
+function QtyInput({ value, onChange }: { value: number; onChange: (q: number) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <button
+        onClick={() => onChange(Math.max(0, value - 1))}
+        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+      >−</button>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={e => onChange(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+        style={{ width: 48, textAlign: 'center', padding: '4px', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface)', color: 'var(--md-sys-color-on-surface)', fontSize: 14 }}
+      />
+      <button
+        onClick={() => onChange(value + 1)}
+        style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+      >＋</button>
+    </div>
+  )
 }
 
-const primaryBtn: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: 6,
-  background: 'var(--md-sys-color-primary)',
-  color: 'var(--md-sys-color-on-primary)',
-  border: 'none',
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
+function statusBadge(status: string) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    pending: { label: '未対応', bg: 'rgba(234,179,8,0.15)', fg: '#eab308' },
+    ordered: { label: '発注済み', bg: 'rgba(46,125,50,0.15)', fg: '#66bb6a' },
+  }
+  return map[status] ?? { label: status, bg: 'rgba(120,120,120,0.15)', fg: '#a3a3a3' }
+}
+function paymentBadge(status: string) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    pending: { label: '未決済', bg: 'rgba(234,179,8,0.15)', fg: '#eab308' },
+    paid: { label: '決済済み', bg: 'rgba(46,125,50,0.15)', fg: '#66bb6a' },
+    failed: { label: '決済失敗', bg: 'rgba(211,47,47,0.15)', fg: '#ef5350' },
+  }
+  return map[status] ?? { label: status, bg: 'rgba(120,120,120,0.15)', fg: '#a3a3a3' }
 }
 
-const cancelBtn: React.CSSProperties = {
-  padding: '8px 16px',
-  borderRadius: 6,
-  background: 'transparent',
-  color: 'var(--md-sys-color-on-surface)',
-  border: '1px solid var(--md-sys-color-outline)',
-  fontSize: 14,
-  cursor: 'pointer',
+function Badge({ label, bg, fg }: { label: string; bg: string; fg: string }) {
+  return <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 999, background: bg, color: fg, fontSize: 12, fontWeight: 600 }}>{label}</span>
+}
+
+function OrderHistory({ orders }: { orders: SupplyOrder[] }) {
+  if (orders.length === 0) {
+    return <p style={{ color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'center', padding: 40 }}>発注履歴はありません</p>
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {orders.map(o => {
+        const sb = statusBadge(o.status)
+        const pb = paymentBadge(o.paymentStatus)
+        return (
+          <div key={o.id} style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 16, border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700 }}>{o.orderNumber}</span>
+                <Badge {...pb} />
+                <Badge {...sb} />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                {new Date(o.createdAt).toLocaleString('ja-JP')}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+              {o.items.map(it => (
+                <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span>{it.productName}{it.sizeName ? `（${it.sizeName}）` : ''} × {it.quantity}</span>
+                  <span>{yen(it.subtotal)}</span>
+                </div>
+              ))}
+            </div>
+            {o.note && <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 8px' }}>備考: {o.note}</p>}
+            <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+              <span>合計</span>
+              <span>{yen(o.totalAmount)}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 }

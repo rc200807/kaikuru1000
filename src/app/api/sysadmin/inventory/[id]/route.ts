@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { requireAdmin, canEditInventory, canViewInventory } from '@/lib/admin-auth'
+import { requireSysAdmin } from '@/lib/sysadmin-auth'
 
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -16,10 +16,8 @@ const updateSchema = z.object({
 })
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin()
-  if (!user || !canViewInventory(user.role)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = await requireSysAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await ctx.params
   const product = await prisma.product.findUnique({
     where: { id },
@@ -30,10 +28,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin()
-  if (!user || !canEditInventory(user.role)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = await requireSysAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await ctx.params
   const body = await req.json()
   const parsed = updateSchema.safeParse(body)
@@ -52,10 +48,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin()
-  if (!user || !canEditInventory(user.role)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const user = await requireSysAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await ctx.params
   await prisma.product.delete({ where: { id } })
   return NextResponse.json({ ok: true })

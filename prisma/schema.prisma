@@ -989,3 +989,86 @@ model PartnerCustomerImport {
   @@index([partnerId])
   @@index([createdAt])
 }
+
+// ============================================================
+// 備品発注 + システム管理者画面
+// ============================================================
+
+// 本部の備品決済アカウント（Stripe顧客）= シングルトン運用（id="default"）
+model SupplyBillingAccount {
+  id               String   @id @default("default")
+  stripeCustomerId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// 備品発注（ヘッダー）
+model SupplyOrder {
+  id                    String            @id @default(cuid())
+  orderNumber           String            @unique            // SO-YYYYMM-NNNN
+  placedByAdminId       String?                              // 発注した管理者
+  placedByName          String
+  totalAmount           Int                                  // 合計（円）
+  status                String            @default("pending") // 履行: pending(未対応) | ordered(発注済み)
+  paymentStatus         String            @default("pending") // pending | paid | failed
+  stripePaymentIntentId String?
+  note                  String?           @db.Text
+  items                 SupplyOrderItem[]
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 発注明細（商品情報はスナップショット保持＝後で商品が変わっても履歴は不変）
+model SupplyOrderItem {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       SupplyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?                                        // 参照（削除時 null 想定）
+  variantId   String?
+  productName String                                         // スナップショット
+  sizeName    String?
+  unitPrice   Int
+  quantity    Int
+  subtotal    Int
+
+  @@index([orderId])
+}
+
+// アクセスログ
+model AccessLog {
+  id        String   @id @default(cuid())
+  userType  String                                           // customer/store/admin/sysadmin/partner
+  userId    String?
+  userName  String?
+  action    String                                           // login など
+  ip        String?
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userType])
+}
+
+// 運用コスト（手動入力、コスト推移・内訳用）
+model OperatingCost {
+  id        String   @id @default(cuid())
+  month     String                                           // YYYY-MM
+  category  String                                           // hosting/api/email/labor/other
+  label     String
+  amount    Int                                              // 円
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([month])
+}
+
+// Stripe Webhook 冪等性ガード
+model StripeWebhookEvent {
+  id        String   @id                                     // Stripe event id
+  type      String
+  createdAt DateTime @default(now())
+}

@@ -13,8 +13,19 @@ function generatePassword(): string {
   return Array.from(bytes).map(b => chars[b % chars.length]).join('')
 }
 
+// 店舗コードを自動生成（0206160b のような8桁の16進文字列）。重複時はリトライ。
+async function generateUniqueStoreCode(): Promise<string> {
+  for (let i = 0; i < 10; i++) {
+    const code = randomBytes(4).toString('hex')
+    const exists = await prisma.store.findFirst({ where: { code }, select: { id: true } })
+    if (!exists) return code
+  }
+  // 万一の連続衝突時は桁数を増やす
+  return randomBytes(6).toString('hex')
+}
+
 const createSchema = z.object({
-  code:       z.string().min(1).max(50),
+  code:       z.string().min(1).max(50).optional(), // 未指定なら自動生成
   name:       z.string().min(1).max(100),
   email:      z.string().email().optional().or(z.literal('')),
   phone:      z.string().max(20).optional(),
@@ -34,12 +45,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '入力内容が正しくありません' }, { status: 400 })
   }
 
-  const { code, name, email, phone, prefecture, address } = parsed.data
+  const { name, email, phone, prefecture, address } = parsed.data
 
-  // 店舗コード重複チェック（メールアドレスの重複は許可）
-  const existing = await prisma.store.findFirst({ where: { code } })
-  if (existing) {
-    return NextResponse.json({ error: '店舗コードが既に使用されています' }, { status: 400 })
+  // 店舗コード：手入力があればそれを使用（重複チェック）、無ければ自動生成
+  let code = parsed.data.code?.trim()
+  if (code) {
+    const existing = await prisma.store.findFirst({ where: { code } })
+    if (existing) {
+      return NextResponse.json({ error: '店舗コードが既に使用されています' }, { status: 400 })
+    }
+  } else {
+    code = await generateUniqueStoreCode()
   }
 
   const plainPassword = generatePassword()

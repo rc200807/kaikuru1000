@@ -159,7 +159,7 @@ export default function AdminStoresPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        code:       createForm.code.trim(),
+        // 店舗コードはサーバー側で自動生成（手入力は廃止）
         name:       createForm.name.trim(),
         email:      createForm.email.trim() || undefined,
         phone:      createForm.phone.trim() || undefined,
@@ -659,21 +659,16 @@ export default function AdminStoresPage() {
         size="md"
       >
         <form onSubmit={handleCreate} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <TextField
-              label="店舗コード"
-              value={createForm.code}
-              onChange={v => setCreateForm({ ...createForm, code: v })}
-              required
-              placeholder="TOKYO01"
-            />
-            <TextField
-              label="都道府県"
-              value={createForm.prefecture}
-              onChange={v => setCreateForm({ ...createForm, prefecture: v })}
-              placeholder="東京都"
-            />
-          </div>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+            ※ 店舗コードは作成時に自動生成されます。
+          </p>
+
+          <TextField
+            label="都道府県"
+            value={createForm.prefecture}
+            onChange={v => setCreateForm({ ...createForm, prefecture: v })}
+            placeholder="東京都"
+          />
 
           <TextField
             label="店舗名"

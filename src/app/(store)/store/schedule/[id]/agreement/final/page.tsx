@@ -135,6 +135,7 @@ type VisitUser = {
   address: string
   phone: string
   email?: string
+  occupation?: string | null
   idAddress?: string | null
   idName?: string | null
   idDocumentType?: string | null
@@ -304,6 +305,7 @@ export default function FinalAgreementPage() {
   const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null)
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [customerEmailInput, setCustomerEmailInput] = useState('')
+  const [occupationInput, setOccupationInput] = useState('')
   const contractRef = useRef<HTMLDivElement>(null)
 
   // PIN lock state
@@ -376,8 +378,9 @@ export default function FinalAgreementPage() {
     if (visitRes.ok) {
       const data = await visitRes.json()
       setVisit(data)
-      // 既存ユーザー登録メールアドレスを初期値にセット（未入力時のみ）
+      // 既存ユーザー登録メールアドレス・職業を初期値にセット（未入力時のみ）
       setCustomerEmailInput((prev) => prev || data?.user?.email || '')
+      setOccupationInput((prev) => prev || data?.user?.occupation || '')
     }
     if (contractRes.ok) {
       const contract = await contractRes.json()
@@ -495,6 +498,7 @@ export default function FinalAgreementPage() {
           invoiceSignatureData: invoiceSignature,
           pdfBase64,
           email: emailTrimmed,
+          occupation: occupationInput.trim() || null,
         }),
       })
 
@@ -950,21 +954,39 @@ export default function FinalAgreementPage() {
 
       </div>{/* /contractRef */}
 
-      {/* メール送付先 */}
+      {/* お客様情報・メール送付先 */}
       <Card variant="elevated" padding="md">
-        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">売買契約書の内容をお送りするメールアドレス</h2>
-        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3 leading-relaxed">
-          提出するとPDFファイルとマイページへのリンクをこのメールアドレス宛にお送りします。
-        </p>
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          value={customerEmailInput}
-          onChange={(e) => setCustomerEmailInput(e.target.value)}
-          placeholder="example@example.com"
-          className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
-        />
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">お客様情報・送付先</h2>
+
+        {/* 職業 */}
+        <div className="mb-4">
+          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">ご職業</label>
+          <input
+            type="text"
+            value={occupationInput}
+            onChange={(e) => setOccupationInput(e.target.value)}
+            placeholder="例: 会社員"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+          />
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">提出後、お客様の顧客情報に反映されます。</p>
+        </div>
+
+        {/* メールアドレス */}
+        <div>
+          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">売買契約書の内容をお送りするメールアドレス</label>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={customerEmailInput}
+            onChange={(e) => setCustomerEmailInput(e.target.value)}
+            placeholder="example@example.com"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+          />
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1 leading-relaxed">
+            提出するとPDFファイルとマイページへのリンクをこのメールアドレス宛にお送りします。
+          </p>
+        </div>
       </Card>
 
       {/* 操作ボタン */}

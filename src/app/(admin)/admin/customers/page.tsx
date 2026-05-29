@@ -39,6 +39,7 @@ type User = {
   customerType: string  // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
   customerTypes?: string  // JSON配列（複数可）
   visitFrequencyMonths: number
+  leadSource?: string | null  // 流入経路
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -184,7 +185,8 @@ export default function AdminCustomersPage() {
 
   // 顧客情報編集
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; furigana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number }>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1 })
+  const [editForm, setEditForm] = useState<{ name: string; furigana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number; leadSource: string }>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1, leadSource: '' })
+  const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
   const [changingFrequency, setChangingFrequency] = useState<string | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
@@ -201,7 +203,7 @@ export default function AdminCustomersPage() {
   // 新規顧客追加モーダル
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [addForm, setAddForm] = useState({
-    name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '',
+    name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addStoreSearch, setAddStoreSearch] = useState('')
@@ -250,13 +252,15 @@ export default function AdminCustomersPage() {
         fetch(usersUrl).then(r => r.json()),
         fetch('/api/stores').then(r => r.json()),
         fetch(statsUrl).then(r => r.ok ? r.json() : null),
-      ]).then(([usersData, storesData, statsData]) => {
+        fetch('/api/lead-sources').then(r => r.ok ? r.json() : []),
+      ]).then(([usersData, storesData, statsData, leadSourcesData]) => {
         const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
         setUsers(list)
         setUsersTotal(usersData?.total ?? list.length)
         setUsersPage(1)
         setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
         setStores(Array.isArray(storesData) ? storesData : [])
+        setLeadSources(Array.isArray(leadSourcesData) ? leadSourcesData : [])
         if (statsData) {
           setStatsUnassigned(statsData.unassigned ?? 0)
           setStatsIdMissing(statsData.idMissing ?? 0)
@@ -458,6 +462,7 @@ export default function AdminCustomersPage() {
       customerType: detailUser.customerType,
       customerTypes: types.length > 0 ? types : [detailUser.customerType],
       visitFrequencyMonths: detailUser.visitFrequencyMonths ?? 1,
+      leadSource: (detailUser as any).leadSource || '',
     })
     setEditMode(true)
   }
@@ -481,6 +486,7 @@ export default function AdminCustomersPage() {
           customerType: editForm.customerType,
           customerTypes: editForm.customerTypes,
           visitFrequencyMonths: editForm.visitFrequencyMonths,
+          leadSource: editForm.leadSource || null,
         }),
       })
       if (res.ok) {
@@ -496,6 +502,7 @@ export default function AdminCustomersPage() {
           internalNote: updated.internalNote ?? editForm.internalNote,
           customerType: updated.customerType ?? editForm.customerType,
           visitFrequencyMonths: updated.visitFrequencyMonths ?? editForm.visitFrequencyMonths,
+          leadSource: updated.leadSource ?? editForm.leadSource,
         }
         setDetailUser(prev => prev ? { ...prev, ...patch } : null)
         setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, ...patch } : u))
@@ -633,6 +640,7 @@ export default function AdminCustomersPage() {
           address: addForm.address,
           // パスワードは未指定にしてAPI側で自動生成させる
           customerType: addForm.customerType,
+          leadSource: addForm.leadSource || undefined,
           skipLicenseKey: true,
         }),
       })
@@ -670,7 +678,7 @@ export default function AdminCustomersPage() {
 
       setMessage({ type: 'success', text: `${addForm.name} を追加しました` })
       setShowAddCustomer(false)
-      setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '' })
+      setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
       setAddStoreSearch('')
       setAddStoreOpen(false)
     } catch {
@@ -1245,6 +1253,21 @@ export default function AdminCustomersPage() {
                         </select>
                       </div>
                     )}
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                        流入経路
+                      </label>
+                      <select
+                        value={editForm.leadSource}
+                        onChange={e => setEditForm(prev => ({ ...prev, leadSource: e.target.value }))}
+                        className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                      >
+                        <option value="">未設定</option>
+                        {leadSources.map(s => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex justify-end gap-3 pt-2">
                       <Button variant="outlined" onClick={() => setEditMode(false)} disabled={editSubmitting}>
                         キャンセル
@@ -1268,6 +1291,7 @@ export default function AdminCustomersPage() {
                       { label: '訪問先住所', value: detailUser.address },
                       { label: 'ライセンスキー', value: detailUser.licenseKey?.key || '—', mono: true },
                       { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
+                      ...(detailUser.leadSource ? [{ label: '流入経路', value: detailUser.leadSource }] : []),
                       { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
                     ].map(item => (
                       <div key={item.label} className="flex gap-3">
@@ -1947,6 +1971,21 @@ export default function AdminCustomersPage() {
               ))}
             </select>
             <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">作成後の編集画面で複数タイプを追加できます</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+              流入経路（任意）
+            </label>
+            <select
+              value={addForm.leadSource}
+              onChange={e => setAddForm(prev => ({ ...prev, leadSource: e.target.value }))}
+              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            >
+              <option value="">未設定</option>
+              {leadSources.map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">

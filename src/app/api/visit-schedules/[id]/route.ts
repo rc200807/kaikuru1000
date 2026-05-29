@@ -23,7 +23,7 @@ export async function GET(
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, address: true, phone: true, email: true, customerType: true, idAddress: true, idName: true, idDocumentType: true, idDocumentPath: true, idDocumentBackPath: true, idBirthDate: true } },
+      user: { select: { id: true, name: true, address: true, phone: true, email: true, customerType: true, occupation: true, leadSource: true, idAddress: true, idName: true, idDocumentType: true, idDocumentPath: true, idDocumentBackPath: true, idBirthDate: true, idLicenseNumber: true } },
       store: {
         select: {
           id: true, name: true, address: true, phone: true,
@@ -99,7 +99,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote } = body
+  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote, supplementaryDocs } = body
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -129,6 +129,7 @@ export async function PATCH(
   if (revisitStart !== undefined) updateData.revisitStart = revisitStart || null
   if (revisitEnd !== undefined) updateData.revisitEnd = revisitEnd || null
   if (revisitNote !== undefined) updateData.revisitNote = revisitNote || null
+  if (supplementaryDocs !== undefined) updateData.supplementaryDocs = supplementaryDocs
 
   const updated = await prisma.visitSchedule.update({
     where: { id },

@@ -25,6 +25,9 @@ const updateUserSchema = z.object({
   customerType:     z.enum(VALID_CUSTOMER_TYPES).optional(),
   customerTypes:    z.array(z.enum(VALID_CUSTOMER_TYPES)).optional(),
   visitFrequencyMonths: z.number().int().min(1).max(60).optional(),
+  // 職業・流入経路（store / admin のみ）
+  occupation:       z.string().max(100).nullable().optional(),
+  leadSource:       z.string().max(100).nullable().optional(),
   // 振込先口座情報
   bankName:      z.string().max(50).nullable().optional(),
   branchName:    z.string().max(50).nullable().optional(),
@@ -93,7 +96,7 @@ export async function PATCH(
   }
 
   const { name, furigana, email, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
-          internalNote, customerType, customerTypes, visitFrequencyMonths,
+          internalNote, customerType, customerTypes, visitFrequencyMonths, occupation, leadSource,
           bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
@@ -124,6 +127,8 @@ export async function PATCH(
       updateData.customerTypes = JSON.stringify(set)
     }
     if (visitFrequencyMonths !== undefined) updateData.visitFrequencyMonths = visitFrequencyMonths
+    if (occupation !== undefined) updateData.occupation = occupation ? occupation.trim() : null
+    if (leadSource !== undefined) updateData.leadSource = leadSource ? leadSource.trim() : null
   }
   // 振込先口座情報
   if (bankName      !== undefined) updateData.bankName      = bankName

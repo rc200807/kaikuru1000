@@ -15,6 +15,7 @@ const schema = z.object({
   idAddress:        z.string().min(1).max(200),
   idBirthDate:      z.string().max(50).nullable().optional(),
   idDocumentType:   z.string().max(50).nullable().optional(),
+  idLicenseNumber:  z.string().max(50).nullable().optional(),
   applyToProfile:   z.boolean().default(false),
 })
 
@@ -39,7 +40,7 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { idName, idAddress, idBirthDate, idDocumentType, applyToProfile } = parsed.data
+  const { idName, idAddress, idBirthDate, idDocumentType, idLicenseNumber, applyToProfile } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id }, select: { address: true } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -51,6 +52,8 @@ export async function PATCH(
   }
   if (idBirthDate !== undefined) updateData.idBirthDate = idBirthDate
   if (idDocumentType !== undefined) updateData.idDocumentType = idDocumentType
+  // 運転免許証など、免許番号が確認・修正された場合は内部の売買記録用に保存
+  if (idLicenseNumber !== undefined) updateData.idLicenseNumber = idLicenseNumber
 
   if (applyToProfile) {
     updateData.name = idName

@@ -437,6 +437,101 @@ export async function sendContractEmail(params: {
   return true
 }
 
+/** 見積書をメール送信する。送信成功なら true、設定未構成なら false を返す。
+ * 見積書には買取金額・請求金額・店舗情報・担当者・有効期限のみを記載（顧客情報は含めない）。 */
+export async function sendEstimateEmail(params: {
+  customerEmail: string
+  storeName: string
+  staffName: string
+  purchaseAmount: number
+  billingAmount: number
+  validUntil: Date
+  pdfBase64: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+
+  const { transporter, from } = result
+
+  const validUntilStr = params.validUntil.toLocaleDateString('ja-JP', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  })
+  const yen = (n: number) => `¥${n.toLocaleString()}`
+  const pdfBuffer = params.pdfBase64 ? Buffer.from(params.pdfBase64, 'base64') : null
+  const storeName = escapeHtml(params.storeName)
+  const staffName = escapeHtml(params.staffName)
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>お見積書のご送付</title></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr>
+          <td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+            <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル</p>
+            <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">お見積書のご送付</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#ffffff;padding:32px;">
+            <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+              この度はお問い合わせいただき誠にありがとうございます。<br>
+              下記のとおりお見積りをお送りいたします。詳細は添付のPDFをご確認ください。
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+              <tr><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">買取金額</td><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:16px;font-weight:700;color:#991b1b;text-align:right;">${yen(params.purchaseAmount)}</td></tr>
+              <tr><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">請求金額</td><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:16px;font-weight:700;color:#111827;text-align:right;">${yen(params.billingAmount)}</td></tr>
+              <tr><td style="padding:14px 18px;font-size:13px;color:#6b7280;">見積有効期限</td><td style="padding:14px 18px;font-size:14px;font-weight:600;color:#111827;text-align:right;">${escapeHtml(validUntilStr)}</td></tr>
+            </table>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;overflow:hidden;">
+              <tr><td style="padding:14px 18px;font-size:13px;color:#374151;line-height:1.8;">
+                <strong style="color:#111827;">店舗名:</strong> ${storeName}<br>
+                <strong style="color:#111827;">担当者:</strong> ${staffName}
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;">
+            <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">このメールは買いクル管理システムから自動送信されています</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+`
+
+  await transporter.sendMail({
+    from,
+    to: params.customerEmail,
+    subject: `【買いクル】お見積書`,
+    html,
+    text: [
+      'この度はお問い合わせいただき誠にありがとうございます。',
+      '下記のとおりお見積りをお送りいたします。',
+      '',
+      `買取金額: ${yen(params.purchaseAmount)}`,
+      `請求金額: ${yen(params.billingAmount)}`,
+      `見積有効期限: ${validUntilStr}`,
+      '',
+      `店舗名: ${params.storeName}`,
+      `担当者: ${params.staffName}`,
+      '',
+      '詳細は添付のPDFをご確認ください。',
+    ].join('\n'),
+    attachments: pdfBuffer ? [
+      { filename: 'お見積書.pdf', content: pdfBuffer, contentType: 'application/pdf' },
+    ] : [],
+  })
+
+  return true
+}
+
 /** パスワードリセットメールを送信する。送信成功なら true、設定未構成なら false を返す */
 export async function sendPasswordResetEmail(params: {
   to: string

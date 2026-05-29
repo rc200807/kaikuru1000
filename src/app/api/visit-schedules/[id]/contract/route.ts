@@ -58,7 +58,7 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { signatureData, invoiceSignatureData, pdfBase64, email: inputEmail } = body
+  const { signatureData, invoiceSignatureData, pdfBase64, email: inputEmail, occupation } = body
 
   if (!signatureData) {
     return NextResponse.json({ error: '売買契約への署名が必要です' }, { status: 400 })
@@ -80,6 +80,18 @@ export async function POST(
       customerEmail = inputEmail.trim()
     } catch (e) {
       console.error('User.email 更新失敗:', e)
+    }
+  }
+
+  // 職業が入力されていれば顧客情報に反映（空欄なら既存値を保持）
+  if (typeof occupation === 'string' && occupation.trim()) {
+    try {
+      await prisma.user.update({
+        where: { id: schedule.user.id },
+        data: { occupation: occupation.trim() },
+      })
+    } catch (e) {
+      console.error('User.occupation 更新失敗:', e)
     }
   }
 

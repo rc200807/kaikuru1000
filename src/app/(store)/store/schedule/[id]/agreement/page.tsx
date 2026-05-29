@@ -10,6 +10,7 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import Modal from '@/components/Modal'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { PROOF_DOCUMENT_TYPES } from '@/lib/document-types'
 
 /* ─── PINロック解除モーダル ─── */
 function PinUnlockModal({
@@ -156,6 +157,7 @@ type VisitDetail = {
   revisitStart?: string | null
   revisitEnd?: string | null
   revisitNote?: string | null
+  supplementaryDocs?: string | null
 }
 
 /* ─── 身分証アップロードモーダル ─── */
@@ -174,6 +176,7 @@ type IdEditState = {
   name: string
   address: string
   birthDate: string
+  licenseNumber: string
 }
 
 function IdDocumentUploadModal({
@@ -198,7 +201,7 @@ function IdDocumentUploadModal({
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [edit, setEdit] = useState<IdEditState>({ documentType: '', name: '', address: '', birthDate: '' })
+  const [edit, setEdit] = useState<IdEditState>({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
   const [ocrWarning, setOcrWarning] = useState('')
 
   const needsBack = DOC_TYPES_REQUIRING_BACK.includes(docType)
@@ -210,7 +213,7 @@ function IdDocumentUploadModal({
       setFrontFile(null); setFrontPreview('')
       setBackFile(null); setBackPreview('')
       setError(''); setOcrWarning('')
-      setEdit({ documentType: '', name: '', address: '', birthDate: '' })
+      setEdit({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
     }
   }, [open, initialDocType])
 
@@ -268,6 +271,7 @@ function IdDocumentUploadModal({
         name:         data?.ocr?.idName ?? '',
         address:      data?.ocr?.idAddress ?? '',
         birthDate:    data?.ocr?.idBirthDate ?? '',
+        licenseNumber: data?.ocr?.idLicenseNumber ?? '',
       })
 
       if (data?.ocrError) {
@@ -300,6 +304,7 @@ function IdDocumentUploadModal({
           idAddress:      edit.address.trim(),
           idBirthDate:    edit.birthDate.trim() || null,
           idDocumentType: edit.documentType || null,
+          idLicenseNumber: edit.documentType === '運転免許証' ? (edit.licenseNumber.trim() || null) : null,
           applyToProfile,
         }),
       })
@@ -418,6 +423,21 @@ function IdDocumentUploadModal({
             </div>
           </div>
 
+          {/* 運転免許証の場合は免許番号を記録（内部の売買記録用） */}
+          {edit.documentType === '運転免許証' && (
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">免許番号（内部記録用）</label>
+              <input
+                type="text"
+                value={edit.licenseNumber}
+                onChange={(e) => setEdit({ ...edit, licenseNumber: e.target.value })}
+                placeholder="例: 第123456789012号"
+                inputMode="numeric"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
               氏名 <span className="text-[var(--md-sys-color-error)]">*</span>
@@ -476,6 +496,10 @@ export default function AgreementPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [idModalOpen, setIdModalOpen] = useState(false)
+
+  // 補足確認書類（身分証が不十分な場合にチェック）
+  const [supplementaryDocs, setSupplementaryDocs] = useState<string[]>([])
+  const [savingDocs, setSavingDocs] = useState(false)
 
   // 再訪問日（後日引取）設定
   const [showRevisitForm, setShowRevisitForm] = useState(false)
@@ -544,9 +568,29 @@ export default function AgreementPage() {
     if (res.ok) {
       const data = await res.json()
       setVisit(data)
+      try {
+        const docs = data.supplementaryDocs ? JSON.parse(data.supplementaryDocs) : []
+        if (Array.isArray(docs)) setSupplementaryDocs(docs)
+      } catch { /* ignore */ }
     }
     setLoading(false)
   }, [scheduleId])
+
+  async function toggleSupplementaryDoc(docName: string) {
+    const next = supplementaryDocs.includes(docName)
+      ? supplementaryDocs.filter((d) => d !== docName)
+      : [...supplementaryDocs, docName]
+    setSupplementaryDocs(next)
+    setSavingDocs(true)
+    try {
+      await fetch(`/api/visit-schedules/${scheduleId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplementaryDocs: JSON.stringify(next) }),
+      })
+    } catch { /* ignore */ }
+    finally { setSavingDocs(false) }
+  }
 
   useEffect(() => {
     if (session) fetchVisit()
@@ -851,6 +895,30 @@ export default function AgreementPage() {
             <Button onClick={() => setIdModalOpen(true)}>身分証をアップロード</Button>
           </div>
         )}
+      </Card>
+
+      {/* ──── 補足確認書類 ──── */}
+      <Card variant="elevated" padding="md">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">補足確認書類</h2>
+          {savingDocs && <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">保存中...</span>}
+        </div>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
+          身分証明証の内容が不十分な場合、追加で確認した書類にチェックしてください（写真添付は不要・内部記録用）。
+        </p>
+        <div className="space-y-1.5">
+          {PROOF_DOCUMENT_TYPES.map((doc) => (
+            <label key={doc} className="flex items-center gap-2 cursor-pointer py-1">
+              <input
+                type="checkbox"
+                checked={supplementaryDocs.includes(doc)}
+                onChange={() => toggleSupplementaryDoc(doc)}
+                className="w-4 h-4 rounded border-[var(--md-sys-color-outline)] accent-[var(--portal-primary)]"
+              />
+              <span className="text-sm text-[var(--md-sys-color-on-surface)]">{doc}</span>
+            </label>
+          ))}
+        </div>
       </Card>
 
       {/* ──── 操作ボタン ──── */}

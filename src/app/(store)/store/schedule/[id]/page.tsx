@@ -117,14 +117,13 @@ export default function VisitDetailPage() {
   // 買取品目フォーム
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
   const [editingPurchase, setEditingPurchase] = useState<PurchaseItem | null>(null)
-  const [purchaseForm, setPurchaseForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: 0, imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null })
+  const [purchaseForm, setPurchaseForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: '' as number | '', imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null })
   const [uploading, setUploading] = useState(false)
   const [savingPurchase, setSavingPurchase] = useState(false)
 
   // バーコードスキャン
   const [showScanner, setShowScanner] = useState(false)
   const [staffName, setStaffName] = useState('')
-  const [storeMembers, setStoreMembers] = useState<{ id: string; name: string }[]>([])
   const [janLookupLoading, setJanLookupLoading] = useState(false)
   const [janLookupError, setJanLookupError] = useState<string | null>(null)
 
@@ -157,7 +156,6 @@ export default function VisitDetailPage() {
       const data = await res.json()
       setVisit(data)
       setEditNote(data.note || '')
-      if (data.staffName) setStaffName(data.staffName)
 
       // 保存済みのAI調査結果をstateにロード
       const saved: Record<string, MarketResearch> = {}
@@ -185,20 +183,11 @@ export default function VisitDetailPage() {
       .catch(() => {})
   }, [])
 
-  // 店舗メンバー一覧を取得し、未入力ならログインユーザー名をデフォルト選択
+  // 担当者はログイン中の店舗スタッフ名で固定（変更不可）
   useEffect(() => {
     if (!session) return
-    fetch('/api/store/members')
-      .then(res => res.ok ? res.json() : [])
-      .then((list: { id: string; name: string }[]) => {
-        if (Array.isArray(list)) setStoreMembers(list)
-      })
-      .catch(() => {})
-    // ログインユーザー名をデフォルトに（既に値があれば上書きしない）
     const sessionName = (session.user as any)?.name as string | undefined
-    if (sessionName) {
-      setStaffName(prev => prev || sessionName)
-    }
+    if (sessionName) setStaffName(sessionName)
   }, [session])
 
   useEffect(() => {
@@ -210,7 +199,7 @@ export default function VisitDetailPage() {
 
   /* ─── 買取品目 ─── */
   function resetPurchaseForm() {
-    setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: 0, imageUrls: [], janCode: '', rakutenData: null })
+    setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null })
     setEditingPurchase(null)
     setShowPurchaseForm(false)
     setJanLookupError(null)
@@ -322,7 +311,7 @@ export default function VisitDetailPage() {
       itemName: purchaseForm.itemName,
       category: purchaseForm.category,
       quantity: purchaseForm.quantity,
-      purchasePrice: purchaseForm.purchasePrice,
+      purchasePrice: Number(purchaseForm.purchasePrice) || 0,
       imageUrls: purchaseForm.imageUrls,
       janCode: purchaseForm.janCode || null,
       rakutenData: purchaseForm.rakutenData || null,
@@ -558,7 +547,8 @@ export default function VisitDetailPage() {
               min={0}
               className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
               value={purchaseForm.purchasePrice}
-              onChange={(e) => setPurchaseForm({ ...purchaseForm, purchasePrice: parseInt(e.target.value) || 0 })}
+              onChange={(e) => setPurchaseForm({ ...purchaseForm, purchasePrice: e.target.value === '' ? '' : (parseInt(e.target.value) || 0) })}
+              placeholder="0"
             />
           </div>
         </div>
@@ -845,25 +835,12 @@ export default function VisitDetailPage() {
                 <p className="indent-4">また、いただきました個人情報については、個人情報保護法に従い取り扱い、適切に管理させていただきます。</p>
               </div>
 
-              {/* 担当者名（店舗メンバーから選択） */}
+              {/* 担当者名（ログイン中のスタッフ名で固定・変更不可） */}
               <div className="mb-4">
                 <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">担当者名</label>
-                <select
-                  className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
-                  value={staffName}
-                  onChange={(e) => setStaffName(e.target.value)}
-                >
-                  <option value="">担当者を選択</option>
-                  {(() => {
-                    const sessionName = (session?.user as any)?.name as string | undefined
-                    const names = new Set<string>()
-                    if (sessionName) names.add(sessionName)
-                    for (const m of storeMembers) names.add(m.name)
-                    return Array.from(names).map((n) => (
-                      <option key={n} value={n}>{n}</option>
-                    ))
-                  })()}
-                </select>
+                <div className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]">
+                  {staffName || '—'}
+                </div>
               </div>
 
               {/* 署名欄 */}
@@ -1268,37 +1245,34 @@ export default function VisitDetailPage() {
         </div>
       </Card>
 
-      {/* ────────── 売買契約書ボタン ────────── */}
-      {visit.purchaseItems.length > 0 && (
+      {/* ────────── 見積書・売買契約書ボタン ────────── */}
+      {(visit.purchaseItems.length > 0 || visit.workItems.length > 0) && (
         <Card variant="elevated" padding="md">
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">担当者名（契約書に記載）</label>
-              <select
-                className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
-                value={staffName}
-                onChange={(e) => setStaffName(e.target.value)}
-              >
-                <option value="">担当者を選択</option>
-                {(() => {
-                  const sessionName = (session?.user as any)?.name as string | undefined
-                  const names = new Set<string>()
-                  if (sessionName) names.add(sessionName)
-                  for (const m of storeMembers) names.add(m.name)
-                  return Array.from(names).map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))
-                })()}
-              </select>
+              <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">担当者名（書類に記載）</label>
+              <div className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]">
+                {staffName || '—'}
+              </div>
             </div>
-            <div className="flex justify-center">
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-center">
               <Button
-                onClick={() => router.push(`/store/schedule/${scheduleId}/agreement?staff=${encodeURIComponent(staffName)}`)}
+                variant="outlined"
+                onClick={() => router.push(`/store/schedule/${scheduleId}/estimate?staff=${encodeURIComponent(staffName)}`)}
                 className="w-full sm:w-auto"
                 disabled={!staffName}
               >
-                📝 売買契約書を作成
+                🧾 見積書を出力
               </Button>
+              {visit.purchaseItems.length > 0 && (
+                <Button
+                  onClick={() => router.push(`/store/schedule/${scheduleId}/agreement?staff=${encodeURIComponent(staffName)}`)}
+                  className="w-full sm:w-auto"
+                  disabled={!staffName}
+                >
+                  📝 売買契約書を作成
+                </Button>
+              )}
             </div>
           </div>
         </Card>

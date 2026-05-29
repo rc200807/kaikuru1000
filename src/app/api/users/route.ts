@@ -19,6 +19,7 @@ const registerSchema = z.object({
   licenseKey:   z.string().optional(),
   customerType: z.enum(CUSTOMER_TYPES).optional(),
   customerTypes: z.array(z.enum(CUSTOMER_TYPES)).optional(),
+  leadSource:   z.string().max(100).optional(), // 流入経路
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
 
@@ -34,8 +35,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 })
     }
 
-    const { name, furigana, email, phone, password, licenseKey, customerType, customerTypes, skipLicenseKey } = parsed.data
+    const { name, furigana, email, phone, password, licenseKey, customerType, customerTypes, leadSource, skipLicenseKey } = parsed.data
     const address = parsed.data.address ?? ''
+    const leadSourceValue = leadSource && leadSource.trim() ? leadSource.trim() : null
 
     // 店舗ユーザーが登録した場合は、その店舗に自動割り当てする
     const session = await getServerSession(authOptions)
@@ -75,6 +77,7 @@ export async function POST(request: NextRequest) {
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,
+          leadSource: leadSourceValue,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },
         include: { store: true },
@@ -146,6 +149,7 @@ export async function POST(request: NextRequest) {
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,
+          leadSource: leadSourceValue,
           licenseKeyId: licenseKeyRecord.id,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },

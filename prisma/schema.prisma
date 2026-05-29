@@ -64,6 +64,8 @@ model User {
   customerType          String    @default("visit")  // 主たる種別: "visit" | "delivery" | "regular" | "akikuru"
   customerTypes         String    @default("[]")      // JSON配列: 顧客に適用する全種別（複数可）
   visitFrequencyMonths  Int       @default(1)         // 訪問・宅配の頻度（何ヶ月に1回）
+  occupation            String?                       // 職業（売買契約書作成時に取得）
+  leadSource            String?                       // 流入経路（LeadSourceマスタの名称を格納）
   // 振込先口座情報
   bankName       String?
   branchName     String?
@@ -236,9 +238,11 @@ model VisitSchedule {
   revisitStart          String?             // 再訪問開始時間 (HH:MM)
   revisitEnd            String?             // 再訪問終了時間 (HH:MM)
   revisitNote           String?             // 再訪問メモ
+  supplementaryDocs     String?  @db.Text   // 補足確認書類（チェックした書類名のJSON配列）
   purchaseItems  PurchaseItem[]
   workItems      WorkItem[]
   salesContract  SalesContract?
+  estimate       Estimate?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -263,6 +267,15 @@ model PurchaseCategory {
   purchaseItems PurchaseItem[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+// 流入経路マスタ（管理ポータルから管理。電話/お問い合わせフォーム/LINE/紹介/おいくら など）
+model LeadSource {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // 買取品目（訪問ごとに記録する買取商品）
@@ -408,6 +421,22 @@ model DeliveryShipment {
 
   @@index([userId])
   @@index([shipmentMonth])
+}
+
+// 見積書（買取金額・請求金額・有効期限を記録。署名・顧客情報は不要）
+model Estimate {
+  id              String        @id @default(cuid())
+  visitScheduleId String        @unique
+  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  purchaseAmount  Int                         // 買取金額（円）
+  billingAmount   Int                         // 請求金額（円）
+  validUntil      DateTime                    // 見積有効期限
+  staffName       String                      // 見積担当者
+  customerEmail   String?                     // 送信先メールアドレス（記録用）
+  pdfBase64       String?       @db.Text       // base64 PDF データ
+  emailSentAt     DateTime?                   // メール送信日時
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 // 売買契約書（署名・PDF保存）

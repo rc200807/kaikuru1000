@@ -92,6 +92,8 @@ export async function PATCH(
     if (typeof body.phone3 === 'string') data.phone3 = body.phone3.replace(/[-ー\s]/g, '') || null
     if (typeof body.address === 'string') data.address = body.address.trim()
     if (typeof body.internalNote === 'string') data.internalNote = body.internalNote.trim() || null
+    if ('occupation' in body) data.occupation = (typeof body.occupation === 'string' && body.occupation.trim()) ? body.occupation.trim() : null
+    if ('leadSource' in body) data.leadSource = (typeof body.leadSource === 'string' && body.leadSource.trim()) ? body.leadSource.trim() : null
 
     // email: 空文字なら null にする
     if (typeof body.email === 'string') {
@@ -116,7 +118,7 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, furigana: true, email: true, phone: true, phone2: true, phone3: true, address: true, internalNote: true, customerType: true, customerTypes: true, visitFrequencyMonths: true },
+      select: { id: true, name: true, furigana: true, email: true, phone: true, phone2: true, phone3: true, address: true, internalNote: true, customerType: true, customerTypes: true, visitFrequencyMonths: true, occupation: true, leadSource: true },
     })
     await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `顧客情報を編集「${updated.name}」`, req: request })
     return NextResponse.json(updated)

@@ -39,6 +39,7 @@ type Customer = {
   createdAt: string
   visitSchedules: Array<{ visitDate: string; status: string }>
   customerType: string
+  leadSource: string | null
   bankName: string | null
   branchName: string | null
   accountType: string | null
@@ -202,10 +203,19 @@ export default function StoreCustomerDetailPage() {
     address: string
     customerType: CustomerType
     visitFrequencyMonths: number
+    leadSource: string
   }
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editDraft, setEditDraft] = useState<EditDraft>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1 })
+  const [editDraft, setEditDraft] = useState<EditDraft>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
   const [savingEdit, setSavingEdit] = useState(false)
+  const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/lead-sources')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (Array.isArray(d)) setLeadSources(d) })
+      .catch(() => {})
+  }, [])
 
   function openEditModal() {
     if (!customer) return
@@ -219,6 +229,7 @@ export default function StoreCustomerDetailPage() {
       address: customer.address || '',
       customerType: (CUSTOMER_TYPES.includes(customer.customerType as CustomerType) ? customer.customerType : 'visit') as CustomerType,
       visitFrequencyMonths: (customer as any).visitFrequencyMonths ?? 1,
+      leadSource: customer.leadSource || '',
     })
     setEditModalOpen(true)
   }
@@ -245,6 +256,7 @@ export default function StoreCustomerDetailPage() {
           customerType: editDraft.customerType,
           customerTypes: [editDraft.customerType],
           visitFrequencyMonths: editDraft.visitFrequencyMonths,
+          leadSource: editDraft.leadSource || null,
         }),
       })
       if (res.ok) {
@@ -258,6 +270,7 @@ export default function StoreCustomerDetailPage() {
           phone3: editDraft.phone3.trim() || null,
           address: editDraft.address.trim(),
           customerType: editDraft.customerType,
+          leadSource: editDraft.leadSource || null,
         } : prev)
         setEditModalOpen(false)
         setMsg({ type: 'success', text: '顧客情報を更新しました' })
@@ -781,6 +794,7 @@ export default function StoreCustomerDetailPage() {
                   ...(customer.phone3 ? [{ label: '電話番号 3', value: customer.phone3 }] : []),
                   { label: '訪問先住所', value: customer.address },
                   { label: '顧客タイプ', value: typeInfo.label },
+                  ...(customer.leadSource ? [{ label: '流入経路', value: customer.leadSource }] : []),
                   { label: '登録日', value: format(new Date(customer.createdAt), 'yyyy年M月d日', { locale: ja }) },
                 ].map(item => (
                   <div key={item.label} className="flex gap-3">
@@ -1634,6 +1648,19 @@ export default function StoreCustomerDetailPage() {
                 </div>
               </div>
             )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">流入経路</label>
+            <select
+              value={editDraft.leadSource}
+              onChange={e => setEditDraft(d => ({ ...d, leadSource: e.target.value }))}
+              className="w-full h-12 px-3 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+            >
+              <option value="">未設定</option>
+              {leadSources.map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="text" onClick={() => setEditModalOpen(false)} disabled={savingEdit}>キャンセル</Button>

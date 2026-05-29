@@ -11,6 +11,7 @@ import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import AdminCardManager from '@/components/admin/AdminCardManager'
 
 type GoogleConfig = {
   id: string
@@ -741,6 +742,9 @@ function AdminSettingsContent() {
 
         {/* ─── 買取カテゴリ管理 ─── */}
         <PurchaseCategorySection />
+
+        {/* ─── クレジットカード（備品発注の決済）─── */}
+        <AdminCardManager />
 
         {/* ─── 同期ログ ─── */}
         <SyncLogSection />

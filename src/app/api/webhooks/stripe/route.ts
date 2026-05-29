@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
+import { markSupplyOrderPaidAndNotify } from '@/lib/supply-orders'
 
 export const runtime = 'nodejs'
 
@@ -35,10 +36,8 @@ export async function POST(req: NextRequest) {
       const pi = event.data.object as any
       const orderId = pi.metadata?.supplyOrderId
       if (orderId) {
-        await prisma.supplyOrder.updateMany({
-          where: { id: orderId },
-          data: { paymentStatus: 'paid' },
-        })
+        // 支払い確定 + 初回確定時のみ Slack 通知
+        await markSupplyOrderPaidAndNotify(orderId)
       }
     } else if (event.type === 'payment_intent.payment_failed') {
       const pi = event.data.object as any

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/admin-auth'
 import { stripe } from '@/lib/stripe'
+import { markSupplyOrderPaidAndNotify } from '@/lib/supply-orders'
 
 export const runtime = 'nodejs'
 
@@ -21,16 +22,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   if (order.paymentStatus === 'pending' && order.stripePaymentIntentId) {
     try {
       const pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId)
-      let next: string | null = null
-      if (pi.status === 'succeeded') next = 'paid'
-      else if (pi.status === 'canceled') next = 'failed'
-      if (next && next !== order.paymentStatus) {
-        order = await prisma.supplyOrder.update({
-          where: { id },
-          data: { paymentStatus: next },
-          include: { items: true },
-        })
+      if (pi.status === 'succeeded') {
+        // 支払い確定 + 初回確定時のみ Slack 通知（Webhook と二重送信しない）
+        await markSupplyOrderPaidAndNotify(id)
+      } else if (pi.status === 'canceled') {
+        await prisma.supplyOrder.updateMany({ where: { id, paymentStatus: 'pending' }, data: { paymentStatus: 'failed' } })
       }
+      // 最新状態を取得し直す
+      order = (await prisma.supplyOrder.findUnique({ where: { id }, include: { items: true } })) ?? order
     } catch (e) {
       console.error('[supply-orders] PI sync failed', e)
     }

@@ -19,6 +19,7 @@ type Product = {
   purchasePrice: number
   sellingPrice: number
   stock: number
+  minLot: number
   hasVariants: boolean
   imageUrl: string | null
   variants: Variant[]
@@ -267,9 +268,10 @@ export default function SupplyOrderPage() {
                           <>
                             <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
                               仕入 {yen(p.purchasePrice)} ／ 在庫 {p.stock}
+                              {p.minLot > 1 && <span style={{ marginLeft: 6, color: '#fbbf24' }}>／ 最低{p.minLot}個〜</span>}
                             </div>
                             <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', paddingTop: 4 }}>
-                              <QtyInput value={cart[keyOf(p.id)] ?? 0} onChange={q => setQty(keyOf(p.id), q)} />
+                              <QtyInput value={cart[keyOf(p.id)] ?? 0} onChange={q => setQty(keyOf(p.id), q)} min={p.minLot} />
                             </div>
                           </>
                         ) : (
@@ -282,7 +284,7 @@ export default function SupplyOrderPage() {
                                     仕入{yen(p.purchasePrice)}／在庫{v.stock}
                                   </span>
                                 </div>
-                                <QtyInput value={cart[keyOf(p.id, v.id)] ?? 0} onChange={q => setQty(keyOf(p.id, v.id), q)} />
+                                <QtyInput value={cart[keyOf(p.id, v.id)] ?? 0} onChange={q => setQty(keyOf(p.id, v.id), q)} min={p.minLot} />
                               </div>
                             ))}
                           </div>
@@ -381,22 +383,29 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   )
 }
 
-function QtyInput({ value, onChange }: { value: number; onChange: (q: number) => void }) {
+function QtyInput({ value, onChange, min = 1 }: { value: number; onChange: (q: number) => void; min?: number }) {
+  // 正の数量は最低ロット(min)以上に制限。0は「カートから外す」を意味する。
+  const dec = () => onChange(value <= min ? 0 : value - 1)
+  const inc = () => onChange(value === 0 ? min : value + 1)
+  const onType = (raw: number) => {
+    const n = Math.max(0, Math.floor(raw || 0))
+    onChange(n === 0 ? 0 : Math.max(min, n))
+  }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <button
-        onClick={() => onChange(Math.max(0, value - 1))}
+        onClick={dec}
         style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
       >−</button>
       <input
         type="number"
         min={0}
         value={value}
-        onChange={e => onChange(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+        onChange={e => onType(Number(e.target.value))}
         style={{ width: 48, textAlign: 'center', padding: '4px', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface)', color: 'var(--md-sys-color-on-surface)', fontSize: 14 }}
       />
       <button
-        onClick={() => onChange(value + 1)}
+        onClick={inc}
         style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
       >＋</button>
     </div>

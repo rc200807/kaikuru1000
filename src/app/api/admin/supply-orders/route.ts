@@ -63,6 +63,10 @@ export async function POST(req: NextRequest) {
     if (!product) {
       return NextResponse.json({ error: `商品が見つかりません: ${item.productId}` }, { status: 400 })
     }
+    // 最低ロット（最低発注数）チェック
+    if (product.minLot > 1 && item.quantity < product.minLot) {
+      return NextResponse.json({ error: `「${product.name}」は最低ロット ${product.minLot} 個からの発注です` }, { status: 400 })
+    }
     // 管理ポータルの発注はサイズ問わず「仕入れ価格」で算出する
     const unitPrice = product.purchasePrice
     let sizeName: string | null = null

@@ -15,6 +15,7 @@ const createSchema = z.object({
   purchasePrice: z.number().int().min(0),
   sellingPrice: z.number().int().min(0),
   stock: z.number().int().min(0).default(0),
+  minLot: z.number().int().min(1).default(1),
   hasVariants: z.boolean().default(false),
   imageUrl: z.string().max(1000).nullable().optional(),
   supplierUrl: z.string().max(500).nullable().optional(),

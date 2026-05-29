@@ -19,6 +19,7 @@ type Product = {
   purchasePrice: number
   sellingPrice: number
   stock: number
+  minLot: number
   hasVariants: boolean
   imageUrl: string | null
   supplierUrl: string | null
@@ -65,6 +66,7 @@ export default function SysAdminInventoryDetailPage({ params }: { params: Promis
   const [purchasePrice, setPurchasePrice] = useState('0')
   const [sellingPrice, setSellingPrice] = useState('0')
   const [stock, setStock] = useState('0')
+  const [minLot, setMinLot] = useState('1')
   const [imageUrl, setImageUrl] = useState('')
   const [supplierUrl, setSupplierUrl] = useState('')
   const [supplierEmail, setSupplierEmail] = useState('')
@@ -89,6 +91,7 @@ export default function SysAdminInventoryDetailPage({ params }: { params: Promis
           setPurchasePrice(String(p.purchasePrice))
           setSellingPrice(String(p.sellingPrice))
           setStock(String(p.stock))
+          setMinLot(String(p.minLot ?? 1))
           setImageUrl(p.imageUrl ?? '')
           setSupplierUrl(p.supplierUrl ?? '')
           setSupplierEmail(p.supplierEmail ?? '')
@@ -120,6 +123,7 @@ export default function SysAdminInventoryDetailPage({ params }: { params: Promis
           purchasePrice: Number(purchasePrice),
           sellingPrice: Number(sellingPrice),
           stock: Number(stock),
+          minLot: Math.max(1, Number(minLot) || 1),
           imageUrl: imageUrl || null,
           supplierUrl: supplierUrl || null,
           supplierEmail: supplierEmail || null,
@@ -220,6 +224,7 @@ export default function SysAdminInventoryDetailPage({ params }: { params: Promis
           <Field label="在庫数（バリアントなし時）"><input type="number" value={stock} onChange={e => setStock(e.target.value)} style={inputStyle} disabled={!canEdit || product.hasVariants} /></Field>
           <Field label="仕入れ価格"><input type="number" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} style={inputStyle} disabled={!canEdit} /></Field>
           <Field label="販売価格"><input type="number" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} style={inputStyle} disabled={!canEdit} /></Field>
+          <Field label="最低ロット（最低発注数）"><input type="number" min={1} value={minLot} onChange={e => setMinLot(e.target.value)} style={inputStyle} disabled={!canEdit} /></Field>
           <Field label="発注先URL"><input value={supplierUrl} onChange={e => setSupplierUrl(e.target.value)} style={inputStyle} disabled={!canEdit} /></Field>
           <Field label="発注先メール"><input type="email" value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} style={inputStyle} disabled={!canEdit} /></Field>
           <div style={{ gridColumn: '1 / -1' }}>

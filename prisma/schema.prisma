@@ -858,6 +858,7 @@ model Product {
   purchasePrice Int              // 仕入れ価格（円）
   sellingPrice  Int              // 販売価格（円）
   stock         Int              @default(0)  // hasVariants=false 時の在庫
+  minLot        Int              @default(1)  // 最低発注数（最低ロット）
   hasVariants   Boolean          @default(false)
   imageUrl      String?          @db.Text  // 商品画像URL（Vercel Blob）
   supplierUrl   String?          @db.Text

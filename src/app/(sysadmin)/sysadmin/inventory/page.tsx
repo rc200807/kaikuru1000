@@ -34,6 +34,7 @@ type FormState = {
   purchasePrice: string
   sellingPrice: string
   stock: string
+  minLot: string
   imageUrl: string
   supplierUrl: string
   supplierEmail: string
@@ -45,6 +46,7 @@ const EMPTY: FormState = {
   purchasePrice: '',
   sellingPrice: '',
   stock: '0',
+  minLot: '1',
   imageUrl: '',
   supplierUrl: '',
   supplierEmail: '',
@@ -100,6 +102,7 @@ export default function SysAdminInventoryPage() {
     const purchasePrice = Number(form.purchasePrice)
     const sellingPrice = Number(form.sellingPrice)
     const stock = Number(form.stock || '0')
+    const minLot = Math.max(1, Number(form.minLot || '1'))
     if (!Number.isFinite(purchasePrice) || purchasePrice < 0) {
       setError('仕入れ価格を正しく入力してください')
       return
@@ -118,6 +121,7 @@ export default function SysAdminInventoryPage() {
           purchasePrice,
           sellingPrice,
           stock,
+          minLot,
           imageUrl: form.imageUrl.trim() || null,
           supplierUrl: form.supplierUrl.trim() || null,
           supplierEmail: form.supplierEmail.trim() || null,
@@ -270,6 +274,9 @@ export default function SysAdminInventoryPage() {
                   <input type="number" min={0} value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} style={inputStyle} />
                 </Field>
               </div>
+              <Field label="最低ロット（最低発注数）">
+                <input type="number" min={1} value={form.minLot} onChange={e => setForm({ ...form, minLot: e.target.value })} style={inputStyle} />
+              </Field>
               <Field label="発注先URL">
                 <input value={form.supplierUrl} onChange={e => setForm({ ...form, supplierUrl: e.target.value })} style={inputStyle} placeholder="https://..." />
               </Field>

@@ -9,6 +9,7 @@ const updateSchema = z.object({
   purchasePrice: z.number().int().min(0).optional(),
   sellingPrice: z.number().int().min(0).optional(),
   stock: z.number().int().min(0).optional(),
+  minLot: z.number().int().min(1).optional(),
   hasVariants: z.boolean().optional(),
   imageUrl: z.string().max(1000).nullable().optional(),
   supplierUrl: z.string().max(500).nullable().optional(),

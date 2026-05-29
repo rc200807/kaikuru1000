@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
 import { isLoginBlocked, recordLoginFailure, resetLoginFailures } from './rate-limit'
+import { recordAccessLog } from './access-log'
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -21,7 +22,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'メールアドレスまたは電話番号', type: 'text' },
         password: { label: 'パスワード', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
 
         const loginId = credentials.email.trim()
@@ -51,6 +52,7 @@ export const authOptions: NextAuthOptions = {
             const valid = await bcrypt.compare(credentials.password, u.password)
             if (valid) {
               await resetLoginFailures(key)
+              await recordAccessLog({ userType: 'customer', userId: u.id, userName: u.name, action: 'login', req })
               return {
                 id: u.id,
                 email: u.email || '',
@@ -80,6 +82,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         await resetLoginFailures(key)
+        await recordAccessLog({ userType: 'customer', userId: user.id, userName: user.name, action: 'login', req })
         return {
           id: user.id,
           email: user.email || '',
@@ -99,7 +102,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'メールアドレス', type: 'email' },
         password: { label: 'パスワード', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
 
         const key = `store:${credentials.email}`
@@ -117,6 +120,7 @@ export const authOptions: NextAuthOptions = {
           const isValid = await bcrypt.compare(credentials.password, store.password)
           if (isValid) {
             await resetLoginFailures(key)
+            await recordAccessLog({ userType: 'store', userId: store.id, userName: store.name, action: 'login', req })
             return {
               id: store.id,
               email: store.email || '',
@@ -141,6 +145,7 @@ export const authOptions: NextAuthOptions = {
           const isValid = await bcrypt.compare(credentials.password, member.password)
           if (isValid) {
             await resetLoginFailures(key)
+            await recordAccessLog({ userType: 'store', userId: member.storeId, userName: member.name, action: 'login', req })
             return {
               id: member.storeId,
               email: member.email,
@@ -164,7 +169,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'メールアドレス', type: 'email' },
         password: { label: 'パスワード', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
 
         const key = `admin:${credentials.email}`
@@ -183,6 +188,12 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        // システム管理者は管理ポータルからはログインさせない（/sysadmin 専用）
+        if (admin.role === 'sysadmin') {
+          await recordLoginFailure(key)
+          return null
+        }
+
         const isValid = await bcrypt.compare(credentials.password, admin.password)
         if (!isValid) {
           await recordLoginFailure(key)
@@ -191,12 +202,57 @@ export const authOptions: NextAuthOptions = {
 
         await resetLoginFailures(key)
         const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
+        await recordAccessLog({ userType: adminRole, userId: admin.id, userName: admin.name, action: 'login', req })
         return {
           id: admin.id,
           email: admin.email,
           name: admin.name,
           avatar: admin.avatar || null,
           role: adminRole,
+        }
+      },
+    }),
+    // システム管理者ログイン（運営者専用 / role==='sysadmin' のみ）
+    CredentialsProvider({
+      id: 'sysadmin',
+      name: 'システム管理者',
+      credentials: {
+        email: { label: 'メールアドレス', type: 'email' },
+        password: { label: 'パスワード', type: 'password' },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.email || !credentials?.password) return null
+
+        const key = `sysadmin:${credentials.email}`
+        const { blocked, remainingMs } = await isLoginBlocked(key)
+        if (blocked) {
+          const mins = Math.ceil((remainingMs ?? 0) / 60000)
+          throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
+        }
+
+        const admin = await prisma.admin.findUnique({
+          where: { email: credentials.email },
+        })
+
+        if (!admin || admin.role !== 'sysadmin') {
+          await recordLoginFailure(key)
+          return null
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, admin.password)
+        if (!isValid) {
+          await recordLoginFailure(key)
+          return null
+        }
+
+        await resetLoginFailures(key)
+        await recordAccessLog({ userType: 'sysadmin', userId: admin.id, userName: admin.name, action: 'login', req })
+        return {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          avatar: admin.avatar || null,
+          role: 'sysadmin' as const,
         }
       },
     }),
@@ -208,7 +264,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'メールアドレス', type: 'email' },
         password: { label: 'パスワード', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
 
         const key = `partner:${credentials.email}`
@@ -234,6 +290,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         await resetLoginFailures(key)
+        await recordAccessLog({ userType: 'partner', userId: partner.id, userName: partner.name, action: 'login', req })
         return {
           id: partner.id,
           email: partner.email,

@@ -49,12 +49,12 @@ const primaryBtn: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-export default function InventoryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function SysAdminInventoryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = usePromise(params)
   const { data: session, status } = useSession()
   const router = useRouter()
   const role = (session?.user as any)?.role as string | undefined
-  const canEdit = role === 'superadmin' || role === 'admin'
+  const canEdit = role === 'sysadmin'
 
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -70,17 +70,17 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
   const [supplierEmail, setSupplierEmail] = useState('')
   const [supplierNote, setSupplierNote] = useState('')
 
-  // new variant form
   const [vSize, setVSize] = useState('')
   const [vStock, setVStock] = useState('0')
   const [vPrice, setVPrice] = useState('')
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/admin/login')
-  }, [status, router])
+    if (status === 'unauthenticated') router.push('/sysadmin/login')
+    if (status === 'authenticated' && role !== 'sysadmin') router.push('/sysadmin/login')
+  }, [status, role, router])
 
   function load() {
-    fetch(`/api/admin/inventory/${id}`)
+    fetch(`/api/sysadmin/inventory/${id}`)
       .then(r => (r.ok ? r.json() : null))
       .then((p: Product | null) => {
         if (p) {
@@ -112,7 +112,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
   async function handleSave() {
     setSaving(true)
     try {
-      const res = await fetch(`/api/admin/inventory/${id}`, {
+      const res = await fetch(`/api/sysadmin/inventory/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +140,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleAddVariant() {
     if (!vSize.trim()) return
-    const res = await fetch(`/api/admin/inventory/${id}/variants`, {
+    const res = await fetch(`/api/sysadmin/inventory/${id}/variants`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -159,7 +159,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
   }
 
   async function handleUpdateVariant(v: Variant, patch: Partial<Variant>) {
-    await fetch(`/api/admin/inventory/${id}/variants`, {
+    await fetch(`/api/sysadmin/inventory/${id}/variants`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ variantId: v.id, ...patch }),
@@ -169,7 +169,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleDeleteVariant(v: Variant) {
     if (!confirm(`サイズ「${v.sizeName}」を削除しますか？`)) return
-    await fetch(`/api/admin/inventory/${id}/variants`, {
+    await fetch(`/api/sysadmin/inventory/${id}/variants`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ variantId: v.id }),
@@ -179,8 +179,8 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
 
   async function handleDelete() {
     if (!confirm('この商品を削除しますか？')) return
-    const res = await fetch(`/api/admin/inventory/${id}`, { method: 'DELETE' })
-    if (res.ok) router.push('/admin/inventory')
+    const res = await fetch(`/api/sysadmin/inventory/${id}`, { method: 'DELETE' })
+    if (res.ok) router.push('/sysadmin/inventory')
   }
 
   if (status === 'loading' || loading) {
@@ -192,7 +192,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: 960, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
-      <button onClick={() => router.push('/admin/inventory')} style={{ background: 'transparent', border: 'none', color: 'var(--md-sys-color-primary)', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
+      <button onClick={() => router.push('/sysadmin/inventory')} style={{ background: 'transparent', border: 'none', color: 'var(--md-sys-color-primary)', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
         ← 一覧に戻る
       </button>
       <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 16px' }}>{product.name}</h1>

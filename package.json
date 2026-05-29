@@ -13,6 +13,8 @@
     "@auth/prisma-adapter": "^2.11.1",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
+    "@stripe/react-stripe-js": "^6.4.0",
+    "@stripe/stripe-js": "^9.7.0",
     "@tiptap/extension-image": "^3.20.4",
     "@tiptap/extension-link": "^3.20.4",
     "@tiptap/extension-placeholder": "^3.20.4",
@@ -42,6 +44,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
+    "stripe": "^22.2.0",
     "three": "^0.183.2",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"

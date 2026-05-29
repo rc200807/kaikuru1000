@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { requireAdmin, canEditInventory } from '@/lib/admin-auth'
+import { requireSysAdmin } from '@/lib/sysadmin-auth'
 
 const createSchema = z.object({
   sizeName: z.string().min(1).max(60),
@@ -21,8 +21,8 @@ const deleteSchema = z.object({
 })
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin()
-  if (!user || !canEditInventory(user.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await requireSysAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await ctx.params
   const body = await req.json()
@@ -37,8 +37,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin()
-  if (!user || !canEditInventory(user.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await requireSysAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await ctx.params
   const body = await req.json()
@@ -54,8 +54,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireAdmin()
-  if (!user || !canEditInventory(user.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = await requireSysAdmin()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await ctx.params
   const body = await req.json()

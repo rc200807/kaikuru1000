@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import SupplierAccounts from '@/components/sysadmin/SupplierAccounts'
 import ProductImageUploader from '@/components/admin/ProductImageUploader'
 
 type Variant = {
@@ -232,6 +233,9 @@ export default function SysAdminInventoryPage() {
           </tbody>
         </table>
       </div>
+
+      {/* 発注先アカウント管理 */}
+      <SupplierAccounts />
 
       {modalOpen && (
         <div

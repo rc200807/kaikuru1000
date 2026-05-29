@@ -1074,3 +1074,16 @@ model StripeWebhookEvent {
   type      String
   createdAt DateTime @default(now())
 }
+
+// 発注先アカウント（仕入先サイトのログイン情報）。パスワードはAES-256-GCMで暗号化保存。
+model SupplierAccount {
+  id          String   @id @default(cuid())
+  name        String                                         // 発注先名（例: ラクスル）
+  url         String?  @db.Text                              // ログインURL等
+  loginId     String                                         // メールアドレス または ID
+  passwordEnc String?  @db.Text                              // 暗号化済みパスワード
+  phone       String?
+  note        String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

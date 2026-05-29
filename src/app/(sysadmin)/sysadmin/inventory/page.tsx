@@ -65,6 +65,7 @@ export default function SysAdminInventoryPage() {
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/sysadmin/login')
@@ -84,6 +85,26 @@ export default function SysAdminInventoryPage() {
       .then(setProducts)
       .finally(() => setLoading(false))
   }, [status])
+
+  function persistOrder(ordered: Product[]) {
+    fetch('/api/sysadmin/inventory/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: ordered.map(p => p.id) }),
+    }).catch(() => {})
+  }
+
+  function handleDrop(targetIndex: number) {
+    if (dragIndex === null || dragIndex === targetIndex) { setDragIndex(null); return }
+    setProducts(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(dragIndex, 1)
+      next.splice(targetIndex, 0, moved)
+      persistOrder(next)
+      return next
+    })
+    setDragIndex(null)
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -176,10 +197,20 @@ export default function SysAdminInventoryPage() {
         />
       </div>
 
+      {search.trim() === '' ? (
+        <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 8px' }}>
+          ⠿ の行をドラッグして並べ替えると、管理ポータルの発注画面にもこの順序が反映されます。
+        </p>
+      ) : (
+        <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 8px' }}>
+          ※ 並べ替えは検索を空にしたときに行えます。
+        </p>
+      )}
       <div style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--md-sys-color-outline-variant)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
           <thead>
             <tr style={{ background: 'var(--md-sys-color-surface-container)', textAlign: 'left' }}>
+              <th style={{ padding: '12px 8px', fontWeight: 600, width: 32 }}></th>
               <th style={{ padding: '12px 16px', fontWeight: 600, width: 64 }}></th>
               <th style={{ padding: '12px 16px', fontWeight: 600 }}>商品名</th>
               <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'right' }}>仕入れ価格</th>
@@ -193,17 +224,28 @@ export default function SysAdminInventoryPage() {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                <td colSpan={9} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>
                   商品が登録されていません
                 </td>
               </tr>
             )}
-            {filtered.map(p => {
+            {filtered.map((p, idx) => {
               const totalStock = p.hasVariants
                 ? p.variants.reduce((s, v) => s + v.stock, 0)
                 : p.stock
+              const canReorder = search.trim() === ''
               return (
-                <tr key={p.id} style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+                <tr
+                  key={p.id}
+                  draggable={canReorder}
+                  onDragStart={() => canReorder && setDragIndex(idx)}
+                  onDragOver={e => { if (canReorder) e.preventDefault() }}
+                  onDrop={() => canReorder && handleDrop(idx)}
+                  style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', background: dragIndex === idx ? 'var(--md-sys-color-surface-container-high)' : 'transparent' }}
+                >
+                  <td style={{ padding: '8px', textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)', cursor: canReorder ? 'grab' : 'default', userSelect: 'none' }}>
+                    {canReorder ? '⠿' : ''}
+                  </td>
                   <td style={{ padding: '8px 16px' }}>
                     {p.imageUrl
                       ? <img src={p.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />

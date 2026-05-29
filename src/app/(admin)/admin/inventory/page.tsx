@@ -99,10 +99,9 @@ export default function SupplyOrderPage() {
     return products.filter(p => p.name.toLowerCase().includes(q))
   }, [products, search])
 
-  // 価格解決
-  function priceOf(p: Product, v?: Variant) {
-    if (v) return v.sellingPrice ?? p.sellingPrice
-    return p.sellingPrice
+  // 価格解決：発注はサイズ問わず「仕入れ価格」で算出する
+  function priceOf(p: Product, _v?: Variant) {
+    return p.purchasePrice
   }
   function keyOf(productId: string, variantId?: string) {
     return `${productId}:${variantId ?? '_'}`
@@ -147,7 +146,7 @@ export default function SupplyOrderPage() {
       return
     }
     if (cartTotal <= 0) {
-      setError('合計金額が0円です。販売価格が設定されている商品を選択してください')
+      setError('合計金額が0円です。仕入れ価格が設定されている商品を選択してください')
       return
     }
     setPlacing(true)
@@ -267,7 +266,7 @@ export default function SupplyOrderPage() {
                         {!p.hasVariants ? (
                           <>
                             <div style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
-                              {yen(p.sellingPrice)} ／ 在庫 {p.stock}
+                              仕入 {yen(p.purchasePrice)} ／ 在庫 {p.stock}
                             </div>
                             <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', paddingTop: 4 }}>
                               <QtyInput value={cart[keyOf(p.id)] ?? 0} onChange={q => setQty(keyOf(p.id), q)} />
@@ -280,7 +279,7 @@ export default function SupplyOrderPage() {
                                 <div style={{ fontSize: 12, minWidth: 0 }}>
                                   <span style={{ fontWeight: 600 }}>{v.sizeName}</span>
                                   <span style={{ color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 6 }}>
-                                    {yen(v.sellingPrice ?? p.sellingPrice)}／在庫{v.stock}
+                                    仕入{yen(p.purchasePrice)}／在庫{v.stock}
                                   </span>
                                 </div>
                                 <QtyInput value={cart[keyOf(p.id, v.id)] ?? 0} onChange={q => setQty(keyOf(p.id, v.id), q)} />

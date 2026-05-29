@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
     if (!product) {
       return NextResponse.json({ error: `商品が見つかりません: ${item.productId}` }, { status: 400 })
     }
-    let unitPrice = product.sellingPrice
+    // 管理ポータルの発注はサイズ問わず「仕入れ価格」で算出する
+    const unitPrice = product.purchasePrice
     let sizeName: string | null = null
     if (item.variantId) {
       const variant = product.variants.find(v => v.id === item.variantId)
@@ -71,7 +72,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `サイズが見つかりません: ${item.variantId}` }, { status: 400 })
       }
       sizeName = variant.sizeName
-      unitPrice = variant.sellingPrice ?? product.sellingPrice
     }
     const subtotal = unitPrice * item.quantity
     lineItems.push({
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
   const totalAmount = lineItems.reduce((s, li) => s + li.subtotal, 0)
   if (totalAmount <= 0) {
-    return NextResponse.json({ error: '合計金額が0円です。販売価格が設定されているか確認してください' }, { status: 400 })
+    return NextResponse.json({ error: '合計金額が0円です。仕入れ価格が設定されているか確認してください' }, { status: 400 })
   }
 
   // 発注番号 SO-YYYYMM-NNNN

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/process-email-queue",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/apply-recurring-costs",
+      "schedule": "0 5 1 * *"
     }
   ]
 }

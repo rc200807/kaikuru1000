@@ -1054,14 +1054,16 @@ model AccessLog {
 
 // 運用コスト（手動入力、コスト推移・内訳用）
 model OperatingCost {
-  id        String   @id @default(cuid())
-  month     String                                           // YYYY-MM
-  category  String                                           // hosting/api/email/labor/other
-  label     String
-  amount    Int                                              // 円
-  note      String?  @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  month       String                                         // YYYY-MM
+  category    String                                         // hosting/api/email/labor/stripe/other
+  label       String
+  amount      Int                                            // 円
+  note        String?  @db.Text
+  isRecurring Boolean  @default(false)                       // 毎月発生する固定費（自動繰り越し対象）
+  source      String   @default("manual")                   // manual | stripe（自動取得分の識別）
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([month])
 }

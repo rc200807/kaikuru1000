@@ -10,6 +10,7 @@ const createSchema = z.object({
   label: z.string().min(1).max(120),
   amount: z.number().int().min(0),
   note: z.string().max(2000).nullable().optional(),
+  isRecurring: z.boolean().optional(),
 })
 
 export async function GET() {

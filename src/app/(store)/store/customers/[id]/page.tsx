@@ -9,7 +9,7 @@ import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
-import Modal from '@/components/Modal'
+import BottomSheet from '@/components/BottomSheet'
 import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
@@ -1194,7 +1194,7 @@ export default function StoreCustomerDetailPage() {
             )}
 
             {/* 案件追加モーダル */}
-            <Modal open={newDealOpen} onClose={() => setNewDealOpen(false)} title="案件を追加">
+            <BottomSheet open={newDealOpen} onClose={() => setNewDealOpen(false)} title="案件を追加">
               <div className="space-y-4">
                 <TextField
                   label="案件メモ（買取内容など）"
@@ -1208,10 +1208,10 @@ export default function StoreCustomerDetailPage() {
                   <Button onClick={handleCreateDeal} loading={creatingDeal} disabled={creatingDeal}>作成</Button>
                 </div>
               </div>
-            </Modal>
+            </BottomSheet>
 
             {/* 案件に紐づく訪問予定の作成モーダル */}
-            <Modal open={!!scheduleForDeal} onClose={() => setScheduleForDeal(null)} title="訪問予定を作成して案件に紐づける">
+            <BottomSheet open={!!scheduleForDeal} onClose={() => setScheduleForDeal(null)} title="訪問予定を作成して案件に紐づける">
               <form onSubmit={handleCreateDealSchedule} className="space-y-4">
                 <TextField
                   label="訪問日"
@@ -1245,7 +1245,7 @@ export default function StoreCustomerDetailPage() {
                   <Button type="submit" loading={creatingDealSchedule} disabled={creatingDealSchedule || !dealScheduleForm.visitDate}>作成</Button>
                 </div>
               </form>
-            </Modal>
+            </BottomSheet>
           </div>
         )}
 
@@ -1876,7 +1876,7 @@ export default function StoreCustomerDetailPage() {
       </div>
 
       {/* 顧客情報編集モーダル */}
-      <Modal open={editModalOpen} onClose={() => !savingEdit && setEditModalOpen(false)} title="顧客情報を編集" size="lg">
+      <BottomSheet open={editModalOpen} onClose={() => !savingEdit && setEditModalOpen(false)} title="顧客情報を編集" desktopMaxWidth="sm:max-w-2xl">
         <div className="space-y-4">
           <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1938,7 +1938,7 @@ export default function StoreCustomerDetailPage() {
             </Button>
           </div>
         </div>
-      </Modal>
+      </BottomSheet>
     </>
   )
 }

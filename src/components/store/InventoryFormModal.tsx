@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Modal from '@/components/Modal'
+import BottomSheet from '@/components/BottomSheet'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
@@ -229,7 +229,7 @@ export default function InventoryFormModal({ open, onClose, mode, itemId, purcha
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={MODAL_TITLE[mode]} size="lg">
+    <BottomSheet open={open} onClose={onClose} title={MODAL_TITLE[mode]} desktopMaxWidth="sm:max-w-2xl">
       <div className="space-y-4">
         {error && <MessageBanner severity="error">{error}</MessageBanner>}
 
@@ -360,6 +360,6 @@ export default function InventoryFormModal({ open, onClose, mode, itemId, purcha
           </Button>
         </div>
       </div>
-    </Modal>
+    </BottomSheet>
   )
 }

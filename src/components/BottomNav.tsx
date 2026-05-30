@@ -279,16 +279,16 @@ export default function BottomNav() {
         transform transition-transform duration-300 ease-out
         ${menuOpen ? 'translate-y-0' : 'translate-y-full'}
       `}>
-        <div className="bg-[#ffffff] rounded-t-2xl shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_-4px_16px_rgba(0,0,0,0.08)] max-h-[85vh] flex flex-col">
+        <div className="bg-[var(--md-sys-color-surface)] rounded-t-2xl shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_-4px_16px_rgba(0,0,0,0.08)] max-h-[85vh] flex flex-col">
           {/* Handle bar */}
           <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-[#e5e5e5]" />
+            <div className="w-10 h-1 rounded-full bg-[var(--md-sys-color-outline-variant)]" />
           </div>
 
           {/* Store switcher section (only if linked stores exist) */}
           {hasLinkedStores && (
             <div className="px-4 pt-2 pb-3 border-b border-[rgba(0,0,0,0.08)]">
-              <p className="text-[11px] font-semibold text-[#a3a3a3] uppercase tracking-wider mb-2">
+              <p className="text-[11px] font-semibold text-[var(--md-sys-color-on-surface-faint)] uppercase tracking-wider mb-2">
                 店舗を切り替え
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1">
@@ -302,8 +302,8 @@ export default function BottomNav() {
                       className={`
                         flex items-center gap-2 px-3 py-2 rounded-lg shrink-0 transition-colors
                         ${isCurrent
-                          ? 'bg-[#f5f5f5] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]'
-                          : 'bg-[#fafafa] active:bg-[#f0f0f0]'
+                          ? 'bg-[var(--md-sys-color-surface-container-high)] shadow-[0_0_0_1px_rgba(0,0,0,0.08)]'
+                          : 'bg-[var(--md-sys-color-surface-container)] active:bg-[var(--md-sys-color-surface-container-high)]'
                         }
                         disabled:opacity-70
                       `}
@@ -311,16 +311,16 @@ export default function BottomNav() {
                       {store.avatar ? (
                         <img src={store.avatar} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-[#171717] flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                           <span className="text-white text-xs font-semibold">{store.name[0]}</span>
                         </div>
                       )}
                       <div className="text-left min-w-0">
-                        <p className="text-xs font-medium text-[#171717] truncate max-w-[100px]">{store.name}</p>
-                        <p className="text-[10px] text-[#a3a3a3] font-mono">{store.code}</p>
+                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)] truncate max-w-[100px]">{store.name}</p>
+                        <p className="text-[10px] text-[var(--md-sys-color-on-surface-faint)] font-mono">{store.code}</p>
                       </div>
                       {isCurrent && (
-                        <svg className="w-4 h-4 text-[#171717] shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 text-[var(--md-sys-color-on-surface)] shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
@@ -336,13 +336,13 @@ export default function BottomNav() {
             {user?.avatar ? (
               <img src={user.avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-[#171717] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center">
                 <span className="text-white text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-[#171717] truncate">{user?.name ?? '店舗'}</p>
-              <p className="text-[11px] text-[#a3a3a3] truncate">{user?.email ?? ''}</p>
+              <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">{user?.name ?? '店舗'}</p>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-faint)] truncate">{user?.email ?? ''}</p>
             </div>
           </div>
 
@@ -360,20 +360,20 @@ export default function BottomNav() {
                     className={`
                       flex flex-col items-center gap-1 py-3 px-1 rounded-lg transition-colors relative
                       ${active
-                        ? 'bg-[#f5f5f5] text-[#171717]'
-                        : 'text-[#666666] active:bg-[#f5f5f5]'
+                        ? 'bg-[var(--store-primary-container)] text-[var(--store-primary)]'
+                        : 'text-[var(--md-sys-color-on-surface-variant)] active:bg-[var(--md-sys-color-surface-container-high)]'
                       }
                     `}
                   >
                     <div className="relative">
                       {item.icon}
                       {showBadge && (
-                        <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] flex items-center justify-center px-1 rounded-full bg-[#171717] text-white text-[9px] font-bold leading-none">
+                        <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] flex items-center justify-center px-1 rounded-full bg-[var(--store-primary)] text-white text-[9px] font-bold leading-none">
                           {unreadCount > 99 ? '99+' : unreadCount}
                         </span>
                       )}
                     </div>
-                    <span className={`text-[10px] leading-tight text-center ${active ? 'font-semibold text-[#171717]' : 'font-medium'}`}>
+                    <span className={`text-[10px] leading-tight text-center ${active ? 'font-semibold text-[var(--store-primary)]' : 'font-medium'}`}>
                       {item.label}
                     </span>
                   </Link>
@@ -390,7 +390,7 @@ export default function BottomNav() {
                   signOut({ callbackUrl: '/store/login' })
                 }
               }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[#666666] bg-[#f5f5f5] active:bg-[#e5e5e5] transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-high)] active:bg-[var(--md-sys-color-outline-variant)] transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
@@ -402,7 +402,7 @@ export default function BottomNav() {
       </div>
 
       {/* Bottom navigation bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#ffffff] shadow-[inset_0_1px_0_0_rgba(0,0,0,0.08)] safe-area-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--md-sys-color-surface)] shadow-[inset_0_1px_0_0_rgba(0,0,0,0.08)] safe-area-bottom">
         <div className="flex items-center justify-around h-16">
           {mainNavItems.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -414,14 +414,14 @@ export default function BottomNav() {
                   flex flex-col items-center justify-center gap-0.5 w-full h-full
                   text-[10px] transition-colors
                   ${active
-                    ? 'text-[#171717] font-semibold'
-                    : 'text-[#666666] font-medium'
+                    ? 'text-[var(--store-primary)] font-semibold'
+                    : 'text-[var(--md-sys-color-on-surface-variant)] font-medium'
                   }
                 `}
               >
                 <div className={`
                   px-4 py-1 rounded-full transition-colors
-                  ${active ? 'bg-[#f5f5f5]' : ''}
+                  ${active ? 'bg-[var(--store-primary-container)]' : ''}
                 `}>
                   {item.icon}
                 </div>
@@ -437,14 +437,14 @@ export default function BottomNav() {
               flex flex-col items-center justify-center gap-0.5 w-full h-full
               text-[10px] transition-colors
               ${menuOpen
-                ? 'text-[#171717] font-semibold'
-                : 'text-[#666666] font-medium'
+                ? 'text-[var(--store-primary)] font-semibold'
+                : 'text-[var(--md-sys-color-on-surface-variant)] font-medium'
               }
             `}
           >
             <div className={`
               px-4 py-1 rounded-full transition-colors
-              ${menuOpen ? 'bg-[#f5f5f5]' : ''}
+              ${menuOpen ? 'bg-[var(--store-primary-container)]' : ''}
             `}>
               {menuOpen ? (
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">

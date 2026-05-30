@@ -13,7 +13,7 @@ export default function AppBar({ title, subtitle, actions, className = '' }: App
       className={`bg-[var(--md-sys-color-surface)] sticky top-0 z-30 ${className}`}
       style={{ boxShadow: 'rgba(0,0,0,0.08) 0px 1px 0px 0px' }}
     >
-      <div className="px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div className="px-4 sm:px-6 py-3 min-h-[var(--appbar-h)] flex items-center justify-between">
         <div className="min-w-0">
           {subtitle && (
             <p className="text-[13px] font-normal text-[var(--md-sys-color-on-surface-variant)] mb-0.5">

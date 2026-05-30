@@ -296,7 +296,7 @@ export default function StoreDeliveryDetailPage() {
                     done
                       ? 'bg-emerald-500 text-white'
                       : active
-                        ? 'bg-[var(--portal-primary,#1E3A5F)] text-white ring-2 ring-[var(--portal-primary,#1E3A5F)] ring-offset-1'
+                        ? 'bg-[var(--portal-primary)] text-white ring-2 ring-[var(--portal-primary)] ring-offset-1'
                         : 'bg-gray-100 border border-gray-300 text-gray-400'
                   }`}
                 >

@@ -8,6 +8,7 @@ import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
+import { useToast } from '@/components/Toast'
 
 type Item = {
   id: string
@@ -32,6 +33,7 @@ const fmtYen = (n: number) => `¥${(n ?? 0).toLocaleString()}`
 export default function StorePurchaseItemsPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
+  const { success } = useToast()
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
@@ -249,7 +251,7 @@ export default function StorePurchaseItemsPage() {
           janCode: convertItem.janCode,
           images: convertItem.images,
         }) : undefined}
-        onSaved={() => { setConvertItem(null); fetchItems() }}
+        onSaved={() => { setConvertItem(null); fetchItems(); success('在庫化しました') }}
       />
     </div>
   )

@@ -7,6 +7,7 @@ import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import InventoryFormModal, { inventoryItemToForm, type InventoryFormValues } from '@/components/store/InventoryFormModal'
+import { useToast } from '@/components/Toast'
 import {
   INVENTORY_STATUSES, INVENTORY_STATUS_LABEL, INVENTORY_STATUS_BADGE,
   INVENTORY_CONDITION_LABEL, type InventoryStatus, type InventoryCondition,
@@ -45,6 +46,7 @@ const fmtYen = (n: number) => `¥${(n ?? 0).toLocaleString()}`
 export default function StoreInventoryPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
+  const { success } = useToast()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
@@ -101,6 +103,7 @@ export default function StoreInventoryPage() {
     setModalOpen(true)
   }
   function handleSaved() {
+    success(editing ? '在庫を更新しました' : '在庫を登録しました')
     setModalOpen(false)
     setEditing(null)
     fetchItems()

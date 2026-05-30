@@ -1361,7 +1361,7 @@ export default function StoreCustomerDetailPage() {
                         <button
                           onClick={() => handleSaveMemoNote(memo.id)}
                           disabled={savingMemoNote === memo.id}
-                          className="text-xs px-4 py-1.5 bg-[var(--portal-primary,#1E3A5F)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
+                          className="text-xs px-4 py-1.5 bg-[var(--portal-primary)] text-white rounded-[var(--md-sys-shape-small)] hover:opacity-90 transition-opacity disabled:opacity-50"
                         >
                           {savingMemoNote === memo.id ? '保存中...' : '保存する'}
                         </button>
@@ -1691,7 +1691,7 @@ export default function StoreCustomerDetailPage() {
                               <div className="flex flex-col items-center gap-0.5" style={{ minWidth: '52px' }}>
                                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
                                   done   ? 'bg-emerald-500 text-white' :
-                                  active ? 'bg-[var(--portal-primary,#1E3A5F)] text-white ring-2 ring-[var(--portal-primary,#1E3A5F)] ring-offset-1' :
+                                  active ? 'bg-[var(--portal-primary)] text-white ring-2 ring-[var(--portal-primary)] ring-offset-1' :
                                            'bg-gray-100 border border-gray-300 text-gray-400'
                                 }`}>
                                   {done ? (

@@ -498,7 +498,7 @@ function MyStoreContent() {
                       <button
                         type="button"
                         onClick={handleLoadCalendars}
-                        className="text-xs font-medium text-[var(--store-primary,#1E3A5F)] hover:underline px-3 py-1.5 rounded-lg bg-[var(--md-sys-color-surface-container-high)] transition-colors shrink-0"
+                        className="text-xs font-medium text-[var(--store-primary)] hover:underline px-3 py-1.5 rounded-lg bg-[var(--md-sys-color-surface-container-high)] transition-colors shrink-0"
                       >
                         変更
                       </button>
@@ -559,13 +559,13 @@ function MyStoreContent() {
                               value={newCalendarName}
                               onChange={(e) => setNewCalendarName(e.target.value)}
                               placeholder="カレンダー名"
-                              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--store-primary,#1E3A5F)]/30 focus:border-[var(--store-primary,#1E3A5F)]"
+                              className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30 focus:border-[var(--store-primary)]"
                             />
                             <button
                               type="button"
                               onClick={handleCreateCalendar}
                               disabled={creatingCalendar || !newCalendarName.trim()}
-                              className="px-4 py-2 text-sm font-medium text-white bg-[var(--store-primary,#1E3A5F)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
+                              className="px-4 py-2 text-sm font-medium text-white bg-[var(--store-primary)] rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0"
                             >
                               {creatingCalendar ? '作成中...' : '作成'}
                             </button>
@@ -709,7 +709,7 @@ function MyStoreContent() {
                             }}
                             className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
                               bizDays.includes(day)
-                                ? 'bg-[var(--store-primary,#1E3A5F)] text-white'
+                                ? 'bg-[var(--store-primary)] text-white'
                                 : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-highest)]'
                             }`}
                           >
@@ -959,7 +959,7 @@ function MyStoreContent() {
                       <button
                         type="button"
                         onClick={() => setShowLinkForm(true)}
-                        className="flex items-center gap-2 text-sm font-medium text-[var(--store-primary,#1E3A5F)] hover:underline"
+                        className="flex items-center gap-2 text-sm font-medium text-[var(--store-primary)] hover:underline"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

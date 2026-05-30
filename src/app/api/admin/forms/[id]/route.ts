@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { normalizeCustomSlug } from '@/lib/forms/slug'
 import { CUSTOMER_TYPES } from '@/lib/customer-types'
+import { encrypt } from '@/lib/encrypt'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -38,6 +39,14 @@ const updateSchema = z.object({
   customerTypes: z.array(z.enum(CUSTOMER_TYPES)).nullable().optional(),
   customerFieldMap: customerFieldMapSchema.nullable().optional(),
   customerStoreId: z.string().nullable().optional(),
+  // 外部API送信（汎用Webhook）
+  externalApiEnabled: z.boolean().optional(),
+  externalApiUrl: z.string().url().nullable().optional().or(z.literal('')),
+  externalApiKey: z.string().optional(), // 生のAPIキー。非空のときのみ暗号化保存
+  externalApiHeaders: z.string().max(10000).nullable().optional(),
+  externalApiStaticFields: z.string().max(20000).nullable().optional(),
+  externalApiFieldMap: z.record(z.string(), z.string()).nullable().optional(),
+  externalApiNotifyEmails: z.string().max(1000).nullable().optional(),
 })
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -49,7 +58,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     include: { _count: { select: { submissions: true } } },
   })
   if (!form) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
-  return NextResponse.json({ ...form, submissionCount: form._count.submissions, _count: undefined })
+  return NextResponse.json({
+    ...form,
+    submissionCount: form._count.submissions,
+    _count: undefined,
+    externalApiKeyEnc: undefined,
+    externalApiKeySet: !!form.externalApiKeyEnc,
+  })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -95,8 +110,38 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   if (data.customerStoreId === '') data.customerStoreId = null
 
+  // 外部API送信設定
+  if (data.externalApiUrl === '') data.externalApiUrl = null
+  if (data.externalApiNotifyEmails === '') data.externalApiNotifyEmails = null
+  if ('externalApiFieldMap' in data) {
+    data.externalApiFieldMap = data.externalApiFieldMap && Object.keys(data.externalApiFieldMap).length > 0
+      ? JSON.stringify(data.externalApiFieldMap) : null
+  }
+  // ヘッダー / 固定フィールドは JSON オブジェクトとして妥当か確認
+  for (const key of ['externalApiHeaders', 'externalApiStaticFields'] as const) {
+    if (typeof data[key] === 'string' && data[key].trim()) {
+      try {
+        const o = JSON.parse(data[key])
+        if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error()
+      } catch {
+        const label = key === 'externalApiHeaders' ? 'カスタムヘッダー' : '固定送信フィールド'
+        return NextResponse.json({ error: `${label} は有効なJSONオブジェクトで入力してください` }, { status: 400 })
+      }
+    } else if (data[key] === '') {
+      data[key] = null
+    }
+  }
+  // API-Key: 非空のときのみ暗号化して保存（空＝既存維持＝SMTPパスワードと同じ挙動）
+  if ('externalApiKey' in data) {
+    const raw = data.externalApiKey
+    delete data.externalApiKey
+    if (typeof raw === 'string' && raw.trim()) {
+      data.externalApiKeyEnc = encrypt(raw.trim())
+    }
+  }
+
   const updated = await prisma.form.update({ where: { id }, data })
-  return NextResponse.json(updated)
+  return NextResponse.json({ ...updated, externalApiKeyEnc: undefined, externalApiKeySet: !!updated.externalApiKeyEnc })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

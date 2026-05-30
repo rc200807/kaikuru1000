@@ -791,6 +791,14 @@ model Form {
   customerFieldMap String?          @db.Text  // JSON: { name?, furigana?, email?, phone?, address?, postalCode? } → fieldId
   customerStoreId  String?
   customerStore    Store?           @relation("FormCustomerStore", fields: [customerStoreId], references: [id], onDelete: SetNull)
+  // 外部API送信（汎用Webhook）設定
+  externalApiEnabled      Boolean  @default(false)
+  externalApiUrl          String?  @db.Text  // 送信先URL
+  externalApiKeyEnc       String?  @db.Text  // API-Key（AES-256-GCM暗号化）。{{API_KEY}} で参照
+  externalApiHeaders      String?  @db.Text  // JSON: カスタムヘッダー（{{API_KEY}} 置換可）
+  externalApiStaticFields String?  @db.Text  // JSON: 固定送信フィールド（{{API_KEY}} 置換可）
+  externalApiFieldMap     String?  @db.Text  // JSON: { "<fieldId|$id|$submittedAt>": "出力キーパス" }
+  externalApiNotifyEmails String?  @db.Text  // 送信成功後の通知先（カンマ区切り）
   createdById      String
   createdBy        Admin            @relation(fields: [createdById], references: [id])
   submissions      FormSubmission[]
@@ -871,6 +879,9 @@ model FormSubmission {
   userAgent      String?   @db.Text
   sheetSyncedAt  DateTime?
   sheetSyncError String?   @db.Text
+  // 外部API送信の状態
+  externalApiPushedAt DateTime?
+  externalApiError    String?   @db.Text
   // 自動作成された顧客（customerCreate=true 時）
   userId         String?
   user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)

@@ -40,6 +40,14 @@ type FormData = {
   customerTypes: string | null  // JSON
   customerFieldMap: string | null // JSON
   customerStoreId: string | null
+  // 外部API送信（汎用Webhook）
+  externalApiEnabled: boolean
+  externalApiUrl: string | null
+  externalApiKeySet: boolean       // APIキーが設定済みか（鍵自体は返さない）
+  externalApiHeaders: string | null
+  externalApiStaticFields: string | null
+  externalApiFieldMap: string | null // JSON
+  externalApiNotifyEmails: string | null
 }
 
 type StoreOption = { id: string; name: string }
@@ -95,6 +103,12 @@ export default function FormEditPage() {
   const [customerFieldMap, setCustomerFieldMap] = useState<CustomerFieldMap>({})
   const [stores, setStores] = useState<StoreOption[]>([])
 
+  // 外部API送信設定
+  const [externalFieldMap, setExternalFieldMap] = useState<Record<string, string>>({})
+  const [externalApiKeyInput, setExternalApiKeyInput] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<any>(null)
+
   // ストアリスト読み込み
   useEffect(() => {
     fetch('/api/stores').then(r => r.ok ? r.json() : []).then(d => {
@@ -119,6 +133,12 @@ export default function FormEditPage() {
       } catch {
         setCustomerFieldMap({})
       }
+      try {
+        setExternalFieldMap(d.externalApiFieldMap ? JSON.parse(d.externalApiFieldMap) : {})
+      } catch {
+        setExternalFieldMap({})
+      }
+      setExternalApiKeyInput('')
     } else {
       setMsg({ type: 'error', text: 'フォームを取得できませんでした' })
     }
@@ -180,6 +200,14 @@ export default function FormEditPage() {
         customerTypes: customerTypesArr,
         customerFieldMap: customerFieldMap,
         customerStoreId: data.customerStoreId,
+        // 外部API送信
+        externalApiEnabled: data.externalApiEnabled,
+        externalApiUrl: data.externalApiUrl,
+        externalApiHeaders: data.externalApiHeaders,
+        externalApiStaticFields: data.externalApiStaticFields,
+        externalApiFieldMap: externalFieldMap,
+        externalApiNotifyEmails: data.externalApiNotifyEmails,
+        ...(externalApiKeyInput.trim() ? { externalApiKey: externalApiKeyInput.trim() } : {}),
       }
       const res = await fetch(`/api/admin/forms/${formId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!res.ok) {
@@ -188,11 +216,33 @@ export default function FormEditPage() {
       } else {
         const updated = await res.json()
         // slug が小文字化された等のサーバー側調整を反映
-        setData(prev => prev ? { ...prev, slug: updated.slug } : prev)
+        setData(prev => prev ? { ...prev, slug: updated.slug, externalApiKeySet: updated.externalApiKeySet ?? prev.externalApiKeySet } : prev)
+        setExternalApiKeyInput('')
         setMsg({ type: 'success', text: '保存しました' })
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function testExternal() {
+    setTesting(true)
+    setTestResult(null)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/admin/forms/${formId}/test-external`, { method: 'POST' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ type: 'error', text: j.error ?? 'テスト送信に失敗しました' })
+        setTestResult(j ?? null)
+      } else {
+        setTestResult(j)
+        setMsg({ type: j.ok ? 'success' : 'error', text: j.ok ? `テスト送信成功（HTTP ${j.status}）` : `テスト送信失敗: ${j.error ?? `HTTP ${j.status}`}` })
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'テスト送信に失敗しました' })
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -390,6 +440,91 @@ export default function FormEditPage() {
         )}
       </Card>
 
+      {/* 外部API送信（汎用Webhook） */}
+      <Card variant="elevated" padding="md" className="mb-4">
+        <label className="flex items-center gap-2 cursor-pointer mb-3">
+          <input
+            type="checkbox"
+            checked={data.externalApiEnabled}
+            onChange={(e) => setField('externalApiEnabled', e.target.checked)}
+            className="w-4 h-4 rounded accent-[hsla(212,100%,48%,1)]"
+          />
+          <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">回答を外部APIへ送信する（汎用Webhook）</h3>
+        </label>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+          有効化すると、回答送信時に下記設定で外部APIへ JSON を POST します。ヘッダーや固定フィールドに{' '}
+          <code className="px-1 rounded bg-[var(--md-sys-color-surface-container)]">{'{{API_KEY}}'}</code>{' '}
+          と書くと、保存したAPIキーへ置換されます。出力キーはドット記法でネストできます（例{' '}
+          <code className="px-1 rounded bg-[var(--md-sys-color-surface-container)]">hearing_json.customize_137</code>）。
+        </p>
+
+        {data.externalApiEnabled && (
+          <div className="space-y-5 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+            <Input label="送信先URL" value={data.externalApiUrl ?? ''} onChange={(v) => setField('externalApiUrl', v)} placeholder="https://apollon.crm-sys.net/Api/customerDataImport" />
+
+            <div>
+              <Label>APIキー{data.externalApiKeySet ? '（設定済み・変更する場合のみ入力）' : ''}</Label>
+              <input
+                type="password"
+                value={externalApiKeyInput}
+                onChange={(e) => setExternalApiKeyInput(e.target.value)}
+                placeholder={data.externalApiKeySet ? '••••••（変更する場合のみ入力）' : 'APIキーを入力'}
+                autoComplete="new-password"
+                className={inputCls}
+                style={{ boxShadow: inputBoxShadow }}
+                onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}
+                onBlur={(e) => { e.currentTarget.style.boxShadow = inputBoxShadow }}
+              />
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">暗号化して保存されます。ヘッダー/固定フィールド内の <code>{'{{API_KEY}}'}</code> に展開されます。</p>
+            </div>
+
+            <Textarea label="カスタムヘッダー（JSON）" value={data.externalApiHeaders ?? ''} onChange={(v) => setField('externalApiHeaders', v)} placeholder={'{"X-Api-Key": "{{API_KEY}}"}'} />
+
+            <Textarea label="固定送信フィールド（JSON）" value={data.externalApiStaticFields ?? ''} onChange={(v) => setField('externalApiStaticFields', v)} placeholder={'{"api_key":"{{API_KEY}}","company_code":"2","list_id":"32047"}'} />
+
+            {/* 項目マッピング */}
+            <div>
+              <Label>項目マッピング（フォーム項目 → 出力キー）</Label>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                各項目を送信JSONのどのキーに入れるか指定します。空欄の項目は送信されません。
+              </p>
+              <div className="space-y-2">
+                {([
+                  { src: '$id', label: '送信ID' },
+                  { src: '$submittedDate', label: '送信日（YYYY/MM/DD）' },
+                  { src: '$submittedAt', label: '送信日時（YYYY/MM/DD HH:mm）' },
+                ] as const).map(({ src, label }) => (
+                  <MapRow key={src} label={label} value={externalFieldMap[src] ?? ''} onChange={(v) => setExternalFieldMap(prev => ({ ...prev, [src]: v }))} />
+                ))}
+                {schema.filter(isInputField).map(f => (
+                  <MapRow
+                    key={f.id}
+                    label={`${(f as any).label} (${FIELD_TYPE_LABELS[f.type]})`}
+                    value={externalFieldMap[f.id] ?? ''}
+                    onChange={(v) => setExternalFieldMap(prev => ({ ...prev, [f.id]: v }))}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <Input label="取込み後の通知先メール（カンマ区切り）" value={data.externalApiNotifyEmails ?? ''} onChange={(v) => setField('externalApiNotifyEmails', v)} placeholder="fourth_fukuoka@premiumwater-hd.co.jp, ..." />
+
+            {/* テスト送信 */}
+            <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button variant="outlined" onClick={testExternal} loading={testing}>テスト送信</Button>
+                <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">保存後に、直近の回答（無ければサンプル値）で実際にPOSTし、組み立てたJSONとレスポンスを表示します。</p>
+              </div>
+              {testResult && (
+                <pre className="mt-3 max-h-80 overflow-auto text-[11px] leading-relaxed p-3 rounded-[6px] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap break-all">
+                  {JSON.stringify(testResult, null, 2)}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* タブ切り替え */}
       <div className="flex gap-1 bg-[var(--md-sys-color-surface-container)] rounded-xl p-1 mb-4 max-w-xs">
         {(['edit', 'preview'] as const).map(t => (
@@ -485,7 +620,7 @@ function Input({ label, value, onChange, placeholder, hint }: { label: string; v
   )
 }
 
-function Textarea({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Textarea({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
       <Label>{label}</Label>
@@ -493,6 +628,24 @@ function Textarea({ label, value, onChange }: { label: string; value: string; on
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={2}
+        placeholder={placeholder}
+        className={inputCls}
+        style={{ boxShadow: inputBoxShadow }}
+        onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}
+        onBlur={(e) => { e.currentTarget.style.boxShadow = inputBoxShadow }}
+      />
+    </div>
+  )
+}
+
+function MapRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:items-center">
+      <span className="text-xs text-[var(--md-sys-color-on-surface)] break-all">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="出力キー（例: customer_name / hearing_json.customize_137）"
         className={inputCls}
         style={{ boxShadow: inputBoxShadow }}
         onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}

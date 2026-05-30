@@ -6,6 +6,8 @@ import { buildZodFromSchema, formatAnswersForDisplay } from '@/lib/forms/buildZo
 import { verifyRecaptcha } from '@/lib/recaptcha'
 import { postToSheetWebhook } from '@/lib/forms/sheetWebhook'
 import { sendFormSubmissionNotification } from '@/lib/mailer'
+import { decrypt } from '@/lib/encrypt'
+import { buildExternalPayload, parseHeaders, postToExternalApi } from '@/lib/forms/externalApi'
 import { isCustomerType, parseCustomerTypes, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
 /** フォーム回答から顧客フィールドを抽出。fieldMap で指定された fieldId の値を読む。 */
@@ -186,6 +188,59 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         data: r.ok ? { sheetSyncedAt: new Date(), sheetSyncError: null } : { sheetSyncError: r.error ?? 'unknown error' },
       }))
       .catch(err => console.error('[FormSubmit] sheet webhook error:', err?.message))
+  }
+
+  // 外部API送信（汎用Webhook）— 成功/失敗を記録し、成功時のみ専用通知を送る
+  // ⚠️ 信頼性のため await する（Vercelで途中終了しないように）。回答自体は成功扱い（送信失敗は握り潰さず記録）
+  if (form.externalApiEnabled && form.externalApiUrl) {
+    try {
+      const apiKey = form.externalApiKeyEnc ? decrypt(form.externalApiKeyEnc) : ''
+      const fieldMap = form.externalApiFieldMap ? JSON.parse(form.externalApiFieldMap) : {}
+      const payload = buildExternalPayload({
+        schema,
+        staticFieldsJson: form.externalApiStaticFields,
+        fieldMap,
+        answers: parsed.data as Record<string, unknown>,
+        submissionId: submission.id,
+        submittedAt: submission.createdAt,
+        apiKey,
+      })
+      const headers = parseHeaders(form.externalApiHeaders, apiKey)
+      const r = await postToExternalApi({ url: form.externalApiUrl, headers, payload })
+      await prisma.formSubmission.update({
+        where: { id: submission.id },
+        data: r.ok
+          ? { externalApiPushedAt: new Date(), externalApiError: null }
+          : { externalApiError: r.error ?? 'unknown error' },
+      })
+      // 取込み（送信成功）後に指定アドレスへ通知
+      if (r.ok && form.externalApiNotifyEmails) {
+        const recipients = form.externalApiNotifyEmails.split(',').map(s => s.trim()).filter(Boolean)
+        if (recipients.length > 0) {
+          const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+          try {
+            await sendFormSubmissionNotification({
+              to: recipients,
+              formTitle: form.title,
+              submissionId: submission.id,
+              submittedAt: submission.createdAt,
+              fields: formatted,
+              reviewUrl: `${baseUrl}/admin/forms/${form.id}/submissions`,
+            })
+          } catch (err: any) {
+            console.error('[FormSubmit] external api notify mail error:', err?.message)
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('[FormSubmit] external api push error:', err?.message)
+      try {
+        await prisma.formSubmission.update({
+          where: { id: submission.id },
+          data: { externalApiError: err?.message ?? 'build/send error' },
+        })
+      } catch { /* ignore */ }
+    }
   }
 
   return NextResponse.json({ ok: true, submissionId: submission.id }, { status: 201 })

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendAssignmentNotification, sendStoreAssignmentNotification } from '@/lib/mailer'
+import { sendStoreAssignmentNotification } from '@/lib/mailer'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
@@ -83,29 +83,10 @@ export async function POST(request: NextRequest) {
         include: { store: true },
       })
 
-      // 店舗から登録した場合は割り当て通知メールを送信
+      // 店舗が自分で登録した顧客には「担当顧客のご案内」（店舗向け割り当て通知）は送らない。
+      // この通知は本部から割り当てた場合のみ /api/assignments で送信する。
       // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
-      // メール送信が中断されるため、必ず await する
-      // 顧客タイプが「アキクル」の場合は店舗通知をスキップ
-      const isAkikuruUser = user.customerType === 'akikuru'
-      if (autoStoreId && user.store?.email && !isAkikuruUser) {
-        try {
-          await sendAssignmentNotification({
-            storeEmail: user.store.email,
-            storeName: user.store.name,
-            customerName: user.name,
-            customerFurigana: user.furigana,
-            customerEmail: user.email || '',
-            customerPhone: user.phone,
-            customerAddress: user.address,
-            registeredAt: user.createdAt,
-          })
-        } catch (err: any) {
-          console.error('[Users] 店舗向け割り当て通知メールの送信に失敗しました:', err.message)
-        }
-      } else if (autoStoreId && isAkikuruUser) {
-        console.log(`[Users] アキクル顧客のため店舗通知をスキップ: userId=${user.id}, storeId=${autoStoreId}`)
-      }
+      // メール送信が中断されるため、以下の顧客本人向けメールは必ず await する
       if (autoStoreId && user.email && user.store) {
         const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
         try {

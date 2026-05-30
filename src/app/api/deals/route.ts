@@ -28,6 +28,24 @@ export async function GET(request: NextRequest) {
   if (isStore) where.storeId = sessionUser.id
   else if (storeId) where.storeId = storeId
   if (userId) where.userId = userId
+
+  // 集計モード（成約率・ステータス別件数）。status フィルタは無視し全ステータスの内訳を返す。
+  // ページング上限に依存せず正確な件数を出すため groupBy で集計する。
+  if (searchParams.get('stats') === '1') {
+    const grouped = await prisma.deal.groupBy({
+      by: ['status'],
+      where,
+      _count: { _all: true },
+    })
+    const counts: Record<string, number> = {}
+    let statsTotal = 0
+    for (const g of grouped) {
+      counts[g.status] = g._count._all
+      statsTotal += g._count._all
+    }
+    return NextResponse.json({ stats: { counts, total: statsTotal } })
+  }
+
   if (status && status !== 'all') where.status = status
 
   const [deals, total] = await Promise.all([

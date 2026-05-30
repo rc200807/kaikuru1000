@@ -26,23 +26,21 @@ export default function StoreDealsPage() {
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchText, setSearchText] = useState('')
+  const [stats, setStats] = useState<{ counts: Record<string, number>; total: number } | null>(null)
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
   useEffect(() => {
-    if (authStatus === 'authenticated') fetchDeals()
+    if (authStatus === 'authenticated') { fetchDeals(); fetchStats() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus, filterStatus])
+  }, [authStatus])
 
   async function fetchDeals() {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (filterStatus !== 'all') params.set('status', filterStatus)
-      params.set('limit', '200')
-      const res = await fetch(`/api/deals?${params}`)
+      const res = await fetch(`/api/deals?limit=200`)
       if (res.ok) {
         const data = await res.json()
         setDeals(data.deals ?? [])
@@ -54,14 +52,33 @@ export default function StoreDealsPage() {
     }
   }
 
+  async function fetchStats() {
+    try {
+      const res = await fetch(`/api/deals?stats=1`)
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data.stats ?? null)
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = searchText.trim().toLowerCase()
-    if (!q) return deals
     return deals.filter(d => {
-      const hay = [d.user?.name ?? '', d.user?.phone ?? '', d.detail ?? ''].join(' ').toLowerCase()
-      return hay.includes(q)
+      if (filterStatus !== 'all' && d.status !== filterStatus) return false
+      if (q) {
+        const hay = [d.user?.name ?? '', d.user?.phone ?? '', d.detail ?? ''].join(' ').toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
     })
-  }, [deals, searchText])
+  }, [deals, searchText, filterStatus])
+
+  const wonCount = (stats?.counts.contract ?? 0) + (stats?.counts.completed ?? 0)
+  const statsTotal = stats?.total ?? 0
+  const winRate = statsTotal > 0 ? Math.round((wonCount / statsTotal) * 1000) / 10 : 0
 
   if (authStatus === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage />
@@ -72,6 +89,28 @@ export default function StoreDealsPage() {
       <AppBar title="案件一覧" />
 
       <div className="max-w-3xl w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3">
+        {/* 成約率・ステータス別件数サマリー */}
+        {stats && (
+          <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3 flex items-center gap-4 flex-wrap">
+            <div className="shrink-0">
+              <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">
+                {winRate}<span className="text-base font-semibold">%</span>
+              </div>
+              <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">成約率（契約+完了 / 全{statsTotal}件）</div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {DEAL_STATUSES.map(s => {
+                const badge = DEAL_STATUS_BADGE[s]
+                return (
+                  <span key={s} className="text-xs px-2 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.fg }}>
+                    {DEAL_STATUS_LABEL[s]} {stats.counts[s] ?? 0}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 検索 + ステータスフィルタ */}
         <div className="flex flex-col gap-2">
           <div className="relative">

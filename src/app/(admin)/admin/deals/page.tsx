@@ -45,6 +45,7 @@ export default function AdminDealsPage() {
   const router = useRouter()
 
   const [deals, setDeals] = useState<Deal[]>([])
+  const [stats, setStats] = useState<{ counts: Record<string, number>; total: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
@@ -66,6 +67,12 @@ export default function AdminDealsPage() {
     fetchDeals()
   }, [status])
 
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    fetchStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, storeFilter])
+
   async function fetchDeals() {
     setLoading(true)
     try {
@@ -76,6 +83,20 @@ export default function AdminDealsPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchStats() {
+    try {
+      const params = new URLSearchParams({ stats: '1' })
+      if (storeFilter) params.set('storeId', storeFilter)
+      const res = await fetch(`/api/deals?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data.stats ?? null)
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -149,6 +170,10 @@ export default function AdminDealsPage() {
     }
   }
 
+  const wonCount = (stats?.counts.contract ?? 0) + (stats?.counts.completed ?? 0)
+  const statsTotal = stats?.total ?? 0
+  const winRate = statsTotal > 0 ? Math.round((wonCount / statsTotal) * 1000) / 10 : 0
+
   if (status === 'loading' || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><LoadingSpinner /></div>
   }
@@ -159,8 +184,26 @@ export default function AdminDealsPage() {
       <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
         <h1 style={{ margin: '0 0 2px', fontSize: 20, fontWeight: 700 }}>案件管理</h1>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
-          全店舗の案件（{filtered.length}件 / 全{deals.length}件）
+          {storeFilter ? '選択店舗の案件' : '全店舗の案件'}（{filtered.length}件 表示 / 全{statsTotal || deals.length}件）
         </p>
+        {stats && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>{winRate}<span style={{ fontSize: 14, fontWeight: 600 }}>%</span></div>
+              <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 2 }}>成約率（契約+完了 / 全{statsTotal}件）</div>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {DEAL_STATUS_ORDER.map(s => {
+                const c = DEAL_STATUS_BADGE[s]
+                return (
+                  <span key={s} style={{ fontSize: 12, padding: '2px 10px', borderRadius: 999, background: c.bg, color: c.fg }}>
+                    {DEAL_STATUS_LABEL[s]} {stats.counts[s] ?? 0}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 分割レイアウト */}

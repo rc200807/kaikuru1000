@@ -156,10 +156,11 @@ export default function StorePurchaseItemsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map(item => (
+            {filtered.map((item, i) => (
               <div
                 key={item.id}
-                className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-3 flex gap-3"
+                className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-3 flex gap-3 animate-fade-in-up"
+                style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
               >
                 {/* サムネイル */}
                 <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-[var(--md-sys-color-surface-container)] flex items-center justify-center">

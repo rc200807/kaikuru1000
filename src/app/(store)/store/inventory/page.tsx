@@ -177,13 +177,14 @@ export default function StoreInventoryPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map(item => {
+            {filtered.map((item, i) => {
               const badge = INVENTORY_STATUS_BADGE[item.status as InventoryStatus] ?? INVENTORY_STATUS_BADGE.draft
               return (
                 <button
                   key={item.id}
                   onClick={() => openEdit(item)}
-                  className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-3 flex gap-3 hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                  className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-3 flex gap-3 hover:bg-[var(--md-sys-color-surface-container)] transition-colors animate-fade-in-up"
+                  style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
                 >
                   <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-[var(--md-sys-color-surface-container)] flex items-center justify-center">
                     {item.images[0] ? (

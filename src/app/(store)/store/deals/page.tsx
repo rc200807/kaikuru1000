@@ -155,13 +155,14 @@ export default function StoreDealsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map(deal => {
+            {filtered.map((deal, i) => {
               const badge = DEAL_STATUS_BADGE[deal.status as DealStatus] ?? DEAL_STATUS_BADGE.inquiry
               return (
                 <button
                   key={deal.id}
                   onClick={() => deal.user && router.push(`/store/customers/${deal.user.id}?tab=deals`)}
-                  className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-4 hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                  className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-4 hover:bg-[var(--md-sys-color-surface-container)] transition-colors animate-fade-in-up"
+                  style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2">

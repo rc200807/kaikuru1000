@@ -226,6 +226,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // --- 案件（Deal）自動作成 ---
+    // レガシー問い合わせフォーム経由のみ案件を作成する。
+    // userId が無い（メール未入力で顧客紐付けなし）場合は作成しない。
+    // 失敗しても問い合わせ受付・メール・シート連携は止めない（try/catch で握り潰す）。
+    if (userId) {
+      const itemTitles = Array.isArray(items)
+        ? items.filter((i: any) => i?.title && typeof i.title === 'string').map((i: any) => `・${i.title}`)
+        : []
+      const dealDetail = [
+        `申込み内容: ${inquiryType}`,
+        details ? `相談内容: ${details}` : null,
+        itemTitles.length > 0 ? `買取希望品:\n${itemTitles.join('\n')}` : null,
+      ].filter(Boolean).join('\n\n')
+      try {
+        await prisma.deal.create({
+          data: {
+            userId,
+            storeId: store.id,
+            inquiryId: inquiry.id,
+            detail: dealDetail,
+            status: 'inquiry',
+          },
+        })
+      } catch (e: any) {
+        // inquiryId は @unique。再送等での重複（P2002）は無害なので握り潰す
+        if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) {
+          console.error('[inquiry] Deal 作成に失敗しました', e)
+        }
+      }
+    }
+
     // --- メール送信をキューに投入 ---
     // ⚠️ APIリクエスト中にSMTP送信を待たず、cronで2分間隔でバッチ処理する
     // - Vercel関数の同時実行数を圧迫しない

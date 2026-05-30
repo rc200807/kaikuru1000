@@ -17,6 +17,7 @@ import type { Status } from '@/components/StatusBadge'
 import MessageBanner from '@/components/MessageBanner'
 import EmptyState from '@/components/EmptyState'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
+import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 
 type Customer = {
   id: string
@@ -141,7 +142,7 @@ const TYPE_MAP: Record<string, { label: string; cls: string }> = {
   visit: { label: '訪問型', cls: 'bg-green-100 text-green-700' },
 }
 
-type TabKey = 'info' | 'memos' | 'add' | 'history' | 'shipments' | 'inquiries'
+type TabKey = 'info' | 'memos' | 'add' | 'history' | 'shipments' | 'inquiries' | 'deals'
 
 type CustomerInquiry = {
   id: string
@@ -163,6 +164,15 @@ const INQUIRY_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
   new:       { bg: 'rgba(248,113,113,0.15)', fg: '#f87171' },
   contacted: { bg: 'rgba(251,191,36,0.15)',  fg: '#fbbf24' },
   completed: { bg: 'rgba(74,222,128,0.15)',  fg: '#4ade80' },
+}
+
+type DealItem = {
+  id: string
+  detail: string | null
+  status: string
+  createdAt: string
+  inquiry: { id: string; inquiryType: string } | null
+  _count?: { visitSchedules: number }
 }
 
 export default function StoreCustomerDetailPage() {
@@ -314,6 +324,19 @@ export default function StoreCustomerDetailPage() {
   const [inquiriesList, setInquiriesList] = useState<CustomerInquiry[]>([])
   const [inquiriesLoading, setInquiriesLoading] = useState(false)
   const [inquiriesLoaded, setInquiriesLoaded] = useState(false)
+
+  // 案件
+  const [dealsList, setDealsList] = useState<DealItem[]>([])
+  const [dealsLoading, setDealsLoading] = useState(false)
+  const [dealsLoaded, setDealsLoaded] = useState(false)
+  const [newDealOpen, setNewDealOpen] = useState(false)
+  const [newDealDetail, setNewDealDetail] = useState('')
+  const [creatingDeal, setCreatingDeal] = useState(false)
+  const [dealDetailEdits, setDealDetailEdits] = useState<Record<string, string>>({})
+  const [savingDeal, setSavingDeal] = useState<string | null>(null)
+  const [scheduleForDeal, setScheduleForDeal] = useState<DealItem | null>(null)
+  const [dealScheduleForm, setDealScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
+  const [creatingDealSchedule, setCreatingDealSchedule] = useState(false)
   const [memoStoreNotes, setMemoStoreNotes] = useState<Record<string, string>>({})
   const [savingMemoNote, setSavingMemoNote] = useState<string | null>(null)
 
@@ -403,6 +426,9 @@ export default function StoreCustomerDetailPage() {
     if (tab === 'inquiries' && !inquiriesLoaded && customer) {
       loadInquiries()
     }
+    if (tab === 'deals' && !dealsLoaded && customer) {
+      loadDeals()
+    }
   }
 
   function loadInquiries() {
@@ -415,6 +441,103 @@ export default function StoreCustomerDetailPage() {
         setInquiriesLoaded(true)
       })
       .finally(() => setInquiriesLoading(false))
+  }
+
+  function loadDeals() {
+    if (!customer) return
+    setDealsLoading(true)
+    fetch(`/api/deals?userId=${customer.id}`)
+      .then(r => r.ok ? r.json() : { deals: [] })
+      .then((data: { deals: DealItem[] }) => {
+        const list = data.deals || []
+        setDealsList(list)
+        const edits: Record<string, string> = {}
+        list.forEach(d => { edits[d.id] = d.detail ?? '' })
+        setDealDetailEdits(edits)
+        setDealsLoaded(true)
+      })
+      .finally(() => setDealsLoading(false))
+  }
+
+  async function handleCreateDeal() {
+    if (!customer) return
+    setCreatingDeal(true)
+    const storeId = (session?.user as any).id
+    const res = await fetch('/api/deals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: customer.id, storeId, detail: newDealDetail }),
+    })
+    setCreatingDeal(false)
+    if (res.ok) {
+      const created: DealItem = await res.json()
+      setDealsList(prev => [created, ...prev])
+      setDealDetailEdits(prev => ({ ...prev, [created.id]: created.detail ?? '' }))
+      setNewDealOpen(false)
+      setNewDealDetail('')
+      setMsg({ type: 'success', text: '案件を作成しました' })
+    } else {
+      setMsg({ type: 'error', text: '案件の作成に失敗しました' })
+    }
+  }
+
+  async function handleDealStatusChange(dealId: string, newStatus: string) {
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (res.ok) {
+      setDealsList(prev => prev.map(d => d.id === dealId ? { ...d, status: newStatus } : d))
+    }
+  }
+
+  async function handleSaveDealDetail(dealId: string) {
+    setSavingDeal(dealId)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ detail: dealDetailEdits[dealId] ?? '' }),
+    })
+    setSavingDeal(null)
+    if (res.ok) {
+      setDealsList(prev => prev.map(d => d.id === dealId ? { ...d, detail: dealDetailEdits[dealId] ?? '' } : d))
+      setMsg({ type: 'success', text: '案件メモを保存しました' })
+    } else {
+      setMsg({ type: 'error', text: '保存に失敗しました' })
+    }
+  }
+
+  async function handleCreateDealSchedule(e: React.FormEvent) {
+    e.preventDefault()
+    if (!customer || !scheduleForDeal || !dealScheduleForm.visitDate) return
+    const storeId = (session?.user as any).id
+    const targetId = scheduleForDeal.id
+    setCreatingDealSchedule(true)
+    const res = await fetch('/api/visit-schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: customer.id,
+        storeId,
+        dealId: targetId,
+        visitDate: dealScheduleForm.visitDate,
+        startTime: dealScheduleForm.startTime || undefined,
+        endTime: dealScheduleForm.endTime || undefined,
+        note: dealScheduleForm.note || undefined,
+      }),
+    })
+    setCreatingDealSchedule(false)
+    if (res.ok) {
+      const created = await res.json()
+      setDealsList(prev => prev.map(d => d.id === targetId ? { ...d, _count: { visitSchedules: (d._count?.visitSchedules ?? 0) + 1 } } : d))
+      setSchedules(prev => [created, ...prev])
+      setScheduleForDeal(null)
+      setDealScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' })
+      setMsg({ type: 'success', text: '訪問予定を作成し、案件に紐づけました' })
+    } else {
+      setMsg({ type: 'error', text: '訪問予定の作成に失敗しました' })
+    }
   }
 
   function loadSchedules() {
@@ -478,6 +601,7 @@ export default function StoreCustomerDetailPage() {
     if (tabFromUrl === 'memos' && !memosLoaded) loadMemos()
     if (tabFromUrl === 'shipments' && !shipmentsLoaded) loadShipments()
     if (tabFromUrl === 'add' && !storeProposalsLoaded) loadStoreProposals()
+    if (tabFromUrl === 'deals' && !dealsLoaded) loadDeals()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer])
 
@@ -680,11 +804,13 @@ export default function StoreCustomerDetailPage() {
     ? [
         { key: 'info', label: '基本情報' },
         { key: 'inquiries', label: inquiriesList.length > 0 ? `お問い合わせ（${inquiriesList.length}）` : 'お問い合わせ' },
+        { key: 'deals', label: dealsList.length > 0 ? `案件（${dealsList.length}）` : '案件' },
         { key: 'shipments', label: shipmentsList.length > 0 ? `送付履歴（${shipmentsList.length}）` : '送付履歴' },
       ]
     : [
         { key: 'info', label: '基本情報' },
         { key: 'inquiries', label: inquiriesList.length > 0 ? `お問い合わせ（${inquiriesList.length}）` : 'お問い合わせ' },
+        { key: 'deals', label: dealsList.length > 0 ? `案件（${dealsList.length}）` : '案件' },
         { key: 'memos', label: memosList.length > 0 ? `買取トライ（${memosList.length}）` : '買取トライ' },
         { key: 'add', label: 'スケジュール追加' },
         { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
@@ -977,6 +1103,149 @@ export default function StoreCustomerDetailPage() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ===== 案件タブ ===== */}
+        {activeTab === 'deals' && (
+          <div>
+            <div className="flex justify-end mb-4">
+              <Button size="sm" onClick={() => { setNewDealDetail(''); setNewDealOpen(true) }}>
+                + 案件を追加
+              </Button>
+            </div>
+            {dealsLoading ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner size="md" />
+              </div>
+            ) : dealsList.length === 0 ? (
+              <Card className="p-6 text-center">
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">この顧客に紐づく案件はありません</p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {dealsList.map(deal => {
+                  const badge = DEAL_STATUS_BADGE[deal.status as keyof typeof DEAL_STATUS_BADGE] ?? DEAL_STATUS_BADGE.inquiry
+                  const dirty = (dealDetailEdits[deal.id] ?? '') !== (deal.detail ?? '')
+                  return (
+                    <Card key={deal.id} className="p-4">
+                      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: badge.bg, color: badge.fg }}
+                          >
+                            {DEAL_STATUS_LABEL[deal.status as keyof typeof DEAL_STATUS_LABEL] ?? deal.status}
+                          </span>
+                          {deal.inquiry && (
+                            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">問い合わせ由来</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          {new Date(deal.createdAt).toLocaleDateString('ja-JP', { dateStyle: 'medium' })}
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">ステータス</label>
+                        <select
+                          value={deal.status}
+                          onChange={e => handleDealStatusChange(deal.id, e.target.value)}
+                          className="w-full sm:w-52 px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
+                        >
+                          {DEAL_STATUS_ORDER.map(s => (
+                            <option key={s} value={s}>{DEAL_STATUS_LABEL[s]}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <TextField
+                        label="案件メモ（買取内容など）"
+                        value={dealDetailEdits[deal.id] ?? ''}
+                        onChange={v => setDealDetailEdits(prev => ({ ...prev, [deal.id]: v }))}
+                        rows={4}
+                      />
+                      <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          紐づく訪問予定: {deal._count?.visitSchedules ?? 0}件
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="tonal"
+                            onClick={() => { setDealScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' }); setScheduleForDeal(deal) }}
+                          >
+                            訪問予定を作成
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveDealDetail(deal.id)}
+                            loading={savingDeal === deal.id}
+                            disabled={savingDeal === deal.id || !dirty}
+                          >
+                            メモを保存
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* 案件追加モーダル */}
+            <Modal open={newDealOpen} onClose={() => setNewDealOpen(false)} title="案件を追加">
+              <div className="space-y-4">
+                <TextField
+                  label="案件メモ（買取内容など）"
+                  value={newDealDetail}
+                  onChange={setNewDealDetail}
+                  rows={5}
+                  placeholder="買取の内容や状況などを入力..."
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="text" onClick={() => setNewDealOpen(false)}>キャンセル</Button>
+                  <Button onClick={handleCreateDeal} loading={creatingDeal} disabled={creatingDeal}>作成</Button>
+                </div>
+              </div>
+            </Modal>
+
+            {/* 案件に紐づく訪問予定の作成モーダル */}
+            <Modal open={!!scheduleForDeal} onClose={() => setScheduleForDeal(null)} title="訪問予定を作成して案件に紐づける">
+              <form onSubmit={handleCreateDealSchedule} className="space-y-4">
+                <TextField
+                  label="訪問日"
+                  type="date"
+                  value={dealScheduleForm.visitDate}
+                  onChange={v => setDealScheduleForm(prev => ({ ...prev, visitDate: v }))}
+                  required
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <TextField
+                    label="開始時間"
+                    type="time"
+                    value={dealScheduleForm.startTime}
+                    onChange={v => setDealScheduleForm(prev => ({ ...prev, startTime: v }))}
+                  />
+                  <TextField
+                    label="終了時間"
+                    type="time"
+                    value={dealScheduleForm.endTime}
+                    onChange={v => setDealScheduleForm(prev => ({ ...prev, endTime: v }))}
+                  />
+                </div>
+                <TextField
+                  label="メモ（任意）"
+                  value={dealScheduleForm.note}
+                  onChange={v => setDealScheduleForm(prev => ({ ...prev, note: v }))}
+                  rows={3}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="text" onClick={() => setScheduleForDeal(null)}>キャンセル</Button>
+                  <Button type="submit" loading={creatingDealSchedule} disabled={creatingDealSchedule || !dealScheduleForm.visitDate}>作成</Button>
+                </div>
+              </form>
+            </Modal>
           </div>
         )}
 

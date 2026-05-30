@@ -81,6 +81,7 @@ model User {
   lineUsers         LineUser[]
   formSubmissions   FormSubmission[]
   partnerNotes      SalesPartnerCustomerNote[]
+  deals             Deal[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -133,6 +134,7 @@ model Store {
   lineChannels LineChannel[]
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
   trainingVideoViews   TrainingVideoView[]
+  deals      Deal[]
   // 運営者（複数店舗を1運営者が運営できる）
   operatorId String?
   operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
@@ -243,8 +245,12 @@ model VisitSchedule {
   workItems      WorkItem[]
   salesContract  SalesContract?
   estimate       Estimate?
+  dealId         String?
+  deal           Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([dealId])
 }
 
 // 訪問ステータス（管理ポータルから管理）
@@ -494,9 +500,30 @@ model Inquiry {
   user            User?    @relation(fields: [userId], references: [id])
   status          String   @default("new") // new/contacted/completed
   purchaseMemos   PurchaseMemo[]
+  deal            Deal?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@index([storeId])
+  @@index([status])
+}
+
+// 案件（買取案件・商談）
+model Deal {
+  id          String    @id @default(cuid())
+  userId      String                       // 顧客（必須）
+  user        User      @relation(fields: [userId], references: [id])
+  storeId     String?                      // 担当店舗（問い合わせ由来は必ず有り／手動作成は任意）
+  store       Store?    @relation(fields: [storeId], references: [id])
+  inquiryId   String?   @unique            // 由来の問い合わせ（1案件:1問い合わせ）
+  inquiry     Inquiry?  @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
+  detail      String?   @db.Text           // 買取内容などの自由記述メモ（タイトルなし）
+  status      String    @default("inquiry") // inquiry/visit_decided/estimate_only/contract/completed/lost
+  visitSchedules VisitSchedule[]           // 1案件:N訪問予定（任意リンク）
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
   @@index([storeId])
   @@index([status])
 }

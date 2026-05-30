@@ -18,6 +18,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import BankSearch from '@/components/customer/BankSearch'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 
 type User = {
   id: string
@@ -91,7 +92,16 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'cancelled',   label: 'キャンセル' },
 ]
 
-type DetailTab = 'info' | 'add' | 'history' | 'inquiries'
+type DetailTab = 'info' | 'add' | 'history' | 'inquiries' | 'deals'
+
+type DealItem = {
+  id: string
+  detail: string | null
+  status: string
+  createdAt: string
+  inquiry: { id: string; inquiryType: string } | null
+  _count?: { visitSchedules: number }
+}
 
 type CustomerInquiry = {
   id: string
@@ -177,6 +187,14 @@ export default function AdminCustomersPage() {
   // 顧客に紐づくお問い合わせ
   const [customerInquiries, setCustomerInquiries] = useState<CustomerInquiry[]>([])
   const [inquiriesLoading, setInquiriesLoading] = useState(false)
+  // 顧客に紐づく案件
+  const [customerDeals, setCustomerDeals] = useState<DealItem[]>([])
+  const [dealsLoading, setDealsLoading] = useState(false)
+  const [dealDetailEdits, setDealDetailEdits] = useState<Record<string, string>>({})
+  const [savingDeal, setSavingDeal] = useState<string | null>(null)
+  const [showNewDeal, setShowNewDeal] = useState(false)
+  const [newDealDetail, setNewDealDetail] = useState('')
+  const [creatingDeal, setCreatingDeal] = useState(false)
   const [detailSchedules, setDetailSchedules] = useState<VisitSchedule[]>([])
   const [detailSchedulesLoading, setDetailSchedulesLoading] = useState(false)
   const [scheduleForm, setScheduleForm] = useState({ storeId: '', visitDate: '', note: '' })
@@ -280,7 +298,7 @@ export default function AdminCustomersPage() {
     if (customerId) {
       const user = users.find(u => u.id === customerId)
       if (user) {
-        if (tab && ['info', 'add', 'history', 'inquiries'].includes(tab)) {
+        if (tab && ['info', 'add', 'history', 'inquiries', 'deals'].includes(tab)) {
           restoringFromUrl.current = true
           setDetailTab(tab)
         }
@@ -340,7 +358,63 @@ export default function AdminCustomersPage() {
       .then(r => r.ok ? r.json() : { inquiries: [] })
       .then((data: { inquiries: CustomerInquiry[] }) => setCustomerInquiries(data.inquiries || []))
       .finally(() => setInquiriesLoading(false))
+
+    // 顧客に紐づく案件を取得
+    setDealsLoading(true)
+    setCustomerDeals([])
+    fetch(`/api/deals?userId=${detailUser.id}`)
+      .then(r => r.ok ? r.json() : { deals: [] })
+      .then((data: { deals: DealItem[] }) => {
+        const list = data.deals || []
+        setCustomerDeals(list)
+        const edits: Record<string, string> = {}
+        list.forEach(d => { edits[d.id] = d.detail ?? '' })
+        setDealDetailEdits(edits)
+      })
+      .finally(() => setDealsLoading(false))
   }, [detailUser])
+
+  async function handleCreateDeal() {
+    if (!detailUser) return
+    setCreatingDeal(true)
+    const res = await fetch('/api/deals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: detailUser.id, detail: newDealDetail }),
+    })
+    setCreatingDeal(false)
+    if (res.ok) {
+      const created: DealItem = await res.json()
+      setCustomerDeals(prev => [created, ...prev])
+      setDealDetailEdits(prev => ({ ...prev, [created.id]: created.detail ?? '' }))
+      setShowNewDeal(false)
+      setNewDealDetail('')
+    }
+  }
+
+  async function handleDealStatusChange(dealId: string, newStatus: string) {
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    if (res.ok) {
+      setCustomerDeals(prev => prev.map(d => d.id === dealId ? { ...d, status: newStatus } : d))
+    }
+  }
+
+  async function handleSaveDealDetail(dealId: string) {
+    setSavingDeal(dealId)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ detail: dealDetailEdits[dealId] ?? '' }),
+    })
+    setSavingDeal(null)
+    if (res.ok) {
+      setCustomerDeals(prev => prev.map(d => d.id === dealId ? { ...d, detail: dealDetailEdits[dealId] ?? '' } : d))
+    }
+  }
 
   async function handleAssign() {
     if (!assigning || !selectedStore) return
@@ -1111,6 +1185,7 @@ export default function AdminCustomersPage() {
               tabs={[
                 { key: 'info', label: '基本情報' },
                 { key: 'inquiries', label: customerInquiries.length > 0 ? `お問い合わせ（${customerInquiries.length}）` : 'お問い合わせ' },
+                { key: 'deals', label: customerDeals.length > 0 ? `案件（${customerDeals.length}）` : '案件' },
                 { key: 'add', label: 'スケジュール追加' },
                 { key: 'history', label: detailSchedules.length > 0 ? `訪問履歴（${detailSchedules.length}）` : '訪問履歴' },
               ]}
@@ -1783,6 +1858,92 @@ export default function AdminCustomersPage() {
                           >
                             お問い合わせ管理で開く →
                           </Link>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* 案件 */}
+            {detailTab === 'deals' && (
+              <div className="space-y-3">
+                <div className="flex justify-end">
+                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); setShowNewDeal(v => !v) }}>
+                    {showNewDeal ? 'キャンセル' : '+ 案件を追加'}
+                  </Button>
+                </div>
+                {showNewDeal && (
+                  <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 space-y-2">
+                    <TextField
+                      label="案件メモ（買取内容など）"
+                      value={newDealDetail}
+                      onChange={setNewDealDetail}
+                      rows={4}
+                      placeholder="買取の内容や状況などを入力..."
+                    />
+                    <div className="flex justify-end">
+                      <Button size="sm" onClick={handleCreateDeal} loading={creatingDeal} disabled={creatingDeal}>作成</Button>
+                    </div>
+                  </div>
+                )}
+                {dealsLoading ? (
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-6">読み込み中...</p>
+                ) : customerDeals.length === 0 ? (
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-6">この顧客に紐づく案件はありません</p>
+                ) : (
+                  customerDeals.map(deal => {
+                    const badge = DEAL_STATUS_BADGE[deal.status as DealStatus] ?? DEAL_STATUS_BADGE.inquiry
+                    const dirty = (dealDetailEdits[deal.id] ?? '') !== (deal.detail ?? '')
+                    return (
+                      <div
+                        key={deal.id}
+                        className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                              style={{ background: badge.bg, color: badge.fg }}
+                            >
+                              {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
+                            </span>
+                            {deal.inquiry && (
+                              <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">問い合わせ由来</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            {new Date(deal.createdAt).toLocaleDateString('ja-JP', { dateStyle: 'medium' })}
+                          </div>
+                        </div>
+                        <select
+                          value={deal.status}
+                          onChange={e => handleDealStatusChange(deal.id, e.target.value)}
+                          className="w-full sm:w-52 mb-2 px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+                        >
+                          {DEAL_STATUS_ORDER.map(s => (
+                            <option key={s} value={s}>{DEAL_STATUS_LABEL[s]}</option>
+                          ))}
+                        </select>
+                        <TextField
+                          label="案件メモ"
+                          value={dealDetailEdits[deal.id] ?? ''}
+                          onChange={v => setDealDetailEdits(prev => ({ ...prev, [deal.id]: v }))}
+                          rows={3}
+                        />
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                            紐づく訪問予定: {deal._count?.visitSchedules ?? 0}件
+                          </span>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveDealDetail(deal.id)}
+                            loading={savingDeal === deal.id}
+                            disabled={savingDeal === deal.id || !dirty}
+                          >
+                            メモを保存
+                          </Button>
                         </div>
                       </div>
                     )

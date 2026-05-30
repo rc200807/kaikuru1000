@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const storeId = searchParams.get('storeId')
   const userId = searchParams.get('userId')
+  const dealId = searchParams.get('dealId')
 
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
   const where: any = {}
   if (storeId) where.storeId = storeId
   if (userId) where.userId = userId
+  if (dealId) where.dealId = dealId
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
   if (sessionUser.role === 'store') where.storeId = sessionUser.id
 
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
       include: {
         user: { select: { id: true, name: true, address: true, phone: true } },
         store: { select: { id: true, name: true } },
+        deal: { select: { id: true, status: true } },
         salesContract: { select: { id: true, createdAt: true } },
         purchaseItems: { select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true } },
         workItems: { select: { id: true, workName: true, quantity: true, unitPrice: true } },
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { userId, storeId, visitDate, startTime, endTime, note } = body
+  const { userId, storeId, visitDate, startTime, endTime, note, dealId } = body
 
   if (!userId || !storeId || !visitDate) {
     return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
@@ -62,6 +65,7 @@ export async function POST(request: NextRequest) {
   const schedule = await prisma.visitSchedule.create({
     data: {
       userId, storeId,
+      dealId: dealId || null,
       visitDate: new Date(visitDate),
       startTime: startTime || null,
       endTime: endTime || null,

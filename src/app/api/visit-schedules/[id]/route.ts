@@ -42,6 +42,7 @@ export async function GET(
       },
       purchaseItems: { orderBy: { createdAt: 'asc' } },
       workItems: { orderBy: { createdAt: 'asc' } },
+      deal: { select: { id: true, status: true } },
     },
   })
 
@@ -99,7 +100,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote, supplementaryDocs } = body
+  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote, supplementaryDocs, dealId } = body
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -130,6 +131,7 @@ export async function PATCH(
   if (revisitEnd !== undefined) updateData.revisitEnd = revisitEnd || null
   if (revisitNote !== undefined) updateData.revisitNote = revisitNote || null
   if (supplementaryDocs !== undefined) updateData.supplementaryDocs = supplementaryDocs
+  if (dealId !== undefined) updateData.dealId = dealId || null
 
   const updated = await prisma.visitSchedule.update({
     where: { id },
@@ -137,6 +139,7 @@ export async function PATCH(
     include: {
       user: { select: { id: true, name: true, address: true, phone: true } },
       store: { select: { id: true, name: true } },
+      deal: { select: { id: true, status: true } },
     },
   })
 

@@ -11,6 +11,7 @@ import MessageBanner from '@/components/MessageBanner'
 import Modal from '@/components/Modal'
 import dynamic from 'next/dynamic'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false })
 
@@ -39,6 +40,7 @@ type PurchaseItem = {
   rakutenData: RakutenProduct | null
   aiResearch: MarketResearch | null
   aiResearchedAt: string | null
+  convertedInventoryId: string | null
 }
 
 type WorkItem = {
@@ -106,6 +108,7 @@ export default function VisitDetailPage() {
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [convertItem, setConvertItem] = useState<PurchaseItem | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // 訪問ステータス（動的取得）
@@ -986,6 +989,11 @@ export default function VisitDetailPage() {
                       </button>
                     )}
                     <button onClick={() => startEditPurchase(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>
+                    {item.convertedInventoryId ? (
+                      <button onClick={() => router.push('/store/inventory')} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">在庫化済み →</button>
+                    ) : (
+                      <button onClick={() => setConvertItem(item)} className="text-xs text-[var(--portal-primary)] font-medium hover:underline">在庫化</button>
+                    )}
                   </div>
                 </div>
 
@@ -1131,6 +1139,23 @@ export default function VisitDetailPage() {
           {renderPurchaseFormFields()}
         </div>
       </Modal>
+
+      {/* 在庫化（買取品目→在庫）モーダル */}
+      <InventoryFormModal
+        open={!!convertItem}
+        onClose={() => setConvertItem(null)}
+        mode="convert"
+        purchaseItemId={convertItem?.id}
+        initial={convertItem ? purchaseItemToForm({
+          itemName: convertItem.itemName,
+          category: convertItem.category,
+          purchasePrice: convertItem.purchasePrice,
+          quantity: convertItem.quantity,
+          janCode: convertItem.janCode,
+          images: convertItem.imageUrls,
+        }) : undefined}
+        onSaved={() => { setConvertItem(null); fetchVisit(); setMessage({ type: 'success', text: '在庫化しました' }) }}
+      />
 
       {/* ────────── 作業品目セクション ────────── */}
       <Card variant="elevated" padding="md">

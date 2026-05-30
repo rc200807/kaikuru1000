@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
           user: { select: { id: true, name: true } },
         },
       },
+      inventoryItem: { select: { id: true } }, // 在庫化済みか判定用
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
       // 画像は認証付きプロキシ経由で配信（外部Blob URLは直接返さない）
       images: Array.from({ length: imageCount }, (_, idx) => `/api/purchase-items/${it.id}/images/${idx}`),
       visitSchedule: it.visitSchedule,
+      convertedInventoryId: it.inventoryItem?.id ?? null, // 在庫化済みなら在庫ID
     }
   })
 

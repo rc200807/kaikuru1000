@@ -135,6 +135,7 @@ model Store {
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
   trainingVideoViews   TrainingVideoView[]
   deals      Deal[]
+  inventoryItems InventoryItem[]
   // 運営者（複数店舗を1運営者が運営できる）
   operatorId String?
   operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
@@ -300,6 +301,7 @@ model PurchaseItem {
   rakutenData     String?  @db.Text           // 楽天商品検索APIの結果 (JSON文字列)
   aiResearch      String?                     // AI市場調査結果 (JSON文字列)
   aiResearchedAt  DateTime?                   // AI調査実行日時
+  inventoryItem   InventoryItem?              // 変換先の在庫（1:1。未変換は null）
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -526,6 +528,70 @@ model Deal {
   @@index([userId])
   @@index([storeId])
   @@index([status])
+}
+
+// 在庫（店舗の販売商品。買取品目から変換可。将来のマーケット自動出品を見据えた設計）
+model InventoryItem {
+  id                   String   @id @default(cuid())
+  storeId              String                          // 所有店舗（必須）
+  store                Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  sourcePurchaseItemId String?  @unique                // 変換元の買取品目（1:1・二重変換防止）
+  sourcePurchaseItem   PurchaseItem? @relation(fields: [sourcePurchaseItemId], references: [id], onDelete: SetNull)
+  // 商品・出品データ
+  title                String                          // 商品名（必須）
+  description          String   @default("") @db.Text
+  categoryName         String   @default("")
+  brand                String?
+  condition            String   @default("no_noticeable_damage") // メルカリ6段階のキー
+  costPrice            Int                             // 仕入れ値（円・必須）
+  listingPrice         Int?                            // 販売価格（円）
+  quantity             Int      @default(1)
+  managementCode       String?                         // 管理コード/SKU
+  imageUrls            String   @default("[]")         // JSON配列（最大10）
+  janCode              String?
+  // 配送・寸法（メルカリ出品向け）
+  weightGrams          Int?
+  sizeW                Int?
+  sizeH                Int?
+  sizeD                Int?
+  shippingPayer        String   @default("seller")     // seller | buyer
+  shippingMethod       String?
+  shippingFromPrefecture String?
+  shippingDays         String?                         // "1-2" | "2-3" | "4-7"
+  // ライフサイクル
+  status               String   @default("draft")      // draft|ready|listed|sold|archived
+  listedAt             DateTime?
+  soldPrice            Int?
+  soldAt               DateTime?
+  note                 String   @default("") @db.Text
+  listings             MarketplaceListing[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+  @@index([storeId, status])
+}
+
+// マーケットプレイス出品状態（在庫1:Nマーケット。将来のAPI同期状態を保持）
+model MarketplaceListing {
+  id              String   @id @default(cuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  marketplace     String                       // "mercari" | "yahoo" | ...
+  externalId      String?                      // マーケット側の商品ID
+  url             String?  @db.Text
+  listingStatus   String   @default("pending")  // pending|listed|sold|error|cancelled
+  listedAt        DateTime?
+  soldAt          DateTime?
+  rawResponse     String?  @db.Text            // API生レスポンス(JSON)
+  errorMessage    String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([inventoryItemId, marketplace])
+  @@index([inventoryItemId])
+  @@index([marketplace, listingStatus])
 }
 
 // 店舗→運営の不具合報告

@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
 
 type Item = {
   id: string
@@ -23,6 +24,7 @@ type Item = {
     status: string
     user: { id: string; name: string } | null
   } | null
+  convertedInventoryId: string | null
 }
 
 const fmtYen = (n: number) => `¥${(n ?? 0).toLocaleString()}`
@@ -34,6 +36,7 @@ export default function StorePurchaseItemsPage() {
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [convertItem, setConvertItem] = useState<Item | null>(null)
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') router.push('/store/login')
@@ -207,12 +210,47 @@ export default function StorePurchaseItemsPage() {
                       </button>
                     )}
                   </div>
+
+                  {/* 在庫化 */}
+                  <div className="mt-2 flex justify-end">
+                    {item.convertedInventoryId ? (
+                      <button
+                        onClick={() => router.push('/store/inventory')}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-highest)] transition-colors"
+                      >
+                        在庫化済み →
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setConvertItem(item)}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-[var(--store-primary)] text-[var(--store-on-primary)] hover:opacity-90 transition-opacity"
+                      >
+                        在庫化
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      <InventoryFormModal
+        open={!!convertItem}
+        onClose={() => setConvertItem(null)}
+        mode="convert"
+        purchaseItemId={convertItem?.id}
+        initial={convertItem ? purchaseItemToForm({
+          itemName: convertItem.itemName,
+          category: convertItem.category,
+          purchasePrice: convertItem.purchasePrice,
+          quantity: convertItem.quantity,
+          janCode: convertItem.janCode,
+          images: convertItem.images,
+        }) : undefined}
+        onSaved={() => { setConvertItem(null); fetchItems() }}
+      />
     </div>
   )
 }

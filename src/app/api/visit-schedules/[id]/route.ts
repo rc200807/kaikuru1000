@@ -40,7 +40,7 @@ export async function GET(
           },
         },
       },
-      purchaseItems: { orderBy: { createdAt: 'asc' } },
+      purchaseItems: { orderBy: { createdAt: 'asc' }, include: { inventoryItem: { select: { id: true } } } },
       workItems: { orderBy: { createdAt: 'asc' } },
       deal: { select: { id: true, status: true } },
     },
@@ -79,6 +79,7 @@ export async function GET(
       aiResearchedAt: item.aiResearchedAt,
       janCode: item.janCode,
       rakutenData,
+      convertedInventoryId: item.inventoryItem?.id ?? null,
     }
   })
 

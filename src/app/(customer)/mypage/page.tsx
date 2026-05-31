@@ -16,6 +16,7 @@ import EmptyState from '@/components/EmptyState'
 import BankSearch from '@/components/customer/BankSearch'
 import { convertToJpegIfNeeded, createPreviewUrl } from '@/lib/image-utils'
 import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, customerView, type CustomerType } from '@/lib/customer-types'
+import { calcAge, needsFamilyConsent, isMinorBlockedFromDelivery } from '@/lib/age'
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 
 type UserData = {
@@ -1009,6 +1010,9 @@ function MyPageContent() {
   const isDelivery = view === 'delivery'
   const isRegularLike = view === 'regular' // regular + akikuru
   const appliedTypes = parseCustomerTypes(user.customerTypes, user.customerType)
+  // 身分証OCRの生年月日から年齢を算出（判定不可は null）
+  const age = calcAge(user.idBirthDate)
+  const deliveryBlocked = isMinorBlockedFromDelivery(age)
 
   const tabs = isDelivery
     ? [
@@ -1330,80 +1334,60 @@ function MyPageContent() {
               {/* ─── Main Content Area ─── */}
               <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-4 relative z-10 space-y-5 pb-28">
 
-                {/* ─── Quick Action Cards (2x2 grid) ─── */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    {
-                      label: '訪問リクエスト',
-                      sub: '日時を予約',
-                      tab: 'visit-request',
-                      requiresId: true,
-                      gradient: 'from-blue-400 to-indigo-500',
-                      icon: (
-                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                        </svg>
-                      ),
-                    },
-                    {
-                      label: 'プロフィール',
-                      sub: '設定・口座情報',
-                      tab: 'profile',
-                      gradient: 'from-purple-400 to-pink-500',
-                      icon: (
-                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                        </svg>
-                      ),
-                    },
-                    {
-                      label: '訪問履歴',
-                      sub: '過去の訪問一覧',
-                      tab: 'history',
-                      requiresId: true,
-                      gradient: 'from-emerald-400 to-teal-500',
-                      icon: (
-                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ),
-                    },
-                    {
-                      label: '買取トライ',
-                      sub: '写真で事前査定',
-                      tab: 'memos',
-                      requiresId: true,
-                      gradient: 'from-red-400 to-orange-500',
-                      icon: (
-                        <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                        </svg>
-                      ),
-                    },
-                    ...(isDelivery ? [
-                      {
-                        label: '送付登録',
-                        sub: '今月の送付を登録',
-                        tab: 'shipments',
-                        gradient: 'from-orange-400 to-red-500',
-                        icon: (
-                          <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
-                          </svg>
-                        ),
-                      },
-                    ] : []),
-                  ].filter(item => {
-                    // Hide memos, visit-request and history for delivery customers
-                    if (isDelivery && (item.tab === 'memos' || item.tab === 'visit-request' || item.tab === 'history')) return false
-                    return true
-                  }).map(item => {
+                {/* ─── Quick Action Cards ─── */}
+                <div className={isDelivery ? 'flex' : 'grid grid-cols-2 gap-3'}>
+                  {(isDelivery
+                    ? [
+                        {
+                          label: '送付登録',
+                          sub: '今月の送付を登録',
+                          tab: 'shipments',
+                          requiresId: false,
+                          gradient: 'from-orange-400 to-red-500',
+                          icon: (
+                            <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                            </svg>
+                          ),
+                        },
+                      ]
+                    : [
+                        {
+                          label: '訪問リクエスト',
+                          sub: '日時を予約',
+                          tab: 'visit-request',
+                          requiresId: true,
+                          gradient: 'from-blue-400 to-indigo-500',
+                          icon: (
+                            <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                            </svg>
+                          ),
+                        },
+                        {
+                          label: '買取トライ',
+                          sub: '写真で事前査定',
+                          tab: 'memos',
+                          requiresId: true,
+                          gradient: 'from-red-400 to-orange-500',
+                          icon: (
+                            <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                            </svg>
+                          ),
+                        },
+                      ]
+                  ).map(item => {
                     const locked = !!(item.requiresId && !user.idDocumentPath)
+                    const blocked = item.tab === 'shipments' && deliveryBlocked
+                    const disabled = locked || blocked
                     return (
                       <button
                         key={item.tab}
+                        disabled={blocked}
                         onClick={() => {
+                          if (blocked) return
                           if (locked) {
                             setIdRequiredItemLabel(item.label)
                             setShowIdRequiredModal(true)
@@ -1411,7 +1395,7 @@ function MyPageContent() {
                             handleTabChange(item.tab)
                           }
                         }}
-                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all cursor-pointer ${locked ? 'opacity-50 grayscale' : 'hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
+                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all ${isDelivery ? 'w-fit min-w-[240px]' : ''} ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
                       >
                         {locked && (
                           <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-gray-400 flex items-center justify-center">
@@ -1432,11 +1416,27 @@ function MyPageContent() {
                           </div>
                         </div>
                         <p className="text-sm font-bold text-gray-800 mt-3">{item.label}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{locked ? '身分証明証が必要です' : item.sub}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{blocked ? '18歳以下の方はご利用いただけません' : locked ? '身分証明証が必要です' : item.sub}</p>
                       </button>
                     )
                   })}
                 </div>
+
+                {/* 訪問履歴へのリンク（非宅配・TOPカードから移設） */}
+                {!isDelivery && (
+                  <button
+                    onClick={() => handleTabChange('history')}
+                    className="w-full flex items-center justify-between gap-3 bg-white/70 backdrop-blur-xl rounded-2xl px-4 py-3 text-left shadow-sm border border-white/50 hover:bg-white/80 active:scale-[0.98] transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </div>
+                      <span className="text-sm font-bold text-gray-800">訪問履歴を見る</span>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                )}
 
                 {/* ─── 身分証明書未提出バナー ─── */}
                 {!user.idDocumentPath && (
@@ -2177,12 +2177,19 @@ function MyPageContent() {
           {/* ─── 送付履歴タブ（宅配顧客のみ） ─── */}
           {activeTab === 'shipments' && (
             <div className="space-y-4">
+              {deliveryBlocked && (
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+                  <span className="mt-0.5 shrink-0">⚠️</span>
+                  <span>18歳以下の方は宅配買取をご利用いただけません。</span>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">送付履歴</h2>
                   <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">月ごとに段ボールを送付してください（月1回）</p>
                 </div>
                 {(() => {
+                  if (deliveryBlocked) return null
                   const now = new Date()
                   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
                   const alreadyRegistered = shipments.some(s => s.shipmentMonth === currentMonth && s.status !== 'draft')
@@ -3437,10 +3444,16 @@ function MyPageContent() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                <span className="mt-0.5 shrink-0">⚠️</span>
-                <span>65歳以上の方は、訪問時にご家族の同意・同席が必要です。</span>
-              </div>
+              {needsFamilyConsent(age) && (
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                  <span className="mt-0.5 shrink-0">⚠️</span>
+                  <span>
+                    {age != null && age <= 18
+                      ? '18歳以下の方は、訪問時にご家族の同意・同席が必要です。'
+                      : '65歳以上の方は、訪問時にご家族の同意・同席が必要です。'}
+                  </span>
+                </div>
+              )}
 
               <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
                 <span className="mt-0.5 shrink-0">ℹ️</span>

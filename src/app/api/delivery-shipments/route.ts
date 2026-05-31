@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { calcAge, isMinorBlockedFromDelivery } from '@/lib/age'
 
 /** imageUrls / trackingImageUrls をプロキシURLに変換して返す */
 function toClientShipment(s: any) {
@@ -88,9 +89,13 @@ export async function POST(request: NextRequest) {
   const userId = sessionUser.id
 
   // 顧客タイプ確認
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { customerType: true } })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { customerType: true, idBirthDate: true } })
   if (user?.customerType !== 'delivery') {
     return NextResponse.json({ error: '定期宅配顧客のみ送付登録できます' }, { status: 403 })
+  }
+  // 18歳以下は宅配買取を利用不可（身分証OCRの生年月日で判定。判定不可なら通す）
+  if (isMinorBlockedFromDelivery(calcAge(user.idBirthDate))) {
+    return NextResponse.json({ error: '18歳以下の方は宅配買取をご利用いただけません' }, { status: 403 })
   }
 
   const body = await request.json()

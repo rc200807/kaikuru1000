@@ -4158,6 +4158,10 @@ function ShipmentCard({
   }
 
   async function handleSaveStep1() {
+    if (boxImages.length === 0) {
+      onMessage({ type: 'error', text: '箱の中の写真を1枚以上添付してください' })
+      return
+    }
     setSubmitting(true)
     const res = await fetch('/api/delivery-shipments', {
       method: 'POST',
@@ -4205,6 +4209,10 @@ function ShipmentCard({
 
   // registered状態でステップ1・2を編集して保存する
   async function handleSaveEditedStep() {
+    if (boxImages.length === 0) {
+      onMessage({ type: 'error', text: '箱の中の写真を1枚以上添付してください' })
+      return
+    }
     setSubmitting(true)
     // step 1 と step 2 両方の情報を更新（registered状態を維持）
     const res = await fetch('/api/delivery-shipments', {
@@ -4353,8 +4361,8 @@ function ShipmentCard({
                       rows={3}
                     />
                     <div>
-                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">箱の中の写真</p>
-                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚</p>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">箱の中の写真 <span className="text-[var(--md-sys-color-error,#B3261E)]">*</span></p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚（最低1枚必須）</p>
                       <div className="flex flex-wrap gap-2">
                         {boxImages.map((url, i) => (
                           <div key={i} className="relative w-20 h-20">
@@ -4435,8 +4443,8 @@ function ShipmentCard({
                       rows={3}
                     />
                     <div>
-                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">箱の中の写真</p>
-                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚</p>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">箱の中の写真 <span className="text-[var(--md-sys-color-error,#B3261E)]">*</span></p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">JPEG・PNG・WebP・HEIC、各10MB以下、最大5枚（最低1枚必須）</p>
                       <div className="flex flex-wrap gap-2">
                         {boxImages.map((url, i) => (
                           <div key={i} className="relative w-20 h-20">
@@ -4475,7 +4483,7 @@ function ShipmentCard({
                       </div>
                     </div>
                     <div className="pt-1">
-                      <Button onClick={handleSaveStep1} disabled={submitting} loading={submitting}>
+                      <Button onClick={handleSaveStep1} disabled={submitting || boxImages.length === 0} loading={submitting}>
                         {submitting ? '保存中...' : '下書き保存して次へ'}
                       </Button>
                     </div>
@@ -4593,10 +4601,20 @@ function ShipmentCard({
                 {/* Step 3 action: 発送完了を報告する (index=2, status=registered) */}
                 {!isDraft && active && idx === 2 && shipment.status === 'registered' && (
                   <div className="mt-3 space-y-3">
-                    {/* 発送番号未記載の注意 */}
-                    <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-700">
-                      <span className="shrink-0 mt-0.5">⚠️</span>
-                      <span>発送番号の記載なく送付された場合、お支払いができない可能性があります。</span>
+                    {/* 発送前の注意（1枠にまとめてボタンの上に配置） */}
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                      <div className="flex gap-2">
+                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div className="space-y-2">
+                          <p className="text-xs text-amber-800">発送番号の記載なく送付された場合、お支払いができない可能性があります。</p>
+                          <div>
+                            <p className="text-xs font-bold text-amber-800">発送後は必ずこのボタンを押してください</p>
+                            <p className="text-xs text-amber-700 mt-0.5">ボタンを押さないと店舗側で荷物の到着確認ができません。発送が完了したら忘れずにタップしてください。</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     {/* 大きな発送完了ボタン */}
                     <button
@@ -4613,18 +4631,6 @@ function ShipmentCard({
                       )}
                       {updating ? '更新中...' : '発送完了を報告する'}
                     </button>
-                    {/* 注意喚起 */}
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                      <div className="flex gap-2">
-                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                        <div>
-                          <p className="text-xs font-bold text-amber-800">発送後は必ずこのボタンを押してください</p>
-                          <p className="text-xs text-amber-700 mt-0.5">ボタンを押さないと店舗側で荷物の到着確認ができません。発送が完了したら忘れずにタップしてください。</p>
-                        </div>
-                      </div>
-                    </div>
                     {/* 前のステップに戻って修正 */}
                     <button
                       type="button"

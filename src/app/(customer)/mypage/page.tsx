@@ -1395,7 +1395,7 @@ function MyPageContent() {
                             handleTabChange(item.tab)
                           }
                         }}
-                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all ${isDelivery ? 'w-fit min-w-[240px]' : ''} ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
+                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all ${isDelivery ? 'w-full sm:w-fit sm:min-w-[240px]' : ''} ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
                       >
                         {locked && (
                           <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-gray-400 flex items-center justify-center">

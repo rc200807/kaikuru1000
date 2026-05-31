@@ -54,6 +54,34 @@ export default function RegisterPage() {
 
   const needsBackImage = DOC_TYPES_REQUIRING_BACK.includes(selectedDocType)
 
+  // ステップ1: ライセンスキーを検証してから次へ進む
+  async function handleValidateLicense() {
+    const key = formData.licenseKey.trim()
+    if (!key) {
+      setError('ライセンスキーを入力してください')
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/license-keys/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.valid) {
+        setError(data.error || 'ライセンスキーが確認できませんでした。')
+        return
+      }
+      setStep(2)
+    } catch {
+      setError('通信エラーが発生しました。時間をおいて再度お試しください。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -76,7 +104,7 @@ export default function RegisterPage() {
         furigana: formData.furigana,
         email: formData.email,
         phone: formData.phone,
-        address: formData.address,
+        address: '', // 住所は身分証OCRから自動登録する
         password: formData.password,
         licenseKey: formData.licenseKey,
       }),
@@ -281,15 +309,11 @@ export default function RegisterPage() {
 
           <GlassButton
             variant="primary"
-            onClick={() => {
-              if (!formData.licenseKey.trim()) {
-                setError('ライセンスキーを入力してください')
-                return
-              }
-              setStep(2)
-            }}
+            onClick={handleValidateLicense}
+            disabled={loading}
+            loading={loading}
           >
-            次へ
+            {loading ? '確認中...' : '次へ'}
           </GlassButton>
         </div>
       )}
@@ -336,13 +360,12 @@ export default function RegisterPage() {
             placeholder="090-0000-0000"
           />
 
-          <GlassInput
-            label="訪問先住所"
-            value={formData.address}
-            onChange={(val) => { setFormData({ ...formData, address: val }); setError('') }}
-            required
-            placeholder="東京都渋谷区..."
-          />
+          <div className="flex items-start gap-2 rounded-lg bg-blue-50/70 border border-blue-100 px-3 py-2.5 text-xs text-blue-700">
+            <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>ご住所は、次のステップで登録いただく身分証明書の記載内容から自動で登録されます。</span>
+          </div>
 
           <GlassInput
             label="パスワード"

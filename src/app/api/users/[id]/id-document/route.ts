@@ -188,12 +188,19 @@ export async function POST(
 
     // 住所一致判定（OCRで住所が取得できた場合）
     const currentUser = await prisma.user.findUnique({ where: { id }, select: { address: true } })
+    const hasRegisteredAddress = !!(currentUser?.address && currentUser.address.trim())
     let addressMismatchFlag = false
     let addressVerifiedFlag = false
-    if (ocrResult?.idAddress && currentUser?.address) {
-      const matched = isAddressMatch(currentUser.address, ocrResult.idAddress)
+    // 訪問型/宅配型は登録時に住所を入力しないため、住所未登録なら
+    // 身分証OCRで読み取った住所をユーザーの住所として採用する。
+    const adoptIdAddress = !!ocrResult?.idAddress && !hasRegisteredAddress
+    if (ocrResult?.idAddress && hasRegisteredAddress) {
+      const matched = isAddressMatch(currentUser!.address, ocrResult.idAddress)
       addressMismatchFlag = !matched
       addressVerifiedFlag = matched
+    } else if (adoptIdAddress) {
+      // 身分証由来の住所なので一致扱い
+      addressVerifiedFlag = true
     }
 
     await prisma.user.update({
@@ -214,6 +221,8 @@ export async function POST(
           idLicenseNumber: ocrResult.idLicenseNumber,
           idExpiryDate:    ocrResult.idExpiryDate,
         }),
+        // 住所未登録（訪問型/宅配型の新規登録）の場合は身分証OCRの住所を採用
+        ...(adoptIdAddress ? { address: ocrResult!.idAddress! } : {}),
         // 住所一致判定結果
         ...(ocrResult?.idAddress ? {
           addressMismatch: addressMismatchFlag,

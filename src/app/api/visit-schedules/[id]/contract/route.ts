@@ -58,7 +58,7 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { signatureData, invoiceSignatureData, pdfBase64, email: inputEmail, occupation } = body
+  const { signatureData, invoiceSignatureData, pdfBase64, email: inputEmail, occupation, phone: inputPhone } = body
 
   if (!signatureData) {
     return NextResponse.json({ error: '売買契約への署名が必要です' }, { status: 400 })
@@ -92,6 +92,22 @@ export async function POST(
       })
     } catch (e) {
       console.error('User.occupation 更新失敗:', e)
+    }
+  }
+
+  // 電話番号が入力されていれば顧客情報に反映し、契約書にも反映（空欄なら既存値を保持）
+  let effectivePhone: string = schedule.user.phone
+  if (typeof inputPhone === 'string' && inputPhone.trim()) {
+    effectivePhone = inputPhone.trim()
+    if (inputPhone.trim() !== schedule.user.phone) {
+      try {
+        await prisma.user.update({
+          where: { id: schedule.user.id },
+          data: { phone: inputPhone.trim() },
+        })
+      } catch (e) {
+        console.error('User.phone 更新失敗:', e)
+      }
     }
   }
 
@@ -142,7 +158,7 @@ export async function POST(
   const contractTemplateParams = {
     customerName: schedule.user.idName || schedule.user.name,
     customerAddress: schedule.user.idAddress || schedule.user.address || '',
-    customerPhone: schedule.user.phone,
+    customerPhone: effectivePhone,
     customerIdType: schedule.user.idDocumentType,
     storeName: schedule.store.name,
     storeAddress: schedule.store.address,

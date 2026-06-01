@@ -306,6 +306,7 @@ export default function FinalAgreementPage() {
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [customerEmailInput, setCustomerEmailInput] = useState('')
   const [occupationInput, setOccupationInput] = useState('')
+  const [phoneInput, setPhoneInput] = useState('')
   const contractRef = useRef<HTMLDivElement>(null)
 
   // PIN lock state
@@ -381,6 +382,7 @@ export default function FinalAgreementPage() {
       // 既存ユーザー登録メールアドレス・職業を初期値にセット（未入力時のみ）
       setCustomerEmailInput((prev) => prev || data?.user?.email || '')
       setOccupationInput((prev) => prev || data?.user?.occupation || '')
+      setPhoneInput((prev) => prev || data?.user?.phone || '')
     }
     if (contractRes.ok) {
       const contract = await contractRes.json()
@@ -499,6 +501,7 @@ export default function FinalAgreementPage() {
           pdfBase64,
           email: emailTrimmed,
           occupation: occupationInput.trim() || null,
+          phone: phoneInput.trim() || null,
         }),
       })
 
@@ -697,7 +700,7 @@ export default function FinalAgreementPage() {
                 <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">お客様情報（売主）</div>
                 <div><span className="font-medium">氏名:</span> {customerName}</div>
                 <div><span className="font-medium">住所:</span> {customerAddress}</div>
-                <div><span className="font-medium">電話:</span> {visit.user.phone}</div>
+                <div><span className="font-medium">電話:</span> {phoneInput || visit.user.phone}</div>
                 {visit.user.idDocumentType && (
                   <div className="text-[10px] text-green-700 mt-1">本人確認: {visit.user.idDocumentType}</div>
                 )}
@@ -956,7 +959,8 @@ export default function FinalAgreementPage() {
 
       {/* お客様情報・メール送付先 */}
       <Card variant="elevated" padding="md">
-        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">お客様情報・送付先</h2>
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様情報・送付先</h2>
+        <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mb-3">本人確認の完了後にご記入ください。</p>
 
         {/* 職業 */}
         <div className="mb-4">
@@ -969,6 +973,20 @@ export default function FinalAgreementPage() {
             className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
           />
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">提出後、お客様の顧客情報に反映されます。</p>
+        </div>
+
+        {/* 電話番号 */}
+        <div className="mb-4">
+          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">お客様の電話番号</label>
+          <input
+            type="tel"
+            inputMode="tel"
+            value={phoneInput}
+            onChange={(e) => setPhoneInput(e.target.value)}
+            placeholder="090-1234-5678"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+          />
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">変更がある場合は修正してください。更新後の番号が売買契約書と顧客情報に反映されます。</p>
         </div>
 
         {/* メールアドレス */}

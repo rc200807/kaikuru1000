@@ -54,11 +54,32 @@ export async function GET(
     prisma.user.count({ where }),
   ])
 
+  // 最終訪問日（過去のキャンセル以外の訪問のうち最新）をまとめて取得
+  const ids = customers.map(c => c.id)
+  const now = new Date()
+  const pastVisits = ids.length > 0
+    ? await prisma.visitSchedule.findMany({
+        where: { userId: { in: ids }, visitDate: { lt: now }, status: { not: 'cancelled' } },
+        orderBy: { visitDate: 'desc' },
+        select: { userId: true, visitDate: true },
+      })
+    : []
+  const lastVisitByUser = new Map<string, Date>()
+  for (const v of pastVisits) {
+    if (!lastVisitByUser.has(v.userId)) lastVisitByUser.set(v.userId, v.visitDate)
+  }
+
   // idDocumentPath をプロキシ URL に変換（Blob URL をクライアントに露出しない）
-  const result = customers.map(c => ({
-    ...c,
-    idDocumentPath: c.idDocumentPath ? `/api/users/${c.id}/id-document` : null,
-  }))
+  const result = customers.map(c => {
+    const next = c.visitSchedules?.[0] ?? null
+    return {
+      ...c,
+      idDocumentPath: c.idDocumentPath ? `/api/users/${c.id}/id-document` : null,
+      // 登録日は createdAt をそのまま利用
+      lastVisitDate: lastVisitByUser.get(c.id) ?? null,
+      nextVisit: next ? { visitDate: next.visitDate, startTime: next.startTime ?? null } : null,
+    }
+  })
 
   return NextResponse.json({ customers: result, total, page, limit })
 }

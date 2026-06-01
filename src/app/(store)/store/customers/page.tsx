@@ -22,6 +22,16 @@ type Customer = {
   phone: string
   address: string
   customerType: string
+  createdAt?: string | null
+  lastVisitDate?: string | null
+  nextVisit?: { visitDate: string; startTime?: string | null } | null
+}
+
+function fmtDate(d?: string | null): string {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}`
 }
 
 export default function StoreCustomersPage() {
@@ -38,9 +48,14 @@ export default function StoreCustomersPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const CUSTOMERS_LIMIT = 50
 
-  // 新規顧客追加
+  // 新規顧客追加（顧客作成 → 案件作成 → 訪問予定追加 の一連ウィザード）
   const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1) // 1:顧客 2:案件 3:予定 4:完了
   const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '' })
+  const [createdCustomer, setCreatedCustomer] = useState<{ id: string; name: string } | null>(null)
+  const [dealForm, setDealForm] = useState({ detail: '' })
+  const [createdDealId, setCreatedDealId] = useState<string | null>(null)
+  const [scheduleForm, setScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
   const [addCustomerMsg, setAddCustomerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -80,7 +95,30 @@ export default function StoreCustomersPage() {
     setLoadingMore(false)
   }
 
-  async function handleAddCustomer(e: React.FormEvent) {
+  async function refreshCustomers() {
+    const storeId = (session?.user as any).id
+    const listRes = await fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)
+    const listData = await listRes.json()
+    const list = listData?.customers ?? (Array.isArray(listData) ? listData : [])
+    setCustomers(list)
+    setCustomersTotal(listData?.total ?? list.length)
+    setCustomersPage(1)
+    setCustomersHasMore((listData?.total ?? list.length) > CUSTOMERS_LIMIT)
+  }
+
+  function openAddWizard() {
+    setShowAddCustomer(true)
+    setWizardStep(1)
+    setAddCustomerMsg(null)
+    setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '' })
+    setCreatedCustomer(null)
+    setDealForm({ detail: '' })
+    setCreatedDealId(null)
+    setScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' })
+  }
+
+  // ステップ1: 顧客作成 → 案件作成へ
+  async function handleCreateCustomer(e: React.FormEvent) {
     e.preventDefault()
     setAddCustomerSubmitting(true)
     setAddCustomerMsg(null)
@@ -105,27 +143,81 @@ export default function StoreCustomersPage() {
         setAddCustomerSubmitting(false)
         return
       }
-      await res.json()
-
-      // サーバー側で自動的に当該店舗へ割り当て済み
-      const storeId = (session?.user as any).id
-
-      // 顧客一覧を再取得
-      const listRes = await fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)
-      const listData = await listRes.json()
-      const list = listData?.customers ?? (Array.isArray(listData) ? listData : [])
-      setCustomers(list)
-      setCustomersTotal(listData?.total ?? list.length)
-      setCustomersPage(1)
-      setCustomersHasMore((listData?.total ?? list.length) > CUSTOMERS_LIMIT)
-
-      setAddCustomerMsg({ type: 'success', text: `${addCustomerForm.name} 様を追加しました` })
-      setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '' })
-      setTimeout(() => setShowAddCustomer(false), 1200)
+      const created = await res.json()
+      setCreatedCustomer({ id: created.id, name: created.name ?? addCustomerForm.name })
+      await refreshCustomers() // 一覧に即時反映
+      setWizardStep(2)
     } catch {
       setAddCustomerMsg({ type: 'error', text: '顧客の作成に失敗しました' })
     }
     setAddCustomerSubmitting(false)
+  }
+
+  // ステップ2: 案件作成 → 訪問予定へ（スキップ可）
+  async function handleCreateDeal() {
+    if (!createdCustomer) return
+    setAddCustomerSubmitting(true)
+    setAddCustomerMsg(null)
+    try {
+      const storeId = (session?.user as any).id
+      const res = await fetch('/api/deals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: createdCustomer.id, storeId, detail: dealForm.detail }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setAddCustomerMsg({ type: 'error', text: data.error ?? '案件の作成に失敗しました' })
+        setAddCustomerSubmitting(false)
+        return
+      }
+      const created = await res.json()
+      setCreatedDealId(created.id ?? null)
+      setWizardStep(3)
+    } catch {
+      setAddCustomerMsg({ type: 'error', text: '案件の作成に失敗しました' })
+    }
+    setAddCustomerSubmitting(false)
+  }
+
+  // ステップ3: 訪問予定追加 → 完了（スキップ可）
+  async function handleCreateSchedule() {
+    if (!createdCustomer || !scheduleForm.visitDate) return
+    setAddCustomerSubmitting(true)
+    setAddCustomerMsg(null)
+    try {
+      const storeId = (session?.user as any).id
+      const res = await fetch('/api/visit-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: createdCustomer.id,
+          storeId,
+          dealId: createdDealId || undefined,
+          visitDate: scheduleForm.visitDate,
+          startTime: scheduleForm.startTime || undefined,
+          endTime: scheduleForm.endTime || undefined,
+          note: scheduleForm.note || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setAddCustomerMsg({ type: 'error', text: data.error ?? '訪問予定の作成に失敗しました' })
+        setAddCustomerSubmitting(false)
+        return
+      }
+      await refreshCustomers() // 次回訪問予定列を更新
+      setWizardStep(4)
+    } catch {
+      setAddCustomerMsg({ type: 'error', text: '訪問予定の作成に失敗しました' })
+    }
+    setAddCustomerSubmitting(false)
+  }
+
+  // 案件/予定をスキップして完了画面へ（予定スキップ時は一覧を最新化）
+  async function skipToDone() {
+    await refreshCustomers()
+    setWizardStep(4)
   }
 
   const filtered = customers.filter(c =>
@@ -183,6 +275,36 @@ export default function StoreCustomersPage() {
         return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
       },
     },
+    {
+      key: 'createdAt',
+      header: '登録日',
+      hideOnMobile: true,
+      render: (c) => <span className="text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{fmtDate(c.createdAt)}</span>,
+      sortable: true,
+      sortValue: (c) => c.createdAt ?? '',
+    },
+    {
+      key: 'lastVisit',
+      header: '最終訪問日',
+      hideOnMobile: true,
+      render: (c) => <span className="text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{fmtDate(c.lastVisitDate)}</span>,
+      sortable: true,
+      sortValue: (c) => c.lastVisitDate ?? '',
+    },
+    {
+      key: 'nextVisit',
+      header: '次回訪問予定',
+      hideOnMobile: true,
+      render: (c) => (
+        <span className="text-[var(--md-sys-color-on-surface)] whitespace-nowrap">
+          {c.nextVisit
+            ? `${fmtDate(c.nextVisit.visitDate)}${c.nextVisit.startTime ? ` ${c.nextVisit.startTime}` : ''}`
+            : '—'}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (c) => c.nextVisit?.visitDate ?? '',
+    },
   ]
 
   return (
@@ -218,7 +340,7 @@ export default function StoreCustomersPage() {
             </Button>
             <Button
               variant="filled"
-              onClick={() => { setShowAddCustomer(true); setAddCustomerMsg(null); setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '' }) }}
+              onClick={openAddWizard}
             >
               <span className="flex items-center gap-1.5">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -254,80 +376,155 @@ export default function StoreCustomersPage() {
         )}
       </div>
 
-      {/* 新規顧客追加モーダル */}
+      {/* 新規顧客追加ウィザード（顧客 → 案件 → 訪問予定） */}
       <Modal
         open={showAddCustomer}
         onClose={() => setShowAddCustomer(false)}
-        title="新規顧客追加"
+        title={
+          wizardStep === 1 ? '新規顧客追加'
+          : wizardStep === 2 ? '案件を作成（任意）'
+          : wizardStep === 3 ? '訪問予定を追加（任意）'
+          : '登録完了'
+        }
         disableBackdropClose
       >
-        <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
-          <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
-          <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
-          {addCustomerMsg && (
+        {/* ステッパー */}
+        {wizardStep < 4 && (
+          <div className="flex items-center justify-center gap-2 mb-4 text-xs">
+            {([['1', '顧客'], ['2', '案件'], ['3', '予定']] as const).map(([n, label], i) => {
+              const stepNo = i + 1
+              const activeOrDone = wizardStep >= stepNo
+              return (
+                <div key={n} className="flex items-center gap-2">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold ${activeOrDone ? 'bg-[var(--portal-primary)] text-white' : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]'}`}>{n}</span>
+                  <span className={activeOrDone ? 'text-[var(--md-sys-color-on-surface)] font-medium' : 'text-[var(--md-sys-color-on-surface-variant)]'}>{label}</span>
+                  {i < 2 && <span className="w-5 h-px bg-[var(--md-sys-color-outline-variant)]" />}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {addCustomerMsg && (
+          <div className="mb-4">
             <MessageBanner severity={addCustomerMsg.type} dismissible onDismiss={() => setAddCustomerMsg(null)}>
               {addCustomerMsg.text}
             </MessageBanner>
-          )}
-          <TextField
-            label="氏名"
-            value={addCustomerForm.name}
-            onChange={v => setAddCustomerForm(f => ({ ...f, name: v }))}
-            required
-            placeholder="山田 太郎"
-            autoComplete="off"
-            name="kk-cust-name"
-          />
-          <TextField
-            label="ふりがな"
-            value={addCustomerForm.furigana}
-            onChange={v => setAddCustomerForm(f => ({ ...f, furigana: v }))}
-            required
-            placeholder="やまだ たろう"
-            autoComplete="off"
-            name="kk-cust-furigana"
-          />
-          <TextField
-            label="メールアドレス（任意）"
-            type="email"
-            value={addCustomerForm.email}
-            onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))}
-            placeholder="taro@example.com"
-            autoComplete="off"
-            name="kk-cust-email"
-          />
-          <TextField
-            label="電話番号（任意）"
-            type="tel"
-            value={addCustomerForm.phone}
-            onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))}
-            placeholder="090-1234-5678"
-            autoComplete="off"
-            name="kk-cust-phone"
-          />
-          <TextField
-            label="住所（任意）"
-            value={addCustomerForm.address}
-            onChange={v => setAddCustomerForm(f => ({ ...f, address: v }))}
-            placeholder="東京都渋谷区..."
-            autoComplete="off"
-            name="kk-cust-address"
-          />
-          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-            ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
-          </p>
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="submit"
-              variant="filled"
-              loading={addCustomerSubmitting}
-              disabled={addCustomerSubmitting || !addCustomerForm.name || !addCustomerForm.furigana}
-              fullWidth
-            >
-              {addCustomerSubmitting ? '登録中...' : '登録する'}
-            </Button>
           </div>
-        </form>
+        )}
+
+        {/* ステップ1: 顧客情報 */}
+        {wizardStep === 1 && (
+          <form onSubmit={handleCreateCustomer} className="space-y-4" autoComplete="off">
+            <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+            <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+            <TextField label="氏名" value={addCustomerForm.name} onChange={v => setAddCustomerForm(f => ({ ...f, name: v }))} required placeholder="山田 太郎" autoComplete="off" name="kk-cust-name" />
+            <TextField label="ふりがな" value={addCustomerForm.furigana} onChange={v => setAddCustomerForm(f => ({ ...f, furigana: v }))} required placeholder="やまだ たろう" autoComplete="off" name="kk-cust-furigana" />
+            <TextField label="メールアドレス（任意）" type="email" value={addCustomerForm.email} onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))} placeholder="taro@example.com" autoComplete="off" name="kk-cust-email" />
+            <TextField label="電話番号（任意）" type="tel" value={addCustomerForm.phone} onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))} placeholder="090-1234-5678" autoComplete="off" name="kk-cust-phone" />
+            <TextField label="住所（任意）" value={addCustomerForm.address} onChange={v => setAddCustomerForm(f => ({ ...f, address: v }))} placeholder="東京都渋谷区..." autoComplete="off" name="kk-cust-address" />
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button type="submit" variant="filled" loading={addCustomerSubmitting} disabled={addCustomerSubmitting || !addCustomerForm.name || !addCustomerForm.furigana} fullWidth>
+                {addCustomerSubmitting ? '登録中...' : '次へ（顧客を登録）'}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* ステップ2: 案件作成 */}
+        {wizardStep === 2 && (
+          <div className="space-y-4">
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="font-medium text-[var(--md-sys-color-on-surface)]">{createdCustomer?.name} 様</span> を登録しました。続けて案件を作成できます（不要な場合はスキップ）。
+            </p>
+            <div>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">案件メモ（買取内容など）</label>
+              <textarea
+                value={dealForm.detail}
+                onChange={(e) => setDealForm({ detail: e.target.value })}
+                rows={4}
+                placeholder="例: 古い切手コレクション、ブランドバッグ数点 など"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="text" onClick={() => setWizardStep(3)} disabled={addCustomerSubmitting}>
+                スキップ
+              </Button>
+              <Button variant="filled" onClick={handleCreateDeal} loading={addCustomerSubmitting} disabled={addCustomerSubmitting} fullWidth>
+                案件を作成して次へ
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ステップ3: 訪問予定追加 */}
+        {wizardStep === 3 && (
+          <div className="space-y-4">
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              {createdDealId ? '案件を作成しました。' : ''}訪問予定を追加できます（不要な場合はスキップ）。
+            </p>
+            <div>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">訪問日 <span className="text-[var(--md-sys-color-error,#B3261E)]">*</span></label>
+              <input
+                type="date"
+                value={scheduleForm.visitDate}
+                onChange={(e) => setScheduleForm(f => ({ ...f, visitDate: e.target.value }))}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">開始時間（任意）</label>
+                <input type="time" value={scheduleForm.startTime} onChange={(e) => setScheduleForm(f => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">終了時間（任意）</label>
+                <input type="time" value={scheduleForm.endTime} onChange={(e) => setScheduleForm(f => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">メモ（任意）</label>
+              <textarea value={scheduleForm.note} onChange={(e) => setScheduleForm(f => ({ ...f, note: e.target.value }))} rows={2} placeholder="訪問に関するメモ" className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="text" onClick={skipToDone} disabled={addCustomerSubmitting}>
+                スキップして完了
+              </Button>
+              <Button variant="filled" onClick={handleCreateSchedule} loading={addCustomerSubmitting} disabled={addCustomerSubmitting || !scheduleForm.visitDate} fullWidth>
+                訪問予定を登録して完了
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ステップ4: 完了 */}
+        {wizardStep === 4 && (
+          <div className="space-y-5 text-center py-2">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+              <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <div>
+              <p className="font-semibold text-[var(--md-sys-color-on-surface)]">{createdCustomer?.name} 様 を登録しました</p>
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                {createdDealId ? '案件' : ''}{createdDealId ? '・' : ''}必要に応じて訪問予定も登録されました。
+              </p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="tonal" onClick={() => setShowAddCustomer(false)} fullWidth>
+                閉じる
+              </Button>
+              {createdCustomer && (
+                <Button variant="filled" onClick={() => router.push(`/store/customers/${createdCustomer.id}`)} fullWidth>
+                  顧客ページを開く
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   )

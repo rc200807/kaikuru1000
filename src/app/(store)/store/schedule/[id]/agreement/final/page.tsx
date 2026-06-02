@@ -957,54 +957,21 @@ export default function FinalAgreementPage() {
 
       </div>{/* /contractRef */}
 
-      {/* お客様情報・メール送付先 */}
+      {/* お客様情報・送付先（前のページで入力済み・確認用） */}
       <Card variant="elevated" padding="md">
-        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様情報・送付先</h2>
-        <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mb-3">本人確認の完了後にご記入ください。</p>
-
-        {/* 職業 */}
-        <div className="mb-4">
-          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">ご職業</label>
-          <input
-            type="text"
-            value={occupationInput}
-            onChange={(e) => setOccupationInput(e.target.value)}
-            placeholder="例: 会社員"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
-          />
-          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">提出後、お客様の顧客情報に反映されます。</p>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">お客様情報・送付先</h2>
+          <Button variant="text" size="sm" onClick={backToAgreement} disabled={submitting}>修正する</Button>
         </div>
-
-        {/* 電話番号 */}
-        <div className="mb-4">
-          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">お客様の電話番号</label>
-          <input
-            type="tel"
-            inputMode="tel"
-            value={phoneInput}
-            onChange={(e) => setPhoneInput(e.target.value)}
-            placeholder="090-1234-5678"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
-          />
-          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">変更がある場合は修正してください。更新後の番号が売買契約書と顧客情報に反映されます。</p>
+        <div className="text-xs space-y-1.5 text-[var(--md-sys-color-on-surface)]">
+          <div><span className="font-medium text-[var(--md-sys-color-on-surface-variant)]">ご職業：</span>{occupationInput || '—'}</div>
+          <div><span className="font-medium text-[var(--md-sys-color-on-surface-variant)]">電話番号：</span>{phoneInput || visit.user.phone || '—'}</div>
+          <div><span className="font-medium text-[var(--md-sys-color-on-surface-variant)]">送付先メール：</span>{customerEmailInput || '未入力'}</div>
         </div>
-
-        {/* メールアドレス */}
-        <div>
-          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">売買契約書の内容をお送りするメールアドレス</label>
-          <input
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            value={customerEmailInput}
-            onChange={(e) => setCustomerEmailInput(e.target.value)}
-            placeholder="example@example.com"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
-          />
-          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1 leading-relaxed">
-            提出するとPDFファイルとマイページへのリンクをこのメールアドレス宛にお送りします。
-          </p>
-        </div>
+        <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-2">職業・電話番号・メールアドレスは前のページ（本人確認の下）でご記入ください。提出後、顧客情報および売買契約書に反映されます。</p>
+        {!customerEmailInput.trim() && (
+          <p className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] mt-1">提出にはメールアドレスが必要です。「修正する」から前のページでご入力ください。</p>
+        )}
       </Card>
 
       {/* 操作ボタン */}

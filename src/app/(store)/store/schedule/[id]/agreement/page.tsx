@@ -136,6 +136,7 @@ type VisitUser = {
   address: string
   phone: string
   email?: string
+  occupation?: string | null
   idAddress?: string | null
   idName?: string | null
   idDocumentType?: string | null
@@ -501,6 +502,12 @@ export default function AgreementPage() {
   const [supplementaryDocs, setSupplementaryDocs] = useState<string[]>([])
   const [savingDocs, setSavingDocs] = useState(false)
 
+  // お客様情報・送付先（職業・電話・メール）— 本人確認後にこのページで記入
+  const [occupationInput, setOccupationInput] = useState('')
+  const [phoneInput, setPhoneInput] = useState('')
+  const [emailInput, setEmailInput] = useState('')
+  const [savingInfo, setSavingInfo] = useState(false)
+
   // 再訪問日（後日引取）設定
   const [showRevisitForm, setShowRevisitForm] = useState(false)
   const [revisitForm, setRevisitForm] = useState({ date: '', start: '', end: '', note: '' })
@@ -568,6 +575,10 @@ export default function AgreementPage() {
     if (res.ok) {
       const data = await res.json()
       setVisit(data)
+      // 既存の職業・電話・メールを初期値にセット（入力済みは保持）
+      setOccupationInput((prev) => prev || data?.user?.occupation || '')
+      setPhoneInput((prev) => prev || data?.user?.phone || '')
+      setEmailInput((prev) => prev || data?.user?.email || '')
       try {
         const docs = data.supplementaryDocs ? JSON.parse(data.supplementaryDocs) : []
         if (Array.isArray(docs)) setSupplementaryDocs(docs)
@@ -660,10 +671,29 @@ export default function AgreementPage() {
     }
   }
 
-  const goToFinal = () => {
+  const goToFinal = async () => {
     if (!hasIdDocument) {
       setMessage({ type: 'error', text: '身分証明証をアップロードしてください' })
       return
+    }
+    // 職業・電話・メールを顧客情報へ保存（最終契約書に反映させる）
+    if (visit) {
+      setSavingInfo(true)
+      try {
+        await fetch(`/api/users/${visit.user.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            occupation: occupationInput.trim() || null,
+            phone: phoneInput.trim() || visit.user.phone,
+            email: emailInput.trim() || null,
+          }),
+        })
+      } catch {
+        /* 保存失敗時も契約書画面へは進める（最終画面でも反映可能） */
+      } finally {
+        setSavingInfo(false)
+      }
     }
     const qs = staffName ? `?staff=${encodeURIComponent(staffName)}` : ''
     navigateWithPinCheck(`/store/schedule/${scheduleId}/agreement/final${qs}`)
@@ -921,16 +951,67 @@ export default function AgreementPage() {
         </div>
       </Card>
 
+      {/* ──── お客様情報・送付先（本人確認後に記入） ──── */}
+      <Card variant="elevated" padding="md">
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様情報・送付先</h2>
+        <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mb-3">本人確認の完了後にご記入ください。</p>
+
+        {/* 職業 */}
+        <div className="mb-4">
+          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">ご職業</label>
+          <input
+            type="text"
+            value={occupationInput}
+            onChange={(e) => setOccupationInput(e.target.value)}
+            placeholder="例: 会社員"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+          />
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">提出後、お客様の顧客情報に反映されます。</p>
+        </div>
+
+        {/* 電話番号 */}
+        <div className="mb-4">
+          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">お客様の電話番号</label>
+          <input
+            type="tel"
+            inputMode="tel"
+            value={phoneInput}
+            onChange={(e) => setPhoneInput(e.target.value)}
+            placeholder="090-1234-5678"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+          />
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">変更がある場合は修正してください。更新後の番号が売買契約書と顧客情報に反映されます。</p>
+        </div>
+
+        {/* メールアドレス */}
+        <div>
+          <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">売買契約書の内容をお送りするメールアドレス</label>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            placeholder="example@example.com"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+          />
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1 leading-relaxed">
+            提出するとPDFファイルとマイページへのリンクをこのメールアドレス宛にお送りします。
+          </p>
+        </div>
+      </Card>
+
       {/* ──── 操作ボタン ──── */}
       <div className="flex gap-3 justify-end pt-2">
         <Button
           variant="text"
           onClick={() => navigateWithPinCheck(`/store/schedule/${scheduleId}`)}
+          disabled={savingInfo}
         >
           戻る
         </Button>
-        <Button onClick={goToFinal} disabled={!hasIdDocument}>
-          最終契約書へ進む →
+        <Button onClick={goToFinal} disabled={!hasIdDocument || savingInfo} loading={savingInfo}>
+          {savingInfo ? '保存中...' : '最終契約書へ進む →'}
         </Button>
       </div>
     </div>

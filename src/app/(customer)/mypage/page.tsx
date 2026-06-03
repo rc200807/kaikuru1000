@@ -2248,7 +2248,7 @@ function MyPageContent() {
               </div>
 
               {/* 未登録項目の警告 */}
-              {(!user.idDocumentPath || !user.bankName || !user.accountNumber || (user.addressMismatch && !user.addressVerified)) && (
+              {!deliveryBlocked && (!user.idDocumentPath || !user.bankName || !user.accountNumber || (user.addressMismatch && !user.addressVerified)) && (
                 <Card variant="elevated" padding="md" className="!bg-red-50/70 backdrop-blur-xl !border border-red-200/50 !shadow-sm">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -2283,7 +2283,8 @@ function MyPageContent() {
                 </Card>
               )}
 
-              {/* 送付手順ガイド */}
+              {/* 送付手順ガイド（18歳以下は非表示） */}
+              {!deliveryBlocked && (
               <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
                 <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
                   <svg className="w-5 h-5 text-[#B91C1C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -2314,8 +2315,10 @@ function MyPageContent() {
                   </li>
                 </ol>
               </Card>
+              )}
 
-              {/* 注意事項 */}
+              {/* 注意事項（18歳以下は非表示） */}
+              {!deliveryBlocked && (
               <Card variant="elevated" padding="md" className="!bg-amber-50/70 backdrop-blur-xl !border border-amber-200/50 !shadow-sm">
                 <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-2">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -2343,6 +2346,7 @@ function MyPageContent() {
                   ※ 上記に該当する商品が含まれていた場合、ご返送させていただく場合があります。
                 </p>
               </Card>
+              )}
 
               {/* 送付一覧 */}
               {shipmentsLoading ? (

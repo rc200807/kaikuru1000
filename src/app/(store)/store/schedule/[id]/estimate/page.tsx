@@ -134,7 +134,7 @@ export default function EstimatePage() {
         // フォント読み込み完了を待ってからレンダリング（PDFが空・崩れるのを防ぐ）
         try { await (document as any).fonts?.ready } catch {}
         const { default: jsPDF } = await import('jspdf')
-        const { default: html2canvas } = await import('html2canvas')
+        const { default: html2canvas } = await import('html2canvas-pro')
         const genPdf = async (el: HTMLElement): Promise<string | null> => {
           const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
           const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })

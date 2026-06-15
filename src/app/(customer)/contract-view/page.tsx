@@ -61,16 +61,18 @@ function ContractViewContent() {
   const [magicAuth, setMagicAuth] = useState<{ userId: string; contractId: string | null; user: any } | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const [downloading, setDownloading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
 
   // 表示中の契約書をその場でPDF化してダウンロード（保存済みPDFの有無に依存しない）
   const handleDownloadPdf = useCallback(async () => {
     const el = cardRef.current
     if (!el) return
     setDownloading(true)
+    setPdfError('')
     try {
       try { await (document as any).fonts?.ready } catch {}
       const { default: jsPDF } = await import('jspdf')
-      const { default: html2canvas } = await import('html2canvas')
+      const { default: html2canvas } = await import('html2canvas-pro')
       const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pageWidth = pdf.internal.pageSize.getWidth()
@@ -97,7 +99,7 @@ function ContractViewContent() {
       pdf.save(`売買契約書_${ymd}.pdf`)
     } catch (e) {
       console.error('PDF生成エラー:', e)
-      setError('PDFの生成に失敗しました。お手数ですが、時間をおいて再度お試しください。')
+      setPdfError('PDFの生成に失敗しました。お手数ですが、時間をおいて再度お試しください。')
     } finally {
       setDownloading(false)
     }
@@ -604,6 +606,7 @@ function ContractViewContent() {
               </>
             )}
           </button>
+          {pdfError && <p className="text-xs text-red-600 mt-3">{pdfError}</p>}
         </div>
 
         {/* マイページへの導線 */}

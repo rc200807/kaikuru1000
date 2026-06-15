@@ -445,7 +445,7 @@ export default function FinalAgreementPage() {
       let invoicePdfBase64: string | null = null
       try {
         const { default: jsPDF } = await import('jspdf')
-        const { default: html2canvas } = await import('html2canvas')
+        const { default: html2canvas } = await import('html2canvas-pro')
 
         // 要素を A4 複数ページPDFのbase64に変換するヘルパー
         const genPdf = async (el: HTMLElement): Promise<string | null> => {

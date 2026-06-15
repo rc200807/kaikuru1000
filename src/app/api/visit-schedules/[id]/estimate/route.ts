@@ -24,8 +24,8 @@ export async function POST(
     include: {
       user: { select: { id: true, name: true, email: true } },
       store: { select: { id: true, name: true, address: true, phone: true } },
-      purchaseItems: { select: { purchasePrice: true, quantity: true } },
-      workItems: { select: { unitPrice: true, quantity: true } },
+      purchaseItems: { select: { itemName: true, category: true, purchasePrice: true, quantity: true }, orderBy: { createdAt: 'asc' } },
+      workItems: { select: { workName: true, unitPrice: true, quantity: true }, orderBy: { createdAt: 'asc' } },
     },
   })
 
@@ -119,6 +119,8 @@ export async function POST(
         billingAmount,
         validUntil: validUntilDate,
         pdfBase64: pdfBase64 ?? '',
+        purchaseItems: schedule.purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
+        workItems: schedule.workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
       })
       if (emailSent) {
         await prisma.estimate.update({

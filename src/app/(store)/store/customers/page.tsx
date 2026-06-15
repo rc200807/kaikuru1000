@@ -9,6 +9,7 @@ import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
+import { useBusinessHours } from '@/hooks/useBusinessHours'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import DataTable from '@/components/DataTable'
 import type { Column } from '@/components/DataTable'
@@ -38,6 +39,7 @@ function fmtDate(d?: string | null): string {
 export default function StoreCustomersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const bizHours = useBusinessHours()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
@@ -546,11 +548,11 @@ export default function StoreCustomersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">開始時間（任意）</label>
-                <TimeSelect value={scheduleForm.startTime} onChange={v => setScheduleForm(f => ({ ...f, startTime: v }))} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+                <TimeSelect value={scheduleForm.startTime} onChange={v => setScheduleForm(f => ({ ...f, startTime: v }))} rangeStart={bizHours?.start} rangeEnd={bizHours?.end} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">終了時間（任意）</label>
-                <TimeSelect value={scheduleForm.endTime} onChange={v => setScheduleForm(f => ({ ...f, endTime: v }))} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+                <TimeSelect value={scheduleForm.endTime} onChange={v => setScheduleForm(f => ({ ...f, endTime: v }))} rangeStart={bizHours?.start} rangeEnd={bizHours?.end} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
               </div>
             </div>
             <div>

@@ -10,6 +10,7 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import Modal from '@/components/Modal'
 import TimeSelect from '@/components/TimeSelect'
+import { useBusinessHours } from '@/hooks/useBusinessHours'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import { PROOF_DOCUMENT_TYPES } from '@/lib/document-types'
 
@@ -489,6 +490,7 @@ function IdDocumentUploadModal({
 export default function AgreementPage() {
   const { data: session } = useSession()
   const router = useRouter()
+  const bizHours = useBusinessHours()
   const params = useParams()
   const searchParams = useSearchParams()
   const scheduleId = params.id as string
@@ -873,11 +875,11 @@ export default function AgreementPage() {
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">開始時間</label>
-                <TimeSelect value={revisitForm.start} onChange={v => setRevisitForm(p => ({ ...p, start: v }))} selectClassName="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
+                <TimeSelect value={revisitForm.start} onChange={v => setRevisitForm(p => ({ ...p, start: v }))} rangeStart={bizHours?.start} rangeEnd={bizHours?.end} selectClassName="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">終了時間</label>
-                <TimeSelect value={revisitForm.end} onChange={v => setRevisitForm(p => ({ ...p, end: v }))} selectClassName="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
+                <TimeSelect value={revisitForm.end} onChange={v => setRevisitForm(p => ({ ...p, end: v }))} rangeStart={bizHours?.start} rangeEnd={bizHours?.end} selectClassName="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
               </div>
             </div>
             <div>

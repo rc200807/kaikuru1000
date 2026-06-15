@@ -11,6 +11,7 @@ import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
+import { useBusinessHours } from '@/hooks/useBusinessHours'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
@@ -57,6 +58,7 @@ function fmt(n: number | null | undefined) {
 export default function StoreSchedulePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const bizHours = useBusinessHours()
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -916,12 +918,16 @@ export default function StoreSchedulePage() {
               value={counterForm.start}
               onChange={v => setCounterForm({ ...counterForm, start: v })}
               required
+              rangeStart={bizHours?.start}
+              rangeEnd={bizHours?.end}
             />
             <TimeSelect
               label="終了時間"
               value={counterForm.end}
               onChange={v => setCounterForm({ ...counterForm, end: v })}
               required
+              rangeStart={bizHours?.start}
+              rangeEnd={bizHours?.end}
             />
           </div>
           <TextField

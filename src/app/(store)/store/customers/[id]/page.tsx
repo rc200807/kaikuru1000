@@ -11,6 +11,7 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
+import { useBusinessHours } from '@/hooks/useBusinessHours'
 import BottomSheet from '@/components/BottomSheet'
 import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -212,6 +213,7 @@ function DashStat({ label, value, sub }: { label: string; value: string; sub?: s
 export default function StoreCustomerDetailPage() {
   const { data: session, status: authStatus } = useSession()
   const router = useRouter()
+  const bizHours = useBusinessHours()
   const { id } = useParams<{ id: string }>()
   const searchParams = useSearchParams()
 
@@ -1414,11 +1416,15 @@ export default function StoreCustomerDetailPage() {
                     label="開始時間"
                     value={dealScheduleForm.startTime}
                     onChange={v => setDealScheduleForm(prev => ({ ...prev, startTime: v }))}
+                    rangeStart={bizHours?.start}
+                    rangeEnd={bizHours?.end}
                   />
                   <TimeSelect
                     label="終了時間"
                     value={dealScheduleForm.endTime}
                     onChange={v => setDealScheduleForm(prev => ({ ...prev, endTime: v }))}
+                    rangeStart={bizHours?.start}
+                    rangeEnd={bizHours?.end}
                   />
                 </div>
                 <TextField
@@ -1579,11 +1585,15 @@ export default function StoreCustomerDetailPage() {
                     label="開始時間"
                     value={addForm.startTime}
                     onChange={v => setAddForm({ ...addForm, startTime: v })}
+                    rangeStart={bizHours?.start}
+                    rangeEnd={bizHours?.end}
                   />
                   <TimeSelect
                     label="終了時間"
                     value={addForm.endTime}
                     onChange={v => setAddForm({ ...addForm, endTime: v })}
+                    rangeStart={bizHours?.start}
+                    rangeEnd={bizHours?.end}
                   />
                 </div>
                 <TextField
@@ -1640,11 +1650,15 @@ export default function StoreCustomerDetailPage() {
                         label="開始"
                         value={proposalForm.candidate1Start}
                         onChange={v => setProposalForm(prev => ({ ...prev, candidate1Start: v }))}
+                        rangeStart={bizHours?.start}
+                        rangeEnd={bizHours?.end}
                       />
                       <TimeSelect
                         label="終了"
                         value={proposalForm.candidate1End}
                         onChange={v => setProposalForm(prev => ({ ...prev, candidate1End: v }))}
+                        rangeStart={bizHours?.start}
+                        rangeEnd={bizHours?.end}
                       />
                     </div>
                   </div>

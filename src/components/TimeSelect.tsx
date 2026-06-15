@@ -22,6 +22,8 @@ export default function TimeSelect({
   required = false,
   className = '',
   selectClassName,
+  rangeStart,
+  rangeEnd,
 }: {
   label?: string
   value: string
@@ -29,9 +31,23 @@ export default function TimeSelect({
   required?: boolean
   className?: string
   selectClassName?: string
+  /** 営業開始時刻 "HH:MM"。指定すると、これ以降の候補のみ表示 */
+  rangeStart?: string | null
+  /** 営業終了時刻 "HH:MM"。指定すると、これ以前の候補のみ表示 */
+  rangeEnd?: string | null
 }) {
-  // 既存値が候補に無い場合（過去データの :15 等）も選べるよう先頭に追加
-  const extra = value && !TIME_OPTIONS.includes(value) ? [value] : []
+  // 営業時間内（rangeStart〜rangeEnd 包含）に候補を絞り込む。"HH:MM" は文字列比較で順序が保たれる
+  const isValidTime = (t?: string | null): t is string => !!t && /^([01]\d|2[0-3]):[0-5]\d$/.test(t)
+  const start = isValidTime(rangeStart) ? rangeStart : null
+  const end = isValidTime(rangeEnd) ? rangeEnd : null
+  const options = TIME_OPTIONS.filter(t => (!start || t >= start) && (!end || t <= end))
+  // 範囲の端が30分刻みでない場合（例 18:45）も端を選べるよう補完
+  for (const b of [start, end]) {
+    if (b && !options.includes(b)) options.push(b)
+  }
+  options.sort()
+  // 既存値が候補に無い場合（過去データの :15 や営業時間外の値）も選べるよう追加
+  const extra = value && !options.includes(value) ? [value] : []
   return (
     <div className={className}>
       {label && (
@@ -47,7 +63,7 @@ export default function TimeSelect({
       >
         <option value="">--:--</option>
         {extra.map(t => <option key={t} value={t}>{t}</option>)}
-        {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+        {options.map(t => <option key={t} value={t}>{t}</option>)}
       </select>
     </div>
   )

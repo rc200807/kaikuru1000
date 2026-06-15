@@ -515,6 +515,8 @@ export async function sendEstimateEmail(params: {
   pdfBase64: string
   /** 請求見積PDF（買取見積とは別ファイルで添付） */
   invoicePdfBase64?: string
+  /** オンラインで見積書を閲覧・PDFダウンロードできるリンク（マジックリンク） */
+  viewUrl?: string
   purchaseItems?: { name: string; quantity: number; price: number }[]
   workItems?: { name: string; quantity: number; price: number }[]
 }): Promise<boolean> {
@@ -586,10 +588,16 @@ export async function sendEstimateEmail(params: {
         </tr>
         <tr>
           <td style="background-color:#ffffff;padding:32px;">
-            <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+            <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.7;">
               この度はお問い合わせいただき誠にありがとうございます。<br>
-              下記のとおりお見積りをお送りいたします。詳細は添付のPDFをご確認ください。
+              下記のとおりお見積りをお送りいたします。${params.viewUrl ? '内容のご確認とPDFのダウンロードは、下記ボタンからも行えます。' : '詳細は添付のPDFをご確認ください。'}
             </p>
+            ${params.viewUrl ? `
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+              <tr><td align="center">
+                <a href="${params.viewUrl}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:8px;">見積書を確認・PDFをダウンロード</a>
+              </td></tr>
+            </table>` : ''}
             ${itemsHtml}
             <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
               <tr><td style="padding:14px 18px;font-size:13px;color:#6b7280;">見積有効期限</td><td style="padding:14px 18px;font-size:14px;font-weight:600;color:#111827;text-align:right;">${escapeHtml(validUntilStr)}</td></tr>
@@ -624,6 +632,7 @@ export async function sendEstimateEmail(params: {
     text: [
       'この度はお問い合わせいただき誠にありがとうございます。',
       '下記のとおりお見積りをお送りいたします。',
+      ...(params.viewUrl ? ['', '▼ 見積書の確認・PDFダウンロードはこちら', params.viewUrl] : []),
       '',
       '【買取品目】',
       ...((params.purchaseItems && params.purchaseItems.length > 0)

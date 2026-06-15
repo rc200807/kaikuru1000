@@ -115,6 +115,24 @@ export async function POST(
     }
   }
 
+  // 見積書をオンライン閲覧・PDFダウンロードできるマジックリンクを生成
+  // （メールにPDFが添付できなかった場合でも、お客様がリンクからPDFを取得できるようにする）
+  let viewUrl: string | undefined
+  if (customerEmail) {
+    try {
+      const crypto = await import('crypto')
+      const token = crypto.randomBytes(32).toString('hex')
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+      await prisma.magicLink.create({
+        data: { token, userId: schedule.user.id, contractId: id, expiresAt },
+      })
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+      viewUrl = `${baseUrl}/magic/${token}?doc=estimate`
+    } catch (e) {
+      console.error('[estimate POST] 見積マジックリンク生成失敗:', e)
+    }
+  }
+
   // メール送信
   let emailSent = false
   let emailErrorReason: string | null = null
@@ -131,6 +149,7 @@ export async function POST(
         validUntil: validUntilDate,
         pdfBase64: effectivePdfBase64 ?? '',
         invoicePdfBase64: effectiveInvoicePdfBase64 ?? '',
+        viewUrl,
         purchaseItems: schedule.purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
         workItems: schedule.workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
       })

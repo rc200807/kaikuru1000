@@ -52,7 +52,7 @@ export default function StoreCustomersPage() {
   // 新規顧客追加（顧客作成 → 案件作成 → 訪問予定追加 の一連ウィザード）
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1) // 1:顧客 2:案件 3:予定 4:完了
-  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '' })
+  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', leadSource: '' })
   const [createdCustomer, setCreatedCustomer] = useState<{ id: string; name: string } | null>(null)
   const [dealForm, setDealForm] = useState({ detail: '' })
   const [createdDealId, setCreatedDealId] = useState<string | null>(null)
@@ -118,7 +118,7 @@ export default function StoreCustomersPage() {
     setShowAddCustomer(true)
     setWizardStep(1)
     setAddCustomerMsg(null)
-    setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '' })
+    setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '', leadSource: '' })
     setCreatedCustomer(null)
     setDealForm({ detail: '' })
     setCreatedDealId(null)
@@ -140,6 +140,7 @@ export default function StoreCustomersPage() {
           email: addCustomerForm.email,
           phone: addCustomerForm.phone,
           address: addCustomerForm.address,
+          leadSource: addCustomerForm.leadSource || undefined,
           // パスワードはAPIで自動生成
           customerType: 'regular',
           skipLicenseKey: true,
@@ -434,6 +435,21 @@ export default function StoreCustomersPage() {
             <TextField label="メールアドレス（任意）" type="email" value={addCustomerForm.email} onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))} placeholder="taro@example.com" autoComplete="off" name="kk-cust-email" />
             <TextField label="電話番号（任意）" type="tel" value={addCustomerForm.phone} onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))} placeholder="090-1234-5678" autoComplete="off" name="kk-cust-phone" />
             <TextField label="住所（任意）" value={addCustomerForm.address} onChange={v => setAddCustomerForm(f => ({ ...f, address: v }))} placeholder="東京都渋谷区..." autoComplete="off" name="kk-cust-address" />
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">流入経路（任意）</label>
+              <select
+                value={addCustomerForm.leadSource}
+                onChange={e => setAddCustomerForm(f => ({ ...f, leadSource: e.target.value }))}
+                className="w-full h-12 px-3 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              >
+                <option value="">未設定</option>
+                <option value="電話">電話</option>
+                <option value="LINE">LINE</option>
+                <option value="紹介">紹介</option>
+                <option value="その他">その他</option>
+              </select>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">※ お問い合わせフォーム経由のお客様は自動的に「フォーム」が設定されます。</p>
+            </div>
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
               ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
             </p>

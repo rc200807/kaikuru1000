@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createCalendarEvent } from '@/lib/google-calendar'
 import { recordAccessLog } from '@/lib/access-log'
+import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
 
 // 訪問スケジュール一覧
 export async function GET(request: NextRequest) {
@@ -77,6 +78,18 @@ export async function POST(request: NextRequest) {
       store: { select: { name: true } },
     },
   })
+
+  // 案件に紐づく訪問予定が作成されたら、案件ステータスを「訪問決定」へ前進（前進のみ・終端は変更しない）
+  if (schedule.dealId) {
+    try {
+      await prisma.deal.updateMany({
+        where: { id: schedule.dealId, status: { in: DEAL_AUTO_ADVANCE_FROM.visit_decided } },
+        data: { status: 'visit_decided' },
+      })
+    } catch (e) {
+      console.error('[Deal] 訪問決定への自動遷移に失敗:', e)
+    }
+  }
 
   // Googleカレンダーにイベントを同期（失敗してもスケジュール登録は成功とする）
   try {

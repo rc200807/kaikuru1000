@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { sendContractEmail } from '@/lib/mailer'
 import { buildContractBodyHtml, buildContractBodyText } from '@/lib/contract-email-template'
 import { recordAccessLog } from '@/lib/access-log'
+import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
 
 /** 売買契約書を保存してメール送信 */
 export async function POST(
@@ -131,6 +132,18 @@ export async function POST(
       emailSentAt: null, // 再送信可能にリセット
     },
   })
+
+  // 案件に紐づく訪問で売買契約書が発行されたら、案件ステータスを「契約」へ前進（前進のみ・終端は変更しない）
+  if (schedule.dealId) {
+    try {
+      await prisma.deal.updateMany({
+        where: { id: schedule.dealId, status: { in: DEAL_AUTO_ADVANCE_FROM.contract } },
+        data: { status: 'contract' },
+      })
+    } catch (e) {
+      console.error('[Deal] 契約への自動遷移に失敗:', e)
+    }
+  }
 
   // パスワード設定誘導用のマジックリンクを生成
   let magicLinkUrl: string | undefined

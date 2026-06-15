@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendEstimateEmail } from '@/lib/mailer'
 import { recordAccessLog } from '@/lib/access-log'
+import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
 
 /** 見積書を保存してメール送信 */
 export async function POST(
@@ -90,6 +91,18 @@ export async function POST(
       emailSentAt: null, // 再送信可能にリセット
     },
   })
+
+  // 案件に紐づく訪問で見積書が発行されたら、案件ステータスを「見積のみ」へ前進（前進のみ・終端は変更しない）
+  if (schedule.dealId) {
+    try {
+      await prisma.deal.updateMany({
+        where: { id: schedule.dealId, status: { in: DEAL_AUTO_ADVANCE_FROM.estimate_only } },
+        data: { status: 'estimate_only' },
+      })
+    } catch (e) {
+      console.error('[Deal] 見積のみへの自動遷移に失敗:', e)
+    }
+  }
 
   // メール送信
   let emailSent = false

@@ -11,6 +11,21 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import { formalName } from '@/lib/operator-utils'
 
+// base64 PDF を新規タブで開く（ブラウザのPDFビューアで確認・ダウンロードできる）
+function openPdfBase64(base64: string) {
+  try {
+    const bin = atob(base64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    const blob = new Blob([bytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  } catch (e) {
+    console.error('PDF表示エラー:', e)
+  }
+}
+
 /* ─── PINロック解除モーダル ─── */
 function PinUnlockModal({
   open,
@@ -302,6 +317,8 @@ export default function FinalAgreementPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [existingContract, setExistingContract] = useState<ExistingContract | null>(null)
+  // 作成後に確認できるよう、生成したPDFを保持（自動ダウンロードはしない）
+  const [generatedPdfs, setGeneratedPdfs] = useState<{ sale: string | null; invoice: string | null }>({ sale: null, invoice: null })
   const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null)
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [customerEmailInput, setCustomerEmailInput] = useState('')
@@ -518,16 +535,8 @@ export default function FinalAgreementPage() {
 
       generateMagicLink()
 
-      const visitDateStr = format(new Date(visit.visitDate), 'yyyyMMdd', { locale: ja })
-      const cust = visit.user.idName || visit.user.name
-      const dl = (b64: string, name: string) => {
-        const link = document.createElement('a')
-        link.href = `data:application/pdf;base64,${b64}`
-        link.download = name
-        link.click()
-      }
-      if (pdfBase64) dl(pdfBase64, `売買契約書_${cust}_${visitDateStr}.pdf`)
-      if (invoicePdfBase64) dl(invoicePdfBase64, `請求書_${cust}_${visitDateStr}.pdf`)
+      // 自動ダウンロードはせず、確認用に保持（「PDFを確認する」ボタンから開く）
+      setGeneratedPdfs({ sale: pdfBase64, invoice: invoicePdfBase64 })
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message ?? '送信に失敗しました' })
     } finally {
@@ -981,6 +990,22 @@ export default function FinalAgreementPage() {
           <p className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] mt-1">提出にはメールアドレスが必要です。「修正する」から前のページでご入力ください。</p>
         )}
       </Card>
+
+      {/* 作成後のPDF確認 */}
+      {(generatedPdfs.sale || generatedPdfs.invoice) && (
+        <Card variant="elevated" padding="md">
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">PDFを確認する</h2>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">ボタンを押すと別タブでPDFを開きます。表示画面からダウンロードもできます。</p>
+          <div className="flex flex-wrap gap-2">
+            {generatedPdfs.sale && (
+              <Button variant="tonal" onClick={() => openPdfBase64(generatedPdfs.sale!)}>売買契約書PDFを確認する</Button>
+            )}
+            {generatedPdfs.invoice && (
+              <Button variant="tonal" onClick={() => openPdfBase64(generatedPdfs.invoice!)}>請求書PDFを確認する</Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* 操作ボタン */}
       <div className="flex gap-3 justify-end pt-2">

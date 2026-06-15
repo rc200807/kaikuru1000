@@ -6,10 +6,12 @@ import { useRouter } from 'next/navigation'
 import {
   AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import StorePage from '@/components/store/StorePage'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
+import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,28 @@ type DashboardData = {
     note: string | null
     purchaseAmount: number | null
   }[]
+  // 追加指標
+  prevMonthAmount?: number
+  prevMonthVisitCount?: number
+  monthlyDeals?: { month: string; count: number }[]
+  currentMonthDealCount?: number
+  prevMonthDealCount?: number
+  dealStatusBreakdown?: { status: string; count: number }[]
+  totalDeals?: number
+  contractRate?: number
+  leadSourceBreakdown?: { name: string; count: number }[]
+  repeatRate?: number
+  repeatCustomers?: number
+  customersWithPurchase?: number
+}
+
+// 流入経路の円グラフ配色
+const LEAD_COLORS = ['#b91c1c', '#60a5fa', '#22c55e', '#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#94a3b8']
+
+// 前月比（%）。前月が0なら算出不可で null。
+function momPct(cur: number, prev: number): number | null {
+  if (!prev) return null
+  return Math.round(((cur - prev) / prev) * 1000) / 10
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -61,9 +85,12 @@ type KpiProps = {
   unit?: string
   sub?: string
   icon: React.ReactNode
+  deltaPct?: number | null
 }
 
-function KpiCard({ label, value, unit, sub, icon }: KpiProps) {
+function KpiCard({ label, value, unit, sub, icon, deltaPct }: KpiProps) {
+  const hasDelta = deltaPct !== undefined && deltaPct !== null
+  const up = (deltaPct ?? 0) >= 0
   return (
     <div className="relative rounded-2xl p-4 overflow-hidden bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-1)]">
       <div className="flex items-start justify-between mb-3">
@@ -74,7 +101,15 @@ function KpiCard({ label, value, unit, sub, icon }: KpiProps) {
         <span className="text-2xl font-semibold tracking-tight text-[var(--md-sys-color-on-surface)]">{value}</span>
         {unit && <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{unit}</span>}
       </div>
-      {sub && <p className="text-[11px] mt-1 text-[var(--md-sys-color-on-surface-faint)]">{sub}</p>}
+      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+        {hasDelta && (
+          <span className={`inline-flex items-center text-[11px] font-semibold ${up ? 'text-emerald-600' : 'text-red-600'}`}>
+            {up ? '▲' : '▼'} 前月比 {up ? '+' : ''}{deltaPct}%
+          </span>
+        )}
+        {deltaPct === null && <span className="text-[11px] text-[var(--md-sys-color-on-surface-faint)]">前月比 —</span>}
+        {sub && <span className="text-[11px] text-[var(--md-sys-color-on-surface-faint)]">{sub}</span>}
+      </div>
     </div>
   )
 }
@@ -159,12 +194,34 @@ export default function StoreDashboardPage() {
     monthlyPurchaseAmount, monthlyVisits, todayCases,
   } = data
 
+  const prevMonthAmount = data.prevMonthAmount ?? 0
+  const prevMonthVisitCount = data.prevMonthVisitCount ?? 0
+  const monthlyDeals = data.monthlyDeals ?? []
+  const currentMonthDealCount = data.currentMonthDealCount ?? 0
+  const prevMonthDealCount = data.prevMonthDealCount ?? 0
+  const dealStatusBreakdown = data.dealStatusBreakdown ?? []
+  const totalDeals = data.totalDeals ?? 0
+  const contractRate = data.contractRate ?? 0
+  const leadSourceBreakdown = data.leadSourceBreakdown ?? []
+  const repeatRate = data.repeatRate ?? 0
+  const repeatCustomers = data.repeatCustomers ?? 0
+  const customersWithPurchase = data.customersWithPurchase ?? 0
+
+  // 円グラフ用データ
+  const statusPie = dealStatusBreakdown
+    .filter(g => g.count > 0)
+    .map(g => ({ name: DEAL_STATUS_LABEL[g.status] ?? g.status, value: g.count, color: DEAL_STATUS_BADGE[g.status]?.fg ?? '#94a3b8' }))
+  const leadPie = leadSourceBreakdown
+    .filter(g => g.count > 0)
+    .map((g, i) => ({ name: g.name, value: g.count, color: LEAD_COLORS[i % LEAD_COLORS.length] }))
+
   const storeName = (session?.user as any)?.name ?? '店舗'
 
   const kpiCards: KpiProps[] = [
     {
       label: '当月買取金額',
       value: fmtYen(currentMonthAmount),
+      deltaPct: momPct(currentMonthAmount, prevMonthAmount),
       icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
     },
     {
@@ -172,7 +229,27 @@ export default function StoreDashboardPage() {
       value: currentMonthVisitCount.toLocaleString(),
       unit: '件',
       sub: `完了 ${currentMonthCompletedCount}件`,
+      deltaPct: momPct(currentMonthVisitCount, prevMonthVisitCount),
       icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>,
+    },
+    {
+      label: '当月の新規案件',
+      value: currentMonthDealCount.toLocaleString(),
+      unit: '件',
+      deltaPct: momPct(currentMonthDealCount, prevMonthDealCount),
+      icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+    },
+    {
+      label: '契約率（契約+完了/全案件）',
+      value: `${(contractRate * 100).toFixed(1)}%`,
+      sub: `全${totalDeals}案件`,
+      icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+    },
+    {
+      label: 'リピート率',
+      value: `${(repeatRate * 100).toFixed(1)}%`,
+      sub: `${repeatCustomers}/${customersWithPurchase}名が複数回`,
+      icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>,
     },
     {
       label: '本日の案件',
@@ -300,6 +377,98 @@ export default function StoreDashboardPage() {
           )}
         </ChartCard>
       </div>
+
+      {/* ── 案件数推移 ＋ ステータス割合 ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ChartCard>
+          <SectionHeading>案件数の推移（月次・直近12ヶ月）</SectionHeading>
+          {monthlyDeals.every(d => d.count === 0) ? (
+            <p className="text-sm text-center py-8 text-[var(--md-sys-color-on-surface-faint)]">案件データがありません</p>
+          ) : (
+            <div className="h-44 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyDeals} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="storeDealGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={ACCENT} stopOpacity={0.14} />
+                      <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
+                  <Area type="monotone" dataKey="count" stroke={ACCENT} strokeWidth={2} fill="url(#storeDealGrad)" dot={false} activeDot={{ r: 4, fill: ACCENT, strokeWidth: 0 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard>
+          <SectionHeading>案件ステータスの割合</SectionHeading>
+          {statusPie.length === 0 ? (
+            <p className="text-sm text-center py-8 text-[var(--md-sys-color-on-surface-faint)]">案件データがありません</p>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="h-44 w-40 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={2}>
+                      {statusPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(value: any, name: any) => [`${value}件`, name]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="flex-1 space-y-1.5 min-w-0">
+                {statusPie.map((e, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs">
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: e.color }} />
+                    <span className="text-[var(--md-sys-color-on-surface-variant)] truncate flex-1">{e.name}</span>
+                    <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{e.value}件</span>
+                    <span className="text-[var(--md-sys-color-on-surface-faint)] w-10 text-right">{totalDeals > 0 ? Math.round((e.value / totalDeals) * 100) : 0}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* ── 流入経路の割合 ── */}
+      <ChartCard>
+        <SectionHeading>流入経路の割合（担当顧客）</SectionHeading>
+        {leadPie.length === 0 ? (
+          <p className="text-sm text-center py-8 text-[var(--md-sys-color-on-surface-faint)]">顧客データがありません</p>
+        ) : (
+          <div className="flex items-center gap-6 flex-wrap">
+            <div className="h-48 w-48 shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={leadPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={76} paddingAngle={2}>
+                    {leadPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value: any, name: any) => [`${value}名`, name]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <ul className="flex-1 space-y-2 min-w-[180px]">
+              {(() => {
+                const leadTotal = leadPie.reduce((s, e) => s + e.value, 0)
+                return leadPie.map((e, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm">
+                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: e.color }} />
+                    <span className="text-[var(--md-sys-color-on-surface-variant)] truncate flex-1">{e.name}</span>
+                    <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{e.value}名</span>
+                    <span className="text-[var(--md-sys-color-on-surface-faint)] text-xs w-10 text-right">{leadTotal > 0 ? Math.round((e.value / leadTotal) * 100) : 0}%</span>
+                  </li>
+                ))
+              })()}
+            </ul>
+          </div>
+        )}
+      </ChartCard>
 
       {/* ── 本日の案件一覧 ── */}
       <ChartCard>

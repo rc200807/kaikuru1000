@@ -13,6 +13,7 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
   const router = useRouter()
   const searchParams = useSearchParams()
   const requirePasswordSetup = searchParams.get('setup') === '1'
+  const docType = searchParams.get('doc') // 'estimate' のとき見積閲覧へ
   const [error, setError] = useState('')
   const [verifying, setVerifying] = useState(true)
 
@@ -45,12 +46,14 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
           return
         }
 
+        // 閲覧先（見積 or 契約）を決定
+        const viewPath = docType === 'estimate' ? '/estimate-view' : '/contract-view'
         // setup=1 の場合はパスワード設定ページへ
         if (requirePasswordSetup) {
-          const next = infoData.contractId ? `/contract-view?id=${infoData.contractId}` : '/mypage'
+          const next = infoData.contractId ? `${viewPath}?id=${infoData.contractId}` : '/mypage'
           router.replace(`/account-setup?next=${encodeURIComponent(next)}`)
         } else if (infoData.contractId) {
-          router.replace(`/contract-view?id=${infoData.contractId}`)
+          router.replace(`${viewPath}?id=${infoData.contractId}`)
         } else {
           router.replace('/mypage')
         }
@@ -61,7 +64,7 @@ export default function MagicLinkPage({ params }: { params: Promise<{ token: str
     }
 
     verify()
-  }, [token, router, requirePasswordSetup])
+  }, [token, router, requirePasswordSetup, docType])
 
   if (verifying) {
     return (

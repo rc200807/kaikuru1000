@@ -8,6 +8,7 @@ import { ja } from 'date-fns/locale'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import { QRCodeSVG } from 'qrcode.react'
 
 /* ─── 型定義 ─── */
 type PurchaseItem = { id: string; itemName?: string | null; category?: string | null; quantity: number; purchasePrice: number }
@@ -52,6 +53,32 @@ export default function EstimatePage() {
   const [validUntil, setValidUntil] = useState(defaultValidUntil())
   const [emailInput, setEmailInput] = useState('')
   const estimateRef = useRef<HTMLDivElement>(null)
+  const [magicUrl, setMagicUrl] = useState<string | null>(null)
+  const [magicLoading, setMagicLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function generateEstimateLink() {
+    if (!visit) return
+    setMagicLoading(true)
+    try {
+      const res = await fetch('/api/magic-link/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: visit.user.id, contractId: scheduleId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        // 見積閲覧として開くよう doc=estimate を付与
+        setMagicUrl(`${data.url}${data.url.includes('?') ? '&' : '?'}doc=estimate`)
+      } else {
+        setMessage({ type: 'error', text: 'お客様用リンクの発行に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'お客様用リンクの発行に失敗しました' })
+    } finally {
+      setMagicLoading(false)
+    }
+  }
 
   const fetchData = useCallback(async () => {
     const [visitRes, estRes] = await Promise.all([
@@ -336,6 +363,32 @@ export default function EstimatePage() {
           </p>
         </Card>
       </div>
+
+      {/* お客様用 閲覧リンク / QRコード */}
+      <Card variant="elevated" padding="md">
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様用 見積書リンク（QRコード）</h2>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
+          {existing ? 'QRコードを発行すると、お客様がスマホで見積書を閲覧・PDFダウンロードできます。' : '※ 先に見積書を保存・送信するとPDFダウンロードも可能になります。'}
+        </p>
+        {!magicUrl ? (
+          <Button variant="tonal" onClick={generateEstimateLink} loading={magicLoading} disabled={magicLoading}>
+            {magicLoading ? '発行中...' : 'QRコード・リンクを発行'}
+          </Button>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <div className="bg-white p-3 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+              <QRCodeSVG value={magicUrl} size={180} />
+            </div>
+            <div className="w-full flex items-center gap-2">
+              <input readOnly value={magicUrl} className="flex-1 px-2 py-1.5 text-xs rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]" />
+              <Button size="sm" variant="tonal" onClick={() => { navigator.clipboard?.writeText(magicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500) }}>
+                {copied ? 'コピー済' : 'コピー'}
+              </Button>
+            </div>
+            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">このリンクは72時間有効です。</p>
+          </div>
+        )}
+      </Card>
 
       {/* 操作ボタン */}
       <div className="flex gap-3 justify-end pt-2">

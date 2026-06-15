@@ -912,14 +912,14 @@ export default function StoreSchedulePage() {
           <div className="grid grid-cols-2 gap-3">
             <TextField
               label="開始時間"
-              type="time"
+              type="time" step={1800}
               value={counterForm.start}
               onChange={v => setCounterForm({ ...counterForm, start: v })}
               required
             />
             <TextField
               label="終了時間"
-              type="time"
+              type="time" step={1800}
               value={counterForm.end}
               onChange={v => setCounterForm({ ...counterForm, end: v })}
               required

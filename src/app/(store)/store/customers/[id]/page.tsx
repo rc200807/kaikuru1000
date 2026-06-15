@@ -1223,13 +1223,13 @@ export default function StoreCustomerDetailPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <TextField
                     label="開始時間"
-                    type="time"
+                    type="time" step={1800}
                     value={dealScheduleForm.startTime}
                     onChange={v => setDealScheduleForm(prev => ({ ...prev, startTime: v }))}
                   />
                   <TextField
                     label="終了時間"
-                    type="time"
+                    type="time" step={1800}
                     value={dealScheduleForm.endTime}
                     onChange={v => setDealScheduleForm(prev => ({ ...prev, endTime: v }))}
                   />
@@ -1390,13 +1390,13 @@ export default function StoreCustomerDetailPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <TextField
                     label="開始時間"
-                    type="time"
+                    type="time" step={1800}
                     value={addForm.startTime}
                     onChange={v => setAddForm({ ...addForm, startTime: v })}
                   />
                   <TextField
                     label="終了時間"
-                    type="time"
+                    type="time" step={1800}
                     value={addForm.endTime}
                     onChange={v => setAddForm({ ...addForm, endTime: v })}
                   />
@@ -1453,13 +1453,13 @@ export default function StoreCustomerDetailPage() {
                     <div className="grid grid-cols-2 gap-3 mt-2">
                       <TextField
                         label="開始"
-                        type="time"
+                        type="time" step={1800}
                         value={proposalForm.candidate1Start}
                         onChange={v => setProposalForm(prev => ({ ...prev, candidate1Start: v }))}
                       />
                       <TextField
                         label="終了"
-                        type="time"
+                        type="time" step={1800}
                         value={proposalForm.candidate1End}
                         onChange={v => setProposalForm(prev => ({ ...prev, candidate1End: v }))}
                       />

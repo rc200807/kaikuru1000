@@ -19,6 +19,7 @@ type TextFieldProps = {
   onBlur?: () => void
   autoComplete?: string // ブラウザの自動補完制御（'off' で抑止）
   name?: string         // 任意 — autofill 識別子。指定しなければ補完されにくくなる
+  step?: number         // number/time/date 入力の刻み幅（例: time で 1800 = 30分）
 }
 
 export default function TextField({
@@ -38,6 +39,7 @@ export default function TextField({
   onBlur,
   autoComplete,
   name,
+  step,
 }: TextFieldProps) {
   const id = useId()
   const [focused, setFocused] = useState(false)
@@ -118,6 +120,7 @@ export default function TextField({
             name={name}
             autoComplete={autoComplete}
             type={inputType}
+            step={step}
             value={value}
             onChange={e => onChange(e.target.value)}
             onFocus={() => setFocused(true)}

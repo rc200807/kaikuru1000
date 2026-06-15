@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
   const estimate = await prisma.estimate.findUnique({
     where: { visitScheduleId: visitId },
-    select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, pdfBase64: true, createdAt: true },
+    select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, pdfBase64: true, invoicePdfBase64: true, createdAt: true },
   })
 
   if (!estimate) {
@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
       createdAt: estimate.createdAt,
     },
     hasPdf: !!estimate.pdfBase64,
+    hasInvoicePdf: !!estimate.invoicePdfBase64,
     purchaseItems: schedule.purchaseItems.map((item) => ({
       id: item.id,
       itemName: item.itemName,

@@ -9,6 +9,7 @@ import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import { QRCodeSVG } from 'qrcode.react'
+import { formalName } from '@/lib/operator-utils'
 
 /* ─── 型定義 ─── */
 type PurchaseItem = { id: string; itemName?: string | null; category?: string | null; quantity: number; purchasePrice: number }
@@ -18,7 +19,10 @@ type VisitDetail = {
   id: string
   visitDate: string
   user: { id: string; email?: string | null }
-  store: { id: string; name: string; address?: string | null; phone?: string | null }
+  store: {
+    id: string; name: string; address?: string | null; phone?: string | null
+    operator?: { entityType: string | null; corporatePrefix: string | null; prefixPosition: string | null; name: string; address?: string | null; representativeName?: string | null } | null
+  }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
 }
@@ -52,7 +56,8 @@ export default function EstimatePage() {
   const [existing, setExisting] = useState<ExistingEstimate | null>(null)
   const [validUntil, setValidUntil] = useState(defaultValidUntil())
   const [emailInput, setEmailInput] = useState('')
-  const estimateRef = useRef<HTMLDivElement>(null)
+  const saleEstimateRef = useRef<HTMLDivElement>(null)
+  const invoiceEstimateRef = useRef<HTMLDivElement>(null)
   const [magicUrl, setMagicUrl] = useState<string | null>(null)
   const [magicLoading, setMagicLoading] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -123,13 +128,12 @@ export default function EstimatePage() {
 
     try {
       let pdfBase64: string | null = null
+      let invoicePdfBase64: string | null = null
       try {
         const { default: jsPDF } = await import('jspdf')
         const { default: html2canvas } = await import('html2canvas')
-        if (estimateRef.current) {
-          const canvas = await html2canvas(estimateRef.current, {
-            scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
-          })
+        const genPdf = async (el: HTMLElement): Promise<string | null> => {
+          const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
           const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
           const pageWidth = pdf.internal.pageSize.getWidth()
           const pageHeight = pdf.internal.pageSize.getHeight()
@@ -146,14 +150,15 @@ export default function EstimatePage() {
             pageCanvas.height = sourceHeight
             const ctx = pageCanvas.getContext('2d')!
             ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
-            const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95)
-            pdf.addImage(pageImgData, 'JPEG', 10, yOffset, imgWidth, printHeight)
+            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
             remainingHeight -= printHeight
             sourceY += sourceHeight
             if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
           }
-          pdfBase64 = pdf.output('datauristring').split(',')[1]
+          return pdf.output('datauristring').split(',')[1]
         }
+        if (saleEstimateRef.current) pdfBase64 = await genPdf(saleEstimateRef.current)
+        if (invoiceEstimateRef.current) invoicePdfBase64 = await genPdf(invoiceEstimateRef.current)
       } catch (pdfErr) {
         console.error('PDF生成エラー:', pdfErr)
       }
@@ -161,7 +166,7 @@ export default function EstimatePage() {
       const res = await fetch(`/api/visit-schedules/${scheduleId}/estimate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ validUntil, staffName, pdfBase64, email: emailTrimmed }),
+        body: JSON.stringify({ validUntil, staffName, pdfBase64, invoicePdfBase64, email: emailTrimmed }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -180,12 +185,15 @@ export default function EstimatePage() {
         setMessage({ type: 'error', text: `見積書は保存しましたが、${reason}。` })
       }
 
-      if (pdfBase64) {
+      const ymd = format(new Date(), 'yyyyMMdd', { locale: ja })
+      const dl = (b64: string, name: string) => {
         const link = document.createElement('a')
-        link.href = `data:application/pdf;base64,${pdfBase64}`
-        link.download = `見積書_${format(new Date(), 'yyyyMMdd', { locale: ja })}.pdf`
+        link.href = `data:application/pdf;base64,${b64}`
+        link.download = name
         link.click()
       }
+      if (pdfBase64) dl(pdfBase64, `買取見積書_${ymd}.pdf`)
+      if (invoicePdfBase64) dl(invoicePdfBase64, `請求見積書_${ymd}.pdf`)
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message ?? '送信に失敗しました' })
     } finally {
@@ -265,14 +273,13 @@ export default function EstimatePage() {
         </div>
       </Card>
 
-      {/* ──── PDF出力対象エリア（お見積書） ──── */}
-      <div ref={estimateRef} className="bg-white p-1 rounded-xl">
+      {/* ──── PDF出力対象①：買取見積（店舗情報） ──── */}
+      <div ref={saleEstimateRef} className="bg-white p-1 rounded-xl">
         <Card variant="elevated" padding="md">
           <div className="flex items-baseline justify-between mb-3 pb-2 border-b-2 border-[var(--portal-primary)]">
-            <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">お見積書</h2>
+            <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">お見積書（買取）</h2>
             <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">発行日: {today}</span>
           </div>
-
           {/* 店舗・担当者情報 */}
           <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)] text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
             <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">見積発行店舗</div>
@@ -281,86 +288,83 @@ export default function EstimatePage() {
             {visit.store.phone && <div><span className="font-medium">電話:</span> {visit.store.phone}</div>}
             {staffName && <div><span className="font-medium">担当者:</span> {staffName}</div>}
           </div>
-
-          {/* 有効期限 */}
           <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
             <span className="font-medium">見積有効期限:</span> {validUntilLabel}
           </div>
-
-          {/* 買取品目の明細 */}
-          {visit.purchaseItems.length > 0 && (
-            <div className="mb-4">
-              <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">買取品目</div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
-                    <th className="py-1.5 text-left font-medium">品名</th>
-                    <th className="py-1.5 text-right font-medium w-12">数量</th>
-                    <th className="py-1.5 text-right font-medium w-20">単価</th>
-                    <th className="py-1.5 text-right font-medium w-24">小計</th>
+          <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">買取品目</div>
+          {visit.purchaseItems.length > 0 ? (
+            <table className="w-full text-xs mb-2">
+              <thead>
+                <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
+                  <th className="py-1.5 text-left font-medium">品名</th>
+                  <th className="py-1.5 text-right font-medium w-12">数量</th>
+                  <th className="py-1.5 text-right font-medium w-20">単価</th>
+                  <th className="py-1.5 text-right font-medium w-24">小計</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visit.purchaseItems.map(i => (
+                  <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
+                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{i.itemName || '（品名未設定）'}{i.category && <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] ml-1">/ {i.category}</span>}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.purchasePrice)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.purchasePrice * i.quantity)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visit.purchaseItems.map(i => (
-                    <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
-                      <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">
-                        {i.itemName || '（品名未設定）'}
-                        {i.category && <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] ml-1">/ {i.category}</span>}
-                      </td>
-                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
-                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.purchasePrice)}</td>
-                      <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.purchasePrice * i.quantity)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* 請求項目（作業・サービス）の明細 */}
-          {visit.workItems.length > 0 && (
-            <div className="mb-4">
-              <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">請求項目（作業・サービス）</div>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
-                    <th className="py-1.5 text-left font-medium">項目</th>
-                    <th className="py-1.5 text-right font-medium w-12">数量</th>
-                    <th className="py-1.5 text-right font-medium w-20">単価</th>
-                    <th className="py-1.5 text-right font-medium w-24">小計</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visit.workItems.map(i => (
-                    <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
-                      <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{i.workName || '（項目未設定）'}</td>
-                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
-                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.unitPrice)}</td>
-                      <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.unitPrice * i.quantity)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* 金額 */}
+                ))}
+              </tbody>
+            </table>
+          ) : <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">買取品目は登録されていません</p>}
           <table className="w-full text-sm border-t-2 border-[var(--md-sys-color-outline-variant)]">
-            <tbody>
-              <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-                <td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td>
-                <td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td>
-              </tr>
-              <tr>
-                <td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">請求金額 合計</td>
-                <td className="py-3 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td>
-              </tr>
-            </tbody>
+            <tbody><tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td></tr></tbody>
           </table>
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
+        </Card>
+      </div>
 
-          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">
-            ※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。
-          </p>
+      {/* ──── PDF出力対象②：請求見積（運営会社情報） ──── */}
+      <div ref={invoiceEstimateRef} className="bg-white p-1 rounded-xl">
+        <Card variant="elevated" padding="md">
+          <div className="flex items-baseline justify-between mb-3 pb-2 border-b-2 border-[var(--md-sys-color-on-surface)]">
+            <h2 className="text-base font-bold text-[var(--md-sys-color-on-surface)]">お見積書（請求）</h2>
+            <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">発行日: {today}</span>
+          </div>
+          {/* 運営会社情報 */}
+          <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)] text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+            <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">請求元</div>
+            <div><span className="font-medium">名称:</span> {visit.store.operator ? formalName(visit.store.operator) : visit.store.name}</div>
+            {(visit.store.operator?.address || visit.store.address) && <div><span className="font-medium">所在地:</span> {visit.store.operator?.address || visit.store.address}</div>}
+            {staffName && <div><span className="font-medium">担当者:</span> {staffName}</div>}
+          </div>
+          <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
+            <span className="font-medium">見積有効期限:</span> {validUntilLabel}
+          </div>
+          <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">請求項目（作業・サービス）</div>
+          {visit.workItems.length > 0 ? (
+            <table className="w-full text-xs mb-2">
+              <thead>
+                <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
+                  <th className="py-1.5 text-left font-medium">項目</th>
+                  <th className="py-1.5 text-right font-medium w-12">数量</th>
+                  <th className="py-1.5 text-right font-medium w-20">単価</th>
+                  <th className="py-1.5 text-right font-medium w-24">小計</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visit.workItems.map(i => (
+                  <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
+                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{i.workName || '（項目未設定）'}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.unitPrice)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.unitPrice * i.quantity)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">請求項目は登録されていません</p>}
+          <table className="w-full text-sm border-t-2 border-[var(--md-sys-color-outline-variant)]">
+            <tbody><tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">請求金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td></tr></tbody>
+          </table>
+          <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
         </Card>
       </div>
 

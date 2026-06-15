@@ -10,6 +10,7 @@ import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
+import TimeSelect from '@/components/TimeSelect'
 import BottomSheet from '@/components/BottomSheet'
 import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -1409,15 +1410,13 @@ export default function StoreCustomerDetailPage() {
                   required
                 />
                 <div className="grid grid-cols-2 gap-3">
-                  <TextField
+                  <TimeSelect
                     label="開始時間"
-                    type="time" step={1800}
                     value={dealScheduleForm.startTime}
                     onChange={v => setDealScheduleForm(prev => ({ ...prev, startTime: v }))}
                   />
-                  <TextField
+                  <TimeSelect
                     label="終了時間"
-                    type="time" step={1800}
                     value={dealScheduleForm.endTime}
                     onChange={v => setDealScheduleForm(prev => ({ ...prev, endTime: v }))}
                   />
@@ -1576,15 +1575,13 @@ export default function StoreCustomerDetailPage() {
                   required
                 />
                 <div className="grid grid-cols-2 gap-3">
-                  <TextField
+                  <TimeSelect
                     label="開始時間"
-                    type="time" step={1800}
                     value={addForm.startTime}
                     onChange={v => setAddForm({ ...addForm, startTime: v })}
                   />
-                  <TextField
+                  <TimeSelect
                     label="終了時間"
-                    type="time" step={1800}
                     value={addForm.endTime}
                     onChange={v => setAddForm({ ...addForm, endTime: v })}
                   />
@@ -1639,15 +1636,13 @@ export default function StoreCustomerDetailPage() {
                       required
                     />
                     <div className="grid grid-cols-2 gap-3 mt-2">
-                      <TextField
+                      <TimeSelect
                         label="開始"
-                        type="time" step={1800}
                         value={proposalForm.candidate1Start}
                         onChange={v => setProposalForm(prev => ({ ...prev, candidate1Start: v }))}
                       />
-                      <TextField
+                      <TimeSelect
                         label="終了"
-                        type="time" step={1800}
                         value={proposalForm.candidate1End}
                         onChange={v => setProposalForm(prev => ({ ...prev, candidate1End: v }))}
                       />

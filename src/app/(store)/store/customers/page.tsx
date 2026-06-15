@@ -8,6 +8,7 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
+import TimeSelect from '@/components/TimeSelect'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import DataTable from '@/components/DataTable'
 import type { Column } from '@/components/DataTable'
@@ -545,11 +546,11 @@ export default function StoreCustomersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">開始時間（任意）</label>
-                <input type="time" step={1800} value={scheduleForm.startTime} onChange={(e) => setScheduleForm(f => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+                <TimeSelect value={scheduleForm.startTime} onChange={v => setScheduleForm(f => ({ ...f, startTime: v }))} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">終了時間（任意）</label>
-                <input type="time" step={1800} value={scheduleForm.endTime} onChange={(e) => setScheduleForm(f => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+                <TimeSelect value={scheduleForm.endTime} onChange={v => setScheduleForm(f => ({ ...f, endTime: v }))} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
               </div>
             </div>
             <div>

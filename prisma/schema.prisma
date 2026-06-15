@@ -96,6 +96,7 @@ model Store {
   address    String?
   prefecture String?  // 都道府県
   email      String?
+  contractNotifyEmail String? // 契約作成通知の送信先（未設定時は email を使用）
   password   String
   avatar     String?  @db.Text  // プロフィール画像URL（Vercel Blob）
   sheetRowId String?  // Googleスプレッドシートの行ID（同期用）
@@ -441,7 +442,8 @@ model Estimate {
   validUntil      DateTime                    // 見積有効期限
   staffName       String                      // 見積担当者
   customerEmail   String?                     // 送信先メールアドレス（記録用）
-  pdfBase64       String?       @db.Text       // base64 PDF データ
+  pdfBase64       String?       @db.Text       // 買取見積PDF（base64）
+  invoicePdfBase64 String?      @db.Text       // 請求見積PDF（base64）
   emailSentAt     DateTime?                   // メール送信日時
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -454,7 +456,8 @@ model SalesContract {
   visitSchedule         VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
   signatureData         String        // 売買契約への顧客署名（base64 PNG data URL）
   invoiceSignatureData  String?       // 請求書への顧客署名（base64 PNG data URL）
-  pdfBase64             String?       // base64 PDF データ
+  pdfBase64             String?       @db.Text  // 売買契約書PDF（base64）
+  invoicePdfBase64      String?       @db.Text  // 請求書PDF（base64）
   customerEmail         String?       // 送信先メールアドレス（記録用）
   emailSentAt           DateTime?     // メール送信日時
   agreedAt              DateTime      @default(now())

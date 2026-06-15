@@ -10,6 +10,7 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
+import TimeSelect from '@/components/TimeSelect'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
@@ -910,16 +911,14 @@ export default function StoreSchedulePage() {
             required
           />
           <div className="grid grid-cols-2 gap-3">
-            <TextField
+            <TimeSelect
               label="開始時間"
-              type="time" step={1800}
               value={counterForm.start}
               onChange={v => setCounterForm({ ...counterForm, start: v })}
               required
             />
-            <TextField
+            <TimeSelect
               label="終了時間"
-              type="time" step={1800}
               value={counterForm.end}
               onChange={v => setCounterForm({ ...counterForm, end: v })}
               required

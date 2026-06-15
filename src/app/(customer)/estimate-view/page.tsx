@@ -9,6 +9,7 @@ interface EstimateData {
   store: { id: string; name: string; address: string; phone: string }
   estimate: { id: string; validUntil: string; staffName: string | null; purchaseAmount: number; billingAmount: number; createdAt: string }
   hasPdf?: boolean
+  hasInvoicePdf?: boolean
   purchaseItems: { id: string; itemName: string | null; category: string | null; quantity: number; purchasePrice: number }[]
   workItems: { id: string; workName: string | null; unitPrice: number; quantity: number }[]
 }
@@ -180,17 +181,30 @@ function EstimateViewContent() {
           <p className="text-[10px] text-gray-400 mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
         </div>
 
-        {/* PDFダウンロード */}
-        {data.hasPdf && (
+        {/* PDFダウンロード（買取見積 / 請求見積） */}
+        {(data.hasPdf || data.hasInvoicePdf) && (
           <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">
-            <p className="text-sm text-gray-600 mb-4">見積書のPDFをダウンロードできます</p>
-            <a
-              href={`/api/magic-link/document-pdf?type=estimate&visitId=${data.id}${userId ? `&userId=${userId}` : ''}`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              PDFをダウンロード
-            </a>
+            <p className="text-sm text-gray-600 mb-4">PDFをダウンロードできます</p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {data.hasPdf && (
+                <a
+                  href={`/api/magic-link/document-pdf?type=estimate&kind=sale&visitId=${data.id}${userId ? `&userId=${userId}` : ''}`}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  買取見積PDF
+                </a>
+              )}
+              {data.hasInvoicePdf && (
+                <a
+                  href={`/api/magic-link/document-pdf?type=estimate&kind=invoice&visitId=${data.id}${userId ? `&userId=${userId}` : ''}`}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  請求見積PDF
+                </a>
+              )}
+            </div>
           </div>
         )}
 

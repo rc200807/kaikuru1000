@@ -46,6 +46,7 @@ interface ContractData {
     signatureData: string
   } | null
   hasPdf?: boolean
+  hasInvoicePdf?: boolean
   createdAt: string
 }
 
@@ -539,17 +540,30 @@ function ContractViewContent() {
           </div>
         </div>
 
-        {/* PDFダウンロード */}
-        {contract.hasPdf && (
+        {/* PDFダウンロード（売買契約書 / 請求書） */}
+        {(contract.hasPdf || contract.hasInvoicePdf) && (
           <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">
-            <p className="text-sm text-gray-600 mb-4">売買契約書のPDFをダウンロードできます</p>
-            <a
-              href={`/api/magic-link/document-pdf?type=contract&visitId=${contract.id}${magicAuth?.userId ? `&userId=${magicAuth.userId}` : ''}`}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-              PDFをダウンロード
-            </a>
+            <p className="text-sm text-gray-600 mb-4">PDFをダウンロードできます</p>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {contract.hasPdf && (
+                <a
+                  href={`/api/magic-link/document-pdf?type=contract&kind=sale&visitId=${contract.id}${magicAuth?.userId ? `&userId=${magicAuth.userId}` : ''}`}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  売買契約書PDF
+                </a>
+              )}
+              {contract.hasInvoicePdf && (
+                <a
+                  href={`/api/magic-link/document-pdf?type=contract&kind=invoice&visitId=${contract.id}${magicAuth?.userId ? `&userId=${magicAuth.userId}` : ''}`}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  請求書PDF
+                </a>
+              )}
+            </div>
           </div>
         )}
 

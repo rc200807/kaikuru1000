@@ -39,7 +39,7 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { validUntil, staffName, pdfBase64, email: inputEmail } = body
+  const { validUntil, staffName, pdfBase64, invoicePdfBase64, email: inputEmail } = body
 
   if (!validUntil) {
     return NextResponse.json({ error: '見積有効期限を指定してください' }, { status: 400 })
@@ -80,6 +80,7 @@ export async function POST(
       staffName: typeof staffName === 'string' ? staffName : '',
       customerEmail,
       pdfBase64: pdfBase64 ?? null,
+      invoicePdfBase64: invoicePdfBase64 ?? null,
     },
     update: {
       purchaseAmount,
@@ -88,6 +89,7 @@ export async function POST(
       staffName: typeof staffName === 'string' ? staffName : '',
       customerEmail,
       pdfBase64: pdfBase64 ?? null,
+      invoicePdfBase64: invoicePdfBase64 ?? null,
       emailSentAt: null, // 再送信可能にリセット
     },
   })
@@ -119,6 +121,7 @@ export async function POST(
         billingAmount,
         validUntil: validUntilDate,
         pdfBase64: pdfBase64 ?? '',
+        invoicePdfBase64: invoicePdfBase64 ?? '',
         purchaseItems: schedule.purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
         workItems: schedule.workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
       })

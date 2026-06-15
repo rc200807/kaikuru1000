@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
           agreedAt: true,
           signatureData: true,
           pdfBase64: true,
+          invoicePdfBase64: true,
         },
       },
     },
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
       ? { id: schedule.salesContract.id, agreedAt: schedule.salesContract.agreedAt, signatureData: schedule.salesContract.signatureData }
       : null,
     hasPdf: !!schedule.salesContract?.pdfBase64,
+    hasInvoicePdf: !!schedule.salesContract?.invoicePdfBase64,
     createdAt: schedule.createdAt,
   })
 }

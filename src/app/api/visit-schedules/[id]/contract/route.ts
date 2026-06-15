@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendContractEmail } from '@/lib/mailer'
+import { sendContractEmail, sendContractCreatedNotification } from '@/lib/mailer'
 import { buildContractBodyHtml, buildContractBodyText } from '@/lib/contract-email-template'
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
@@ -31,7 +31,7 @@ export async function POST(
       },
       store: {
         select: {
-          id: true, name: true, address: true, phone: true,
+          id: true, name: true, address: true, phone: true, email: true, contractNotifyEmail: true,
           operator: {
             select: {
               entityType: true,
@@ -59,7 +59,7 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { signatureData, invoiceSignatureData, pdfBase64, email: inputEmail, occupation, phone: inputPhone } = body
+  const { signatureData, invoiceSignatureData, pdfBase64, invoicePdfBase64, email: inputEmail, occupation, phone: inputPhone } = body
 
   if (!signatureData) {
     return NextResponse.json({ error: '売買契約への署名が必要です' }, { status: 400 })
@@ -120,6 +120,7 @@ export async function POST(
       signatureData,
       invoiceSignatureData,
       pdfBase64: pdfBase64 ?? null,
+      invoicePdfBase64: invoicePdfBase64 ?? null,
       customerEmail,
       agreedAt: new Date(),
     },
@@ -127,6 +128,7 @@ export async function POST(
       signatureData,
       invoiceSignatureData,
       pdfBase64: pdfBase64 ?? null,
+      invoicePdfBase64: invoicePdfBase64 ?? null,
       customerEmail,
       agreedAt: new Date(),
       emailSentAt: null, // 再送信可能にリセット
@@ -216,6 +218,7 @@ export async function POST(
         storeName: schedule.store.name,
         visitDate: schedule.visitDate,
         pdfBase64: pdfBase64 ?? '',
+        invoicePdfBase64: invoicePdfBase64 ?? '',
         magicLinkUrl,
         contractBodyHtml,
         contractBodyText,
@@ -233,6 +236,28 @@ export async function POST(
       emailErrorReason = 'smtp-error'
       console.error('[contract POST] 契約書メール送信失敗:', e)
     }
+  }
+
+  // 店舗への契約作成通知（contractNotifyEmail 優先・未設定なら店舗メール）。失敗しても本処理は成功扱い。
+  try {
+    const notifyTo = schedule.store.contractNotifyEmail || schedule.store.email
+    if (notifyTo) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+      const purchaseTotal = schedule.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+      const billingTotal = schedule.workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)
+      await sendContractCreatedNotification({
+        to: notifyTo,
+        storeName: schedule.store.name,
+        customerName: schedule.user.idName || schedule.user.name,
+        customerPhone: effectivePhone,
+        visitDate: schedule.visitDate,
+        purchaseAmount: purchaseTotal,
+        billingAmount: billingTotal,
+        contractUrl: `${baseUrl}/store/schedule/${id}`,
+      })
+    }
+  } catch (e) {
+    console.error('[contract POST] 店舗通知メール送信失敗:', e)
   }
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '売買契約書を作成', req: request })

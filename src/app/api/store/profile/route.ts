@@ -8,6 +8,23 @@ import { uploadFile, deleteFile } from '@/lib/storage'
 
 const MIN_PASSWORD_LENGTH = 8
 
+/** 店舗の設定値（契約作成通知先など）を取得 */
+export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = session.user as any
+  if (sessionUser.role !== 'store') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const store = await prisma.store.findFirst({
+    where: { email: sessionUser.email },
+    select: { name: true, email: true, contractNotifyEmail: true },
+  })
+  return NextResponse.json({
+    name: store?.name ?? sessionUser.name ?? '',
+    email: store?.email ?? sessionUser.email ?? '',
+    contractNotifyEmail: store?.contractNotifyEmail ?? '',
+  })
+}
+
 export async function PATCH(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -22,6 +39,7 @@ export async function PATCH(request: NextRequest) {
   const email      = formData.get('email') as string | null
   const password   = formData.get('password') as string | null
   const avatarFile = formData.get('avatar') as File | null
+  const contractNotifyEmail = formData.get('contractNotifyEmail') as string | null
 
   // パスワード長チェック
   if (password && password.length < MIN_PASSWORD_LENGTH) {
@@ -52,6 +70,7 @@ export async function PATCH(request: NextRequest) {
     if (name)      updateData.name     = name
     if (email)     updateData.email    = email
     if (password)  updateData.password = await bcrypt.hash(password, 10)
+    if (contractNotifyEmail !== null) updateData.contractNotifyEmail = contractNotifyEmail.trim() || null
     if (avatarUrl) {
       if (store.avatar) await deleteFile(store.avatar)
       updateData.avatar = avatarUrl
@@ -61,6 +80,7 @@ export async function PATCH(request: NextRequest) {
       name: updated.name,
       email: updated.email,
       avatar: updated.avatar,
+      contractNotifyEmail: updated.contractNotifyEmail,
     })
   }
 

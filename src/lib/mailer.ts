@@ -291,6 +291,8 @@ export async function sendContractEmail(params: {
   storeName: string
   visitDate: Date
   pdfBase64: string
+  /** 請求書PDF（売買契約書とは別ファイルで添付） */
+  invoicePdfBase64?: string
   magicLinkUrl?: string
   /** 契約書本体HTML（売買契約書・請求書・特商法書面・同意の記録）。指定時は導入の挨拶のあとに差し込む */
   contractBodyHtml?: string
@@ -309,6 +311,7 @@ export async function sendContractEmail(params: {
   })
 
   const pdfBuffer = params.pdfBase64 ? Buffer.from(params.pdfBase64, 'base64') : null
+  const invoicePdfBuffer = params.invoicePdfBase64 ? Buffer.from(params.invoicePdfBase64, 'base64') : null
 
   const html = `
 <!DOCTYPE html>
@@ -425,15 +428,77 @@ export async function sendContractEmail(params: {
         params.magicLinkUrl,
       ] : []),
     ].join('\n'),
-    attachments: pdfBuffer ? [
-      {
-        filename: `売買契約書_${visitDateStr}.pdf`,
-        content: pdfBuffer,
-        contentType: 'application/pdf',
-      },
-    ] : [],
+    attachments: [
+      ...(pdfBuffer ? [{ filename: `売買契約書_${visitDateStr}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }] : []),
+      ...(invoicePdfBuffer ? [{ filename: `請求書_${visitDateStr}.pdf`, content: invoicePdfBuffer, contentType: 'application/pdf' }] : []),
+    ],
   })
 
+  return true
+}
+
+/** 売買契約書の作成を店舗（指定の通知先）に通知する。送信成功なら true、設定未構成なら false。 */
+export async function sendContractCreatedNotification(params: {
+  to: string
+  storeName: string
+  customerName: string
+  customerPhone: string
+  visitDate: Date
+  purchaseAmount: number
+  billingAmount: number
+  contractUrl?: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+  const visitDateStr = params.visitDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
+  const yen = (n: number) => `¥${n.toLocaleString()}`
+  const cName = escapeHtml(params.customerName)
+
+  const html = `
+<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>売買契約書 作成のお知らせ</title></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;"><tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+      <tr><td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+        <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">買いクル</p>
+        <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">売買契約書 作成のお知らせ</h1>
+      </td></tr>
+      <tr><td style="background-color:#ffffff;padding:32px;">
+        <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.7;">
+          ${escapeHtml(params.storeName)} 御中<br><br>
+          顧客「${cName}」様（訪問日 ${visitDateStr}）の売買契約書が作成されました。
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:20px;">
+          <tr><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">顧客名</td><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:14px;font-weight:600;color:#111827;text-align:right;">${cName}</td></tr>
+          <tr><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">電話番号</td><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;text-align:right;">${escapeHtml(params.customerPhone)}</td></tr>
+          <tr><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">買取金額</td><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:14px;font-weight:600;color:#991b1b;text-align:right;">${yen(params.purchaseAmount)}</td></tr>
+          <tr><td style="padding:12px 18px;font-size:13px;color:#6b7280;">請求金額</td><td style="padding:12px 18px;font-size:14px;font-weight:600;color:#111827;text-align:right;">${yen(params.billingAmount)}</td></tr>
+        </table>
+        ${params.contractUrl ? `<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><a href="${escapeHtml(params.contractUrl)}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:8px;">契約を確認</a></td></tr></table>` : ''}
+      </td></tr>
+      <tr><td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;"><p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">このメールは買いクル管理システムから自動送信されています</p></td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `【買いクル】売買契約書 作成 - ${params.customerName} 様`,
+    html,
+    text: [
+      `${params.storeName} 御中`,
+      '',
+      `顧客「${params.customerName}」様（訪問日 ${visitDateStr}）の売買契約書が作成されました。`,
+      '',
+      `顧客名: ${params.customerName}`,
+      `電話番号: ${params.customerPhone}`,
+      `買取金額: ${yen(params.purchaseAmount)}`,
+      `請求金額: ${yen(params.billingAmount)}`,
+      ...(params.contractUrl ? ['', `契約確認: ${params.contractUrl}`] : []),
+    ].join('\n'),
+  })
   return true
 }
 
@@ -447,6 +512,8 @@ export async function sendEstimateEmail(params: {
   billingAmount: number
   validUntil: Date
   pdfBase64: string
+  /** 請求見積PDF（買取見積とは別ファイルで添付） */
+  invoicePdfBase64?: string
   purchaseItems?: { name: string; quantity: number; price: number }[]
   workItems?: { name: string; quantity: number; price: number }[]
 }): Promise<boolean> {
@@ -460,6 +527,7 @@ export async function sendEstimateEmail(params: {
   })
   const yen = (n: number) => `¥${n.toLocaleString()}`
   const pdfBuffer = params.pdfBase64 ? Buffer.from(params.pdfBase64, 'base64') : null
+  const invoicePdfBuffer = params.invoicePdfBase64 ? Buffer.from(params.invoicePdfBase64, 'base64') : null
   const storeName = escapeHtml(params.storeName)
   const staffName = escapeHtml(params.staffName)
 
@@ -557,9 +625,10 @@ export async function sendEstimateEmail(params: {
       '',
       '詳細は添付のPDFをご確認ください。',
     ].join('\n'),
-    attachments: pdfBuffer ? [
-      { filename: 'お見積書.pdf', content: pdfBuffer, contentType: 'application/pdf' },
-    ] : [],
+    attachments: [
+      ...(pdfBuffer ? [{ filename: '買取見積書.pdf', content: pdfBuffer, contentType: 'application/pdf' }] : []),
+      ...(invoicePdfBuffer ? [{ filename: '請求見積書.pdf', content: invoicePdfBuffer, contentType: 'application/pdf' }] : []),
+    ],
   })
 
   return true

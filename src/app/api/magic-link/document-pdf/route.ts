@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const visitId = searchParams.get('visitId')
   const type = searchParams.get('type') === 'estimate' ? 'estimate' : 'contract'
+  const kind = searchParams.get('kind') === 'invoice' ? 'invoice' : 'sale'
   let userId = searchParams.get('userId')
   let isStaff = false
 
@@ -38,17 +39,23 @@ export async function GET(request: NextRequest) {
 
   let pdfBase64: string | null | undefined
   if (type === 'estimate') {
-    const est = await prisma.estimate.findUnique({ where: { visitScheduleId: visitId }, select: { pdfBase64: true } })
-    pdfBase64 = est?.pdfBase64
+    const est = await prisma.estimate.findUnique({ where: { visitScheduleId: visitId }, select: { pdfBase64: true, invoicePdfBase64: true } })
+    pdfBase64 = kind === 'invoice' ? est?.invoicePdfBase64 : est?.pdfBase64
   } else {
-    const c = await prisma.salesContract.findUnique({ where: { visitScheduleId: visitId }, select: { pdfBase64: true } })
-    pdfBase64 = c?.pdfBase64
+    const c = await prisma.salesContract.findUnique({ where: { visitScheduleId: visitId }, select: { pdfBase64: true, invoicePdfBase64: true } })
+    pdfBase64 = kind === 'invoice' ? c?.invoicePdfBase64 : c?.pdfBase64
   }
 
   if (!pdfBase64) return NextResponse.json({ error: 'PDFが見つかりません' }, { status: 404 })
 
   const buf = Buffer.from(pdfBase64, 'base64')
-  const filename = type === 'estimate' ? 'estimate.pdf' : 'contract.pdf'
+  const nameMap: Record<string, string> = {
+    'contract-sale': 'sales-contract.pdf',
+    'contract-invoice': 'invoice.pdf',
+    'estimate-sale': 'estimate.pdf',
+    'estimate-invoice': 'estimate-invoice.pdf',
+  }
+  const filename = nameMap[`${type}-${kind}`] ?? 'document.pdf'
   return new NextResponse(buf as any, {
     headers: {
       'Content-Type': 'application/pdf',

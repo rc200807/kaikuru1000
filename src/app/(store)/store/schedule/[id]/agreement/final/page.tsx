@@ -307,7 +307,8 @@ export default function FinalAgreementPage() {
   const [customerEmailInput, setCustomerEmailInput] = useState('')
   const [occupationInput, setOccupationInput] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
-  const contractRef = useRef<HTMLDivElement>(null)
+  const saleRef = useRef<HTMLDivElement>(null)
+  const invoiceRef = useRef<HTMLDivElement>(null)
 
   // PIN lock state
   const [pinLocked, setPinLocked] = useState(true)
@@ -441,53 +442,40 @@ export default function FinalAgreementPage() {
 
     try {
       let pdfBase64: string | null = null
+      let invoicePdfBase64: string | null = null
       try {
         const { default: jsPDF } = await import('jspdf')
         const { default: html2canvas } = await import('html2canvas')
 
-        if (contractRef.current) {
-          const canvas = await html2canvas(contractRef.current, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-          })
-
+        // 要素を A4 複数ページPDFのbase64に変換するヘルパー
+        const genPdf = async (el: HTMLElement): Promise<string | null> => {
+          const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
           const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
           const pageWidth = pdf.internal.pageSize.getWidth()
           const pageHeight = pdf.internal.pageSize.getHeight()
           const imgWidth = pageWidth - 20
           const imgHeight = (canvas.height * imgWidth) / canvas.width
-
           let yOffset = 10
           let remainingHeight = imgHeight
           let sourceY = 0
-
           while (remainingHeight > 0) {
             const printHeight = Math.min(remainingHeight, pageHeight - 20)
             const sourceHeight = (printHeight / imgHeight) * canvas.height
-
             const pageCanvas = document.createElement('canvas')
             pageCanvas.width = canvas.width
             pageCanvas.height = sourceHeight
             const ctx = pageCanvas.getContext('2d')!
             ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
-
-            const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95)
-            pdf.addImage(pageImgData, 'JPEG', 10, yOffset, imgWidth, printHeight)
-
+            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
             remainingHeight -= printHeight
             sourceY += sourceHeight
-
-            if (remainingHeight > 0) {
-              pdf.addPage()
-              yOffset = 10
-            }
+            if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
           }
-
-          const pdfDataUrl = pdf.output('datauristring')
-          pdfBase64 = pdfDataUrl.split(',')[1]
+          return pdf.output('datauristring').split(',')[1]
         }
+
+        if (saleRef.current) pdfBase64 = await genPdf(saleRef.current)
+        if (invoiceRef.current) invoicePdfBase64 = await genPdf(invoiceRef.current)
       } catch (pdfErr) {
         console.error('PDF生成エラー:', pdfErr)
       }
@@ -499,6 +487,7 @@ export default function FinalAgreementPage() {
           signatureData: saleSignature,
           invoiceSignatureData: invoiceSignature,
           pdfBase64,
+          invoicePdfBase64,
           email: emailTrimmed,
           occupation: occupationInput.trim() || null,
           phone: phoneInput.trim() || null,
@@ -529,13 +518,16 @@ export default function FinalAgreementPage() {
 
       generateMagicLink()
 
-      if (pdfBase64) {
+      const visitDateStr = format(new Date(visit.visitDate), 'yyyyMMdd', { locale: ja })
+      const cust = visit.user.idName || visit.user.name
+      const dl = (b64: string, name: string) => {
         const link = document.createElement('a')
-        link.href = `data:application/pdf;base64,${pdfBase64}`
-        const visitDateStr = format(new Date(visit.visitDate), 'yyyyMMdd', { locale: ja })
-        link.download = `売買契約書_${visit.user.idName || visit.user.name}_${visitDateStr}.pdf`
+        link.href = `data:application/pdf;base64,${b64}`
+        link.download = name
         link.click()
       }
+      if (pdfBase64) dl(pdfBase64, `売買契約書_${cust}_${visitDateStr}.pdf`)
+      if (invoicePdfBase64) dl(invoicePdfBase64, `請求書_${cust}_${visitDateStr}.pdf`)
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message ?? '送信に失敗しました' })
     } finally {
@@ -666,8 +658,8 @@ export default function FinalAgreementPage() {
         </Card>
       )}
 
-      {/* ──── PDF出力対象エリア ──── */}
-      <div ref={contractRef} className="space-y-5 bg-white p-1 rounded-xl">
+      {/* ──── PDF出力対象エリア①：売買契約書（買取・店舗情報） ──── */}
+      <div ref={saleRef} className="space-y-5 bg-white p-1 rounded-xl">
 
         {/* ──── 売買契約書 ──── */}
         <Card variant="elevated" padding="md">
@@ -873,6 +865,10 @@ export default function FinalAgreementPage() {
             </div>
           </div>
         </Card>
+      </div>{/* /saleRef */}
+
+      {/* ──── PDF出力対象エリア②：請求書（請求・運営会社情報） ──── */}
+      <div ref={invoiceRef} className="space-y-5 bg-white p-1 rounded-xl">
 
         {/* ──── 請求書 ──── */}
         <Card variant="elevated" padding="md">
@@ -927,6 +923,18 @@ export default function FinalAgreementPage() {
           ) : (
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業項目は登録されていません</p>
           )}
+
+          {/* 注意書き */}
+          <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
+            <p className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">注意事項</p>
+            <ol className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] space-y-1.5 leading-relaxed list-decimal pl-4">
+              <li>お客様は、本書記載の家財道具、家具、その他動産類（以下「対象物」といいます。）について、搬出、片付け、運搬その他これらに付随する作業（以下「本作業」といいます。）を当社へ依頼します。本作業の内容および金額は本書記載の見積内容によります。見積後に判明した事情により追加作業および追加費用が必要となる場合は、本作業実施前にあらかじめにお客様にその作業内容および金額についてご説明し、ご了承を得たうえで、追加作業を実施し、その追加費用をお支払いいただくものとします。</li>
+              <li>お客様は、対象物に第三者の所有物、リース品、盗品、遺失物等が含まれていないことを表明し、保証します。</li>
+              <li>お客様都合による本作業の中止、延期、日程変更または内容変更（以下「キャンセル等」といいます。）の場合、作業日7日前から作業日前日までのキャンセル等は見積金額の10％、作業当日または作業員到着後のキャンセル等は見積金額の25％をキャンセル料としてお客様にお支払いいただきます。</li>
+              <li>お客様に損害が生じた場合の当社の賠償範囲は、現実に発生した直接かつ通常の損害に限り、賠償額は本書記載の作業代金額を上限とします。ただし、当社に故意又は重大な過失がある場合は、この限りではありません。</li>
+              <li>本作業に起因する一切の紛争については、弊社本店所在地を管轄する裁判所とします。</li>
+            </ol>
+          </div>
         </Card>
 
         {/* ──── 請求書への同意と署名 ──── */}
@@ -955,7 +963,7 @@ export default function FinalAgreementPage() {
           </div>
         </Card>
 
-      </div>{/* /contractRef */}
+      </div>{/* /invoiceRef */}
 
       {/* お客様情報・送付先（前のページで入力済み・確認用） */}
       <Card variant="elevated" padding="md">

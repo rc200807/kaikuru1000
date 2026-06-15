@@ -1,7 +1,7 @@
 /**
  * 案件（Deal）ステータスの中央定義。
  * 表示ラベル、UIカラー、検証、自動遷移の集約点。
- * パイプライン: お問い合わせ → 訪問決定 → 見積のみ → 契約 → 完了
+ * パイプライン: 未対応(問い合わせ由来) → 訪問決定 → 見積のみ → 契約 → 完了
  * 終端（失注）: 訪問失注 / 未訪問失注
  */
 
@@ -21,7 +21,7 @@ export const DEAL_STATUS_ORDER: DealStatus[] = [...DEAL_STATUSES]
 
 // Record<string, ...> にして、旧 'lost' などの過去データも表示できるようにする
 export const DEAL_STATUS_LABEL: Record<string, string> = {
-  inquiry:          'お問い合わせ',
+  inquiry:          '未対応',
   visit_decided:    '訪問決定',
   estimate_only:    '見積のみ',
   contract:         '契約',

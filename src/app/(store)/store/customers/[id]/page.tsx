@@ -1346,6 +1346,9 @@ export default function StoreCustomerDetailPage() {
                 {dealsList.map(deal => {
                   const badge = DEAL_STATUS_BADGE[deal.status as keyof typeof DEAL_STATUS_BADGE] ?? DEAL_STATUS_BADGE.inquiry
                   const dirty = (dealDetailEdits[deal.id] ?? '') !== (deal.detail ?? '')
+                  const linkedSchedules = schedules
+                    .filter(s => s.dealId === deal.id)
+                    .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
                   return (
                     <Card key={deal.id} className="p-4">
                       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -1384,9 +1387,34 @@ export default function StoreCustomerDetailPage() {
                         onChange={v => setDealDetailEdits(prev => ({ ...prev, [deal.id]: v }))}
                         rows={4}
                       />
+
+                      {/* 紐づく訪問予定リスト */}
+                      {linkedSchedules.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">紐づく訪問予定</p>
+                          <div className="space-y-1.5">
+                            {linkedSchedules.map(s => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => router.push(`/store/schedule/${s.id}`)}
+                                className="w-full flex items-center gap-2 text-left rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 hover:bg-[var(--md-sys-color-surface-container)] transition-colors"
+                              >
+                                <svg className="w-4 h-4 text-[var(--portal-primary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                <span className="text-sm text-[var(--md-sys-color-on-surface)]">{format(new Date(s.visitDate), 'yyyy/M/d（E）', { locale: ja })}</span>
+                                {s.startTime && (
+                                  <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{s.startTime}{s.endTime ? `-${s.endTime}` : ''}</span>
+                                )}
+                                <span className="ml-auto flex-shrink-0"><StatusBadge status={s.status as Status} /></span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
                         <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                          紐づく訪問予定: {deal._count?.visitSchedules ?? 0}件
+                          紐づく訪問予定: {deal._count?.visitSchedules ?? linkedSchedules.length}件
                         </span>
                         <div className="flex items-center gap-2">
                           <Button

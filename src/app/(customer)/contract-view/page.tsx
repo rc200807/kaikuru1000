@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense, useCallback } from 'react'
+import { useEffect, useState, Suspense, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
@@ -59,6 +59,49 @@ function ContractViewContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [magicAuth, setMagicAuth] = useState<{ userId: string; contractId: string | null; user: any } | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  // 表示中の契約書をその場でPDF化してダウンロード（保存済みPDFの有無に依存しない）
+  const handleDownloadPdf = useCallback(async () => {
+    const el = cardRef.current
+    if (!el) return
+    setDownloading(true)
+    try {
+      try { await (document as any).fonts?.ready } catch {}
+      const { default: jsPDF } = await import('jspdf')
+      const { default: html2canvas } = await import('html2canvas')
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pageWidth - 20
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let yOffset = 10
+      let remainingHeight = imgHeight
+      let sourceY = 0
+      while (remainingHeight > 0) {
+        const printHeight = Math.min(remainingHeight, pageHeight - 20)
+        const sourceHeight = (printHeight / imgHeight) * canvas.height
+        const pageCanvas = document.createElement('canvas')
+        pageCanvas.width = canvas.width
+        pageCanvas.height = sourceHeight
+        const ctx = pageCanvas.getContext('2d')!
+        ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
+        remainingHeight -= printHeight
+        sourceY += sourceHeight
+        if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
+      }
+      const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      pdf.save(`売買契約書_${ymd}.pdf`)
+    } catch (e) {
+      console.error('PDF生成エラー:', e)
+      setError('PDFの生成に失敗しました。お手数ですが、時間をおいて再度お試しください。')
+    } finally {
+      setDownloading(false)
+    }
+  }, [])
 
   // Email registration state
   const [emailInput, setEmailInput] = useState('')
@@ -242,7 +285,7 @@ function ContractViewContent() {
         )}
 
         {/* Contract document */}
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 sm:p-8">
+        <div ref={cardRef} className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 sm:p-8">
 
           {/* Header */}
           <div className="bg-gray-900 text-white px-6 py-5 text-center rounded-xl mb-6">
@@ -540,32 +583,28 @@ function ContractViewContent() {
           </div>
         </div>
 
-        {/* PDFダウンロード（売買契約書 / 請求書） */}
-        {(contract.hasPdf || contract.hasInvoicePdf) && (
-          <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">
-            <p className="text-sm text-gray-600 mb-4">PDFをダウンロードできます</p>
-            <div className="flex flex-wrap gap-3 justify-center">
-              {contract.hasPdf && (
-                <a
-                  href={`/api/magic-link/document-pdf?type=contract&kind=sale&visitId=${contract.id}${magicAuth?.userId ? `&userId=${magicAuth.userId}` : ''}`}
-                  className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  売買契約書PDF
-                </a>
-              )}
-              {contract.hasInvoicePdf && (
-                <a
-                  href={`/api/magic-link/document-pdf?type=contract&kind=invoice&visitId=${contract.id}${magicAuth?.userId ? `&userId=${magicAuth.userId}` : ''}`}
-                  className="inline-flex items-center gap-2 px-5 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  請求書PDF
-                </a>
-              )}
-            </div>
-          </div>
-        )}
+        {/* PDFダウンロード（表示中の契約書をその場でPDF化） */}
+        <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">
+          <p className="text-sm text-gray-600 mb-4">この売買契約書をPDFで保存できます</p>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98] disabled:opacity-60"
+          >
+            {downloading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                作成中...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                売買契約書PDFをダウンロード
+              </>
+            )}
+          </button>
+        </div>
 
         {/* マイページへの導線 */}
         <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">

@@ -531,19 +531,25 @@ export async function sendEstimateEmail(params: {
   const storeName = escapeHtml(params.storeName)
   const staffName = escapeHtml(params.staffName)
 
-  // 明細テーブル（買取品目・請求項目）
-  const itemTable = (title: string, items: { name: string; quantity: number; price: number }[]) => {
-    if (!items || items.length === 0) return ''
-    const rows = items.map(i => `
+  // 明細セクション（品目テーブル＋その直下に合計）
+  const sectionHtml = (
+    title: string,
+    items: { name: string; quantity: number; price: number }[],
+    totalLabel: string,
+    totalAmount: number,
+    totalColor: string,
+  ) => {
+    const hasItems = items && items.length > 0
+    if (!hasItems && !totalAmount) return ''
+    const rows = (items ?? []).map(i => `
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;">${escapeHtml(i.name)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${i.quantity}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${yen(i.price)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;text-align:right;font-weight:600;">${yen(i.price * i.quantity)}</td>
       </tr>`).join('')
-    return `
-      <p style="margin:0 0 6px;color:#111827;font-size:13px;font-weight:700;">${title}</p>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:18px;">
+    const itemsTable = hasItems ? `
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:8px;">
         <tr style="background-color:#f9fafb;">
           <td style="padding:8px 12px;font-size:11px;color:#9ca3af;">品名</td>
           <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">数量</td>
@@ -551,9 +557,17 @@ export async function sendEstimateEmail(params: {
           <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">小計</td>
         </tr>
         ${rows}
+      </table>` : ''
+    return `
+      <p style="margin:0 0 6px;color:#111827;font-size:13px;font-weight:700;">${title}</p>
+      ${itemsTable}
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:20px;">
+        <tr><td style="padding:14px 18px;font-size:13px;color:#6b7280;">${totalLabel}</td><td style="padding:14px 18px;font-size:16px;font-weight:700;color:${totalColor};text-align:right;">${yen(totalAmount)}</td></tr>
       </table>`
   }
-  const itemsHtml = itemTable('買取品目', params.purchaseItems ?? []) + itemTable('請求項目（作業・サービス）', params.workItems ?? [])
+  const itemsHtml =
+    sectionHtml('買取品目', params.purchaseItems ?? [], '買取金額 合計', params.purchaseAmount, '#991b1b') +
+    sectionHtml('請求項目（作業・サービス）', params.workItems ?? [], '請求金額 合計', params.billingAmount, '#111827')
 
   const html = `
 <!DOCTYPE html>
@@ -577,8 +591,6 @@ export async function sendEstimateEmail(params: {
             </p>
             ${itemsHtml}
             <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
-              <tr><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">買取金額 合計</td><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:16px;font-weight:700;color:#991b1b;text-align:right;">${yen(params.purchaseAmount)}</td></tr>
-              <tr><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">請求金額 合計</td><td style="padding:14px 18px;border-bottom:1px solid #f3f4f6;font-size:16px;font-weight:700;color:#111827;text-align:right;">${yen(params.billingAmount)}</td></tr>
               <tr><td style="padding:14px 18px;font-size:13px;color:#6b7280;">見積有効期限</td><td style="padding:14px 18px;font-size:14px;font-weight:600;color:#111827;text-align:right;">${escapeHtml(validUntilStr)}</td></tr>
             </table>
             <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;overflow:hidden;">
@@ -610,14 +622,18 @@ export async function sendEstimateEmail(params: {
       'この度はお問い合わせいただき誠にありがとうございます。',
       '下記のとおりお見積りをお送りいたします。',
       '',
+      '【買取品目】',
       ...((params.purchaseItems && params.purchaseItems.length > 0)
-        ? ['【買取品目】', ...params.purchaseItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`), '']
-        : []),
-      ...((params.workItems && params.workItems.length > 0)
-        ? ['【請求項目（作業・サービス）】', ...params.workItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`), '']
+        ? params.purchaseItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`)
         : []),
       `買取金額 合計: ${yen(params.purchaseAmount)}`,
+      '',
+      '【請求項目（作業・サービス）】',
+      ...((params.workItems && params.workItems.length > 0)
+        ? params.workItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`)
+        : []),
       `請求金額 合計: ${yen(params.billingAmount)}`,
+      '',
       `見積有効期限: ${validUntilStr}`,
       '',
       `店舗名: ${params.storeName}`,

@@ -130,6 +130,8 @@ export default function EstimatePage() {
       let pdfBase64: string | null = null
       let invoicePdfBase64: string | null = null
       try {
+        // フォント読み込み完了を待ってからレンダリング（PDFが空・崩れるのを防ぐ）
+        try { await (document as any).fonts?.ready } catch {}
         const { default: jsPDF } = await import('jspdf')
         const { default: html2canvas } = await import('html2canvas')
         const genPdf = async (el: HTMLElement): Promise<string | null> => {
@@ -176,7 +178,11 @@ export default function EstimatePage() {
       await fetchData()
 
       if (result.emailSent) {
-        setMessage({ type: 'success', text: '見積書を保存し、メールで送信しました。' })
+        if (result.pdfIncluded) {
+          setMessage({ type: 'success', text: '見積書を保存し、PDFを添付してメールで送信しました。' })
+        } else {
+          setMessage({ type: 'error', text: 'メールは送信しましたが、PDFを添付できませんでした。お手数ですが、もう一度「見積書を再送信」をお試しください。' })
+        }
       } else {
         const reason = result.emailErrorReason === 'smtp-error' ? 'メール送信中にエラーが発生しました'
           : result.emailErrorReason === 'smtp-disabled' ? 'メール設定が未構成のため送信はスキップされました'

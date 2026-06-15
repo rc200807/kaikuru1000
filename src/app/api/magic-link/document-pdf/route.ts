@@ -16,12 +16,18 @@ export async function GET(request: NextRequest) {
   const kind = searchParams.get('kind') === 'invoice' ? 'invoice' : 'sale'
   let userId = searchParams.get('userId')
   let isStaff = false
+  let staffRole: string | null = null
+  let staffStoreId: string | null = null
 
   if (!userId) {
     const session = await getServerSession(authOptions)
     const su = session?.user as any
     if (su?.role === 'customer') userId = su.id
-    else if (su && ['store', 'admin', 'superadmin', 'hr'].includes(su.role)) isStaff = true
+    else if (su && ['store', 'admin', 'superadmin', 'hr'].includes(su.role)) {
+      isStaff = true
+      staffRole = su.role
+      if (su.role === 'store') staffStoreId = su.id
+    }
   }
 
   if (!visitId || (!userId && !isStaff)) {
@@ -30,10 +36,14 @@ export async function GET(request: NextRequest) {
 
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id: visitId },
-    select: { userId: true },
+    select: { userId: true, storeId: true },
   })
   if (!schedule) return NextResponse.json({ error: '見つかりません' }, { status: 404 })
   if (!isStaff && schedule.userId !== userId) {
+    return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
+  }
+  // 店舗ユーザーは自店舗のスケジュールのみ（管理者は全件可）
+  if (isStaff && staffRole === 'store' && schedule.storeId !== staffStoreId) {
     return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
   }
 

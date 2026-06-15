@@ -69,6 +69,15 @@ export async function POST(
     }
   }
 
+  // 既存の見積書PDFを取得（クライアントの再生成が失敗しても保存済みPDFを保持・添付するため）
+  const prevEstimate = await prisma.estimate.findUnique({
+    where: { visitScheduleId: id },
+    select: { pdfBase64: true, invoicePdfBase64: true },
+  })
+  // 実効PDF = 今回受領分があればそれ、無ければ保存済みを引き継ぐ（null上書きで消さない）
+  const effectivePdfBase64 = (typeof pdfBase64 === 'string' && pdfBase64) ? pdfBase64 : (prevEstimate?.pdfBase64 ?? null)
+  const effectiveInvoicePdfBase64 = (typeof invoicePdfBase64 === 'string' && invoicePdfBase64) ? invoicePdfBase64 : (prevEstimate?.invoicePdfBase64 ?? null)
+
   // 既存の見積書があれば上書き、なければ新規作成
   const estimate = await prisma.estimate.upsert({
     where: { visitScheduleId: id },
@@ -79,8 +88,8 @@ export async function POST(
       validUntil: validUntilDate,
       staffName: typeof staffName === 'string' ? staffName : '',
       customerEmail,
-      pdfBase64: pdfBase64 ?? null,
-      invoicePdfBase64: invoicePdfBase64 ?? null,
+      pdfBase64: effectivePdfBase64,
+      invoicePdfBase64: effectiveInvoicePdfBase64,
     },
     update: {
       purchaseAmount,
@@ -88,8 +97,8 @@ export async function POST(
       validUntil: validUntilDate,
       staffName: typeof staffName === 'string' ? staffName : '',
       customerEmail,
-      pdfBase64: pdfBase64 ?? null,
-      invoicePdfBase64: invoicePdfBase64 ?? null,
+      pdfBase64: effectivePdfBase64,
+      invoicePdfBase64: effectiveInvoicePdfBase64,
       emailSentAt: null, // 再送信可能にリセット
     },
   })
@@ -120,8 +129,8 @@ export async function POST(
         purchaseAmount,
         billingAmount,
         validUntil: validUntilDate,
-        pdfBase64: pdfBase64 ?? '',
-        invoicePdfBase64: invoicePdfBase64 ?? '',
+        pdfBase64: effectivePdfBase64 ?? '',
+        invoicePdfBase64: effectiveInvoicePdfBase64 ?? '',
         purchaseItems: schedule.purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
         workItems: schedule.workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
       })
@@ -145,7 +154,8 @@ export async function POST(
     estimateId: estimate.id,
     emailSent,
     emailErrorReason,
-    pdfIncluded: !!pdfBase64,
+    pdfIncluded: !!effectivePdfBase64,
+    invoicePdfIncluded: !!effectiveInvoicePdfBase64,
   })
 }
 

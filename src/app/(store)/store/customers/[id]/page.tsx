@@ -68,6 +68,11 @@ type VisitSchedule = {
   salesContract: { id: string; createdAt: string } | null
 }
 
+type IssuedDocs = {
+  estimate: { hasSale: boolean; hasInvoice: boolean } | null
+  contract: { hasSale: boolean; hasInvoice: boolean } | null
+}
+
 type PurchaseMemo = {
   id: string
   title: string
@@ -227,6 +232,8 @@ export default function StoreCustomerDetailPage() {
   const [schedules, setSchedules] = useState<VisitSchedule[]>([])
   const [schedulesLoading, setSchedulesLoading] = useState(false)
   const [schedulesLoaded, setSchedulesLoaded] = useState(false)
+  // 発行済み書類（見積書・売買契約書のPDF有無）。scheduleId をキーに保持
+  const [docsBySchedule, setDocsBySchedule] = useState<Record<string, IssuedDocs>>({})
 
   // スケジュール追加
   const [addForm, setAddForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
@@ -588,6 +595,27 @@ export default function StoreCustomerDetailPage() {
         setSchedulesLoading(false)
       })
       .catch(() => { setSchedulesLoaded(true); setSchedulesLoading(false) })
+    // 発行済み書類（PDF有無）を並行取得
+    fetch(`/api/store/customers/${customer.id}/documents`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.documents) return
+        const map: Record<string, IssuedDocs> = {}
+        for (const d of data.documents) {
+          map[d.scheduleId] = {
+            estimate: d.estimate ? { hasSale: !!d.estimate.hasSale, hasInvoice: !!d.estimate.hasInvoice } : null,
+            contract: d.contract ? { hasSale: !!d.contract.hasSale, hasInvoice: !!d.contract.hasInvoice } : null,
+          }
+        }
+        setDocsBySchedule(map)
+      })
+      .catch(() => {})
+  }
+
+  // 発行済みPDFをダウンロード（店舗セッションで取得・添付不要）
+  function downloadDoc(scheduleId: string, type: 'estimate' | 'contract', kind: 'sale' | 'invoice') {
+    const url = `/api/magic-link/document-pdf?type=${type}&kind=${kind}&visitId=${encodeURIComponent(scheduleId)}`
+    window.open(url, '_blank')
   }
 
   function loadMemos() {
@@ -1786,6 +1814,33 @@ export default function StoreCustomerDetailPage() {
                               {workTotal > 0 && <span>作業費: <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{workTotal.toLocaleString()}円</span></span>}
                             </div>
                           )}
+                          {(() => {
+                            const docs = docsBySchedule[vs.id]
+                            if (!docs || (!docs.estimate && !docs.contract)) return null
+                            const btnCls = 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--portal-primary)] hover:bg-[var(--md-sys-color-surface-container-highest)] transition-colors'
+                            const dlIcon = (
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            )
+                            return (
+                              <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] space-y-1.5">
+                                <p className="text-[11px] font-medium text-[var(--md-sys-color-on-surface-variant)]">発行済み書類</p>
+                                {docs.estimate && (docs.estimate.hasSale || docs.estimate.hasInvoice) && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs text-[var(--md-sys-color-on-surface)] w-16">見積書</span>
+                                    {docs.estimate.hasSale && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'estimate', 'sale')}>{dlIcon}買取PDF</button>}
+                                    {docs.estimate.hasInvoice && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'estimate', 'invoice')}>{dlIcon}請求PDF</button>}
+                                  </div>
+                                )}
+                                {docs.contract && (docs.contract.hasSale || docs.contract.hasInvoice) && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs text-[var(--md-sys-color-on-surface)] w-16">売買契約書</span>
+                                    {docs.contract.hasSale && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'contract', 'sale')}>{dlIcon}契約書PDF</button>}
+                                    {docs.contract.hasInvoice && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'contract', 'invoice')}>{dlIcon}請求書PDF</button>}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
                           <div className="mt-2">
                             <Button
                               variant="text"

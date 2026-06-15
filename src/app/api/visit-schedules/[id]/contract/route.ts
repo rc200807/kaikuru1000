@@ -112,6 +112,15 @@ export async function POST(
     }
   }
 
+  // 既存の契約書PDFを取得（クライアントの再生成が失敗しても保存済みPDFを保持・添付するため）
+  const prevContract = await prisma.salesContract.findUnique({
+    where: { visitScheduleId: id },
+    select: { pdfBase64: true, invoicePdfBase64: true },
+  })
+  // 実効PDF = 今回受領分があればそれ、無ければ保存済みを引き継ぐ（null上書きで消さない）
+  const effectivePdfBase64 = (typeof pdfBase64 === 'string' && pdfBase64) ? pdfBase64 : (prevContract?.pdfBase64 ?? null)
+  const effectiveInvoicePdfBase64 = (typeof invoicePdfBase64 === 'string' && invoicePdfBase64) ? invoicePdfBase64 : (prevContract?.invoicePdfBase64 ?? null)
+
   // 既存の契約書があれば上書き、なければ新規作成
   const contract = await prisma.salesContract.upsert({
     where: { visitScheduleId: id },
@@ -119,16 +128,16 @@ export async function POST(
       visitScheduleId: id,
       signatureData,
       invoiceSignatureData,
-      pdfBase64: pdfBase64 ?? null,
-      invoicePdfBase64: invoicePdfBase64 ?? null,
+      pdfBase64: effectivePdfBase64,
+      invoicePdfBase64: effectiveInvoicePdfBase64,
       customerEmail,
       agreedAt: new Date(),
     },
     update: {
       signatureData,
       invoiceSignatureData,
-      pdfBase64: pdfBase64 ?? null,
-      invoicePdfBase64: invoicePdfBase64 ?? null,
+      pdfBase64: effectivePdfBase64,
+      invoicePdfBase64: effectiveInvoicePdfBase64,
       customerEmail,
       agreedAt: new Date(),
       emailSentAt: null, // 再送信可能にリセット
@@ -217,8 +226,8 @@ export async function POST(
         customerName: schedule.user.idName || schedule.user.name,
         storeName: schedule.store.name,
         visitDate: schedule.visitDate,
-        pdfBase64: pdfBase64 ?? '',
-        invoicePdfBase64: invoicePdfBase64 ?? '',
+        pdfBase64: effectivePdfBase64 ?? '',
+        invoicePdfBase64: effectiveInvoicePdfBase64 ?? '',
         magicLinkUrl,
         contractBodyHtml,
         contractBodyText,
@@ -266,7 +275,7 @@ export async function POST(
     contractId: contract.id,
     emailSent,
     emailErrorReason,
-    pdfIncluded: !!pdfBase64,
+    pdfIncluded: !!effectivePdfBase64,
     magicLinkUrl,
   })
 }

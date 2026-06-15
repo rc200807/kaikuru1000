@@ -934,7 +934,7 @@ export default function StoreCustomerDetailPage() {
         { key: 'deals', label: dealsList.length > 0 ? `案件（${dealsList.length}）` : '案件' },
         { key: 'memos', label: memosList.length > 0 ? `買取トライ（${memosList.length}）` : '買取トライ' },
         { key: 'add', label: 'スケジュール追加' },
-        { key: 'history', label: schedules.length > 0 ? `訪問履歴（${schedules.length}）` : '訪問履歴' },
+        { key: 'history', label: schedules.length > 0 ? `訪問予定（${schedules.length}）` : '訪問予定' },
       ]
 
   const sortedSchedules = [...schedules].sort(

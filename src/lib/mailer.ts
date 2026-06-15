@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encrypt'
+import { buildInvoiceNotesHtml, buildTokushohoHtml, buildLegalNoticeText } from '@/lib/legal-texts'
 
 /**
  * HTMLエスケープ（メール本文に動的値を差し込む際に使用）
@@ -593,12 +594,14 @@ export async function sendEstimateEmail(params: {
             <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
               <tr><td style="padding:14px 18px;font-size:13px;color:#6b7280;">見積有効期限</td><td style="padding:14px 18px;font-size:14px;font-weight:600;color:#111827;text-align:right;">${escapeHtml(validUntilStr)}</td></tr>
             </table>
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;overflow:hidden;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:10px;overflow:hidden;margin-bottom:18px;">
               <tr><td style="padding:14px 18px;font-size:13px;color:#374151;line-height:1.8;">
                 <strong style="color:#111827;">店舗名:</strong> ${storeName}<br>
                 <strong style="color:#111827;">担当者:</strong> ${staffName}
               </td></tr>
             </table>
+            ${buildInvoiceNotesHtml()}
+            ${buildTokushohoHtml()}
           </td>
         </tr>
         <tr>
@@ -638,6 +641,8 @@ export async function sendEstimateEmail(params: {
       '',
       `店舗名: ${params.storeName}`,
       `担当者: ${params.staffName}`,
+      '',
+      ...buildLegalNoticeText(),
       '',
       '詳細は添付のPDFをご確認ください。',
     ].join('\n'),

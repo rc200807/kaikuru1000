@@ -10,6 +10,7 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import { QRCodeSVG } from 'qrcode.react'
 import { formalName } from '@/lib/operator-utils'
+import { buildInvoiceNotesHtml, buildTokushohoHtml } from '@/lib/legal-texts'
 
 /* ─── 型定義 ─── */
 type PurchaseItem = { id: string; itemName?: string | null; category?: string | null; quantity: number; purchasePrice: number }
@@ -324,6 +325,7 @@ export default function EstimatePage() {
             <tbody><tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td></tr></tbody>
           </table>
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
+          <div className="mt-4" dangerouslySetInnerHTML={{ __html: buildTokushohoHtml() }} />
         </Card>
       </div>
 
@@ -371,6 +373,7 @@ export default function EstimatePage() {
             <tbody><tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">請求金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td></tr></tbody>
           </table>
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
+          <div className="mt-4" dangerouslySetInnerHTML={{ __html: buildInvoiceNotesHtml() }} />
         </Card>
       </div>
 

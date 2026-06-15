@@ -10,8 +10,8 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 
 /* ─── 型定義 ─── */
-type PurchaseItem = { id: string; quantity: number; purchasePrice: number }
-type WorkItem = { id: string; quantity: number; unitPrice: number }
+type PurchaseItem = { id: string; itemName?: string | null; category?: string | null; quantity: number; purchasePrice: number }
+type WorkItem = { id: string; workName?: string | null; quantity: number; unitPrice: number }
 
 type VisitDetail = {
   id: string
@@ -260,15 +260,72 @@ export default function EstimatePage() {
             <span className="font-medium">見積有効期限:</span> {validUntilLabel}
           </div>
 
+          {/* 買取品目の明細 */}
+          {visit.purchaseItems.length > 0 && (
+            <div className="mb-4">
+              <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">買取品目</div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
+                    <th className="py-1.5 text-left font-medium">品名</th>
+                    <th className="py-1.5 text-right font-medium w-12">数量</th>
+                    <th className="py-1.5 text-right font-medium w-20">単価</th>
+                    <th className="py-1.5 text-right font-medium w-24">小計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visit.purchaseItems.map(i => (
+                    <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
+                      <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">
+                        {i.itemName || '（品名未設定）'}
+                        {i.category && <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] ml-1">/ {i.category}</span>}
+                      </td>
+                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
+                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.purchasePrice)}</td>
+                      <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.purchasePrice * i.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 請求項目（作業・サービス）の明細 */}
+          {visit.workItems.length > 0 && (
+            <div className="mb-4">
+              <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">請求項目（作業・サービス）</div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
+                    <th className="py-1.5 text-left font-medium">項目</th>
+                    <th className="py-1.5 text-right font-medium w-12">数量</th>
+                    <th className="py-1.5 text-right font-medium w-20">単価</th>
+                    <th className="py-1.5 text-right font-medium w-24">小計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visit.workItems.map(i => (
+                    <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
+                      <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{i.workName || '（項目未設定）'}</td>
+                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
+                      <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.unitPrice)}</td>
+                      <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.unitPrice * i.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* 金額 */}
-          <table className="w-full text-sm">
+          <table className="w-full text-sm border-t-2 border-[var(--md-sys-color-outline-variant)]">
             <tbody>
               <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-                <td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額</td>
+                <td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td>
                 <td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td>
               </tr>
               <tr>
-                <td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">請求金額</td>
+                <td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">請求金額 合計</td>
                 <td className="py-3 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td>
               </tr>
             </tbody>

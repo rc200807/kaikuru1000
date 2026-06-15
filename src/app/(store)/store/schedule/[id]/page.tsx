@@ -140,7 +140,7 @@ export default function VisitDetailPage() {
   // 作業品目フォーム
   const [showWorkForm, setShowWorkForm] = useState(false)
   const [editingWork, setEditingWork] = useState<WorkItem | null>(null)
-  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: 0, quantity: 1 })
+  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '' as number | '', quantity: 1 })
   const [savingWork, setSavingWork] = useState(false)
 
   // AI調査
@@ -395,7 +395,7 @@ export default function VisitDetailPage() {
 
   /* ─── 作業品目 ─── */
   function resetWorkForm() {
-    setWorkForm({ workName: '', unitPrice: 0, quantity: 1 })
+    setWorkForm({ workName: '', unitPrice: '', quantity: 1 })
     setEditingWork(null)
     setShowWorkForm(false)
   }
@@ -414,17 +414,18 @@ export default function VisitDetailPage() {
 
     setSavingWork(true)
 
+    const payload = { ...workForm, unitPrice: Number(workForm.unitPrice) || 0 }
     if (editingWork) {
       await fetch(`/api/work-items/${editingWork.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(workForm),
+        body: JSON.stringify(payload),
       })
     } else {
       await fetch(`/api/visit-schedules/${scheduleId}/work-items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(workForm),
+        body: JSON.stringify(payload),
       })
     }
 
@@ -1223,7 +1224,8 @@ export default function VisitDetailPage() {
                 min={0}
                 className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
                 value={workForm.unitPrice}
-                onChange={(e) => setWorkForm({ ...workForm, unitPrice: parseInt(e.target.value) || 0 })}
+                onChange={(e) => setWorkForm({ ...workForm, unitPrice: e.target.value === '' ? '' : (parseInt(e.target.value) || 0) })}
+                placeholder="0"
               />
             </div>
             <div>
@@ -1238,7 +1240,7 @@ export default function VisitDetailPage() {
             </div>
             <div className="flex items-end">
               <span className="text-sm text-[var(--md-sys-color-on-surface)]">
-                小計: <strong>{fmtYen(workForm.unitPrice * workForm.quantity)}</strong>
+                小計: <strong>{fmtYen((Number(workForm.unitPrice) || 0) * workForm.quantity)}</strong>
               </span>
             </div>
           </div>

@@ -72,7 +72,7 @@ export async function PATCH(
       'name', 'email', 'phone', 'address', 'postalCode', 'prefecture',
       'storeStatus', 'openingDate', 'closingDate',
       'googleBusinessUrl', 'oikuraPageUrl', 'bankInfo',
-      'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail',
+      'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail', 'calendarInviteEmail',
     ] as const
     const data: Record<string, any> = {}
     for (const field of allowedFields) {
@@ -92,7 +92,7 @@ export async function PATCH(
         email: true, phone: true, prefecture: true, address: true,
         storeStatus: true, openingDate: true, closingDate: true,
         googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
-        invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true,
+        invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
         _count: { select: { customers: true } },
       },
     })

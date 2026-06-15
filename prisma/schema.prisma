@@ -97,6 +97,7 @@ model Store {
   prefecture String?  // 都道府県
   email      String?
   contractNotifyEmail String? // 契約作成通知の送信先（未設定時は email を使用）
+  calendarInviteEmail String? // 訪問スケジュール追加時のGoogleカレンダー招待送信先
   password   String
   avatar     String?  @db.Text  // プロフィール画像URL（Vercel Blob）
   sheetRowId String?  // Googleスプレッドシートの行ID（同期用）

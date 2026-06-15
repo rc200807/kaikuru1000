@@ -4,6 +4,7 @@ import { encrypt, decrypt } from './encrypt'
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? ''
+const OFFICE_GOOGLE_REFRESH_TOKEN = process.env.OFFICE_GOOGLE_REFRESH_TOKEN ?? ''
 
 /**
  * 店舗のGoogleカレンダー連携用 OAuth2 クライアントを取得
@@ -273,6 +274,109 @@ export async function createCalendar(storeId: string, calendarName: string): Pro
     return null
   } catch (error) {
     console.error(`[GoogleCalendar] カレンダー作成失敗 (storeId: ${storeId}):`, error)
+    return null
+  }
+}
+
+/**
+ * office@rcinc.jp の OAuth2 クライアントを取得
+ * 環境変数 OFFICE_GOOGLE_REFRESH_TOKEN を使用
+ */
+async function getOfficeOAuth2Client() {
+  if (!OFFICE_GOOGLE_REFRESH_TOKEN || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return null
+  const oauth2Client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+  oauth2Client.setCredentials({ refresh_token: OFFICE_GOOGLE_REFRESH_TOKEN })
+  return oauth2Client
+}
+
+/**
+ * office@rcinc.jp を主催者として、指定メールアドレスにGoogleカレンダー招待を送信
+ * 環境変数 OFFICE_GOOGLE_REFRESH_TOKEN が未設定の場合は null を返す
+ */
+export async function createCalendarInvitation(params: {
+  inviteEmail: string
+  visitDate: Date
+  startTime?: string  // "HH:mm"
+  endTime?: string    // "HH:mm"
+  user: {
+    id: string
+    name: string
+    phone?: string | null
+    address?: string | null
+    internalNote?: string | null
+  }
+  deal?: { id: string; detail?: string | null } | null
+  visitScheduleId: string
+  note?: string | null
+  baseUrl: string
+}): Promise<string | null> {
+  try {
+    const oauth2Client = await getOfficeOAuth2Client()
+    if (!oauth2Client) return null
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+
+    const dateStr = params.visitDate.toISOString().split('T')[0]
+
+    let startDateTime: Date
+    let endDateTime: Date
+
+    if (params.startTime) {
+      const [sh, sm] = params.startTime.split(':').map(Number)
+      startDateTime = new Date(`${dateStr}T${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}:00+09:00`)
+    } else {
+      startDateTime = new Date(params.visitDate)
+    }
+
+    if (params.endTime) {
+      const [eh, em] = params.endTime.split(':').map(Number)
+      endDateTime = new Date(`${dateStr}T${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}:00+09:00`)
+    } else {
+      endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
+    }
+
+    const base = params.baseUrl.replace(/\/$/, '')
+    const lines: string[] = [
+      `お客様名: ${params.user.name}`,
+      `電話番号: ${params.user.phone || '（未登録）'}`,
+      `住所: ${params.user.address || '（未登録）'}`,
+    ]
+
+    if (params.deal?.detail) {
+      lines.push('', '■ 案件内容', params.deal.detail)
+    }
+
+    if (params.note) {
+      lines.push('', '■ 訪問メモ', params.note)
+    }
+
+    if (params.user.internalNote) {
+      lines.push('', '■ 顧客内部メモ', params.user.internalNote)
+    }
+
+    lines.push(
+      '',
+      '■ 関連リンク',
+      `顧客情報: ${base}/store/customers/${params.user.id}`,
+      `訪問詳細: ${base}/store/schedule/${params.visitScheduleId}`,
+    )
+
+    const event = await calendar.events.insert({
+      calendarId: 'primary',
+      sendUpdates: 'all',
+      requestBody: {
+        summary: `【買いクル】${params.user.name}様 訪問予定`,
+        description: lines.join('\n'),
+        location: params.user.address || undefined,
+        start: { dateTime: startDateTime.toISOString(), timeZone: 'Asia/Tokyo' },
+        end: { dateTime: endDateTime.toISOString(), timeZone: 'Asia/Tokyo' },
+        attendees: [{ email: params.inviteEmail }],
+      },
+    })
+
+    return event.data.id ?? null
+  } catch (error) {
+    console.error('[GoogleCalendar] カレンダー招待イベント作成失敗:', error)
     return null
   }
 }

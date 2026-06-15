@@ -16,12 +16,13 @@ export async function GET() {
   if (sessionUser.role !== 'store') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const store = await prisma.store.findFirst({
     where: { email: sessionUser.email },
-    select: { name: true, email: true, contractNotifyEmail: true },
+    select: { name: true, email: true, contractNotifyEmail: true, calendarInviteEmail: true },
   })
   return NextResponse.json({
     name: store?.name ?? sessionUser.name ?? '',
     email: store?.email ?? sessionUser.email ?? '',
     contractNotifyEmail: store?.contractNotifyEmail ?? '',
+    calendarInviteEmail: store?.calendarInviteEmail ?? '',
   })
 }
 
@@ -40,6 +41,7 @@ export async function PATCH(request: NextRequest) {
   const password   = formData.get('password') as string | null
   const avatarFile = formData.get('avatar') as File | null
   const contractNotifyEmail = formData.get('contractNotifyEmail') as string | null
+  const calendarInviteEmail = formData.get('calendarInviteEmail') as string | null
 
   // パスワード長チェック
   if (password && password.length < MIN_PASSWORD_LENGTH) {
@@ -71,6 +73,7 @@ export async function PATCH(request: NextRequest) {
     if (email)     updateData.email    = email
     if (password)  updateData.password = await bcrypt.hash(password, 10)
     if (contractNotifyEmail !== null) updateData.contractNotifyEmail = contractNotifyEmail.trim() || null
+    if (calendarInviteEmail !== null) updateData.calendarInviteEmail = calendarInviteEmail.trim() || null
     if (avatarUrl) {
       if (store.avatar) await deleteFile(store.avatar)
       updateData.avatar = avatarUrl
@@ -81,6 +84,7 @@ export async function PATCH(request: NextRequest) {
       email: updated.email,
       avatar: updated.avatar,
       contractNotifyEmail: updated.contractNotifyEmail,
+      calendarInviteEmail: updated.calendarInviteEmail,
     })
   }
 

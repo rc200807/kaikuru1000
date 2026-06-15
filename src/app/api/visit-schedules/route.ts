@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { createCalendarEvent } from '@/lib/google-calendar'
+import { createCalendarEvent, createCalendarInvitation } from '@/lib/google-calendar'
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
 
@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
       status: 'scheduled',
     },
     include: {
-      user: { select: { name: true, address: true, customerType: true } },
-      store: { select: { name: true } },
+      user: { select: { id: true, name: true, address: true, phone: true, internalNote: true, customerType: true } },
+      store: { select: { name: true, calendarInviteEmail: true } },
     },
   })
 
@@ -112,6 +112,39 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error('[GoogleCalendar] スケジュール作成時のカレンダー同期に失敗:', err)
+  }
+
+  // Googleカレンダー招待送信（store.calendarInviteEmail が設定されている場合）
+  try {
+    if (schedule.store.calendarInviteEmail) {
+      let deal: { id: string; detail: string | null } | null = null
+      if (dealId) {
+        deal = await prisma.deal.findUnique({
+          where: { id: dealId },
+          select: { id: true, detail: true },
+        })
+      }
+      const baseUrl = (process.env.NEXTAUTH_URL ?? '').replace(/\/$/, '')
+      await createCalendarInvitation({
+        inviteEmail: schedule.store.calendarInviteEmail,
+        visitDate: new Date(visitDate),
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+        user: {
+          id: schedule.user.id,
+          name: schedule.user.name,
+          phone: schedule.user.phone,
+          address: schedule.user.address,
+          internalNote: schedule.user.internalNote,
+        },
+        deal,
+        visitScheduleId: schedule.id,
+        note,
+        baseUrl,
+      })
+    }
+  } catch (err) {
+    console.error('[GoogleCalendar] カレンダー招待送信に失敗:', err)
   }
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '訪問予定を作成', req: request })

@@ -10,7 +10,7 @@ type ModalProps = {
   children: React.ReactNode
   footer?: React.ReactNode
   className?: string
-  /** true にすると背景（バックドロップ）クリックでモーダルが閉じない。誤タップ防止用。 */
+  /** 背景（バックドロップ）クリックで閉じるか。既定 true＝閉じない（誤タップ防止）。false を渡すと画面外タップで閉じる。 */
   disableBackdropClose?: boolean
 }
 
@@ -29,7 +29,7 @@ export default function Modal({
   children,
   footer,
   className = '',
-  disableBackdropClose = false,
+  disableBackdropClose = true,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)

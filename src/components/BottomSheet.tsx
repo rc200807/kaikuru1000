@@ -10,16 +10,18 @@ type BottomSheetProps = {
   footer?: React.ReactNode
   /** デスクトップでの最大幅（既定 max-w-lg） */
   desktopMaxWidth?: string
+  /** true で背景（画面外）タップでも閉じる。既定 false（誤タップ防止のため画面外タップでは閉じない）。 */
+  closeOnBackdrop?: boolean
 }
 
 /**
  * ハーフモーダル。
  * モバイル: 画面下からスライドイン（ドラッグハンドル付き）。
  * デスクトップ(sm+): 中央寄せのモーダルにフォールバック。
- * 背景クリック / Escape で閉じる。`prefers-reduced-motion` はCSS側で考慮。
+ * ×ボタン / Escape で閉じる（画面外タップでは既定で閉じない＝誤タップ防止。closeOnBackdrop で変更可）。`prefers-reduced-motion` はCSS側で考慮。
  */
 export default function BottomSheet({
-  open, onClose, title, children, footer, desktopMaxWidth = 'sm:max-w-lg',
+  open, onClose, title, children, footer, desktopMaxWidth = 'sm:max-w-lg', closeOnBackdrop = false,
 }: BottomSheetProps) {
   // Escape で閉じる
   const onKey = useCallback((e: KeyboardEvent) => {
@@ -41,7 +43,7 @@ export default function BottomSheet({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={onClose}
+      onClick={closeOnBackdrop ? onClose : undefined}
       role="dialog"
       aria-modal="true"
     >

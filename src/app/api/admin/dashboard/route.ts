@@ -202,6 +202,45 @@ export async function GET(request: NextRequest) {
   }
   const lineDaily = Object.values(lineDailyMap)
 
+  // === 案件分析（全社） ===
+  // 月次案件数（直近12ヶ月）
+  const dealsForTrend = await prisma.deal.findMany({
+    where: { createdAt: { gte: twelveMonthsAgo } },
+    select: { createdAt: true },
+  })
+  const monthlyDealMap: Record<string, number> = {}
+  for (let i = 11; i >= 0; i--) monthlyDealMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (const d of dealsForTrend) {
+    const m = format(d.createdAt, 'yyyy-MM')
+    if (m in monthlyDealMap) monthlyDealMap[m]++
+  }
+  const monthlyDeals = Object.entries(monthlyDealMap).map(([month, count]) => ({ month: month.slice(5) + '月', count }))
+
+  // ステータス内訳＋成約率（全期間）
+  const dealStatusAgg = await prisma.deal.groupBy({ by: ['status'], _count: { _all: true } })
+  const dealStatusBreakdown = dealStatusAgg.map(g => ({ status: g.status, count: g._count._all }))
+  const totalDeals = dealStatusBreakdown.reduce((s, g) => s + g.count, 0)
+  const wonDeals = dealStatusBreakdown
+    .filter(g => g.status === 'contract' || g.status === 'completed')
+    .reduce((s, g) => s + g.count, 0)
+  const contractRate = totalDeals > 0 ? wonDeals / totalDeals : 0
+
+  // 流入経路の内訳（全顧客）
+  const leadAgg = await prisma.user.groupBy({ by: ['leadSource'], _count: { _all: true } })
+  const leadSourceBreakdown = leadAgg
+    .map(g => ({ name: g.leadSource ?? '未設定', count: g._count._all }))
+    .sort((a, b) => b.count - a.count)
+
+  // リピート率（完了訪問2回以上の顧客 / 1回以上の顧客）
+  const completedByUser = await prisma.visitSchedule.groupBy({
+    by: ['userId'],
+    where: { status: 'completed' },
+    _count: { _all: true },
+  })
+  const customersWithPurchase = completedByUser.length
+  const repeatCustomers = completedByUser.filter(g => g._count._all >= 2).length
+  const repeatRate = customersWithPurchase > 0 ? repeatCustomers / customersWithPurchase : 0
+
   return NextResponse.json({
     summary: {
       totalCustomers,
@@ -217,6 +256,14 @@ export async function GET(request: NextRequest) {
     dailyVisits,
     monthlyPurchaseAmount,
     storePurchaseRanking,
+    monthlyDeals,
+    dealStatusBreakdown,
+    totalDeals,
+    contractRate,
+    leadSourceBreakdown,
+    repeatRate,
+    repeatCustomers,
+    customersWithPurchase,
     line: {
       channelTotal: lineChannelTotal,
       channelActive: lineChannelActive,

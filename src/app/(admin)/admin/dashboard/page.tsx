@@ -6,9 +6,13 @@ import { useRouter } from 'next/navigation'
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
+
+const ADMIN_LEAD_COLORS = ['#ffffff', '#60a5fa', '#22c55e', '#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#737373']
 
 type DashboardData = {
   summary: {
@@ -25,6 +29,14 @@ type DashboardData = {
   dailyVisits: { date: string; count: number }[]
   monthlyPurchaseAmount: { month: string; amount: number }[]
   storePurchaseRanking: { storeId: string; name: string; amount: number }[]
+  monthlyDeals?: { month: string; count: number }[]
+  dealStatusBreakdown?: { status: string; count: number }[]
+  totalDeals?: number
+  contractRate?: number
+  leadSourceBreakdown?: { name: string; count: number }[]
+  repeatRate?: number
+  repeatCustomers?: number
+  customersWithPurchase?: number
   line?: {
     channelTotal: number
     channelActive: number
@@ -143,6 +155,22 @@ export default function AdminDashboardPage() {
   const maxStoreCount = Math.max(...storeRanking.map(s => s.count), 1)
   const maxPurchaseAmount = Math.max(...storePurchaseRanking.map(s => s.amount), 1)
 
+  const monthlyDeals = data.monthlyDeals ?? []
+  const dealStatusBreakdown = data.dealStatusBreakdown ?? []
+  const totalDeals = data.totalDeals ?? 0
+  const contractRate = data.contractRate ?? 0
+  const leadSourceBreakdown = data.leadSourceBreakdown ?? []
+  const repeatRate = data.repeatRate ?? 0
+  const repeatCustomers = data.repeatCustomers ?? 0
+  const customersWithPurchase = data.customersWithPurchase ?? 0
+  const statusPie = dealStatusBreakdown
+    .filter(g => g.count > 0)
+    .map(g => ({ name: DEAL_STATUS_LABEL[g.status] ?? g.status, value: g.count, color: DEAL_STATUS_BADGE[g.status]?.fg ?? '#737373' }))
+  const leadPie = leadSourceBreakdown
+    .filter(g => g.count > 0)
+    .map((g, i) => ({ name: g.name, value: g.count, color: ADMIN_LEAD_COLORS[i % ADMIN_LEAD_COLORS.length] }))
+  const leadTotal = leadPie.reduce((s, e) => s + e.value, 0)
+
   const kpiCards: KpiProps[] = [
     {
       label: '総顧客数',
@@ -202,6 +230,26 @@ export default function AdminDashboardPage() {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+    {
+      label: '案件の成約率',
+      value: `${(contractRate * 100).toFixed(1)}%`,
+      sub: `全${totalDeals}案件`,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+    {
+      label: 'リピート率',
+      value: `${(repeatRate * 100).toFixed(1)}%`,
+      sub: `${repeatCustomers}/${customersWithPurchase}名が複数回`,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
         </svg>
       ),
     },
@@ -385,6 +433,95 @@ export default function AdminDashboardPage() {
             )}
           </ChartCard>
         </div>
+
+        {/* ─── 案件分析（全社） ─────────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ChartCard>
+            <SectionHeading>案件数の推移（月次・直近12ヶ月）</SectionHeading>
+            {monthlyDeals.every(d => d.count === 0) ? (
+              <p className="text-sm text-center py-12" style={{ color: '#525252' }}>案件データがありません</p>
+            ) : (
+              <div className="h-44 min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyDeals} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="dealGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333333" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: '#737373' }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
+                    <Area type="monotone" dataKey="count" stroke="#ffffff" strokeWidth={2} fill="url(#dealGrad)" dot={false} activeDot={{ r: 4, fill: '#ffffff', strokeWidth: 0 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </ChartCard>
+
+          <ChartCard>
+            <SectionHeading>案件ステータスの割合</SectionHeading>
+            {statusPie.length === 0 ? (
+              <p className="text-sm text-center py-12" style={{ color: '#525252' }}>案件データがありません</p>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="h-44 w-40 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={2} stroke="none">
+                        {statusPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                      </Pie>
+                      <Tooltip formatter={(value: any, name: any) => [`${value}件`, name]} contentStyle={{ fontSize: 12, borderRadius: 8, background: '#262626', border: '1px solid #333333', color: '#fff' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <ul className="flex-1 space-y-1.5 min-w-0">
+                  {statusPie.map((e, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: e.color }} />
+                      <span className="truncate flex-1" style={{ color: '#a3a3a3' }}>{e.name}</span>
+                      <span className="font-semibold" style={{ color: '#ffffff' }}>{e.value}件</span>
+                      <span className="w-10 text-right" style={{ color: '#737373' }}>{totalDeals > 0 ? Math.round((e.value / totalDeals) * 100) : 0}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </ChartCard>
+        </div>
+
+        {/* 流入経路の割合（全社） */}
+        <ChartCard>
+          <SectionHeading>流入経路の割合（全顧客）</SectionHeading>
+          {leadPie.length === 0 ? (
+            <p className="text-sm text-center py-12" style={{ color: '#525252' }}>顧客データがありません</p>
+          ) : (
+            <div className="flex items-center gap-6 flex-wrap">
+              <div className="h-48 w-48 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={leadPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={76} paddingAngle={2} stroke="none">
+                      {leadPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(value: any, name: any) => [`${value}名`, name]} contentStyle={{ fontSize: 12, borderRadius: 8, background: '#262626', border: '1px solid #333333', color: '#fff' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="flex-1 space-y-2 min-w-[200px]">
+                {leadPie.map((e, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm">
+                    <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: e.color }} />
+                    <span className="truncate flex-1" style={{ color: '#a3a3a3' }}>{e.name}</span>
+                    <span className="font-semibold" style={{ color: '#ffffff' }}>{e.value}名</span>
+                    <span className="text-xs w-10 text-right" style={{ color: '#737373' }}>{leadTotal > 0 ? Math.round((e.value / leadTotal) * 100) : 0}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </ChartCard>
 
         {/* ─── LINE 統計 ─────────────────────────── */}
         {data.line && <LineSection line={data.line} />}

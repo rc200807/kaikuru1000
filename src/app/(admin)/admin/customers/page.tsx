@@ -165,6 +165,7 @@ export default function AdminCustomersPage() {
   const [usersHasMore, setUsersHasMore] = useState(false)
   const [usersTotal, setUsersTotal] = useState(0)
   // 全件集計
+  const [statsTotal, setStatsTotal] = useState(0)
   const [statsUnassigned, setStatsUnassigned] = useState(0)
   const [statsIdMissing, setStatsIdMissing] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -252,41 +253,59 @@ export default function AdminCustomersPage() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (status === 'authenticated') {
-      const sessionUser = session.user as any
-      if (!['admin','superadmin','hr'].includes(sessionUser.role)) {
-        router.push('/')
-        return
-      }
+  // 顧客取得用クエリ（検索・店舗・タイプ・有効/無効・ページ）を組み立て
+  const buildUserParams = useCallback((pageNum: number) => {
+    const params = new URLSearchParams()
+    if (showInactive) params.set('includeInactive', 'true')
+    if (search.trim()) params.set('search', search.trim())
+    if (filterStore) params.set('storeId', filterStore)
+    if (filterCustomerType) params.set('customerType', filterCustomerType)
+    params.set('page', String(pageNum))
+    params.set('limit', String(USERS_LIMIT))
+    return params.toString()
+  }, [showInactive, search, filterStore, filterCustomerType])
 
-      const params = new URLSearchParams()
-      if (showInactive) params.set('includeInactive', 'true')
-      params.set('page', '1')
-      params.set('limit', String(USERS_LIMIT))
-      const usersUrl = `/api/admin/users?${params.toString()}`
-      const statsUrl = `/api/admin/users/stats?${showInactive ? 'includeInactive=true' : ''}`
-      Promise.all([
-        fetch(usersUrl).then(r => r.json()),
-        fetch('/api/stores').then(r => r.json()),
-        fetch(statsUrl).then(r => r.ok ? r.json() : null),
-        fetch('/api/lead-sources').then(r => r.ok ? r.json() : []),
-      ]).then(([usersData, storesData, statsData, leadSourcesData]) => {
-        const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
-        setUsers(list)
-        setUsersTotal(usersData?.total ?? list.length)
-        setUsersPage(1)
-        setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
-        setStores(Array.isArray(storesData) ? storesData : [])
-        setLeadSources(Array.isArray(leadSourcesData) ? leadSourcesData : [])
-        if (statsData) {
-          setStatsUnassigned(statsData.unassigned ?? 0)
-          setStatsIdMissing(statsData.idMissing ?? 0)
-        }
-        setLoading(false)
-      }).catch(() => setLoading(false))
-    }
+  // 店舗・流入経路・全件集計（フィルタに依存しない）
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    const sessionUser = session.user as any
+    if (!['admin','superadmin','hr'].includes(sessionUser.role)) { router.push('/'); return }
+    const statsUrl = `/api/admin/users/stats?${showInactive ? 'includeInactive=true' : ''}`
+    Promise.all([
+      fetch('/api/stores').then(r => r.json()),
+      fetch(statsUrl).then(r => r.ok ? r.json() : null),
+      fetch('/api/lead-sources').then(r => r.ok ? r.json() : []),
+    ]).then(([storesData, statsData, leadSourcesData]) => {
+      setStores(Array.isArray(storesData) ? storesData : [])
+      setLeadSources(Array.isArray(leadSourcesData) ? leadSourcesData : [])
+      if (statsData) {
+        setStatsTotal(statsData.total ?? 0)
+        setStatsUnassigned(statsData.unassigned ?? 0)
+        setStatsIdMissing(statsData.idMissing ?? 0)
+      }
+    }).catch(() => {})
   }, [status, session, showInactive])
+
+  // 顧客一覧（全顧客対象にサーバー側で検索・絞り込み。検索はデバウンス）
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    const sessionUser = session.user as any
+    if (!['admin','superadmin','hr'].includes(sessionUser.role)) return
+    const handle = setTimeout(() => {
+      fetch(`/api/admin/users?${buildUserParams(1)}`)
+        .then(r => r.json())
+        .then(data => {
+          const list = data?.users ?? (Array.isArray(data) ? data : [])
+          setUsers(list)
+          setUsersTotal(data?.total ?? list.length)
+          setUsersPage(1)
+          setUsersHasMore((data?.total ?? list.length) > USERS_LIMIT)
+          setLoading(false)
+        })
+        .catch(() => setLoading(false))
+    }, search.trim() ? 300 : 0)
+    return () => clearTimeout(handle)
+  }, [status, session, showInactive, search, filterStore, filterCustomerType, buildUserParams])
 
   // URLから顧客ID・タブを復元
   useEffect(() => {
@@ -314,12 +333,8 @@ export default function AdminCustomersPage() {
   async function loadMoreUsers() {
     setLoadingMore(true)
     const nextPage = usersPage + 1
-    const params = new URLSearchParams()
-    if (showInactive) params.set('includeInactive', 'true')
-    params.set('page', String(nextPage))
-    params.set('limit', String(USERS_LIMIT))
     try {
-      const res = await fetch(`/api/admin/users?${params.toString()}`)
+      const res = await fetch(`/api/admin/users?${buildUserParams(nextPage)}`)
       const data = await res.json()
       const list = data?.users ?? (Array.isArray(data) ? data : [])
       setUsers(prev => [...prev, ...list])
@@ -903,20 +918,8 @@ export default function AdminCustomersPage() {
     ? [...new Set([...getRecommendedStoreIds(assigning.address), HQ_STORE_ID])]
     : []
 
-  const filtered = users.filter(u => {
-    const matchSearch = !search
-      || u.name?.includes(search)
-      || u.furigana?.includes(search)
-      || (u.email ?? '').includes(search)
-    const matchStore = !filterStore || (filterStore === 'unassigned' ? !u.store : u.store?.id === filterStore)
-    const types = filterCustomerType
-      ? parseCustomerTypes((u as any).customerTypes, u.customerType)
-      : []
-    const matchCustomerType = !filterCustomerType
-      || types.includes(filterCustomerType as CustomerType)
-      || u.customerType === filterCustomerType
-    return matchSearch && matchStore && matchCustomerType
-  })
+  // 検索・店舗・タイプの絞り込みはサーバー側（全顧客対象）で実施済み
+  const filtered = users
 
   if (status === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage />
@@ -1021,7 +1024,7 @@ export default function AdminCustomersPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <KpiCard
             label="登録顧客数"
-            value={usersTotal.toLocaleString()}
+            value={statsTotal.toLocaleString()}
             unit="名"
             icon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

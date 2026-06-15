@@ -39,6 +39,7 @@ export default function StoreCustomersPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
+  const [searching, setSearching] = useState(false)
   const [search, setSearch] = useState('')
 
   // ページネーション
@@ -63,10 +64,14 @@ export default function StoreCustomersPage() {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
 
+  // 検索語が変わるたびに、全担当顧客を対象にサーバー側で検索して取得（デバウンス）
   useEffect(() => {
-    if (status === 'authenticated') {
-      const storeId = (session.user as any).id
-      fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)
+    if (status !== 'authenticated') return
+    const storeId = (session!.user as any).id
+    const q = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''
+    const handle = setTimeout(() => {
+      setSearching(true)
+      fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}${q}`)
         .then(r => r.json())
         .then(data => {
           const list = data?.customers ?? (Array.isArray(data) ? data : [])
@@ -74,18 +79,20 @@ export default function StoreCustomersPage() {
           setCustomersTotal(data?.total ?? list.length)
           setCustomersPage(1)
           setCustomersHasMore((data?.total ?? list.length) > CUSTOMERS_LIMIT)
-          setLoading(false)
         })
-        .catch(() => setLoading(false))
-    }
-  }, [status, session])
+        .catch(() => { /* ignore */ })
+        .finally(() => { setLoading(false); setSearching(false) })
+    }, search.trim() ? 300 : 0)
+    return () => clearTimeout(handle)
+  }, [status, session, search])
 
   async function loadMoreCustomers() {
     setLoadingMore(true)
     const storeId = (session?.user as any).id
     const nextPage = customersPage + 1
+    const q = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''
     try {
-      const res = await fetch(`/api/stores/${storeId}/customers?page=${nextPage}&limit=${CUSTOMERS_LIMIT}`)
+      const res = await fetch(`/api/stores/${storeId}/customers?page=${nextPage}&limit=${CUSTOMERS_LIMIT}${q}`)
       const data = await res.json()
       const list = data?.customers ?? (Array.isArray(data) ? data : [])
       setCustomers(prev => [...prev, ...list])
@@ -97,7 +104,8 @@ export default function StoreCustomersPage() {
 
   async function refreshCustomers() {
     const storeId = (session?.user as any).id
-    const listRes = await fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}`)
+    const q = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''
+    const listRes = await fetch(`/api/stores/${storeId}/customers?page=1&limit=${CUSTOMERS_LIMIT}${q}`)
     const listData = await listRes.json()
     const list = listData?.customers ?? (Array.isArray(listData) ? listData : [])
     setCustomers(list)
@@ -220,10 +228,8 @@ export default function StoreCustomersPage() {
     setWizardStep(4)
   }
 
-  const filtered = customers.filter(c =>
-    c.name.includes(search) || c.furigana.includes(search) ||
-    c.email?.includes(search) || c.phone.includes(search)
-  )
+  // 検索はサーバー側（全担当顧客対象）で実施済みのため、ここでは絞り込まない
+  const filtered = customers
 
   if (status === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
@@ -311,7 +317,7 @@ export default function StoreCustomersPage() {
     <>
       <AppBar
         title="担当顧客"
-        subtitle={`${customers.length}名`}
+        subtitle={search.trim() ? `${customersTotal}名 該当` : `${customersTotal}名`}
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
@@ -325,6 +331,11 @@ export default function StoreCustomersPage() {
               onChange={(_, v) => setSearch(v)}
               onClear={() => setSearch('')}
             />
+            {search.trim() && (
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1.5 px-1">
+                {searching ? '全顧客から検索中...' : `「${search.trim()}」に該当: ${customersTotal}名`}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
@@ -358,7 +369,7 @@ export default function StoreCustomersPage() {
             data={filtered}
             rowKey={(c) => c.id}
             onRowClick={(c) => router.push(`/store/customers/${c.id}`)}
-            emptyTitle={customers.length === 0 ? '担当顧客がいません' : '検索結果がありません'}
+            emptyTitle={search.trim() ? '検索結果がありません' : '担当顧客がいません'}
           />
         </Card>
 

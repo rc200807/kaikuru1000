@@ -21,8 +21,20 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
+  const search = (searchParams.get('search') || '').trim()
 
-  const where = { storeId: id }
+  // 検索: 全担当顧客を対象に氏名・ふりがな・メール・電話で部分一致（電話はハイフン無しでも一致）
+  const where: any = { storeId: id }
+  if (search) {
+    const phoneDigits = search.replace(/[-ー\s]/g, '')
+    where.OR = [
+      { name:     { contains: search, mode: 'insensitive' } },
+      { furigana: { contains: search, mode: 'insensitive' } },
+      { email:    { contains: search, mode: 'insensitive' } },
+      { phone:    { contains: search } },
+      ...(phoneDigits && phoneDigits !== search ? [{ phone: { contains: phoneDigits } }] : []),
+    ]
+  }
 
   const [customers, total] = await Promise.all([
     prisma.user.findMany({

@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
               customerType: 'regular',
               customerTypes: JSON.stringify(['regular']),
               storeId: store.id,
-              leadSource: 'フォーム', // お問い合わせフォーム由来は流入経路「フォーム」を自動設定
+              leadSource: 'Webフォーム', // お問い合わせフォーム由来は流入経路「Webフォーム」を自動設定
             },
           })
         } catch (e: any) {

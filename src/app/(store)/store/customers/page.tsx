@@ -483,9 +483,11 @@ export default function StoreCustomersPage() {
                 <option value="電話">電話</option>
                 <option value="LINE">LINE</option>
                 <option value="紹介">紹介</option>
+                <option value="Webフォーム">Webフォーム</option>
+                <option value="おいくら">おいくら</option>
                 <option value="その他">その他</option>
               </select>
-              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">※ お問い合わせフォーム経由のお客様は自動的に「フォーム」が設定されます。</p>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">※ お問い合わせフォーム経由のお客様は自動的に「Webフォーム」が設定されます。</p>
             </div>
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
               ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。

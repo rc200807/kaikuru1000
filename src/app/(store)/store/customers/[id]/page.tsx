@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
@@ -55,6 +56,9 @@ type VisitSchedule = {
   endTime: string | null
   status: string
   note: string | null
+  dealId?: string | null
+  purchaseAmount?: number | null
+  billingAmount?: number | null
   store: { id: string; name: string }
   user: { id: string; name: string }
   purchaseItems: Array<{ id: string; itemName: string; purchasePrice: number }>
@@ -173,6 +177,35 @@ type DealItem = {
   createdAt: string
   inquiry: { id: string; inquiryType: string } | null
   _count?: { visitSchedules: number }
+}
+
+// ───── ダッシュボード用ヘルパー ─────
+const DASH_ACCENT = '#b91c1c'
+const DASH_GRID = '#e5e5e5'
+const DASH_TICK = '#a3a3a3'
+
+function fmtYen(n: number): string {
+  return `¥${Math.round(n).toLocaleString()}`
+}
+function yenAxis(v: number): string {
+  if (v >= 10_000) return `${(v / 10_000).toFixed(v % 10_000 === 0 ? 0 : 1)}万`
+  return `${v}`
+}
+function fmtMD(d: string | null | undefined): string {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return `${dt.getFullYear()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${String(dt.getDate()).padStart(2, '0')}`
+}
+
+function DashStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-4">
+      <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{label}</p>
+      <p className="text-xl font-bold text-[var(--md-sys-color-on-surface)] mt-1 leading-tight">{value}</p>
+      {sub && <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{sub}</p>}
+    </div>
+  )
 }
 
 export default function StoreCustomerDetailPage() {
@@ -602,6 +635,10 @@ export default function StoreCustomerDetailPage() {
     if (tabFromUrl === 'shipments' && !shipmentsLoaded) loadShipments()
     if (tabFromUrl === 'add' && !storeProposalsLoaded) loadStoreProposals()
     if (tabFromUrl === 'deals' && !dealsLoaded) loadDeals()
+    // 基本情報ダッシュボード用に案件・訪問予定（宅配は送付履歴）を先読み
+    if (!dealsLoaded) loadDeals()
+    if (!schedulesLoaded) loadSchedules()
+    if (customer.customerType === 'delivery' && !shipmentsLoaded) loadShipments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer])
 
@@ -800,6 +837,59 @@ export default function StoreCustomerDetailPage() {
   const isDelivery = customer.customerType === 'delivery'
   const typeInfo = TYPE_MAP[customer.customerType] ?? TYPE_MAP.visit
 
+  // ───── ダッシュボード集計 ─────
+  const visitAmount = (s: VisitSchedule): number =>
+    s.purchaseAmount ?? (s.purchaseItems?.reduce((a, i) => a + (i.purchasePrice || 0), 0) ?? 0)
+  const visitPurchaseTotal = schedules.reduce((sum, s) => sum + visitAmount(s), 0)
+  const shipmentPurchaseTotal = shipmentsList.reduce((sum, s) => sum + (s.purchaseAmount ?? 0), 0)
+  const cumulativePurchase = visitPurchaseTotal + shipmentPurchaseTotal
+  const completedVisits = schedules.filter(s => s.status === 'completed').length
+  const dashNow = new Date()
+  const upcomingVisits = schedules
+    .filter(s => s.status !== 'cancelled' && new Date(s.visitDate).getTime() >= new Date(dashNow.getFullYear(), dashNow.getMonth(), dashNow.getDate()).getTime())
+    .sort((a, b) => new Date(a.visitDate).getTime() - new Date(b.visitDate).getTime())
+  const nextVisit = upcomingVisits[0] ?? null
+  const lastDealStatus = dealsList[0]?.status ?? null
+
+  // 月別買取金額（直近12ヶ月）
+  const dashMonths: { key: string; label: string }[] = []
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(dashNow.getFullYear(), dashNow.getMonth() - i, 1)
+    dashMonths.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: `${d.getMonth() + 1}月` })
+  }
+  const amountByMonth: Record<string, number> = {}
+  for (const s of schedules) {
+    const amt = visitAmount(s)
+    const key = typeof s.visitDate === 'string' ? s.visitDate.slice(0, 7) : ''
+    if (amt > 0 && key) amountByMonth[key] = (amountByMonth[key] || 0) + amt
+  }
+  for (const sh of shipmentsList) {
+    const amt = sh.purchaseAmount ?? 0
+    if (amt > 0 && sh.shipmentMonth) amountByMonth[sh.shipmentMonth] = (amountByMonth[sh.shipmentMonth] || 0) + amt
+  }
+  const monthlyTrend = dashMonths.map(m => ({ month: m.label, amount: amountByMonth[m.key] || 0 }))
+  const hasTrend = monthlyTrend.some(d => d.amount > 0)
+
+  // これまでの履歴（複数ソースを統合・新しい順）
+  type DashEvent = { date: string; kind: string; label: string; sub?: string; color: string }
+  const dashEvents: DashEvent[] = []
+  for (const s of schedules) {
+    dashEvents.push({ date: s.visitDate, kind: 'visit', color: '#a78bfa', label: '訪問', sub: visitAmount(s) > 0 ? `買取 ${fmtYen(visitAmount(s))}` : (STATUS_OPTIONS.find(o => o.value === s.status)?.label ?? s.status) })
+  }
+  for (const d of dealsList) {
+    dashEvents.push({ date: d.createdAt, kind: 'deal', color: '#2dd4bf', label: '案件作成', sub: d.detail ? d.detail.slice(0, 24) : (DEAL_STATUS_LABEL[d.status] ?? d.status) })
+  }
+  for (const q of inquiriesList) {
+    dashEvents.push({ date: q.createdAt, kind: 'inquiry', color: '#60a5fa', label: 'お問い合わせ', sub: q.inquiryType || undefined })
+  }
+  for (const sh of shipmentsList) {
+    dashEvents.push({ date: sh.createdAt, kind: 'shipment', color: '#fbbf24', label: '宅配送付', sub: sh.purchaseAmount ? `買取 ${fmtYen(sh.purchaseAmount)}` : sh.shipmentMonth })
+  }
+  const dashTimeline = dashEvents
+    .filter(e => e.date && !isNaN(new Date(e.date).getTime()))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 10)
+
   const tabs = isDelivery
     ? [
         { key: 'info', label: '基本情報' },
@@ -900,6 +990,104 @@ export default function StoreCustomerDetailPage() {
         {/* ===== 基本情報タブ ===== */}
         {activeTab === 'info' && (
           <div className="space-y-6">
+            {/* ───── 顧客ダッシュボード ───── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <DashStat label="累計買取金額" value={fmtYen(cumulativePurchase)} sub={isDelivery ? '訪問＋宅配の合計' : undefined} />
+              <DashStat label={isDelivery ? '送付回数' : '訪問回数（完了）'} value={`${isDelivery ? shipmentsList.length : completedVisits} 回`} sub={isDelivery ? undefined : `予定含む全${schedules.length}件`} />
+              <DashStat label="案件数" value={`${dealsList.length} 件`} sub={lastDealStatus ? `最新: ${DEAL_STATUS_LABEL[lastDealStatus] ?? lastDealStatus}` : undefined} />
+              <DashStat label={isDelivery ? '直近の送付' : '次回訪問予定'} value={isDelivery ? (shipmentsList[0] ? fmtMD(shipmentsList[0].createdAt) : '—') : (nextVisit ? fmtMD(nextVisit.visitDate) : '—')} sub={!isDelivery && nextVisit?.startTime ? nextVisit.startTime : undefined} />
+            </div>
+
+            {/* 買取金額の推移（月別・直近12ヶ月） */}
+            <Card>
+              <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3">買取金額の推移（月別・直近12ヶ月）</h2>
+              {!hasTrend ? (
+                <p className="text-sm text-center py-10 text-[var(--md-sys-color-on-surface-variant)]">買取実績がありません</p>
+              ) : (
+                <div className="h-52 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlyTrend} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="custPurchaseGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={DASH_ACCENT} stopOpacity={0.14} />
+                          <stop offset="100%" stopColor={DASH_ACCENT} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={DASH_GRID} vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: DASH_TICK }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: DASH_TICK }} axisLine={false} tickLine={false} tickFormatter={yenAxis} width={46} />
+                      <Tooltip formatter={(v) => [`¥${Number(v).toLocaleString()}`, '買取金額'] as [string, string]} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                      <Area type="monotone" dataKey="amount" stroke={DASH_ACCENT} strokeWidth={2} fill="url(#custPurchaseGrad)" dot={false} activeDot={{ r: 4, fill: DASH_ACCENT, strokeWidth: 0 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </Card>
+
+            {/* 案件と紐づく訪問予定 */}
+            <Card>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">案件と訪問予定</h2>
+                <button onClick={() => handleTabChange('deals')} className="text-xs text-[var(--portal-primary)] hover:underline">案件一覧へ</button>
+              </div>
+              {dealsList.length === 0 ? (
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] py-6 text-center">案件はまだありません</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {dealsList.slice(0, 5).map(deal => {
+                    const badge = DEAL_STATUS_BADGE[deal.status] ?? DEAL_STATUS_BADGE.inquiry
+                    const linked = schedules
+                      .filter(s => s.dealId === deal.id)
+                      .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
+                    return (
+                      <div key={deal.id} className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.fg }}>
+                            {DEAL_STATUS_LABEL[deal.status] ?? deal.status}
+                          </span>
+                          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtMD(deal.createdAt)} 作成</span>
+                          {deal.inquiry && <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] px-1.5 py-0.5 rounded">問い合わせ由来</span>}
+                        </div>
+                        {deal.detail && <p className="text-sm text-[var(--md-sys-color-on-surface)] mt-1.5 line-clamp-2">{deal.detail}</p>}
+                        <div className="mt-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                          紐づく訪問予定: {linked.length}件
+                          {linked.length > 0 && (
+                            <span className="ml-1">（{linked.slice(0, 3).map(s => fmtMD(s.visitDate)).join(' / ')}{linked.length > 3 ? ' …' : ''}）</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {dealsList.length > 5 && (
+                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] text-center pt-1">ほか {dealsList.length - 5} 件</p>
+                  )}
+                </div>
+              )}
+            </Card>
+
+            {/* これまでの履歴 */}
+            <Card>
+              <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3">これまでの履歴</h2>
+              {dashTimeline.length === 0 ? (
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] py-6 text-center">履歴はまだありません</p>
+              ) : (
+                <ol className="space-y-3">
+                  {dashTimeline.map((e, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ background: e.color }} />
+                      <div className="min-w-0">
+                        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtMD(e.date)}</p>
+                        <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+                          <span className="font-medium">{e.label}</span>
+                          {e.sub && <span className="text-[var(--md-sys-color-on-surface-variant)]"> — {e.sub}</span>}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Card>
+
             <Card>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">顧客情報</h2>

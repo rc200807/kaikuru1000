@@ -52,13 +52,33 @@ export default function StoreCustomersPage() {
   // 新規顧客追加（顧客作成 → 案件作成 → 訪問予定追加 の一連ウィザード）
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1) // 1:顧客 2:案件 3:予定 4:完了
-  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', address: '', leadSource: '' })
+  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
   const [createdCustomer, setCreatedCustomer] = useState<{ id: string; name: string } | null>(null)
   const [dealForm, setDealForm] = useState({ detail: '' })
   const [createdDealId, setCreatedDealId] = useState<string | null>(null)
   const [scheduleForm, setScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
   const [addCustomerMsg, setAddCustomerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [zipLooking, setZipLooking] = useState(false)
+
+  // 郵便番号(7桁)から住所を自動入力
+  async function lookupPostal(zip: string) {
+    const digits = zip.replace(/[-ー\s]/g, '')
+    if (digits.length !== 7) return
+    setZipLooking(true)
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      const data = await res.json()
+      if (res.ok && data.address) {
+        setAddCustomerForm(f => ({ ...f, address: data.address }))
+      } else {
+        setAddCustomerMsg({ type: 'error', text: '該当する住所が見つかりませんでした' })
+      }
+    } catch {
+      setAddCustomerMsg({ type: 'error', text: '住所の検索に失敗しました' })
+    }
+    setZipLooking(false)
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -118,7 +138,7 @@ export default function StoreCustomersPage() {
     setShowAddCustomer(true)
     setWizardStep(1)
     setAddCustomerMsg(null)
-    setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', address: '', leadSource: '' })
+    setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
     setCreatedCustomer(null)
     setDealForm({ detail: '' })
     setCreatedDealId(null)
@@ -434,6 +454,23 @@ export default function StoreCustomersPage() {
             <TextField label="ふりがな" value={addCustomerForm.furigana} onChange={v => setAddCustomerForm(f => ({ ...f, furigana: v }))} required placeholder="やまだ たろう" autoComplete="off" name="kk-cust-furigana" />
             <TextField label="メールアドレス（任意）" type="email" value={addCustomerForm.email} onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))} placeholder="taro@example.com" autoComplete="off" name="kk-cust-email" />
             <TextField label="電話番号（任意）" type="tel" value={addCustomerForm.phone} onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))} placeholder="090-1234-5678" autoComplete="off" name="kk-cust-phone" />
+            <div>
+              <TextField
+                label="郵便番号（任意）"
+                type="text"
+                value={addCustomerForm.postalCode}
+                onChange={v => {
+                  setAddCustomerForm(f => ({ ...f, postalCode: v }))
+                  if (v.replace(/[-ー\s]/g, '').length === 7) lookupPostal(v)
+                }}
+                placeholder="1234567"
+                autoComplete="off"
+                name="kk-cust-zip"
+              />
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                {zipLooking ? '住所を検索中...' : '7桁を入力すると住所が自動入力されます'}
+              </p>
+            </div>
             <TextField label="住所（任意）" value={addCustomerForm.address} onChange={v => setAddCustomerForm(f => ({ ...f, address: v }))} placeholder="東京都渋谷区..." autoComplete="off" name="kk-cust-address" />
             <div>
               <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">流入経路（任意）</label>

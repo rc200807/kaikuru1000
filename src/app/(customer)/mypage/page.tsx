@@ -1392,7 +1392,7 @@ function MyPageContent() {
                   if (allDone) return null
 
                   return (
-                    <div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-bold text-gray-900">はじめにやること</h3>
                         <span className="text-xs text-gray-500">{completedCount}/{tasks.length}</span>

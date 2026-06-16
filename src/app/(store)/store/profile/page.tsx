@@ -18,8 +18,6 @@ export default function StoreProfilePage() {
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
-  const [contractNotifyEmail, setContractNotifyEmail] = useState('')
-  const [calendarInviteEmail, setCalendarInviteEmail] = useState('')
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [saving, setSaving]   = useState(false)
@@ -36,13 +34,6 @@ export default function StoreProfilePage() {
       setEmail(sessionUser?.email || '')
       setAvatarPreview(sessionUser?.avatar || null)
       // 契約作成通知先メールを取得
-      fetch('/api/store/profile')
-        .then(r => r.ok ? r.json() : null)
-        .then(d => {
-          if (d?.contractNotifyEmail != null) setContractNotifyEmail(d.contractNotifyEmail)
-          if (d?.calendarInviteEmail != null) setCalendarInviteEmail(d.calendarInviteEmail)
-        })
-        .catch(() => {})
     }
   }, [status, session])
 
@@ -69,9 +60,6 @@ export default function StoreProfilePage() {
     if (email)    fd.append('email', email)
     if (password) fd.append('password', password)
     if (avatarFile) fd.append('avatar', avatarFile)
-    fd.append('contractNotifyEmail', contractNotifyEmail)
-    fd.append('calendarInviteEmail', calendarInviteEmail)
-
     const res = await fetch('/api/store/profile', { method: 'PATCH', body: fd })
     setSaving(false)
 
@@ -162,22 +150,6 @@ export default function StoreProfilePage() {
               type="email"
               value={email}
               onChange={setEmail}
-            />
-            <TextField
-              label="契約作成通知先メールアドレス"
-              type="email"
-              value={contractNotifyEmail}
-              onChange={setContractNotifyEmail}
-              placeholder="未設定の場合は上記メールアドレスへ通知"
-              helper="売買契約書が作成されたときに、このアドレスへ通知メールを送信します。"
-            />
-            <TextField
-              label="カレンダー招待メールアドレス"
-              type="email"
-              value={calendarInviteEmail}
-              onChange={setCalendarInviteEmail}
-              placeholder="未設定の場合は招待を送信しません"
-              helper="訪問スケジュールが追加されたとき、このアドレスにGoogleカレンダーの招待を送信します。"
             />
           </Card>
 

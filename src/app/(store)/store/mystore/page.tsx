@@ -84,6 +84,12 @@ function MyStoreContent() {
   const [bizHoursLoading, setBizHoursLoading] = useState(true)
   const [bizHoursSaving, setBizHoursSaving] = useState(false)
 
+  // Notification email state
+  const [contractNotifyEmail, setContractNotifyEmail] = useState('')
+  const [calendarInviteEmail, setCalendarInviteEmail] = useState('')
+  const [notifyEmailLoading, setNotifyEmailLoading] = useState(true)
+  const [notifyEmailSaving, setNotifyEmailSaving] = useState(false)
+
   // Google Calendar state
   const [gcalConfig, setGcalConfig] = useState<GCalConfig | null>(null)
   const [gcalLoading, setGcalLoading] = useState(true)
@@ -213,6 +219,15 @@ function MyStoreContent() {
       fetchGcalConfig()
       fetchLinkedAccounts()
       fetchBusinessHours()
+      // Notification emails
+      fetch('/api/store/profile')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d?.contractNotifyEmail != null) setContractNotifyEmail(d.contractNotifyEmail)
+          if (d?.calendarInviteEmail != null) setCalendarInviteEmail(d.calendarInviteEmail)
+        })
+        .catch(() => {})
+        .finally(() => setNotifyEmailLoading(false))
       // Lock PIN
       fetch('/api/store/lock-pin')
         .then(r => r.json())
@@ -435,6 +450,78 @@ function MyStoreContent() {
                   </svg>
                 }
               />
+            </div>
+
+            {/* ===== 通知・招待設定 ===== */}
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                通知・招待設定
+              </h3>
+
+              <Card variant="elevated" padding="md" className="space-y-4">
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  この設定は店舗全体に適用されます。
+                </p>
+
+                {notifyEmailLoading ? (
+                  <div className="flex justify-center py-4">
+                    <LoadingSpinner size="sm" label="読み込み中..." />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">契約作成通知先メールアドレス</label>
+                      <input
+                        type="email"
+                        value={contractNotifyEmail}
+                        onChange={e => setContractNotifyEmail(e.target.value)}
+                        placeholder="未設定の場合は店舗メールアドレスへ通知"
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                      />
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">売買契約書が作成されたときに、このアドレスへ通知メールを送信します。</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--md-sys-color-on-surface-variant)] block mb-1">カレンダー招待メールアドレス</label>
+                      <input
+                        type="email"
+                        value={calendarInviteEmail}
+                        onChange={e => setCalendarInviteEmail(e.target.value)}
+                        placeholder="未設定の場合は招待を送信しません"
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)]/30"
+                      />
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">訪問スケジュールが追加されたとき、このアドレスにGoogleカレンダーの招待を送信します。</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={notifyEmailSaving}
+                      onClick={async () => {
+                        setNotifyEmailSaving(true)
+                        try {
+                          const fd = new FormData()
+                          fd.append('contractNotifyEmail', contractNotifyEmail)
+                          fd.append('calendarInviteEmail', calendarInviteEmail)
+                          const res = await fetch('/api/store/profile', { method: 'PATCH', body: fd })
+                          if (res.ok) {
+                            setMessage({ type: 'success', text: '通知設定を保存しました' })
+                          } else {
+                            const data = await res.json().catch(() => ({}))
+                            setMessage({ type: 'error', text: data.error || '保存に失敗しました' })
+                          }
+                        } catch {
+                          setMessage({ type: 'error', text: '保存に失敗しました' })
+                        } finally {
+                          setNotifyEmailSaving(false)
+                        }
+                      }}
+                    >
+                      {notifyEmailSaving ? '保存中...' : '通知設定を保存'}
+                    </Button>
+                  </div>
+                )}
+              </Card>
             </div>
 
             {/* ===== Googleカレンダー連携 ===== */}

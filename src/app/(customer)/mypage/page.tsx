@@ -1334,6 +1334,96 @@ function MyPageContent() {
               {/* ─── Main Content Area ─── */}
               <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-4 relative z-10 space-y-5 pb-28">
 
+                {/* ─── Onboarding Checklist (horizontal scrollable) ─── */}
+                {(() => {
+                  const tasks = [
+                    {
+                      key: 'id-document',
+                      label: '身分証明書を登録',
+                      sub: '写真を撮るだけ10秒',
+                      done: !!user.idDocumentPath,
+                      action: () => handleTabChange('id-document'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15A2.25 2.25 0 002.25 6.75v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                        </svg>
+                      ),
+                    },
+                    ...(isDelivery ? [{
+                      key: 'bank',
+                      label: '口座情報を登録',
+                      sub: '買取金額の振込先を設定',
+                      done: !!(user.bankName && user.accountNumber),
+                      action: () => handleTabChange('bank-account'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                        </svg>
+                      ),
+                    }] : []),
+                    ...(!isDelivery ? [{
+                      key: 'memo',
+                      label: '買取トライで事前査定',
+                      sub: '写真で簡単に買取価格をチェック',
+                      done: memos.length > 0,
+                      action: () => handleTabChange('memos'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      ),
+                    }] : []),
+                    ...(user.customerType !== 'delivery' ? [{
+                      key: 'visit',
+                      label: '訪問型の予約',
+                      sub: 'お近くの店舗が訪問',
+                      done: user.visitSchedules.length > 0,
+                      action: () => handleTabChange('visit-request'),
+                      icon: (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                      ),
+                    }] : []),
+                  ]
+                  const completedCount = tasks.filter(t => t.done).length
+                  const allDone = completedCount === tasks.length
+
+                  if (allDone) return null
+
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-bold text-gray-900">はじめにやること</h3>
+                        <span className="text-xs text-gray-500">{completedCount}/{tasks.length}</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
+                        <div
+                          className="h-full bg-[#B91C1C] rounded-full transition-all duration-500"
+                          style={{ width: `${(completedCount / tasks.length) * 100}%` }}
+                        />
+                      </div>
+                      {/* Horizontal scrollable cards */}
+                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
+                        {tasks.filter(t => !t.done).map(task => (
+                          <button
+                            key={task.key}
+                            onClick={task.action}
+                            className="flex-shrink-0 w-40 bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm text-left snap-start hover:shadow-md transition-all active:scale-[0.98]"
+                          >
+                            <div className="w-10 h-10 bg-[#B91C1C] rounded-xl flex items-center justify-center mb-3">
+                              <span className="text-white">{task.icon}</span>
+                            </div>
+                            <p className="text-xs font-bold text-gray-900 leading-tight">{task.label}</p>
+                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">{task.sub}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 {/* ─── Quick Action Cards ─── */}
                 <div className={isDelivery ? 'flex' : 'grid grid-cols-2 gap-3'}>
                   {(isDelivery
@@ -1486,6 +1576,25 @@ function MyPageContent() {
                   </button>
                 )}
 
+                {/* ─── 同伴者書類バナー（訪問型 + 18歳以下 or 65歳以上）─── */}
+                {!isDelivery && needsFamilyConsent(age) && (
+                  <div className="w-full bg-amber-500/10 backdrop-blur-sm border border-amber-300/30 rounded-2xl p-4 flex items-start gap-3">
+                    <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-amber-800">
+                        {age != null && age <= 18 ? '18歳以下の方へのご案内' : '65歳以上の方へのご案内'}
+                      </p>
+                      <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                        訪問時は、同伴者の身分証明書、および家族間の確認ができる書類（戸籍謄本・住民票等）のご提示が必要です。
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* ─── Stats Section ─── */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm">
@@ -1564,95 +1673,6 @@ function MyPageContent() {
                   </div>
                 )}
 
-                {/* ─── Onboarding Checklist (horizontal scrollable) ─── */}
-                {(() => {
-                  const tasks = [
-                    {
-                      key: 'id-document',
-                      label: '身分証明書を登録',
-                      sub: '写真を撮るだけ10秒',
-                      done: !!user.idDocumentPath,
-                      action: () => handleTabChange('id-document'),
-                      icon: (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15A2.25 2.25 0 002.25 6.75v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
-                        </svg>
-                      ),
-                    },
-                    {
-                      key: 'bank',
-                      label: '口座情報を登録',
-                      sub: '買取金額の振込先を設定',
-                      done: !!(user.bankName && user.accountNumber),
-                      action: () => handleTabChange('bank-account'),
-                      icon: (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                        </svg>
-                      ),
-                    },
-                    ...(!isDelivery ? [{
-                      key: 'memo',
-                      label: '買取トライで事前査定',
-                      sub: '写真で簡単に買取価格をチェック',
-                      done: memos.length > 0,
-                      action: () => handleTabChange('memos'),
-                      icon: (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                      ),
-                    }] : []),
-                    ...(user.customerType !== 'delivery' ? [{
-                      key: 'visit',
-                      label: '訪問型の予約',
-                      sub: 'お近くの店舗が訪問',
-                      done: user.visitSchedules.length > 0,
-                      action: () => handleTabChange('visit-request'),
-                      icon: (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                        </svg>
-                      ),
-                    }] : []),
-                  ]
-                  const completedCount = tasks.filter(t => t.done).length
-                  const allDone = completedCount === tasks.length
-
-                  if (allDone) return null
-
-                  return (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-bold text-gray-900">はじめにやること</h3>
-                        <span className="text-xs text-gray-500">{completedCount}/{tasks.length}</span>
-                      </div>
-                      {/* Progress bar */}
-                      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
-                        <div
-                          className="h-full bg-[#B91C1C] rounded-full transition-all duration-500"
-                          style={{ width: `${(completedCount / tasks.length) * 100}%` }}
-                        />
-                      </div>
-                      {/* Horizontal scrollable cards */}
-                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory scrollbar-hide">
-                        {tasks.filter(t => !t.done).map(task => (
-                          <button
-                            key={task.key}
-                            onClick={task.action}
-                            className="flex-shrink-0 w-40 bg-white/60 backdrop-blur-lg rounded-2xl p-4 border border-white/40 shadow-sm text-left snap-start hover:shadow-md transition-all active:scale-[0.98]"
-                          >
-                            <div className="w-10 h-10 bg-[#B91C1C] rounded-xl flex items-center justify-center mb-3">
-                              <span className="text-white">{task.icon}</span>
-                            </div>
-                            <p className="text-xs font-bold text-gray-900 leading-tight">{task.label}</p>
-                            <p className="text-[10px] text-gray-500 mt-1 leading-tight">{task.sub}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}
 
                 {/* ─── Info Cards ─── */}
                 <div className="bg-white/70 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/50 shadow-sm">
@@ -2177,12 +2197,21 @@ function MyPageContent() {
           {/* ─── 送付履歴タブ（宅配顧客のみ） ─── */}
           {activeTab === 'shipments' && (
             <div className="space-y-4">
-              {deliveryBlocked && (
-                <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-                  <span className="mt-0.5 shrink-0">⚠️</span>
-                  <span>18歳以下の方は宅配買取をご利用いただけません。</span>
+              {deliveryBlocked ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mb-4">
+                    <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  </div>
+                  <p className="text-base font-bold text-gray-800 mb-2">宅配買取はご利用いただけません</p>
+                  <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
+                    18歳以下の方は宅配買取をご利用いただけません。<br />
+                    18歳になった時点で自動的に解除されます。
+                  </p>
                 </div>
-              )}
+              ) : null}
+              {!deliveryBlocked && (<>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">送付履歴</h2>
@@ -2421,6 +2450,7 @@ function MyPageContent() {
                   </div>
                 </div>
               )}
+            </>)}
             </div>
           )}
 
@@ -3451,11 +3481,14 @@ function MyPageContent() {
               {needsFamilyConsent(age) && (
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
                   <span className="mt-0.5 shrink-0">⚠️</span>
-                  <span>
-                    {age != null && age <= 18
-                      ? '18歳以下の方は、訪問時にご家族の同意・同席が必要です。'
-                      : '65歳以上の方は、訪問時にご家族の同意・同席が必要です。'}
-                  </span>
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      {age != null && age <= 18
+                        ? '18歳以下の方は、訪問時にご家族の同意・同席が必要です。'
+                        : '65歳以上の方は、訪問時にご家族の同意・同席が必要です。'}
+                    </p>
+                    <p>訪問の際は、<span className="font-medium">同伴者の身分証明書</span>、および<span className="font-medium">家族間の確認ができる書類</span>（戸籍謄本・住民票等）のご提示をお願いします。</p>
+                  </div>
                 </div>
               )}
 
@@ -4554,8 +4587,8 @@ function ShipmentCard({
 
                     {/* 発送伝票の写真 */}
                     <div>
-                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">発送伝票の写真</p>
-                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">伝票の控えを撮影してください（追跡番号の確認に使用します）</p>
+                      <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">発送伝票の写真 <span className="text-red-500">*</span></p>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">伝票の控えを撮影してください（追跡番号の確認に使用します）。<span className="font-medium text-red-600">必須です。</span></p>
                       <div className="flex flex-wrap gap-2">
                         {slipImages.map((url, i) => (
                           <div key={`slip-${i}`} className="relative w-20 h-20">
@@ -4588,9 +4621,13 @@ function ShipmentCard({
                       </div>
                     </div>
 
+                    {slipImages.length === 0 && (
+                      <p className="text-xs text-red-600">伝票の写真を1枚以上撮影してください</p>
+                    )}
+
                     {/* Buttons */}
                     <div className="flex gap-3 pt-1">
-                      <Button onClick={handleCompleteStep2} disabled={submitting} loading={submitting}>
+                      <Button onClick={handleCompleteStep2} disabled={submitting || slipImages.length === 0} loading={submitting}>
                         {submitting ? '登録中...' : '次へ'}
                       </Button>
                       <Button variant="tonal" onClick={() => setDraftStep(1)}>

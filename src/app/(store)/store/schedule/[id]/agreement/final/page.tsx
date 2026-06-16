@@ -198,12 +198,27 @@ type ExistingContract = {
 /* ─── 手書きサインパッド ─── */
 function SignaturePad({
   onSignatureChange,
+  initialDataUrl,
 }: {
   onSignatureChange: (dataUrl: string | null) => void
+  initialDataUrl?: string | null
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
-  const [hasDrawn, setHasDrawn] = useState(false)
+  const [hasDrawn, setHasDrawn] = useState(!!initialDataUrl)
+
+  // マウント時に保存済み署名を復元
+  useEffect(() => {
+    if (!initialDataUrl || !canvasRef.current) return
+    const img = new Image()
+    img.onload = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')
+      if (ctx) ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    }
+    img.src = initialDataUrl
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current
@@ -312,8 +327,12 @@ export default function FinalAgreementPage() {
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saleSignature, setSaleSignature] = useState<string | null>(null)
-  const [invoiceSignature, setInvoiceSignature] = useState<string | null>(null)
+  const [saleSignature, setSaleSignature] = useState<string | null>(
+    () => (typeof window !== 'undefined' ? sessionStorage.getItem(`sig_sale_${scheduleId}`) : null)
+  )
+  const [invoiceSignature, setInvoiceSignature] = useState<string | null>(
+    () => (typeof window !== 'undefined' ? sessionStorage.getItem(`sig_invoice_${scheduleId}`) : null)
+  )
   const [agreedSale, setAgreedSale] = useState(false)
   const [agreedInvoice, setAgreedInvoice] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -328,6 +347,18 @@ export default function FinalAgreementPage() {
   const [phoneInput, setPhoneInput] = useState('')
   const saleRef = useRef<HTMLDivElement>(null)
   const invoiceRef = useRef<HTMLDivElement>(null)
+
+  const handleSaleSignature = useCallback((dataUrl: string | null) => {
+    setSaleSignature(dataUrl)
+    if (dataUrl) sessionStorage.setItem(`sig_sale_${scheduleId}`, dataUrl)
+    else sessionStorage.removeItem(`sig_sale_${scheduleId}`)
+  }, [scheduleId])
+
+  const handleInvoiceSignature = useCallback((dataUrl: string | null) => {
+    setInvoiceSignature(dataUrl)
+    if (dataUrl) sessionStorage.setItem(`sig_invoice_${scheduleId}`, dataUrl)
+    else sessionStorage.removeItem(`sig_invoice_${scheduleId}`)
+  }, [scheduleId])
 
   // PIN lock state
   const [pinLocked, setPinLocked] = useState(true)
@@ -520,6 +551,10 @@ export default function FinalAgreementPage() {
 
       const result = await res.json()
       await fetchVisit()
+
+      // 提出成功 → 署名のセッションストレージをクリア
+      sessionStorage.removeItem(`sig_sale_${scheduleId}`)
+      sessionStorage.removeItem(`sig_invoice_${scheduleId}`)
 
       if (result.emailSent) {
         const pdfNote = result.pdfIncluded ? 'PDFを添付して' : 'マイページへのリンクを記載して'
@@ -872,7 +907,7 @@ export default function FinalAgreementPage() {
               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">
                 お客様署名（売買契約 / 下の枠内に指またはペンで署名してください）
               </label>
-              <SignaturePad onSignatureChange={setSaleSignature} />
+              <SignaturePad onSignatureChange={handleSaleSignature} initialDataUrl={saleSignature} />
             </div>
           </div>
         </Card>
@@ -969,7 +1004,7 @@ export default function FinalAgreementPage() {
               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">
                 お客様署名（請求書 / 下の枠内に指またはペンで署名してください）
               </label>
-              <SignaturePad onSignatureChange={setInvoiceSignature} />
+              <SignaturePad onSignatureChange={handleInvoiceSignature} initialDataUrl={invoiceSignature} />
             </div>
           </div>
         </Card>

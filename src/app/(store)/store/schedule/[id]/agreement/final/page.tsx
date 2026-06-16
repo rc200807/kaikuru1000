@@ -307,6 +307,8 @@ export default function FinalAgreementPage() {
   const searchParams = useSearchParams()
   const scheduleId = params.id as string
   const staffName = searchParams.get('staff') || ''
+  const emailParam = searchParams.get('email') || ''
+  const occupationParam = searchParams.get('occupation') || ''
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -397,9 +399,9 @@ export default function FinalAgreementPage() {
     if (visitRes.ok) {
       const data = await visitRes.json()
       setVisit(data)
-      // 前のページで保存した最新値を常に反映（prev || だと戻り操作後に古い値が残る）
-      setCustomerEmailInput(data?.user?.email || '')
-      setOccupationInput(data?.user?.occupation || '')
+      // URLパラメータ（前のページで入力した値）を最優先、なければAPIの登録値を使用
+      setCustomerEmailInput(emailParam || data?.user?.email || '')
+      setOccupationInput(occupationParam || data?.user?.occupation || '')
       setPhoneInput(data?.user?.phone || '')
     }
     if (contractRes.ok) {

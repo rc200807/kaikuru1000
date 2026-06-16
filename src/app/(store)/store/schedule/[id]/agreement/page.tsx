@@ -698,7 +698,11 @@ export default function AgreementPage() {
         setSavingInfo(false)
       }
     }
-    const qs = staffName ? `?staff=${encodeURIComponent(staffName)}` : ''
+    const params = new URLSearchParams()
+    if (staffName) params.set('staff', staffName)
+    if (emailInput.trim()) params.set('email', emailInput.trim())
+    if (occupationInput.trim()) params.set('occupation', occupationInput.trim())
+    const qs = params.toString() ? `?${params.toString()}` : ''
     navigateWithPinCheck(`/store/schedule/${scheduleId}/agreement/final${qs}`)
   }
 

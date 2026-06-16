@@ -397,10 +397,10 @@ export default function FinalAgreementPage() {
     if (visitRes.ok) {
       const data = await visitRes.json()
       setVisit(data)
-      // 既存ユーザー登録メールアドレス・職業を初期値にセット（未入力時のみ）
-      setCustomerEmailInput((prev) => prev || data?.user?.email || '')
-      setOccupationInput((prev) => prev || data?.user?.occupation || '')
-      setPhoneInput((prev) => prev || data?.user?.phone || '')
+      // 前のページで保存した最新値を常に反映（prev || だと戻り操作後に古い値が残る）
+      setCustomerEmailInput(data?.user?.email || '')
+      setOccupationInput(data?.user?.occupation || '')
+      setPhoneInput(data?.user?.phone || '')
     }
     if (contractRes.ok) {
       const contract = await contractRes.json()

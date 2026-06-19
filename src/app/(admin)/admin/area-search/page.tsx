@@ -252,7 +252,7 @@ export default function AdminAreaSearchPage() {
                   <button
                     type="submit"
                     disabled={searching || !simpleAddress.trim()}
-                    className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
+                    className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-[var(--portal-primary-container,#fff)] text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
                   >
                     {searching ? (
                       <>
@@ -360,7 +360,7 @@ export default function AdminAreaSearchPage() {
                   <button
                     type="submit"
                     disabled={searching || !prefecture}
-                    className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
+                    className="h-11 px-6 bg-gradient-to-r from-[var(--portal-primary,#374151)] to-[var(--portal-primary,#374151)] text-[var(--portal-primary-container,#fff)] text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-all flex items-center gap-2 flex-shrink-0"
                   >
                     {searching ? (
                       <>

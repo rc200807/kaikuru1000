@@ -160,7 +160,7 @@ export default function StoreDealsPage() {
               return (
                 <button
                   key={deal.id}
-                  onClick={() => deal.user && router.push(`/store/customers/${deal.user.id}?tab=deals`)}
+                  onClick={() => router.push(`/store/deals/${deal.id}`)}
                   className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-4 hover:bg-[var(--md-sys-color-surface-container)] transition-colors animate-fade-in-up"
                   style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
                 >

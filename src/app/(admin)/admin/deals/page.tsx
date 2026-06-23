@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 
@@ -21,21 +20,6 @@ type Deal = {
   _count?: { visitSchedules: number }
 }
 
-type VisitScheduleLite = {
-  id: string
-  visitDate: string
-  startTime: string | null
-  endTime: string | null
-  status: string
-  note: string | null
-  staffName: string | null
-}
-
-type DealDetail = Omit<Deal, 'inquiry'> & {
-  inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
-  visitSchedules: VisitScheduleLite[]
-}
-
 function statusColor(status: string) {
   return DEAL_STATUS_BADGE[status as DealStatus] ?? DEAL_STATUS_BADGE.inquiry
 }
@@ -50,13 +34,6 @@ export default function AdminDealsPage() {
   const [searchText, setSearchText] = useState('')
   const [storeFilter, setStoreFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const [detail, setDetail] = useState<DealDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailEdit, setDetailEdit] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')
@@ -100,18 +77,6 @@ export default function AdminDealsPage() {
     }
   }
 
-  useEffect(() => {
-    if (!selectedId) { setDetail(null); return }
-    setDetailLoading(true)
-    fetch(`/api/deals/${selectedId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: DealDetail | null) => {
-        setDetail(d)
-        setDetailEdit(d?.detail ?? '')
-      })
-      .finally(() => setDetailLoading(false))
-  }, [selectedId])
-
   const stores = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>()
     deals.forEach(d => { if (d.store) map.set(d.store.id, { id: d.store.id, name: d.store.name }) })
@@ -130,45 +95,6 @@ export default function AdminDealsPage() {
       return true
     })
   }, [deals, searchText, storeFilter, statusFilter])
-
-  async function updateStatus(dealId: string, newStatus: string) {
-    const res = await fetch(`/api/deals/${dealId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    })
-    if (!res.ok) return
-    setDeals(prev => prev.map(x => x.id === dealId ? { ...x, status: newStatus } : x))
-    setDetail(prev => prev && prev.id === dealId ? { ...prev, status: newStatus } : prev)
-  }
-
-  async function saveDetail() {
-    if (!detail) return
-    setSaving(true)
-    const res = await fetch(`/api/deals/${detail.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ detail: detailEdit }),
-    })
-    setSaving(false)
-    if (res.ok) {
-      setDeals(prev => prev.map(x => x.id === detail.id ? { ...x, detail: detailEdit } : x))
-      setDetail(prev => prev ? { ...prev, detail: detailEdit } : prev)
-    }
-  }
-
-  async function deleteDeal() {
-    if (!detail) return
-    if (!confirm('この案件を削除しますか？（紐づく訪問予定は削除されず、リンクのみ解除されます）')) return
-    setDeleting(true)
-    const res = await fetch(`/api/deals/${detail.id}`, { method: 'DELETE' })
-    setDeleting(false)
-    if (res.ok) {
-      setDeals(prev => prev.filter(x => x.id !== detail.id))
-      setSelectedId(null)
-      setDetail(null)
-    }
-  }
 
   const wonCount = (stats?.counts.contract ?? 0) + (stats?.counts.completed ?? 0)
   const statsTotal = stats?.total ?? 0
@@ -206,10 +132,9 @@ export default function AdminDealsPage() {
         )}
       </div>
 
-      {/* 分割レイアウト */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) 1fr', overflow: 'hidden' }}>
-        {/* 左ペイン: フィルタ + 一覧 */}
-        <aside style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--md-sys-color-outline-variant)', overflow: 'hidden', background: 'var(--md-sys-color-surface)' }}>
+      {/* 一覧 */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <aside style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', background: 'var(--md-sys-color-surface)' }}>
           <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--md-sys-color-outline-variant)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ position: 'relative' }}>
               <svg
@@ -252,18 +177,17 @@ export default function AdminDealsPage() {
               <p style={{ textAlign: 'center', padding: 40, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>該当する案件がありません</p>
             ) : (
               filtered.map(d => {
-                const isActive = selectedId === d.id
                 const c = statusColor(d.status)
                 return (
                   <button
                     key={d.id}
-                    onClick={() => setSelectedId(d.id)}
+                    onClick={() => router.push(`/admin/deals/${d.id}`)}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left',
                       padding: '12px 14px',
                       borderTop: '1px solid var(--md-sys-color-outline-variant)',
-                      borderLeft: isActive ? '3px solid #4f8ef7' : '3px solid transparent',
-                      background: isActive ? 'rgba(79,142,247,0.1)' : 'transparent',
+                      borderLeft: '3px solid transparent',
+                      background: 'transparent',
                       cursor: 'pointer', color: 'inherit', font: 'inherit',
                     }}
                   >
@@ -294,126 +218,6 @@ export default function AdminDealsPage() {
             )}
           </div>
         </aside>
-
-        {/* 右ペイン: 詳細 */}
-        <main style={{ overflowY: 'auto' }}>
-          {!selectedId ? (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 14, padding: 40, textAlign: 'center' }}>
-              左のリストから案件を選択してください
-            </div>
-          ) : detailLoading || !detail ? (
-            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}><LoadingSpinner /></div>
-          ) : (
-            <div style={{ padding: '20px 24px', maxWidth: 800 }}>
-              {/* ヘッダー */}
-              <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{detail.user?.name ?? '—'}</h2>
-                  <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
-                    {new Date(detail.createdAt).toLocaleString('ja-JP')}
-                    {detail.store && ` ・ ${detail.store.name}（${detail.store.code}）`}
-                  </div>
-                </div>
-                <button
-                  onClick={deleteDeal}
-                  disabled={deleting}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #f87171', cursor: deleting ? 'wait' : 'pointer', background: 'transparent', color: '#f87171', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', opacity: deleting ? 0.6 : 1 }}
-                >
-                  {deleting ? '削除中...' : '案件を削除'}
-                </button>
-              </div>
-
-              {/* ステータス変更 */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-                {DEAL_STATUS_ORDER.map(s => {
-                  const active = detail.status === s
-                  const c = DEAL_STATUS_BADGE[s]
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => !active && updateStatus(detail.id, s)}
-                      style={{
-                        padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: active ? 'default' : 'pointer',
-                        border: active ? `1px solid ${c.fg}` : '1px solid var(--md-sys-color-outline-variant)',
-                        background: active ? c.bg : 'transparent',
-                        color: active ? c.fg : 'var(--md-sys-color-on-surface-variant)',
-                      }}
-                    >
-                      {DEAL_STATUS_LABEL[s]}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* 顧客リンク */}
-              {detail.user && (
-                <div style={{ marginBottom: 16, padding: 12, background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>顧客</div>
-                  <Link href={`/admin/customers?focus=${detail.user.id}`} style={{ fontSize: 13, color: '#4f8ef7', textDecoration: 'none' }}>
-                    {detail.user.name}{detail.user.phone && `（${detail.user.phone}）`}
-                  </Link>
-                </div>
-              )}
-
-              {/* 由来の問い合わせ */}
-              {detail.inquiry && (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>由来の問い合わせ</div>
-                  <div style={{ background: 'var(--md-sys-color-surface-container)', borderRadius: 8, padding: 12, fontSize: 13 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{detail.inquiry.inquiryType}</div>
-                    {detail.inquiry.details && <div style={{ whiteSpace: 'pre-wrap', color: 'var(--md-sys-color-on-surface-variant)' }}>{detail.inquiry.details}</div>}
-                  </div>
-                </div>
-              )}
-
-              {/* 案件内容 */}
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>案件内容（買取内容など）</div>
-                <textarea
-                  value={detailEdit}
-                  onChange={e => setDetailEdit(e.target.value)}
-                  rows={6}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: 12, borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                  <button
-                    onClick={saveDetail}
-                    disabled={saving || detailEdit === (detail.detail ?? '')}
-                    style={{ padding: '8px 22px', borderRadius: 8, border: 'none', cursor: saving || detailEdit === (detail.detail ?? '') ? 'default' : 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 700, opacity: saving || detailEdit === (detail.detail ?? '') ? 0.5 : 1 }}
-                  >
-                    {saving ? '保存中...' : 'メモを保存'}
-                  </button>
-                </div>
-              </div>
-
-              {/* 紐づく訪問予定 */}
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 8 }}>
-                  紐づく訪問予定（{detail.visitSchedules.length}件）
-                </div>
-                {detail.visitSchedules.length === 0 ? (
-                  <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>この案件に紐づく訪問予定はありません</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {detail.visitSchedules.map(vs => (
-                      <div key={vs.id} style={{ padding: 12, background: 'var(--md-sys-color-surface-container)', borderRadius: 8, fontSize: 13 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                          <span style={{ fontWeight: 600 }}>
-                            {new Date(vs.visitDate).toLocaleDateString('ja-JP')}
-                            {vs.startTime && ` ${vs.startTime}`}{vs.endTime && `〜${vs.endTime}`}
-                          </span>
-                          <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{vs.status}</span>
-                        </div>
-                        {vs.staffName && <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 2 }}>担当: {vs.staffName}</div>}
-                        {vs.note && <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{vs.note}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </main>
       </div>
     </div>
   )

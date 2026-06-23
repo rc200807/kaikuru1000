@@ -29,11 +29,37 @@ export async function GET(
     where: { id },
     include: {
       user: { select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true } },
-      store: { select: { id: true, name: true, code: true } },
+      store: {
+        select: {
+          id: true, name: true, code: true, phone: true, address: true,
+          prefecture: true, email: true, invoiceNumber: true, antiquePermitNumber: true,
+        },
+      },
       inquiry: { select: { id: true, inquiryType: true, details: true, createdAt: true } },
       visitSchedules: {
-        select: { id: true, visitDate: true, startTime: true, endTime: true, status: true, note: true, staffName: true },
         orderBy: { visitDate: 'desc' },
+        select: {
+          id: true, visitDate: true, startTime: true, endTime: true, status: true, note: true,
+          staffName: true, purchaseAmount: true, billingAmount: true,
+          purchaseItems: {
+            select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
+          },
+          workItems: {
+            select: { id: true, workName: true, unitPrice: true, quantity: true },
+          },
+          salesContract: {
+            select: {
+              id: true, agreedAt: true, emailSentAt: true, customerEmail: true,
+              pdfBase64: true, invoicePdfBase64: true,
+            },
+          },
+          estimate: {
+            select: {
+              id: true, validUntil: true, purchaseAmount: true, billingAmount: true,
+              emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true,
+            },
+          },
+        },
       },
     },
   })
@@ -43,7 +69,37 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  return NextResponse.json(deal)
+  // PDF本体（base64）は返さず、有無のbooleanへ変換してペイロードを軽量化
+  const shaped = {
+    ...deal,
+    visitSchedules: deal.visitSchedules.map(vs => ({
+      ...vs,
+      salesContract: vs.salesContract
+        ? {
+            id: vs.salesContract.id,
+            agreedAt: vs.salesContract.agreedAt,
+            emailSentAt: vs.salesContract.emailSentAt,
+            customerEmail: vs.salesContract.customerEmail,
+            hasPdf: !!vs.salesContract.pdfBase64,
+            hasInvoicePdf: !!vs.salesContract.invoicePdfBase64,
+          }
+        : null,
+      estimate: vs.estimate
+        ? {
+            id: vs.estimate.id,
+            validUntil: vs.estimate.validUntil,
+            purchaseAmount: vs.estimate.purchaseAmount,
+            billingAmount: vs.estimate.billingAmount,
+            emailSentAt: vs.estimate.emailSentAt,
+            customerEmail: vs.estimate.customerEmail,
+            hasPdf: !!vs.estimate.pdfBase64,
+            hasInvoicePdf: !!vs.estimate.invoicePdfBase64,
+          }
+        : null,
+    })),
+  }
+
+  return NextResponse.json(shaped)
 }
 
 // 案件更新（detail / status / storeId）

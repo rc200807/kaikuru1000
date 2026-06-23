@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -379,7 +380,12 @@ export default function AdminDashboardPage() {
 
           {/* 店舗別買取金額 */}
           <ChartCard>
-            <SectionHeading>店舗別買取金額（全期間 TOP10）</SectionHeading>
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-sm flex-1" style={{ color: '#ffffff', fontWeight: 600 }}>店舗別買取金額（全期間 TOP10）</h2>
+              <Link href="/admin/rankings" className="text-xs px-2 py-1 rounded-lg transition-colors" style={{ color: '#a3a3a3', background: '#262626' }}>
+                すべて見る
+              </Link>
+            </div>
             {storePurchaseRanking.length === 0 ? (
               <p className="text-sm text-center py-8" style={{ color: '#525252' }}>買取実績がありません</p>
             ) : (
@@ -407,7 +413,12 @@ export default function AdminDashboardPage() {
 
           {/* 店舗別顧客数 */}
           <ChartCard>
-            <SectionHeading>店舗別顧客数（当月 TOP10）</SectionHeading>
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-sm flex-1" style={{ color: '#ffffff', fontWeight: 600 }}>店舗別顧客数（当月 TOP10）</h2>
+              <Link href="/admin/rankings" className="text-xs px-2 py-1 rounded-lg transition-colors" style={{ color: '#a3a3a3', background: '#262626' }}>
+                すべて見る
+              </Link>
+            </div>
             {storeRanking.length === 0 ? (
               <p className="text-sm text-center py-8" style={{ color: '#525252' }}>当月のデータがありません</p>
             ) : (

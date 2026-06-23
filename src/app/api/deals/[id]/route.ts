@@ -161,8 +161,15 @@ export async function DELETE(
   const deal = await prisma.deal.findUnique({ where: { id } })
   if (!deal) return NextResponse.json({ error: '案件が見つかりません' }, { status: 404 })
 
-  // 訪問予定は削除せずリンクのみ解除（FKの SET NULL と二重防御）
-  await prisma.visitSchedule.updateMany({ where: { dealId: id }, data: { dealId: null } })
+  // 全訪問は必ず案件に属する不変条件を守るため、訪問が紐づく案件は削除不可。
+  // （削除で dealId を null 化すると訪問が再び孤立し、契約書/見積が案件から辿れなくなる）
+  const linkedVisits = await prisma.visitSchedule.count({ where: { dealId: id } })
+  if (linkedVisits > 0) {
+    return NextResponse.json(
+      { error: `訪問予定が紐づく案件は削除できません（紐づく訪問: ${linkedVisits}件）。先に訪問予定を削除または別案件へ付け替えてください。` },
+      { status: 400 },
+    )
+  }
   await prisma.deal.delete({ where: { id } })
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `案件を削除`, req: request })

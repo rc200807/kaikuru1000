@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { createCalendarEvent, createCalendarInvitation } from '@/lib/google-calendar'
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
+import { ensureDealForVisit } from '@/lib/ensure-deal'
 
 // 訪問スケジュール一覧
 export async function GET(request: NextRequest) {
@@ -63,10 +64,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
   }
 
+  // 訪問には必ず案件を紐づける（無ければ自動生成）
+  const finalDealId = await ensureDealForVisit(prisma, { userId, storeId, dealId })
+
   const schedule = await prisma.visitSchedule.create({
     data: {
       userId, storeId,
-      dealId: dealId || null,
+      dealId: finalDealId,
       visitDate: new Date(visitDate),
       startTime: startTime || null,
       endTime: endTime || null,

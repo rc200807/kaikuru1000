@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createCalendarEvent } from '@/lib/google-calendar'
+import { ensureDealForVisit } from '@/lib/ensure-deal'
 
 // 訪問リクエスト詳細
 export async function GET(
@@ -81,10 +82,12 @@ export async function PATCH(
 
     // トランザクションでVisitSchedule作成 + リクエスト更新
     const result = await prisma.$transaction(async (tx) => {
+      const dealId = await ensureDealForVisit(tx, { userId: visitRequest.userId, storeId: visitRequest.storeId })
       const schedule = await tx.visitSchedule.create({
         data: {
           userId: visitRequest.userId,
           storeId: visitRequest.storeId,
+          dealId,
           visitDate,
           startTime,
           endTime,
@@ -168,10 +171,12 @@ export async function PATCH(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      const dealId = await ensureDealForVisit(tx, { userId: visitRequest.userId, storeId: visitRequest.storeId })
       const schedule = await tx.visitSchedule.create({
         data: {
           userId: visitRequest.userId,
           storeId: visitRequest.storeId,
+          dealId,
           visitDate: visitRequest.counterDate!,
           startTime: visitRequest.counterStart,
           endTime: visitRequest.counterEnd,
@@ -284,10 +289,12 @@ export async function PATCH(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      const dealId = await ensureDealForVisit(tx, { userId: visitRequest.userId, storeId: visitRequest.storeId })
       const schedule = await tx.visitSchedule.create({
         data: {
           userId: visitRequest.userId,
           storeId: visitRequest.storeId,
+          dealId,
           visitDate,
           startTime,
           endTime,

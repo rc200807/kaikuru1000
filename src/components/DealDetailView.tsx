@@ -144,8 +144,9 @@ export default function DealDetailView({
     setDeleting(true)
     const res = await fetch(`/api/deals/${dealId}`, { method: 'DELETE' })
     setDeleting(false)
-    if (res.ok) router.push(backHref)
-    else setMsg({ type: 'error', text: '削除に失敗しました' })
+    if (res.ok) { router.push(backHref); return }
+    const data = await res.json().catch(() => null)
+    setMsg({ type: 'error', text: data?.error || '削除に失敗しました' })
   }
 
   if (loading) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />

@@ -219,14 +219,21 @@ export default function AdminCustomersPage() {
   const [bankForm, setBankForm] = useState({ bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' })
   const [bankSaving, setBankSaving] = useState(false)
 
-  // 新規顧客追加モーダル
+  // 新規顧客追加ウィザード
   const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [addStep, setAddStep] = useState<1 | 2 | 3>(1)
   const [addForm, setAddForm] = useState({
     name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addStoreSearch, setAddStoreSearch] = useState('')
   const [addStoreOpen, setAddStoreOpen] = useState(false)
+  const [addCreatedUser, setAddCreatedUser] = useState<{ id: string; name: string } | null>(null)
+  const [wizardDealDetail, setWizardDealDetail] = useState('')
+  const [wizardDealSubmitting, setWizardDealSubmitting] = useState(false)
+  const [wizardDealId, setWizardDealId] = useState<string | null>(null)
+  const [wizardSchedule, setWizardSchedule] = useState({ storeId: '', visitDate: '', note: '' })
+  const [wizardScheduleSubmitting, setWizardScheduleSubmitting] = useState(false)
 
   // URL同期用: 復元フラグ（URL由来の初回openでtabリセットを抑止）
   const restoringFromUrl = useRef(false)
@@ -752,28 +759,84 @@ export default function AdminCustomersPage() {
         })
       }
 
-      // ユーザー一覧を再取得
+      // ユーザー一覧を再取得（バックグラウンドで）
       const params = new URLSearchParams()
       if (showInactive) params.set('includeInactive', 'true')
       params.set('page', '1')
       params.set('limit', String(USERS_LIMIT))
-      const usersRes = await fetch(`/api/admin/users?${params.toString()}`)
-      const usersData = await usersRes.json()
-      const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
-      setUsers(list)
-      setUsersTotal(usersData?.total ?? list.length)
-      setUsersPage(1)
-      setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
+      fetch(`/api/admin/users?${params.toString()}`)
+        .then(r => r.json())
+        .then(usersData => {
+          const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
+          setUsers(list)
+          setUsersTotal(usersData?.total ?? list.length)
+          setUsersPage(1)
+          setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
+        })
+        .catch(() => {})
 
-      setMessage({ type: 'success', text: `${addForm.name} を追加しました` })
-      setShowAddCustomer(false)
-      setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
-      setAddStoreSearch('')
-      setAddStoreOpen(false)
+      // ウィザードのステップ2へ
+      setAddCreatedUser({ id: created.id, name: addForm.name })
+      setWizardSchedule(prev => ({ ...prev, storeId: addForm.storeId || '' }))
+      setAddSubmitting(false)
+      setAddStep(2)
     } catch {
       setMessage({ type: 'error', text: '顧客の追加に失敗しました' })
+      setAddSubmitting(false)
     }
-    setAddSubmitting(false)
+  }
+
+  async function handleWizardDealNext(skip: boolean) {
+    if (skip || !wizardDealDetail.trim()) {
+      setAddStep(3)
+      return
+    }
+    setWizardDealSubmitting(true)
+    try {
+      const res = await fetch('/api/deals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: addCreatedUser!.id, detail: wizardDealDetail }),
+      })
+      if (res.ok) {
+        const deal = await res.json()
+        setWizardDealId(deal.id)
+      }
+    } catch { /* ignore */ }
+    setWizardDealSubmitting(false)
+    setAddStep(3)
+  }
+
+  async function handleWizardScheduleFinish(skip: boolean) {
+    if (!skip && wizardSchedule.storeId && wizardSchedule.visitDate) {
+      setWizardScheduleSubmitting(true)
+      try {
+        await fetch('/api/visit-schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: addCreatedUser!.id,
+            storeId: wizardSchedule.storeId,
+            visitDate: wizardSchedule.visitDate,
+            note: wizardSchedule.note || undefined,
+            ...(wizardDealId ? { dealId: wizardDealId } : {}),
+          }),
+        })
+      } catch { /* ignore */ }
+      setWizardScheduleSubmitting(false)
+    }
+    const name = addCreatedUser?.name ?? ''
+    // リセット
+    setShowAddCustomer(false)
+    setAddStep(1)
+    setAddCreatedUser(null)
+    setWizardDealDetail('')
+    setWizardDealId(null)
+    setWizardSchedule({ storeId: '', visitDate: '', note: '' })
+    setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
+    setAddStoreSearch('')
+    setAddStoreOpen(false)
+    setMessage({ type: 'success', text: `${name} を追加しました` })
   }
 
   async function handleToggleActive(user: User) {
@@ -2065,170 +2128,274 @@ export default function AdminCustomersPage() {
         )}
       </Modal>
 
-      {/* 新規顧客追加モーダル */}
+      {/* 新規顧客追加ウィザードモーダル */}
       <Modal
         open={showAddCustomer}
-        onClose={() => setShowAddCustomer(false)}
-        title="新規顧客追加"
+        onClose={() => {
+          if (addStep === 1) setShowAddCustomer(false)
+          else handleWizardScheduleFinish(true)
+        }}
+        title={addStep === 1 ? '新規顧客追加' : addStep === 2 ? '案件を作成' : '訪問スケジュールを設定'}
         size="lg"
         disableBackdropClose
       >
-        <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
-          {/* ブラウザ自動補完抑止用ダミー（多くのブラウザは最初の input を狙うため） */}
-          <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
-          <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
-          <TextField
-            label="氏名"
-            value={addForm.name}
-            onChange={v => setAddForm(prev => ({ ...prev, name: v }))}
-            required
-            placeholder="山田 太郎"
-            autoComplete="off"
-            name="kk-cust-name"
-          />
-          <TextField
-            label="ふりがな"
-            value={addForm.furigana}
-            onChange={v => setAddForm(prev => ({ ...prev, furigana: v }))}
-            required
-            placeholder="やまだ たろう"
-            autoComplete="off"
-            name="kk-cust-furigana"
-          />
-          <TextField
-            label="メールアドレス（任意）"
-            value={addForm.email}
-            onChange={v => setAddForm(prev => ({ ...prev, email: v }))}
-            type="email"
-            placeholder="example@mail.com"
-            autoComplete="off"
-            name="kk-cust-email"
-          />
-          <TextField
-            label="電話番号（任意）"
-            value={addForm.phone}
-            onChange={v => setAddForm(prev => ({ ...prev, phone: v }))}
-            type="tel"
-            placeholder="090-1234-5678"
-            autoComplete="off"
-            name="kk-cust-phone"
-          />
-          <TextField
-            label="住所（任意）"
-            value={addForm.address}
-            onChange={v => setAddForm(prev => ({ ...prev, address: v }))}
-            placeholder="東京都渋谷区..."
-            autoComplete="off"
-            name="kk-cust-address"
-          />
-          <div>
-            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-              顧客タイプ <span className="text-[var(--md-sys-color-error)]">*</span>
-            </label>
-            <select
-              value={addForm.customerType}
-              onChange={e => setAddForm(prev => ({ ...prev, customerType: e.target.value }))}
-              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-            >
-              {CUSTOMER_TYPES.map(t => (
-                <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t]}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">作成後の編集画面で複数タイプを追加できます</p>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-              流入経路（任意）
-            </label>
-            <select
-              value={addForm.leadSource}
-              onChange={e => setAddForm(prev => ({ ...prev, leadSource: e.target.value }))}
-              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-            >
-              <option value="">未設定</option>
-              {leadSources.map(s => (
-                <option key={s.id} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-              担当店舗（任意）
-            </label>
-            {(() => {
-              const selected = stores.find(s => s.id === addForm.storeId)
-              const q = addStoreSearch.trim().toLowerCase()
-              const filtered = q
-                ? stores.filter(s =>
-                    s.code.toLowerCase().includes(q) ||
-                    s.name.toLowerCase().includes(q) ||
-                    (s.prefecture || '').toLowerCase().includes(q)
-                  )
-                : stores
-              return (
-                <div className="relative">
-                  {/* 選択中表示 + クリアボタン */}
-                  {selected && !addStoreOpen && (
-                    <div className="flex items-center justify-between gap-2 h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)]">
-                      <span className="truncate">[{selected.code}] {selected.name}{selected.prefecture ? `（${selected.prefecture}）` : ''}</span>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button type="button" onClick={() => setAddStoreOpen(true)} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">変更</button>
-                        <button type="button" onClick={() => { setAddForm(prev => ({ ...prev, storeId: '' })); setAddStoreSearch('') }} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">クリア</button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 検索 + リスト */}
-                  {(!selected || addStoreOpen) && (
-                    <>
-                      <input
-                        type="text"
-                        value={addStoreSearch}
-                        onChange={e => setAddStoreSearch(e.target.value)}
-                        placeholder="店舗名・コード・都道府県で検索（空欄は全店舗から選択）"
-                        autoComplete="off"
-                        className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-                      />
-                      <div className="mt-1 max-h-56 overflow-y-auto rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)]">
-                        <button
-                          type="button"
-                          onClick={() => { setAddForm(prev => ({ ...prev, storeId: '' })); setAddStoreSearch(''); setAddStoreOpen(false) }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] ${!addForm.storeId ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
-                        >
-                          店舗を選択しない
-                        </button>
-                        {filtered.length === 0 ? (
-                          <p className="px-3 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">該当する店舗が見つかりません</p>
-                        ) : filtered.map(s => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => { setAddForm(prev => ({ ...prev, storeId: s.id })); setAddStoreSearch(''); setAddStoreOpen(false) }}
-                            className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] border-t border-[var(--md-sys-color-outline-variant)] ${addForm.storeId === s.id ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
-                          >
-                            [{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+        {/* ステップインジケーター */}
+        <div className="flex items-center gap-2 mb-5 pb-4 border-b border-[var(--md-sys-color-outline-variant)]">
+          {(['顧客情報', '案件作成', 'スケジュール'] as const).map((label, idx) => {
+            const step = idx + 1
+            const done = addStep > step
+            const active = addStep === step
+            return (
+              <div key={step} className="flex items-center gap-2 min-w-0">
+                {idx > 0 && <div className="w-6 h-px flex-shrink-0" style={{ background: done || active ? 'var(--portal-primary,#374151)' : 'var(--md-sys-color-outline-variant)' }} />}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${done ? 'bg-green-500 text-white' : active ? 'bg-[var(--portal-primary,#374151)] text-[var(--portal-primary-container,#fff)]' : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                    {done ? '✓' : step}
+                  </div>
+                  <span className={`text-xs hidden sm:inline ${active ? 'text-[var(--md-sys-color-on-surface)] font-semibold' : done ? 'text-green-600 dark:text-green-400' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>{label}</span>
                 </div>
-              )
-            })()}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* ── STEP 1: 顧客情報 ── */}
+        {addStep === 1 && (
+          <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
+            <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+            <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
+            <TextField
+              label="氏名"
+              value={addForm.name}
+              onChange={v => setAddForm(prev => ({ ...prev, name: v }))}
+              required
+              placeholder="山田 太郎"
+              autoComplete="off"
+              name="kk-cust-name"
+            />
+            <TextField
+              label="ふりがな"
+              value={addForm.furigana}
+              onChange={v => setAddForm(prev => ({ ...prev, furigana: v }))}
+              required
+              placeholder="やまだ たろう"
+              autoComplete="off"
+              name="kk-cust-furigana"
+            />
+            <TextField
+              label="メールアドレス（任意）"
+              value={addForm.email}
+              onChange={v => setAddForm(prev => ({ ...prev, email: v }))}
+              type="email"
+              placeholder="example@mail.com"
+              autoComplete="off"
+              name="kk-cust-email"
+            />
+            <TextField
+              label="電話番号（任意）"
+              value={addForm.phone}
+              onChange={v => setAddForm(prev => ({ ...prev, phone: v }))}
+              type="tel"
+              placeholder="090-1234-5678"
+              autoComplete="off"
+              name="kk-cust-phone"
+            />
+            <TextField
+              label="住所（任意）"
+              value={addForm.address}
+              onChange={v => setAddForm(prev => ({ ...prev, address: v }))}
+              placeholder="東京都渋谷区..."
+              autoComplete="off"
+              name="kk-cust-address"
+            />
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                顧客タイプ <span className="text-[var(--md-sys-color-error)]">*</span>
+              </label>
+              <select
+                value={addForm.customerType}
+                onChange={e => setAddForm(prev => ({ ...prev, customerType: e.target.value }))}
+                className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+              >
+                {CUSTOMER_TYPES.map(t => (
+                  <option key={t} value={t}>{CUSTOMER_TYPE_LABEL[t]}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">作成後の編集画面で複数タイプを追加できます</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                流入経路（任意）
+              </label>
+              <select
+                value={addForm.leadSource}
+                onChange={e => setAddForm(prev => ({ ...prev, leadSource: e.target.value }))}
+                className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+              >
+                <option value="">未設定</option>
+                {leadSources.map(s => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                担当店舗（任意）
+              </label>
+              {(() => {
+                const selected = stores.find(s => s.id === addForm.storeId)
+                const q = addStoreSearch.trim().toLowerCase()
+                const filtered = q
+                  ? stores.filter(s =>
+                      s.code.toLowerCase().includes(q) ||
+                      s.name.toLowerCase().includes(q) ||
+                      (s.prefecture || '').toLowerCase().includes(q)
+                    )
+                  : stores
+                return (
+                  <div className="relative">
+                    {selected && !addStoreOpen && (
+                      <div className="flex items-center justify-between gap-2 h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)]">
+                        <span className="truncate">[{selected.code}] {selected.name}{selected.prefecture ? `（${selected.prefecture}）` : ''}</span>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button type="button" onClick={() => setAddStoreOpen(true)} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">変更</button>
+                          <button type="button" onClick={() => { setAddForm(prev => ({ ...prev, storeId: '' })); setAddStoreSearch('') }} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">クリア</button>
+                        </div>
+                      </div>
+                    )}
+                    {(!selected || addStoreOpen) && (
+                      <>
+                        <input
+                          type="text"
+                          value={addStoreSearch}
+                          onChange={e => setAddStoreSearch(e.target.value)}
+                          placeholder="店舗名・コード・都道府県で検索（空欄は全店舗から選択）"
+                          autoComplete="off"
+                          className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                        />
+                        <div className="mt-1 max-h-48 overflow-y-auto rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)]">
+                          <button
+                            type="button"
+                            onClick={() => { setAddForm(prev => ({ ...prev, storeId: '' })); setAddStoreSearch(''); setAddStoreOpen(false) }}
+                            className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] ${!addForm.storeId ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
+                          >
+                            店舗を選択しない
+                          </button>
+                          {filtered.length === 0 ? (
+                            <p className="px-3 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">該当する店舗が見つかりません</p>
+                          ) : filtered.map(s => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => { setAddForm(prev => ({ ...prev, storeId: s.id })); setAddStoreSearch(''); setAddStoreOpen(false) }}
+                              className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] border-t border-[var(--md-sys-color-outline-variant)] ${addForm.storeId === s.id ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
+                            >
+                              [{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outlined" onClick={() => setShowAddCustomer(false)} type="button">
+                キャンセル
+              </Button>
+              <Button
+                type="submit"
+                disabled={addSubmitting || !addForm.name || !addForm.furigana}
+                loading={addSubmitting}
+              >
+                {addSubmitting ? '追加中...' : '次へ →'}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* ── STEP 2: 案件作成 ── */}
+        {addStep === 2 && (
+          <div className="space-y-4">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+              顧客 <span className="font-semibold">{addCreatedUser?.name}</span> を登録しました。案件を作成しますか？
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                案件メモ（任意）
+              </label>
+              <textarea
+                value={wizardDealDetail}
+                onChange={e => setWizardDealDetail(e.target.value)}
+                rows={4}
+                placeholder="買取内容・状況など..."
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-none"
+              />
+            </div>
+            <div className="flex justify-between gap-3 pt-2">
+              <Button variant="text" onClick={() => handleWizardDealNext(true)} type="button">
+                スキップ
+              </Button>
+              <Button
+                onClick={() => handleWizardDealNext(false)}
+                loading={wizardDealSubmitting}
+                disabled={wizardDealSubmitting}
+              >
+                {wizardDealDetail.trim() ? '案件を作成して次へ →' : '次へ →'}
+              </Button>
+            </div>
           </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outlined" onClick={() => setShowAddCustomer(false)} type="button">
-              キャンセル
-            </Button>
-            <Button
-              type="submit"
-              disabled={addSubmitting || !addForm.name || !addForm.furigana}
-              loading={addSubmitting}
-            >
-              {addSubmitting ? '追加中...' : '顧客を追加'}
-            </Button>
+        )}
+
+        {/* ── STEP 3: 訪問スケジュール ── */}
+        {addStep === 3 && (
+          <div className="space-y-4">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+              {wizardDealId ? '案件を作成しました。' : ''}訪問スケジュールを設定しますか？
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                担当店舗 <span className="text-[var(--md-sys-color-on-surface-variant)] font-normal">（任意）</span>
+              </label>
+              <select
+                value={wizardSchedule.storeId}
+                onChange={e => setWizardSchedule(prev => ({ ...prev, storeId: e.target.value }))}
+                className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+              >
+                <option value="">店舗を選択...</option>
+                {stores.map(s => (
+                  <option key={s.id} value={s.id}>[{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <TextField
+              label="訪問日（任意）"
+              type="date"
+              value={wizardSchedule.visitDate}
+              onChange={v => setWizardSchedule(prev => ({ ...prev, visitDate: v }))}
+            />
+            <TextField
+              label="メモ（任意）"
+              value={wizardSchedule.note}
+              onChange={v => setWizardSchedule(prev => ({ ...prev, note: v }))}
+              placeholder="訪問に関するメモ..."
+              rows={3}
+            />
+            <div className="flex justify-between gap-3 pt-2">
+              <Button variant="text" onClick={() => handleWizardScheduleFinish(true)} type="button">
+                スキップして完了
+              </Button>
+              <Button
+                onClick={() => handleWizardScheduleFinish(false)}
+                loading={wizardScheduleSubmitting}
+                disabled={wizardScheduleSubmitting || (!wizardSchedule.storeId || !wizardSchedule.visitDate)}
+              >
+                スケジュールを追加して完了
+              </Button>
+            </div>
           </div>
-        </form>
+        )}
       </Modal>
 
       {/* 店舗割り当てモーダル */}

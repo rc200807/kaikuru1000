@@ -219,18 +219,18 @@ export default function AdminCustomersPage() {
   const [bankForm, setBankForm] = useState({ bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' })
   const [bankSaving, setBankSaving] = useState(false)
 
-  // 新規顧客追加ウィザード
+  // 新規顧客追加ウィザード（Step1: 顧客情報＋案件 / Step2: 訪問スケジュール）
   const [showAddCustomer, setShowAddCustomer] = useState(false)
-  const [addStep, setAddStep] = useState<1 | 2 | 3>(1)
+  const [addStep, setAddStep] = useState<1 | 2>(1)
   const [addForm, setAddForm] = useState({
-    name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
+    name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addStoreSearch, setAddStoreSearch] = useState('')
   const [addStoreOpen, setAddStoreOpen] = useState(false)
+  const [addZipLooking, setAddZipLooking] = useState(false)
   const [addCreatedUser, setAddCreatedUser] = useState<{ id: string; name: string } | null>(null)
   const [wizardDealDetail, setWizardDealDetail] = useState('')
-  const [wizardDealSubmitting, setWizardDealSubmitting] = useState(false)
   const [wizardDealId, setWizardDealId] = useState<string | null>(null)
   const [wizardSchedule, setWizardSchedule] = useState({ storeId: '', visitDate: '', note: '' })
   const [wizardScheduleSubmitting, setWizardScheduleSubmitting] = useState(false)
@@ -719,6 +719,26 @@ export default function AdminCustomersPage() {
     updateUrlParams({ customer: null, tab: null })
   }
 
+  // 郵便番号(7桁)から住所を自動入力
+  async function lookupAddPostal(zip: string) {
+    const digits = zip.replace(/[-ー\s]/g, '')
+    if (digits.length !== 7) return
+    setAddZipLooking(true)
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      const data = await res.json()
+      if (res.ok && data.address) {
+        setAddForm(f => ({ ...f, address: data.address }))
+      } else {
+        setMessage({ type: 'error', text: '該当する住所が見つかりませんでした' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: '住所の検索に失敗しました' })
+    }
+    setAddZipLooking(false)
+  }
+
+  // Step1: 顧客作成（＋店舗割当＋案件メモがあれば案件も作成）→ Step2へ
   async function handleAddCustomer(e: React.FormEvent) {
     e.preventDefault()
     setAddSubmitting(true)
@@ -759,6 +779,22 @@ export default function AdminCustomersPage() {
         })
       }
 
+      // 案件メモが入力されていれば同時に案件を作成
+      let newDealId: string | null = null
+      if (wizardDealDetail.trim()) {
+        try {
+          const dealRes = await fetch('/api/deals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: created.id, detail: wizardDealDetail }),
+          })
+          if (dealRes.ok) {
+            const deal = await dealRes.json()
+            newDealId = deal.id
+          }
+        } catch { /* ignore */ }
+      }
+
       // ユーザー一覧を再取得（バックグラウンドで）
       const params = new URLSearchParams()
       if (showInactive) params.set('includeInactive', 'true')
@@ -775,8 +811,9 @@ export default function AdminCustomersPage() {
         })
         .catch(() => {})
 
-      // ウィザードのステップ2へ
+      // ウィザードのステップ2（訪問スケジュール）へ
       setAddCreatedUser({ id: created.id, name: addForm.name })
+      setWizardDealId(newDealId)
       setWizardSchedule(prev => ({ ...prev, storeId: addForm.storeId || '' }))
       setAddSubmitting(false)
       setAddStep(2)
@@ -784,27 +821,6 @@ export default function AdminCustomersPage() {
       setMessage({ type: 'error', text: '顧客の追加に失敗しました' })
       setAddSubmitting(false)
     }
-  }
-
-  async function handleWizardDealNext(skip: boolean) {
-    if (skip || !wizardDealDetail.trim()) {
-      setAddStep(3)
-      return
-    }
-    setWizardDealSubmitting(true)
-    try {
-      const res = await fetch('/api/deals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: addCreatedUser!.id, detail: wizardDealDetail }),
-      })
-      if (res.ok) {
-        const deal = await res.json()
-        setWizardDealId(deal.id)
-      }
-    } catch { /* ignore */ }
-    setWizardDealSubmitting(false)
-    setAddStep(3)
   }
 
   async function handleWizardScheduleFinish(skip: boolean) {
@@ -833,7 +849,7 @@ export default function AdminCustomersPage() {
     setWizardDealDetail('')
     setWizardDealId(null)
     setWizardSchedule({ storeId: '', visitDate: '', note: '' })
-    setAddForm({ name: '', furigana: '', email: '', phone: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
+    setAddForm({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
     setAddStoreSearch('')
     setAddStoreOpen(false)
     setMessage({ type: 'success', text: `${name} を追加しました` })
@@ -2135,13 +2151,13 @@ export default function AdminCustomersPage() {
           if (addStep === 1) setShowAddCustomer(false)
           else handleWizardScheduleFinish(true)
         }}
-        title={addStep === 1 ? '新規顧客追加' : addStep === 2 ? '案件を作成' : '訪問スケジュールを設定'}
+        title={addStep === 1 ? '新規顧客追加' : '訪問スケジュールを設定'}
         size="lg"
         disableBackdropClose
       >
         {/* ステップインジケーター */}
         <div className="flex items-center gap-2 mb-5 pb-4 border-b border-[var(--md-sys-color-outline-variant)]">
-          {(['顧客情報', '案件作成', 'スケジュール'] as const).map((label, idx) => {
+          {(['顧客情報・案件', '訪問スケジュール'] as const).map((label, idx) => {
             const step = idx + 1
             const done = addStep > step
             const active = addStep === step
@@ -2200,6 +2216,36 @@ export default function AdminCustomersPage() {
               autoComplete="off"
               name="kk-cust-phone"
             />
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                郵便番号（任意）
+              </label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={addForm.postalCode}
+                  onChange={e => {
+                    const v = e.target.value
+                    setAddForm(prev => ({ ...prev, postalCode: v }))
+                    if (v.replace(/[-ー\s]/g, '').length === 7) lookupAddPostal(v)
+                  }}
+                  placeholder="1500001"
+                  autoComplete="off"
+                  name="kk-cust-zip"
+                  className="flex-1 h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => lookupAddPostal(addForm.postalCode)}
+                  disabled={addZipLooking || addForm.postalCode.replace(/[-ー\s]/g, '').length !== 7}
+                  className="h-12 px-4 text-sm font-semibold rounded-[var(--md-sys-shape-small)] bg-[var(--portal-primary,#374151)] text-[var(--portal-primary-container,#fff)] disabled:opacity-40 flex-shrink-0"
+                >
+                  {addZipLooking ? '検索中...' : '住所検索'}
+                </button>
+              </div>
+              <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">7桁入力で住所を自動入力します</p>
+            </div>
             <TextField
               label="住所（任意）"
               value={addForm.address}
@@ -2252,6 +2298,11 @@ export default function AdminCustomersPage() {
                       (s.prefecture || '').toLowerCase().includes(q)
                     )
                   : stores
+                // 住所（郵便番号自動入力含む）に近い店舗候補
+                const recIds = addForm.address ? getRecommendedStoreIds(addForm.address) : []
+                const recommended = recIds
+                  .map(id => stores.find(s => s.id === id))
+                  .filter((s): s is typeof stores[number] => !!s)
                 return (
                   <div className="relative">
                     {selected && !addStoreOpen && (
@@ -2265,6 +2316,33 @@ export default function AdminCustomersPage() {
                     )}
                     {(!selected || addStoreOpen) && (
                       <>
+                        {/* 住所が近い店舗（おすすめ） */}
+                        {recommended.length > 0 && (
+                          <div className="mb-2">
+                            <p className="text-[11px] font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-1.5 flex items-center gap-1">
+                              <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                              </svg>
+                              住所が近い店舗（おすすめ）
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {recommended.map(s => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => { setAddForm(prev => ({ ...prev, storeId: s.id })); setAddStoreSearch(''); setAddStoreOpen(false) }}
+                                  className={`px-2.5 py-1.5 rounded-full text-[11px] border transition-all ${
+                                    addForm.storeId === s.id
+                                      ? 'border-green-500 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 font-semibold'
+                                      : 'border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]'
+                                  }`}
+                                >
+                                  {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                         <input
                           type="text"
                           value={addStoreSearch}
@@ -2288,9 +2366,12 @@ export default function AdminCustomersPage() {
                               key={s.id}
                               type="button"
                               onClick={() => { setAddForm(prev => ({ ...prev, storeId: s.id })); setAddStoreSearch(''); setAddStoreOpen(false) }}
-                              className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] border-t border-[var(--md-sys-color-outline-variant)] ${addForm.storeId === s.id ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
+                              className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-1.5 ${addForm.storeId === s.id ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
                             >
-                              [{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}
+                              {recIds.includes(s.id) && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 font-semibold flex-shrink-0">近い</span>
+                              )}
+                              <span className="truncate">[{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}</span>
                             </button>
                           ))}
                         </div>
@@ -2300,6 +2381,21 @@ export default function AdminCustomersPage() {
                 )
               })()}
             </div>
+
+            {/* 案件メモ（任意・顧客と同時に作成） */}
+            <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                案件メモ（任意）
+              </label>
+              <textarea
+                value={wizardDealDetail}
+                onChange={e => setWizardDealDetail(e.target.value)}
+                rows={3}
+                placeholder="買取内容・状況など。入力すると顧客と同時に案件を作成します"
+                className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-none"
+              />
+            </div>
+
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="outlined" onClick={() => setShowAddCustomer(false)} type="button">
                 キャンセル
@@ -2309,50 +2405,17 @@ export default function AdminCustomersPage() {
                 disabled={addSubmitting || !addForm.name || !addForm.furigana}
                 loading={addSubmitting}
               >
-                {addSubmitting ? '追加中...' : '次へ →'}
+                {addSubmitting ? '登録中...' : '登録して次へ →'}
               </Button>
             </div>
           </form>
         )}
 
-        {/* ── STEP 2: 案件作成 ── */}
+        {/* ── STEP 2: 訪問スケジュール ── */}
         {addStep === 2 && (
           <div className="space-y-4">
             <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
-              顧客 <span className="font-semibold">{addCreatedUser?.name}</span> を登録しました。案件を作成しますか？
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-                案件メモ（任意）
-              </label>
-              <textarea
-                value={wizardDealDetail}
-                onChange={e => setWizardDealDetail(e.target.value)}
-                rows={4}
-                placeholder="買取内容・状況など..."
-                className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-none"
-              />
-            </div>
-            <div className="flex justify-between gap-3 pt-2">
-              <Button variant="text" onClick={() => handleWizardDealNext(true)} type="button">
-                スキップ
-              </Button>
-              <Button
-                onClick={() => handleWizardDealNext(false)}
-                loading={wizardDealSubmitting}
-                disabled={wizardDealSubmitting}
-              >
-                {wizardDealDetail.trim() ? '案件を作成して次へ →' : '次へ →'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ── STEP 3: 訪問スケジュール ── */}
-        {addStep === 3 && (
-          <div className="space-y-4">
-            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
-              {wizardDealId ? '案件を作成しました。' : ''}訪問スケジュールを設定しますか？
+              顧客 <span className="font-semibold">{addCreatedUser?.name}</span> を登録しました{wizardDealId ? '（案件も作成済み）' : ''}。訪問スケジュールを設定しますか？
             </div>
             <div>
               <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">

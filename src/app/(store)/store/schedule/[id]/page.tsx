@@ -12,6 +12,7 @@ import Modal from '@/components/Modal'
 import dynamic from 'next/dynamic'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
+import { isSelectableVisitStatus } from '@/lib/visit-status'
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false })
 
@@ -769,9 +770,11 @@ export default function VisitDetailPage() {
               {(visitStatuses.length > 0
                 ? visitStatuses.map(s => ({ key: s.key, label: s.label }))
                 : Object.entries(STATUS_LABELS).map(([k, v]) => ({ key: k, label: v }))
-              ).map(s => (
-                <option key={s.key} value={s.key}>{s.label}</option>
-              ))}
+              )
+                .filter(s => isSelectableVisitStatus(s.key) || s.key === visit.status)
+                .map(s => (
+                  <option key={s.key} value={s.key}>{s.label}</option>
+                ))}
             </select>
           </div>
 

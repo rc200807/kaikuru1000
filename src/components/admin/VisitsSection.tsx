@@ -11,6 +11,7 @@ import Button from '@/components/Button'
 import StatusBadge from '@/components/StatusBadge'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type VisitRecord = {
   id: string
@@ -57,7 +58,7 @@ export default function VisitsSection({ customerTypes }: { customerTypes?: strin
 
   const [visitStatuses, setVisitStatuses] = useState<{ key: string; label: string; color: string }[]>([])
   const STATUS_OPTIONS = visitStatuses.length > 0
-    ? [{ value: '', label: 'すべて' }, ...visitStatuses.map(s => ({ value: s.key, label: s.label }))]
+    ? [{ value: '', label: 'すべて' }, ...filterSelectableStatusOptions(visitStatuses.map(s => ({ value: s.key, label: s.label })))]
     : DEFAULT_STATUS_OPTIONS
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)

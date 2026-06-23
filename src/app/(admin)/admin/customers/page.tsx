@@ -19,6 +19,7 @@ import StatusBadge from '@/components/StatusBadge'
 import BankSearch from '@/components/customer/BankSearch'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type User = {
   id: string
@@ -156,9 +157,11 @@ export default function AdminCustomersPage() {
 
   // 訪問ステータス（動的取得）
   const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
-  const STATUS_OPTIONS = visitStatuses.length > 0
-    ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
-    : DEFAULT_STATUS_OPTIONS
+  const STATUS_OPTIONS = filterSelectableStatusOptions(
+    visitStatuses.length > 0
+      ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
+      : DEFAULT_STATUS_OPTIONS
+  )
 
   // ページネーション
   const [usersPage, setUsersPage] = useState(1)
@@ -738,7 +741,7 @@ export default function AdminCustomersPage() {
     setAddZipLooking(false)
   }
 
-  // Step1: 顧客作成（＋店舗割当＋案件メモがあれば案件も作成）→ Step2へ
+  // Step1: 顧客作成（＋店舗割当＋案件内容があれば案件も作成）→ Step2へ
   async function handleAddCustomer(e: React.FormEvent) {
     e.preventDefault()
     setAddSubmitting(true)
@@ -779,7 +782,7 @@ export default function AdminCustomersPage() {
         })
       }
 
-      // 案件メモが入力されていれば同時に案件を作成
+      // 案件内容が入力されていれば同時に案件を作成
       let newDealId: string | null = null
       if (wizardDealDetail.trim()) {
         try {
@@ -1959,7 +1962,7 @@ export default function AdminCustomersPage() {
                 {showNewDeal && (
                   <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 space-y-2">
                     <TextField
-                      label="案件メモ（買取内容など）"
+                      label="案件内容（買取内容など）"
                       value={newDealDetail}
                       onChange={setNewDealDetail}
                       rows={4}
@@ -2009,7 +2012,7 @@ export default function AdminCustomersPage() {
                           ))}
                         </select>
                         <TextField
-                          label="案件メモ"
+                          label="案件内容"
                           value={dealDetailEdits[deal.id] ?? ''}
                           onChange={v => setDealDetailEdits(prev => ({ ...prev, [deal.id]: v }))}
                           rows={3}
@@ -2382,10 +2385,10 @@ export default function AdminCustomersPage() {
               })()}
             </div>
 
-            {/* 案件メモ（任意・顧客と同時に作成） */}
+            {/* 案件内容（任意・顧客と同時に作成） */}
             <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
               <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-                案件メモ（任意）
+                案件内容（任意）
               </label>
               <textarea
                 value={wizardDealDetail}

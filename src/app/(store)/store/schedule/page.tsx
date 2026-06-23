@@ -17,6 +17,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
+import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type Schedule = {
   id: string
@@ -80,9 +81,11 @@ export default function StoreSchedulePage() {
 
   // 訪問ステータス（動的取得）
   const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
-  const STATUS_OPTIONS = visitStatuses.length > 0
-    ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
-    : DEFAULT_STATUS_OPTIONS
+  const STATUS_OPTIONS = filterSelectableStatusOptions(
+    visitStatuses.length > 0
+      ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
+      : DEFAULT_STATUS_OPTIONS
+  )
 
   // ページネーション
   const [schedulesPage, setSchedulesPage] = useState(1)

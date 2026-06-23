@@ -510,7 +510,7 @@ export default function StoreCustomersPage() {
               <span className="font-medium text-[var(--md-sys-color-on-surface)]">{createdCustomer?.name} 様</span> を登録しました。続けて案件を作成できます（不要な場合はスキップ）。
             </p>
             <div>
-              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">案件メモ（買取内容など）</label>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">案件内容（買取内容など）</label>
               <textarea
                 value={dealForm.detail}
                 onChange={(e) => setDealForm({ detail: e.target.value })}

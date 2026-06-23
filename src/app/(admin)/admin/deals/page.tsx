@@ -366,9 +366,9 @@ export default function AdminDealsPage() {
                 </div>
               )}
 
-              {/* 案件メモ */}
+              {/* 案件内容 */}
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>案件メモ（買取内容など）</div>
+                <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>案件内容（買取内容など）</div>
                 <textarea
                   value={detailEdit}
                   onChange={e => setDetailEdit(e.target.value)}

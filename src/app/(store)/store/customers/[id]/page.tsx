@@ -21,6 +21,7 @@ import MessageBanner from '@/components/MessageBanner'
 import EmptyState from '@/components/EmptyState'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
+import { isSelectableVisitStatus } from '@/lib/visit-status'
 
 type Customer = {
   id: string
@@ -109,6 +110,7 @@ const MEMO_STATUS_STYLE: Record<string, string> = {
   completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
 }
 
+// 全ステータス（バッジ・ラベル表示用に既存値も網羅）
 const STATUS_OPTIONS = [
   { value: 'scheduled', label: '予定' },
   { value: 'pending', label: '未対応' },
@@ -117,6 +119,8 @@ const STATUS_OPTIONS = [
   { value: 'absent', label: '不在' },
   { value: 'cancelled', label: 'キャンセル' },
 ]
+// ステータス変更ドロップダウンで選択可能なもの（契約進捗系は案件側で管理）
+const STATUS_SELECT_OPTIONS = STATUS_OPTIONS.filter(o => isSelectableVisitStatus(o.value))
 
 const SHIPMENT_STATUS_OPTIONS = [
   { value: 'registered', label: '登録済み' },
@@ -545,7 +549,7 @@ export default function StoreCustomerDetailPage() {
     setSavingDeal(null)
     if (res.ok) {
       setDealsList(prev => prev.map(d => d.id === dealId ? { ...d, detail: dealDetailEdits[dealId] ?? '' } : d))
-      setMsg({ type: 'success', text: '案件メモを保存しました' })
+      setMsg({ type: 'success', text: '案件内容を保存しました' })
     } else {
       setMsg({ type: 'error', text: '保存に失敗しました' })
     }
@@ -1382,7 +1386,7 @@ export default function StoreCustomerDetailPage() {
                       </div>
 
                       <TextField
-                        label="案件メモ（買取内容など）"
+                        label="案件内容（買取内容など）"
                         value={dealDetailEdits[deal.id] ?? ''}
                         onChange={v => setDealDetailEdits(prev => ({ ...prev, [deal.id]: v }))}
                         rows={4}
@@ -1444,7 +1448,7 @@ export default function StoreCustomerDetailPage() {
             <BottomSheet open={newDealOpen} onClose={() => setNewDealOpen(false)} title="案件を追加">
               <div className="space-y-4">
                 <TextField
-                  label="案件メモ（買取内容など）"
+                  label="案件内容（買取内容など）"
                   value={newDealDetail}
                   onChange={setNewDealDetail}
                   rows={5}
@@ -1830,7 +1834,7 @@ export default function StoreCustomerDetailPage() {
                               onChange={e => handleStatusChange(vs.id, e.target.value)}
                               className="text-xs border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface-variant)]"
                             >
-                              {STATUS_OPTIONS.map(opt => (
+                              {STATUS_SELECT_OPTIONS.map(opt => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
                               ))}
                             </select>

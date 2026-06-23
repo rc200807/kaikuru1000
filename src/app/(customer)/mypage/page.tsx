@@ -1375,7 +1375,7 @@ function MyPageContent() {
                     }] : []),
                     ...(user.customerType !== 'delivery' ? [{
                       key: 'visit',
-                      label: '訪問型の予約',
+                      label: '訪問予約',
                       sub: 'お近くの店舗が訪問',
                       done: user.visitSchedules.length > 0,
                       action: () => handleTabChange('visit-request'),

@@ -10,11 +10,29 @@ type Client = Prisma.TransactionClient | typeof prisma
  */
 export async function ensureDealForVisit(
   client: Client,
-  { userId, storeId, dealId }: { userId: string; storeId: string; dealId?: string | null },
+  {
+    userId,
+    storeId,
+    dealId,
+    createdBy,
+  }: {
+    userId: string
+    storeId: string
+    dealId?: string | null
+    createdBy?: { type?: string | null; id?: string | null; name?: string | null }
+  },
 ): Promise<string> {
   if (dealId) return dealId
   const deal = await client.deal.create({
-    data: { userId, storeId, status: 'inquiry', detail: null },
+    data: {
+      userId,
+      storeId,
+      status: 'inquiry',
+      detail: null,
+      createdByType: createdBy?.type ?? null,
+      createdById: createdBy?.id ?? null,
+      createdByName: createdBy?.name ?? null,
+    },
   })
   return deal.id
 }

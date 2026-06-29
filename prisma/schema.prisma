@@ -525,6 +525,10 @@ model Deal {
   inquiry     Inquiry?  @relation(fields: [inquiryId], references: [id], onDelete: SetNull)
   detail      String?   @db.Text           // 買取内容などの自由記述メモ（タイトルなし）
   status      String    @default("inquiry") // inquiry/visit_decided/estimate_only/contract/completed/lost
+  occurredAt  DateTime  @default(now())     // 案件発生日（手動設定可・既定は作成日時）
+  createdByType String?                     // 作成者種別（store/admin/superadmin/hr/customer/partner）
+  createdById   String?                     // 作成者ID（Store.id / Admin.id など・スナップショット）
+  createdByName String?                     // 作成者名（スナップショット）
   visitSchedules VisitSchedule[]           // 1案件:N訪問予定（任意リンク）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

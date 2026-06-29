@@ -82,7 +82,11 @@ export async function PATCH(
 
     // トランザクションでVisitSchedule作成 + リクエスト更新
     const result = await prisma.$transaction(async (tx) => {
-      const dealId = await ensureDealForVisit(tx, { userId: visitRequest.userId, storeId: visitRequest.storeId })
+      const dealId = await ensureDealForVisit(tx, {
+        userId: visitRequest.userId,
+        storeId: visitRequest.storeId,
+        createdBy: { type: sessionUser?.role ?? null, id: sessionUser?.id ?? null, name: sessionUser?.name ?? null },
+      })
       const schedule = await tx.visitSchedule.create({
         data: {
           userId: visitRequest.userId,
@@ -171,7 +175,11 @@ export async function PATCH(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const dealId = await ensureDealForVisit(tx, { userId: visitRequest.userId, storeId: visitRequest.storeId })
+      const dealId = await ensureDealForVisit(tx, {
+        userId: visitRequest.userId,
+        storeId: visitRequest.storeId,
+        createdBy: { type: sessionUser?.role ?? null, id: sessionUser?.id ?? null, name: sessionUser?.name ?? null },
+      })
       const schedule = await tx.visitSchedule.create({
         data: {
           userId: visitRequest.userId,
@@ -289,7 +297,11 @@ export async function PATCH(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const dealId = await ensureDealForVisit(tx, { userId: visitRequest.userId, storeId: visitRequest.storeId })
+      const dealId = await ensureDealForVisit(tx, {
+        userId: visitRequest.userId,
+        storeId: visitRequest.storeId,
+        createdBy: { type: sessionUser?.role ?? null, id: sessionUser?.id ?? null, name: sessionUser?.name ?? null },
+      })
       const schedule = await tx.visitSchedule.create({
         data: {
           userId: visitRequest.userId,

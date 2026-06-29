@@ -234,6 +234,9 @@ export default function AdminCustomersPage() {
   const [addZipLooking, setAddZipLooking] = useState(false)
   const [addCreatedUser, setAddCreatedUser] = useState<{ id: string; name: string } | null>(null)
   const [wizardDealDetail, setWizardDealDetail] = useState('')
+  const [wizardDealOccurredAt, setWizardDealOccurredAt] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [wizardDealId, setWizardDealId] = useState<string | null>(null)
   const [wizardSchedule, setWizardSchedule] = useState({ storeId: '', visitDate: '', note: '' })
   const [wizardScheduleSubmitting, setWizardScheduleSubmitting] = useState(false)
@@ -789,7 +792,7 @@ export default function AdminCustomersPage() {
           const dealRes = await fetch('/api/deals', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: created.id, detail: wizardDealDetail }),
+            body: JSON.stringify({ userId: created.id, detail: wizardDealDetail, occurredAt: wizardDealOccurredAt || undefined }),
           })
           if (dealRes.ok) {
             const deal = await dealRes.json()
@@ -2397,6 +2400,16 @@ export default function AdminCustomersPage() {
                 placeholder="買取内容・状況など。入力すると顧客と同時に案件を作成します"
                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-none"
               />
+              <div className="mt-2">
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">案件発生日</label>
+                <input
+                  type="date"
+                  value={wizardDealOccurredAt}
+                  onChange={e => setWizardDealOccurredAt(e.target.value)}
+                  className="h-11 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                />
+                <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">案件作成時に記録されます（既定は本日）</p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

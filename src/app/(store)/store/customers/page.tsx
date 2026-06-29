@@ -57,7 +57,8 @@ export default function StoreCustomersPage() {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1) // 1:顧客 2:案件 3:予定 4:完了
   const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
   const [createdCustomer, setCreatedCustomer] = useState<{ id: string; name: string } | null>(null)
-  const [dealForm, setDealForm] = useState({ detail: '' })
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+  const [dealForm, setDealForm] = useState({ detail: '', occurredAt: todayStr() })
   const [createdDealId, setCreatedDealId] = useState<string | null>(null)
   const [scheduleForm, setScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
@@ -143,7 +144,7 @@ export default function StoreCustomersPage() {
     setAddCustomerMsg(null)
     setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
     setCreatedCustomer(null)
-    setDealForm({ detail: '' })
+    setDealForm({ detail: '', occurredAt: todayStr() })
     setCreatedDealId(null)
     setScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' })
   }
@@ -195,7 +196,7 @@ export default function StoreCustomersPage() {
       const res = await fetch('/api/deals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: createdCustomer.id, storeId, detail: dealForm.detail }),
+        body: JSON.stringify({ userId: createdCustomer.id, storeId, detail: dealForm.detail, occurredAt: dealForm.occurredAt || undefined }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -513,11 +514,21 @@ export default function StoreCustomersPage() {
               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">案件内容（買取内容など）</label>
               <textarea
                 value={dealForm.detail}
-                onChange={(e) => setDealForm({ detail: e.target.value })}
+                onChange={(e) => setDealForm(prev => ({ ...prev, detail: e.target.value }))}
                 rows={4}
                 placeholder="例: 古い切手コレクション、ブランドバッグ数点 など"
                 className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
               />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">案件発生日</label>
+              <input
+                type="date"
+                value={dealForm.occurredAt}
+                onChange={(e) => setDealForm(prev => ({ ...prev, occurredAt: e.target.value }))}
+                className="px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+              />
+              <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">既定は本日。実際に案件が発生した日を設定できます。</p>
             </div>
             <div className="flex gap-3 pt-2">
               <Button variant="text" onClick={() => setWizardStep(3)} disabled={addCustomerSubmitting}>

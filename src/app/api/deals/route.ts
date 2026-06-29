@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
         inquiry: { select: { id: true, inquiryType: true } },
         _count: { select: { visitSchedules: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -79,13 +79,19 @@ export async function POST(request: NextRequest) {
   if (!isStore && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json()
-  const { userId, detail, status } = body
+  const { userId, detail, status, occurredAt } = body
 
   if (!userId) {
     return NextResponse.json({ error: '顧客が指定されていません' }, { status: 400 })
   }
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
+  }
+  // 案件発生日（指定なければ now）。不正値は now にフォールバック。
+  let occurredAtDate: Date | undefined
+  if (occurredAt) {
+    const d = new Date(occurredAt)
+    if (!isNaN(d.getTime())) occurredAtDate = d
   }
 
   // 対象顧客の存在と（店舗の場合は）所有権を確認
@@ -114,6 +120,10 @@ export async function POST(request: NextRequest) {
       storeId: finalStoreId,
       detail: detail || null,
       status: isDealStatus(status) ? status : 'inquiry',
+      ...(occurredAtDate ? { occurredAt: occurredAtDate } : {}),
+      createdByType: sessionUser.role ?? null,
+      createdById: sessionUser.id ?? null,
+      createdByName: sessionUser.name ?? null,
     },
     include: {
       user: { select: { id: true, name: true, email: true, phone: true, customerType: true } },

@@ -248,6 +248,9 @@ export async function POST(request: NextRequest) {
             inquiryId: inquiry.id,
             detail: dealDetail,
             status: 'inquiry',
+            createdByType: 'customer',
+            createdById: userId,
+            createdByName: name,
           },
         })
       } catch (e: any) {

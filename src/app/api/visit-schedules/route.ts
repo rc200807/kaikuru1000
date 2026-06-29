@@ -64,8 +64,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
   }
 
-  // 訪問には必ず案件を紐づける（無ければ自動生成）
-  const finalDealId = await ensureDealForVisit(prisma, { userId, storeId, dealId })
+  // 訪問には必ず案件を紐づける（無ければ自動生成。作成者はセッションの実行者）
+  const finalDealId = await ensureDealForVisit(prisma, {
+    userId, storeId, dealId,
+    createdBy: { type: sessionUser?.role ?? null, id: sessionUser?.id ?? null, name: sessionUser?.name ?? null },
+  })
 
   const schedule = await prisma.visitSchedule.create({
     data: {

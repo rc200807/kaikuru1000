@@ -114,7 +114,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId } = body
+  const { detail, status, storeId, occurredAt } = body
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -131,6 +131,11 @@ export async function PATCH(
   if (status !== undefined) updateData.status = status
   // 担当店舗の変更は管理者のみ
   if (storeId !== undefined && isAdmin) updateData.storeId = storeId || null
+  // 案件発生日（管理・店舗とも編集可）。不正値は無視。
+  if (occurredAt !== undefined) {
+    const d = new Date(occurredAt)
+    if (!isNaN(d.getTime())) updateData.occurredAt = d
+  }
 
   const updated = await prisma.deal.update({
     where: { id },

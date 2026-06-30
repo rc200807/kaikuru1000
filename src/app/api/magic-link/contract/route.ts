@@ -44,17 +44,6 @@ export async function GET(request: NextRequest) {
           phone: true,
         },
       },
-      purchaseItems: { orderBy: { createdAt: 'asc' } },
-      workItems: { orderBy: { createdAt: 'asc' } },
-      salesContract: {
-        select: {
-          id: true,
-          agreedAt: true,
-          signatureData: true,
-          pdfBase64: true,
-          invoicePdfBase64: true,
-        },
-      },
     },
   })
 
@@ -67,33 +56,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
   }
 
+  // 品目・契約は「案件」を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
+  const docWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
+  const itemWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
+  const [purchaseItems, workItems, salesContract] = await Promise.all([
+    prisma.purchaseItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
+    prisma.workItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
+    prisma.salesContract.findUnique({ where: docWhere, select: { id: true, agreedAt: true, signatureData: true, pdfBase64: true, invoicePdfBase64: true } }),
+  ])
+  const purchaseAmount = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+
   return NextResponse.json({
     id: schedule.id,
     visitDate: schedule.visitDate,
     status: schedule.status,
-    purchaseAmount: schedule.purchaseAmount,
-    billingAmount: schedule.billingAmount,
+    purchaseAmount,
+    billingAmount,
     staffName: schedule.staffName,
     user: schedule.user,
     store: schedule.store,
-    purchaseItems: schedule.purchaseItems.map((item) => ({
+    purchaseItems: purchaseItems.map((item) => ({
       id: item.id,
       itemName: item.itemName,
       category: item.category,
       quantity: item.quantity,
       purchasePrice: item.purchasePrice,
     })),
-    workItems: schedule.workItems.map((item) => ({
+    workItems: workItems.map((item) => ({
       id: item.id,
       workName: item.workName,
       unitPrice: item.unitPrice,
       quantity: item.quantity,
     })),
-    salesContract: schedule.salesContract
-      ? { id: schedule.salesContract.id, agreedAt: schedule.salesContract.agreedAt, signatureData: schedule.salesContract.signatureData }
+    salesContract: salesContract
+      ? { id: salesContract.id, agreedAt: salesContract.agreedAt, signatureData: salesContract.signatureData }
       : null,
-    hasPdf: !!schedule.salesContract?.pdfBase64,
-    hasInvoicePdf: !!schedule.salesContract?.invoicePdfBase64,
+    hasPdf: !!salesContract?.pdfBase64,
+    hasInvoicePdf: !!salesContract?.invoicePdfBase64,
     createdAt: schedule.createdAt,
   })
 }

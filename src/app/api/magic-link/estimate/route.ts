@@ -24,8 +24,6 @@ export async function GET(request: NextRequest) {
     include: {
       user: { select: { id: true, name: true, phone: true, address: true, email: true, idAddress: true, idName: true } },
       store: { select: { id: true, name: true, address: true, phone: true } },
-      purchaseItems: { orderBy: { createdAt: 'asc' } },
-      workItems: { orderBy: { createdAt: 'asc' } },
     },
   })
 
@@ -36,10 +34,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
   }
 
-  const estimate = await prisma.estimate.findUnique({
-    where: { visitScheduleId: visitId },
-    select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, pdfBase64: true, invoicePdfBase64: true, createdAt: true },
-  })
+  // 品目・見積は「案件」を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
+  const docWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
+  const [purchaseItems, workItems, estimate] = await Promise.all([
+    prisma.purchaseItem.findMany({ where: docWhere, orderBy: { createdAt: 'asc' } }),
+    prisma.workItem.findMany({ where: docWhere, orderBy: { createdAt: 'asc' } }),
+    prisma.estimate.findUnique({ where: docWhere, select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, pdfBase64: true, invoicePdfBase64: true, createdAt: true } }),
+  ])
 
   if (!estimate) {
     return NextResponse.json({ error: '見積書が見つかりません' }, { status: 404 })
@@ -59,14 +60,14 @@ export async function GET(request: NextRequest) {
     },
     hasPdf: !!estimate.pdfBase64,
     hasInvoicePdf: !!estimate.invoicePdfBase64,
-    purchaseItems: schedule.purchaseItems.map((item) => ({
+    purchaseItems: purchaseItems.map((item) => ({
       id: item.id,
       itemName: item.itemName,
       category: item.category,
       quantity: item.quantity,
       purchasePrice: item.purchasePrice,
     })),
-    workItems: schedule.workItems.map((item) => ({
+    workItems: workItems.map((item) => ({
       id: item.id,
       workName: item.workName,
       unitPrice: item.unitPrice,

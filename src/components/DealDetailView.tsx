@@ -381,6 +381,8 @@ export default function DealDetailView({
   const dealContract = deal.dealContract
   const dealEstimate = deal.dealEstimate
   const editable = !isAdmin // 品目・事前同意の編集は店舗ポータル（管理は閲覧）
+  // 書類作成フローの対象訪問（最新）。フローは案件配下の品目で構成され、結果は案件の書類になる。
+  const targetVisitId = deal.visitSchedules[0]?.id ?? null
 
   // 進捗タイムライン（取得可能な日時を時系列で）
   const timeline: { label: string; at: string; sub?: string }[] = [
@@ -744,6 +746,24 @@ export default function DealDetailView({
             </div>
           )}
         </Card>
+
+        {/* 書類を作成（店舗ポータル） */}
+        {editable && (
+          <Card variant="outlined" padding="md">
+            <SectionTitle>書類を作成</SectionTitle>
+            {targetVisitId ? (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outlined" onClick={() => router.push(`/store/schedule/${targetVisitId}/estimate`)}>見積書を作成</Button>
+                  <Button onClick={() => router.push(`/store/schedule/${targetVisitId}/agreement`)}>売買契約書を作成</Button>
+                </div>
+                <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-2">この案件の買取品目・請求項目をもとに、署名・同意のうえ書類を作成します。</p>
+              </>
+            ) : (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">書類作成には訪問が必要です。先に「訪問を追加」してください。</p>
+            )}
+          </Card>
+        )}
 
         {/* 管理のみ: 削除 */}
         {isAdmin && (

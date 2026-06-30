@@ -38,6 +38,16 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // 品目・書類は「案件」を正とする（再ペアレント後）。見積は案件に1通。
+  const dealId = schedule.dealId
+  const purchaseItems = dealId
+    ? await prisma.purchaseItem.findMany({ where: { dealId }, select: { itemName: true, category: true, purchasePrice: true, quantity: true }, orderBy: { createdAt: 'asc' } })
+    : schedule.purchaseItems
+  const workItems = dealId
+    ? await prisma.workItem.findMany({ where: { dealId }, select: { workName: true, unitPrice: true, quantity: true }, orderBy: { createdAt: 'asc' } })
+    : schedule.workItems
+  const docWhere = dealId ? { dealId } : { visitScheduleId: id }
+
   const body = await request.json()
   const { validUntil, staffName, pdfBase64, invoicePdfBase64, email: inputEmail } = body
 
@@ -50,8 +60,8 @@ export async function POST(
   }
 
   // 金額はサーバー側で品目から算出（クライアントの値は信用しない）
-  const purchaseAmount = schedule.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
-  const billingAmount = schedule.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const purchaseAmount = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
 
   // フロントから受け取ったメールアドレスを優先（無ければ既存のUser.email）
   let customerEmail: string = (typeof inputEmail === 'string' ? inputEmail.trim() : '') || schedule.user.email || ''
@@ -71,18 +81,19 @@ export async function POST(
 
   // 既存の見積書PDFを取得（クライアントの再生成が失敗しても保存済みPDFを保持・添付するため）
   const prevEstimate = await prisma.estimate.findUnique({
-    where: { visitScheduleId: id },
+    where: docWhere,
     select: { pdfBase64: true, invoicePdfBase64: true },
   })
   // 実効PDF = 今回受領分があればそれ、無ければ保存済みを引き継ぐ（null上書きで消さない）
   const effectivePdfBase64 = (typeof pdfBase64 === 'string' && pdfBase64) ? pdfBase64 : (prevEstimate?.pdfBase64 ?? null)
   const effectiveInvoicePdfBase64 = (typeof invoicePdfBase64 === 'string' && invoicePdfBase64) ? invoicePdfBase64 : (prevEstimate?.invoicePdfBase64 ?? null)
 
-  // 既存の見積書があれば上書き、なければ新規作成
+  // 既存の見積書があれば上書き、なければ新規作成（案件に1通＝dealId基準。visitScheduleId は閲覧リンク用に保持）
   const estimate = await prisma.estimate.upsert({
-    where: { visitScheduleId: id },
+    where: docWhere,
     create: {
       visitScheduleId: id,
+      dealId,
       purchaseAmount,
       billingAmount,
       validUntil: validUntilDate,
@@ -150,8 +161,8 @@ export async function POST(
         pdfBase64: effectivePdfBase64 ?? '',
         invoicePdfBase64: effectiveInvoicePdfBase64 ?? '',
         viewUrl,
-        purchaseItems: schedule.purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
-        workItems: schedule.workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
+        purchaseItems: purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
+        workItems: workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
       })
       if (emailSent) {
         await prisma.estimate.update({
@@ -191,8 +202,10 @@ export async function GET(
 
   const { id } = await params
 
+  // 見積は案件に1通。該当訪問の案件IDで照会し、無ければ従来の訪問基準。
+  const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true } })
   const estimate = await prisma.estimate.findUnique({
-    where: { visitScheduleId: id },
+    where: sched?.dealId ? { dealId: sched.dealId } : { visitScheduleId: id },
     select: {
       id: true,
       validUntil: true,

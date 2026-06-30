@@ -58,6 +58,16 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // 品目・書類は「案件」を正とする（再ペアレント後）。案件配下の品目で金額・帳票を構成し、契約は案件に1通。
+  const dealId = schedule.dealId
+  const purchaseItems = dealId
+    ? await prisma.purchaseItem.findMany({ where: { dealId }, orderBy: { createdAt: 'asc' } })
+    : schedule.purchaseItems
+  const workItems = dealId
+    ? await prisma.workItem.findMany({ where: { dealId }, orderBy: { createdAt: 'asc' } })
+    : schedule.workItems
+  const docWhere = dealId ? { dealId } : { visitScheduleId: id }
+
   const body = await request.json()
   const { signatureData, invoiceSignatureData, pdfBase64, invoicePdfBase64, email: inputEmail, occupation, phone: inputPhone } = body
 
@@ -114,18 +124,19 @@ export async function POST(
 
   // 既存の契約書PDFを取得（クライアントの再生成が失敗しても保存済みPDFを保持・添付するため）
   const prevContract = await prisma.salesContract.findUnique({
-    where: { visitScheduleId: id },
+    where: docWhere,
     select: { pdfBase64: true, invoicePdfBase64: true },
   })
   // 実効PDF = 今回受領分があればそれ、無ければ保存済みを引き継ぐ（null上書きで消さない）
   const effectivePdfBase64 = (typeof pdfBase64 === 'string' && pdfBase64) ? pdfBase64 : (prevContract?.pdfBase64 ?? null)
   const effectiveInvoicePdfBase64 = (typeof invoicePdfBase64 === 'string' && invoicePdfBase64) ? invoicePdfBase64 : (prevContract?.invoicePdfBase64 ?? null)
 
-  // 既存の契約書があれば上書き、なければ新規作成
+  // 既存の契約書があれば上書き、なければ新規作成（案件に1通＝dealId基準。visitScheduleId は閲覧リンク用に保持）
   const contract = await prisma.salesContract.upsert({
-    where: { visitScheduleId: id },
+    where: docWhere,
     create: {
       visitScheduleId: id,
+      dealId,
       signatureData,
       invoiceSignatureData,
       pdfBase64: effectivePdfBase64,
@@ -197,13 +208,13 @@ export async function POST(
     contractDate: new Date(contract.agreedAt),
     contractNo: `KK-${id.slice(-8).toUpperCase()}`,
     invoiceNo: `INV-${id.slice(-8).toUpperCase()}`,
-    purchaseItems: schedule.purchaseItems.map(i => ({
+    purchaseItems: purchaseItems.map(i => ({
       itemName: i.itemName,
       category: i.category,
       quantity: i.quantity,
       price: i.purchasePrice,
     })),
-    workItems: schedule.workItems.map(w => ({
+    workItems: workItems.map(w => ({
       workName: w.workName,
       quantity: w.quantity,
       unitPrice: w.unitPrice,
@@ -252,8 +263,8 @@ export async function POST(
     const notifyTo = schedule.store.contractNotifyEmail || schedule.store.email
     if (notifyTo) {
       const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-      const purchaseTotal = schedule.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
-      const billingTotal = schedule.workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)
+      const purchaseTotal = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+      const billingTotal = workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)
       await sendContractCreatedNotification({
         to: notifyTo,
         storeName: schedule.store.name,
@@ -293,8 +304,10 @@ export async function GET(
 
   const { id } = await params
 
+  // 契約は案件に1通。該当訪問の案件IDで照会し、無ければ従来の訪問基準。
+  const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true } })
   const contract = await prisma.salesContract.findUnique({
-    where: { visitScheduleId: id },
+    where: sched?.dealId ? { dealId: sched.dealId } : { visitScheduleId: id },
     select: {
       id: true,
       agreedAt: true,

@@ -40,8 +40,6 @@ export async function GET(
           },
         },
       },
-      purchaseItems: { orderBy: { createdAt: 'asc' }, include: { inventoryItem: { select: { id: true } } } },
-      workItems: { orderBy: { createdAt: 'asc' } },
       deal: { select: { id: true, status: true } },
     },
   })
@@ -55,8 +53,15 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // 品目は「案件」配下を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
+  const itemWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: id }
+  const [purchaseItemsRaw, workItemsRaw] = await Promise.all([
+    prisma.purchaseItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' }, include: { inventoryItem: { select: { id: true } } } }),
+    prisma.workItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
+  ])
+
   // purchaseItems の imageUrls をプロキシURLに変換 + aiResearch をパース
-  const items = schedule.purchaseItems.map((item) => {
+  const items = purchaseItemsRaw.map((item) => {
     let images: string[] = []
     try { images = JSON.parse(item.imageUrls || '[]') } catch { /* ignore */ }
 
@@ -86,6 +91,7 @@ export async function GET(
   return NextResponse.json({
     ...schedule,
     purchaseItems: items,
+    workItems: workItemsRaw,
   })
 }
 
@@ -143,6 +149,18 @@ export async function PATCH(
       deal: { select: { id: true, status: true } },
     },
   })
+
+  // 事前同意は案件単位の正へ伝播（案件詳細の事前同意状況と一致させる）
+  if (preConsentSignature !== undefined && schedule.dealId) {
+    try {
+      await prisma.deal.update({
+        where: { id: schedule.dealId },
+        data: { preConsentSignature: preConsentSignature || null, preConsentAt: preConsentSignature ? new Date() : null },
+      })
+    } catch (e) {
+      console.error('[visit PATCH] 案件への事前同意伝播に失敗:', e)
+    }
+  }
 
   // Googleカレンダー同期（失敗してもスケジュール更新は成功とする）
   try {

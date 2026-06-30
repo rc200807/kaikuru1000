@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id: visitId },
-    select: { userId: true, storeId: true },
+    select: { userId: true, storeId: true, dealId: true },
   })
   if (!schedule) return NextResponse.json({ error: '見つかりません' }, { status: 404 })
   if (!isStaff && schedule.userId !== userId) {
@@ -47,12 +47,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'アクセス権限がありません' }, { status: 403 })
   }
 
+  // 書類は「案件」を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
+  const docWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
   let pdfBase64: string | null | undefined
   if (type === 'estimate') {
-    const est = await prisma.estimate.findUnique({ where: { visitScheduleId: visitId }, select: { pdfBase64: true, invoicePdfBase64: true } })
+    const est = await prisma.estimate.findUnique({ where: docWhere, select: { pdfBase64: true, invoicePdfBase64: true } })
     pdfBase64 = kind === 'invoice' ? est?.invoicePdfBase64 : est?.pdfBase64
   } else {
-    const c = await prisma.salesContract.findUnique({ where: { visitScheduleId: visitId }, select: { pdfBase64: true, invoicePdfBase64: true } })
+    const c = await prisma.salesContract.findUnique({ where: docWhere, select: { pdfBase64: true, invoicePdfBase64: true } })
     pdfBase64 = kind === 'invoice' ? c?.invoicePdfBase64 : c?.pdfBase64
   }
 

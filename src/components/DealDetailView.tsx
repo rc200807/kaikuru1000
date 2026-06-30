@@ -12,6 +12,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
+import SignaturePad from '@/components/SignaturePad'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatYen } from '@/lib/currency'
 
@@ -155,6 +156,8 @@ export default function DealDetailView({
 
   // 事前同意（案件単位）
   const [savingConsent, setSavingConsent] = useState(false)
+  const [showConsentModal, setShowConsentModal] = useState(false)
+  const [consentDraft, setConsentDraft] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -256,6 +259,8 @@ export default function DealDetailView({
     setSavingConsent(false)
     if (res.ok) {
       setDeal(prev => prev ? { ...prev, hasPreConsent: !!signature, preConsentAt: signature ? new Date().toISOString() : null } : prev)
+      setShowConsentModal(false)
+      setConsentDraft(null)
       setMsg({ type: 'success', text: signature ? '事前同意を保存しました' : '事前同意をクリアしました' })
     } else setMsg({ type: 'error', text: '事前同意の保存に失敗しました' })
   }
@@ -640,8 +645,15 @@ export default function DealDetailView({
                 ? <span className="text-green-600 dark:text-green-400 font-medium">取得済み（{fmtDateTime(deal.preConsentAt)}）</span>
                 : <span className="text-[var(--md-sys-color-on-surface-variant)]">未取得</span>}
             </div>
-            {editable && deal.hasPreConsent && (
-              <Button variant="text" size="sm" onClick={() => savePreConsent(null)} loading={savingConsent} disabled={savingConsent}>クリア</Button>
+            {editable && (
+              <div className="flex items-center gap-2">
+                <Button variant="outlined" size="sm" onClick={() => { setConsentDraft(null); setShowConsentModal(true) }}>
+                  {deal.hasPreConsent ? '署名し直す' : '署名して同意取得'}
+                </Button>
+                {deal.hasPreConsent && (
+                  <Button variant="text" size="sm" onClick={() => savePreConsent(null)} loading={savingConsent} disabled={savingConsent}>クリア</Button>
+                )}
+              </div>
             )}
           </div>
         </Card>
@@ -754,8 +766,8 @@ export default function DealDetailView({
             {targetVisitId ? (
               <>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outlined" onClick={() => router.push(`/store/schedule/${targetVisitId}/estimate`)}>見積書を作成</Button>
-                  <Button onClick={() => router.push(`/store/schedule/${targetVisitId}/agreement`)}>売買契約書を作成</Button>
+                  <Button variant="outlined" onClick={() => router.push(`/store/schedule/${targetVisitId}/estimate?dealId=${deal.id}`)}>見積書を作成</Button>
+                  <Button onClick={() => router.push(`/store/schedule/${targetVisitId}/agreement?dealId=${deal.id}`)}>売買契約書を作成</Button>
                 </div>
                 <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-2">この案件の買取品目・請求項目をもとに、署名・同意のうえ書類を作成します。</p>
               </>
@@ -861,6 +873,20 @@ export default function DealDetailView({
           <div className="flex justify-end gap-3 pt-1">
             <Button variant="outlined" type="button" onClick={() => setShowAddWork(false)}>キャンセル</Button>
             <Button onClick={addWorkItem} loading={savingWork} disabled={savingWork || !workForm.workName}>追加</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 事前同意（署名） */}
+      <Modal open={showConsentModal} onClose={() => setShowConsentModal(false)} title="事前同意の取得" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+            お客様に内容をご確認いただき、下の枠内に署名をお願いします。
+          </p>
+          <SignaturePad onSignatureChange={setConsentDraft} initialDataUrl={null} />
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outlined" type="button" onClick={() => setShowConsentModal(false)}>キャンセル</Button>
+            <Button onClick={() => savePreConsent(consentDraft)} loading={savingConsent} disabled={savingConsent || !consentDraft}>同意を保存</Button>
           </div>
         </div>
       </Modal>

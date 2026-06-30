@@ -324,6 +324,7 @@ export default function FinalAgreementPage() {
   const staffName = searchParams.get('staff') || ''
   const emailParam = searchParams.get('email') || ''
   const occupationParam = searchParams.get('occupation') || ''
+  const fromDealId = searchParams.get('dealId') || ''
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -418,9 +419,12 @@ export default function FinalAgreementPage() {
   }, [router])
 
   const backToAgreement = useCallback(() => {
-    const qs = staffName ? `?staff=${encodeURIComponent(staffName)}` : ''
+    const p = new URLSearchParams()
+    if (staffName) p.set('staff', staffName)
+    if (fromDealId) p.set('dealId', fromDealId)
+    const qs = p.toString() ? `?${p.toString()}` : ''
     navigateWithPinCheck(`/store/schedule/${scheduleId}/agreement${qs}`)
-  }, [staffName, scheduleId, navigateWithPinCheck])
+  }, [staffName, fromDealId, scheduleId, navigateWithPinCheck])
 
   const fetchVisit = useCallback(async () => {
     const [visitRes, contractRes] = await Promise.all([

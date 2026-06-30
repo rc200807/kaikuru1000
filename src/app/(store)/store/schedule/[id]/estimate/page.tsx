@@ -64,6 +64,10 @@ export default function EstimatePage() {
   const searchParams = useSearchParams()
   const scheduleId = params.id as string
   const staffName = searchParams.get('staff') || ((session?.user as any)?.name ?? '')
+  // 案件詳細から来た場合は戻り先を案件詳細に
+  const fromDealId = searchParams.get('dealId') || ''
+  const backHref = fromDealId ? `/store/deals/${fromDealId}` : `/store/schedule/${scheduleId}`
+  const backLabel = fromDealId ? '案件詳細' : '訪問詳細'
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -230,7 +234,7 @@ export default function EstimatePage() {
     return (
       <div className="p-6">
         <MessageBanner severity="error">訪問スケジュールが見つかりません</MessageBanner>
-        <Button variant="text" onClick={() => router.push(`/store/schedule/${scheduleId}`)} className="mt-4">← 戻る</Button>
+        <Button variant="text" onClick={() => router.push(backHref)} className="mt-4">← 戻る</Button>
       </div>
     )
   }
@@ -243,10 +247,10 @@ export default function EstimatePage() {
       {/* ヘッダー */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => router.push(`/store/schedule/${scheduleId}`)}
+          onClick={() => router.push(backHref)}
           className="text-[var(--portal-primary)] hover:underline text-sm"
         >
-          ← 訪問詳細
+          ← {backLabel}
         </button>
         <h1 className="text-lg font-bold text-[var(--md-sys-color-on-surface)] flex-1">見積書</h1>
       </div>
@@ -431,7 +435,7 @@ export default function EstimatePage() {
 
       {/* 操作ボタン */}
       <div className="flex gap-3 justify-end pt-2">
-        <Button variant="text" onClick={() => router.push(`/store/schedule/${scheduleId}`)} disabled={submitting}>
+        <Button variant="text" onClick={() => router.push(backHref)} disabled={submitting}>
           戻る
         </Button>
         <Button onClick={handleSubmit} disabled={submitting || !emailInput.trim() || !validUntil}>

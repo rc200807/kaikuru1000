@@ -71,10 +71,10 @@ export async function GET(
         select: { id: true, workName: true, unitPrice: true, quantity: true },
       },
       salesContract: {
-        select: { id: true, agreedAt: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
+        select: { id: true, visitScheduleId: true, agreedAt: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
       },
       estimate: {
-        select: { id: true, validUntil: true, purchaseAmount: true, billingAmount: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
+        select: { id: true, visitScheduleId: true, validUntil: true, purchaseAmount: true, billingAmount: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
       },
     },
   })
@@ -87,11 +87,11 @@ export async function GET(
   // PDF本体・署名base64は返さず有無のbooleanへ。案件直下の書類も同様に整形。
   const { preConsentSignature, salesContract: dealContract, estimate: dealEstimate, ...dealRest } = deal
   const shapeContract = (c: typeof dealContract) => c ? {
-    id: c.id, agreedAt: c.agreedAt, emailSentAt: c.emailSentAt, customerEmail: c.customerEmail,
+    id: c.id, visitScheduleId: c.visitScheduleId, agreedAt: c.agreedAt, emailSentAt: c.emailSentAt, customerEmail: c.customerEmail,
     hasPdf: !!c.pdfBase64, hasInvoicePdf: !!c.invoicePdfBase64,
   } : null
   const shapeEstimate = (e: typeof dealEstimate) => e ? {
-    id: e.id, validUntil: e.validUntil, purchaseAmount: e.purchaseAmount, billingAmount: e.billingAmount,
+    id: e.id, visitScheduleId: e.visitScheduleId, validUntil: e.validUntil, purchaseAmount: e.purchaseAmount, billingAmount: e.billingAmount,
     emailSentAt: e.emailSentAt, customerEmail: e.customerEmail, hasPdf: !!e.pdfBase64, hasInvoicePdf: !!e.invoicePdfBase64,
   } : null
   const shaped = {

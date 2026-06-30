@@ -17,8 +17,8 @@ import { formatYen } from '@/lib/currency'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number }
-type ContractInfo = { id: string; agreedAt: string; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
-type EstimateInfo = { id: string; validUntil: string; purchaseAmount: number; billingAmount: number; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
+type ContractInfo = { id: string; visitScheduleId?: string | null; agreedAt: string; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
+type EstimateInfo = { id: string; visitScheduleId?: string | null; validUntil: string; purchaseAmount: number; billingAmount: number; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 
 type VisitSchedule = {
   id: string
@@ -43,6 +43,10 @@ type Deal = {
   occurredAt: string | null
   createdByType: string | null
   createdByName: string | null
+  purchaseAmount: number | null
+  billingAmount: number | null
+  preConsentAt: string | null
+  hasPreConsent: boolean
   createdAt: string
   updatedAt: string
   userId: string
@@ -52,6 +56,11 @@ type Deal = {
   store: { id: string; name: string; code: string; phone: string | null; address: string | null; prefecture: string | null; email: string | null; invoiceNumber: string | null; antiquePermitNumber: string | null } | null
   inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
   visitSchedules: VisitSchedule[]
+  // 案件直下（再ペアレント後の正）
+  purchaseItems: PurchaseItem[]
+  workItems: WorkItem[]
+  dealContract: ContractInfo | null
+  dealEstimate: EstimateInfo | null
 }
 
 function fmtDate(d?: string | null) {
@@ -134,6 +143,19 @@ export default function DealDetailView({
   const [addVisit, setAddVisit] = useState({ visitDate: '', startTime: '', endTime: '', staffName: '', note: '' })
   const [addingVisit, setAddingVisit] = useState(false)
 
+  // 買取品目 / 請求項目の登録（案件キー）
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [showAddPurchase, setShowAddPurchase] = useState(false)
+  const [purchaseForm, setPurchaseForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: '' })
+  const [savingPurchase, setSavingPurchase] = useState(false)
+  const [showAddWork, setShowAddWork] = useState(false)
+  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1 })
+  const [savingWork, setSavingWork] = useState(false)
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
+
+  // 事前同意（案件単位）
+  const [savingConsent, setSavingConsent] = useState(false)
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -161,6 +183,82 @@ export default function DealDetailView({
       .then(d => setMembers(Array.isArray(d) ? d.map((m: any) => ({ id: m.id, name: m.name })) : []))
       .catch(() => {})
   }, [isAdmin])
+
+  // 買取品目カテゴリ
+  useEffect(() => {
+    fetch('/api/purchase-categories')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setCategories(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [])
+
+  async function addPurchaseItem() {
+    if (!deal || !purchaseForm.itemName || !purchaseForm.category) return
+    setSavingPurchase(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}/purchase-items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemName: purchaseForm.itemName,
+        category: purchaseForm.category,
+        quantity: Number(purchaseForm.quantity) || 1,
+        purchasePrice: Number(purchaseForm.purchasePrice) || 0,
+      }),
+    })
+    setSavingPurchase(false)
+    if (res.ok) {
+      setShowAddPurchase(false)
+      setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: '' })
+      load()
+    } else setMsg({ type: 'error', text: '買取品目の追加に失敗しました' })
+  }
+
+  async function addWorkItem() {
+    if (!deal || !workForm.workName) return
+    setSavingWork(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}/work-items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workName: workForm.workName,
+        unitPrice: Number(workForm.unitPrice) || 0,
+        quantity: Number(workForm.quantity) || 1,
+      }),
+    })
+    setSavingWork(false)
+    if (res.ok) {
+      setShowAddWork(false)
+      setWorkForm({ workName: '', unitPrice: '', quantity: 1 })
+      load()
+    } else setMsg({ type: 'error', text: '請求項目の追加に失敗しました' })
+  }
+
+  async function deleteItem(kind: 'purchase' | 'work', itemId: string) {
+    if (!confirm('この項目を削除しますか？')) return
+    setDeletingItemId(itemId)
+    const path = kind === 'purchase' ? `/api/purchase-items/${itemId}` : `/api/work-items/${itemId}`
+    const res = await fetch(path, { method: 'DELETE' })
+    setDeletingItemId(null)
+    if (res.ok) load()
+    else setMsg({ type: 'error', text: '削除に失敗しました' })
+  }
+
+  async function savePreConsent(signature: string | null) {
+    setSavingConsent(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preConsentSignature: signature }),
+    })
+    setSavingConsent(false)
+    if (res.ok) {
+      setDeal(prev => prev ? { ...prev, hasPreConsent: !!signature, preConsentAt: signature ? new Date().toISOString() : null } : prev)
+      setMsg({ type: 'success', text: signature ? '事前同意を保存しました' : '事前同意をクリアしました' })
+    } else setMsg({ type: 'error', text: '事前同意の保存に失敗しました' })
+  }
 
   async function saveOccurred() {
     if (!deal || !occurredEdit) return
@@ -275,19 +373,21 @@ export default function DealDetailView({
   }
 
   const badge = DEAL_STATUS_BADGE[deal.status as DealStatus] ?? DEAL_STATUS_BADGE.inquiry
-  const totalPurchase = deal.visitSchedules.reduce((s, v) => s + (v.purchaseAmount ?? 0), 0)
-  const totalBilling = deal.visitSchedules.reduce((s, v) => s + (v.billingAmount ?? 0), 0)
-  const contracts = deal.visitSchedules.filter(v => v.salesContract)
-  const estimates = deal.visitSchedules.filter(v => v.estimate)
-  const allPurchaseItems = deal.visitSchedules.flatMap(v => v.purchaseItems.map(pi => ({ ...pi, visitDate: v.visitDate })))
-  const allWorkItems = deal.visitSchedules.flatMap(v => v.workItems.map(wi => ({ ...wi, visitDate: v.visitDate })))
+  // 案件直下の品目（再ペアレント後の正）
+  const purchaseItems = deal.purchaseItems ?? []
+  const workItems = deal.workItems ?? []
+  const totalPurchase = deal.purchaseAmount ?? purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const totalBilling = deal.billingAmount ?? workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const dealContract = deal.dealContract
+  const dealEstimate = deal.dealEstimate
+  const editable = !isAdmin // 品目・事前同意の編集は店舗ポータル（管理は閲覧）
 
   // 進捗タイムライン（取得可能な日時を時系列で）
   const timeline: { label: string; at: string; sub?: string }[] = [
     { label: '案件発生', at: deal.occurredAt ?? deal.createdAt },
     ...deal.visitSchedules.map(v => ({ label: '訪問', at: v.visitDate, sub: v.staffName ? `担当 ${v.staffName}` : undefined })),
-    ...estimates.map(v => ({ label: '見積作成', at: v.estimate!.validUntil, sub: `有効期限 ${fmtDate(v.estimate!.validUntil)}` })),
-    ...contracts.map(v => ({ label: '契約締結', at: v.salesContract!.agreedAt })),
+    ...(dealEstimate ? [{ label: '見積作成', at: dealEstimate.validUntil, sub: `有効期限 ${fmtDate(dealEstimate.validUntil)}` }] : []),
+    ...(dealContract ? [{ label: '契約締結', at: dealContract.agreedAt }] : []),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
 
   const pdfUrl = (type: 'contract' | 'estimate', visitId: string, kind: 'sale' | 'invoice') =>
@@ -316,7 +416,7 @@ export default function DealDetailView({
               { label: '訪問回数', value: `${deal.visitSchedules.length} 回` },
               { label: '合計買取金額', value: formatYen(totalPurchase) },
               { label: '合計請求金額', value: formatYen(totalBilling) },
-              { label: '見積/契約', value: `${estimates.length} / ${contracts.length} 件` },
+              { label: '見積/契約', value: `${dealEstimate ? 1 : 0} / ${dealContract ? 1 : 0} 件` },
             ].map(s => (
               <div key={s.label} className="rounded-xl px-3 py-2.5" style={{ background: 'var(--md-sys-color-surface-container-low)' }}>
                 <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{s.label}</div>
@@ -479,12 +579,6 @@ export default function DealDetailView({
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {!isAdmin && (
-                        <>
-                          <Link href={`/store/schedule/${v.id}/estimate`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">見積作成</Link>
-                          <Link href={`/store/schedule/${v.id}/agreement`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">契約作成</Link>
-                        </>
-                      )}
                       <Link href={`${visitHrefBase}/${v.id}`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">訪問詳細 →</Link>
                     </div>
                   </div>
@@ -535,20 +629,41 @@ export default function DealDetailView({
           )}
         </Card>
 
-        {/* 買取品目（集約） */}
+        {/* 事前同意（案件単位） */}
         <Card variant="outlined" padding="md">
-          <SectionTitle>買取品目（{allPurchaseItems.length}件）</SectionTitle>
-          {allPurchaseItems.length === 0 ? (
+          <SectionTitle>事前同意</SectionTitle>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm">
+              {deal.hasPreConsent
+                ? <span className="text-green-600 dark:text-green-400 font-medium">取得済み（{fmtDateTime(deal.preConsentAt)}）</span>
+                : <span className="text-[var(--md-sys-color-on-surface-variant)]">未取得</span>}
+            </div>
+            {editable && deal.hasPreConsent && (
+              <Button variant="text" size="sm" onClick={() => savePreConsent(null)} loading={savingConsent} disabled={savingConsent}>クリア</Button>
+            )}
+          </div>
+        </Card>
+
+        {/* 買取品目（案件直下） */}
+        <Card variant="outlined" padding="md">
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">買取品目（{purchaseItems.length}件）</h2>
+            {editable && <Button size="sm" variant="outlined" onClick={() => setShowAddPurchase(true)}>＋ 追加</Button>}
+          </div>
+          {purchaseItems.length === 0 ? (
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">買取品目はありません</p>
           ) : (
             <div className="space-y-1.5">
-              {allPurchaseItems.map(pi => (
+              {purchaseItems.map(pi => (
                 <div key={pi.id} className="flex items-center justify-between gap-2 text-sm py-1.5 border-b border-[var(--md-sys-color-outline-variant)] last:border-0">
                   <div className="min-w-0">
                     <div className="text-[var(--md-sys-color-on-surface)] truncate">{pi.itemName}</div>
-                    <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{pi.category} ・ {fmtDate(pi.visitDate)} ・ ×{pi.quantity}</div>
+                    <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{pi.category} ・ ×{pi.quantity}</div>
                   </div>
-                  <span className="font-medium text-[var(--md-sys-color-on-surface)] flex-shrink-0">{formatYen(pi.purchasePrice)}</span>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(pi.purchasePrice * pi.quantity)}</span>
+                    {editable && <button type="button" onClick={() => deleteItem('purchase', pi.id)} disabled={deletingItemId === pi.id} className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50">削除</button>}
+                  </div>
                 </div>
               ))}
               <div className="flex justify-between pt-2 text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
@@ -558,20 +673,26 @@ export default function DealDetailView({
           )}
         </Card>
 
-        {/* 請求項目（集約） */}
+        {/* 請求項目（案件直下） */}
         <Card variant="outlined" padding="md">
-          <SectionTitle>請求項目（{allWorkItems.length}件）</SectionTitle>
-          {allWorkItems.length === 0 ? (
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">請求項目（{workItems.length}件）</h2>
+            {editable && <Button size="sm" variant="outlined" onClick={() => setShowAddWork(true)}>＋ 追加</Button>}
+          </div>
+          {workItems.length === 0 ? (
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">請求項目はありません</p>
           ) : (
             <div className="space-y-1.5">
-              {allWorkItems.map(wi => (
+              {workItems.map(wi => (
                 <div key={wi.id} className="flex items-center justify-between gap-2 text-sm py-1.5 border-b border-[var(--md-sys-color-outline-variant)] last:border-0">
                   <div className="min-w-0">
                     <div className="text-[var(--md-sys-color-on-surface)] truncate">{wi.workName}</div>
-                    <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{formatYen(wi.unitPrice)} ・ ×{wi.quantity} ・ {fmtDate(wi.visitDate)}</div>
+                    <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{formatYen(wi.unitPrice)} ・ ×{wi.quantity}</div>
                   </div>
-                  <span className="font-medium text-[var(--md-sys-color-on-surface)] flex-shrink-0">{formatYen(wi.unitPrice * wi.quantity)}</span>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(wi.unitPrice * wi.quantity)}</span>
+                    {editable && <button type="button" onClick={() => deleteItem('work', wi.id)} disabled={deletingItemId === wi.id} className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50">削除</button>}
+                  </div>
                 </div>
               ))}
               <div className="flex justify-between pt-2 text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
@@ -581,38 +702,45 @@ export default function DealDetailView({
           )}
         </Card>
 
-        {/* 売買契約書・見積 ＋ メール送信履歴 */}
+        {/* 売買契約書・見積（案件単位） */}
         <Card variant="outlined" padding="md">
           <SectionTitle>売買契約書・見積</SectionTitle>
-          {contracts.length === 0 && estimates.length === 0 ? (
+          {!dealContract && !dealEstimate ? (
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">作成された書類はありません</p>
           ) : (
             <div className="space-y-3">
-              {deal.visitSchedules.filter(v => v.salesContract || v.estimate).map(v => (
-                <div key={v.id} className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3">
-                  <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">{fmtDate(v.visitDate)} の訪問</div>
-                  {v.salesContract && (
-                    <div className="mb-2">
-                      <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">売買契約書</div>
-                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">締結: {fmtDateTime(v.salesContract.agreedAt)}</div>
-                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                        メール: {v.salesContract.emailSentAt ? `${fmtDateTime(v.salesContract.emailSentAt)}（${v.salesContract.customerEmail ?? '-'}）` : '未送信'}
-                      </div>
-                    </div>
-                  )}
-                  {v.estimate && (
-                    <div>
-                      <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">見積</div>
-                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                        有効期限: {fmtDate(v.estimate.validUntil)} ・ 買取 {formatYen(v.estimate.purchaseAmount)} / 請求 {formatYen(v.estimate.billingAmount)}
-                      </div>
-                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                        メール: {v.estimate.emailSentAt ? `${fmtDateTime(v.estimate.emailSentAt)}（${v.estimate.customerEmail ?? '-'}）` : '未送信'}
-                      </div>
+              {dealContract && (
+                <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3">
+                  <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">売買契約書・請求書</div>
+                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">締結: {fmtDateTime(dealContract.agreedAt)}</div>
+                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    メール: {dealContract.emailSentAt ? `${fmtDateTime(dealContract.emailSentAt)}（${dealContract.customerEmail ?? '-'}）` : '未送信'}
+                  </div>
+                  {dealContract.visitScheduleId && (dealContract.hasPdf || dealContract.hasInvoicePdf) && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {dealContract.hasPdf && <a href={pdfUrl('contract', dealContract.visitScheduleId, 'sale')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">売買契約書PDF</a>}
+                      {dealContract.hasInvoicePdf && <a href={pdfUrl('contract', dealContract.visitScheduleId, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求書PDF</a>}
                     </div>
                   )}
                 </div>
-              ))}
+              )}
+              {dealEstimate && (
+                <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3">
+                  <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">見積</div>
+                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    有効期限: {fmtDate(dealEstimate.validUntil)} ・ 買取 {formatYen(dealEstimate.purchaseAmount)} / 請求 {formatYen(dealEstimate.billingAmount)}
+                  </div>
+                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    メール: {dealEstimate.emailSentAt ? `${fmtDateTime(dealEstimate.emailSentAt)}（${dealEstimate.customerEmail ?? '-'}）` : '未送信'}
+                  </div>
+                  {dealEstimate.visitScheduleId && (dealEstimate.hasPdf || dealEstimate.hasInvoicePdf) && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {dealEstimate.hasPdf && <a href={pdfUrl('estimate', dealEstimate.visitScheduleId, 'sale')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">買取見積PDF</a>}
+                      {dealEstimate.hasInvoicePdf && <a href={pdfUrl('estimate', dealEstimate.visitScheduleId, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求見積PDF</a>}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -671,6 +799,48 @@ export default function DealDetailView({
             <Button onClick={handleAddVisit} loading={addingVisit} disabled={addingVisit || !addVisit.visitDate}>
               訪問を追加
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 買取品目を追加 */}
+      <Modal open={showAddPurchase} onClose={() => setShowAddPurchase(false)} title="買取品目を追加" size="md">
+        <div className="space-y-4">
+          <TextField label="品名" value={purchaseForm.itemName} onChange={v => setPurchaseForm(prev => ({ ...prev, itemName: v }))} required />
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">カテゴリー <span className="text-[var(--md-sys-color-error)]">*</span></label>
+            <select
+              value={purchaseForm.category}
+              onChange={e => setPurchaseForm(prev => ({ ...prev, category: e.target.value }))}
+              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            >
+              <option value="">カテゴリーを選択</option>
+              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="数量" type="number" value={String(purchaseForm.quantity)} onChange={v => setPurchaseForm(prev => ({ ...prev, quantity: Number(v) || 1 }))} />
+            <TextField label="買取金額（円）" type="number" value={purchaseForm.purchasePrice} onChange={v => setPurchaseForm(prev => ({ ...prev, purchasePrice: v }))} />
+          </div>
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">画像・バーコード・AI査定など詳細な編集は訪問詳細で行えます。</p>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outlined" type="button" onClick={() => setShowAddPurchase(false)}>キャンセル</Button>
+            <Button onClick={addPurchaseItem} loading={savingPurchase} disabled={savingPurchase || !purchaseForm.itemName || !purchaseForm.category}>追加</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 請求項目を追加 */}
+      <Modal open={showAddWork} onClose={() => setShowAddWork(false)} title="請求項目を追加" size="md">
+        <div className="space-y-4">
+          <TextField label="作業名" value={workForm.workName} onChange={v => setWorkForm(prev => ({ ...prev, workName: v }))} required />
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="単価（円）" type="number" value={workForm.unitPrice} onChange={v => setWorkForm(prev => ({ ...prev, unitPrice: v }))} />
+            <TextField label="数量" type="number" value={String(workForm.quantity)} onChange={v => setWorkForm(prev => ({ ...prev, quantity: Number(v) || 1 }))} />
+          </div>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outlined" type="button" onClick={() => setShowAddWork(false)}>キャンセル</Button>
+            <Button onClick={addWorkItem} loading={savingWork} disabled={savingWork || !workForm.workName}>追加</Button>
           </div>
         </div>
       </Modal>

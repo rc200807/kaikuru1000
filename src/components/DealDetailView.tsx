@@ -13,6 +13,7 @@ import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
 import SignaturePad from '@/components/SignaturePad'
+import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatYen } from '@/lib/currency'
 
@@ -58,7 +59,7 @@ type Deal = {
   inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
   visitSchedules: VisitSchedule[]
   // 案件直下（再ペアレント後の正）
-  purchaseItems: PurchaseItem[]
+  purchaseItems: ManagedPurchaseItem[]
   workItems: WorkItem[]
   dealContract: ContractInfo | null
   dealEstimate: EstimateInfo | null
@@ -144,11 +145,8 @@ export default function DealDetailView({
   const [addVisit, setAddVisit] = useState({ visitDate: '', startTime: '', endTime: '', staffName: '', note: '' })
   const [addingVisit, setAddingVisit] = useState(false)
 
-  // 買取品目 / 請求項目の登録（案件キー）
+  // 買取品目（PurchaseItemManager に委譲）／請求項目の登録（案件キー）
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
-  const [showAddPurchase, setShowAddPurchase] = useState(false)
-  const [purchaseForm, setPurchaseForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: '' })
-  const [savingPurchase, setSavingPurchase] = useState(false)
   const [showAddWork, setShowAddWork] = useState(false)
   const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1 })
   const [savingWork, setSavingWork] = useState(false)
@@ -195,27 +193,6 @@ export default function DealDetailView({
       .catch(() => {})
   }, [])
 
-  async function addPurchaseItem() {
-    if (!deal || !purchaseForm.itemName || !purchaseForm.category) return
-    setSavingPurchase(true)
-    setMsg(null)
-    const res = await fetch(`/api/deals/${dealId}/purchase-items`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        itemName: purchaseForm.itemName,
-        category: purchaseForm.category,
-        quantity: Number(purchaseForm.quantity) || 1,
-        purchasePrice: Number(purchaseForm.purchasePrice) || 0,
-      }),
-    })
-    setSavingPurchase(false)
-    if (res.ok) {
-      setShowAddPurchase(false)
-      setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: '' })
-      load()
-    } else setMsg({ type: 'error', text: '買取品目の追加に失敗しました' })
-  }
 
   async function addWorkItem() {
     if (!deal || !workForm.workName) return
@@ -658,33 +635,21 @@ export default function DealDetailView({
           </div>
         </Card>
 
-        {/* 買取品目（案件直下） */}
+        {/* 買取品目（案件直下・訪問詳細と同等の機能：画像/バーコード/AI査定/1000円ボックス/在庫化） */}
         <Card variant="outlined" padding="md">
           <div className="flex items-center justify-between mb-3 gap-2">
             <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">買取品目（{purchaseItems.length}件）</h2>
-            {editable && <Button size="sm" variant="outlined" onClick={() => setShowAddPurchase(true)}>＋ 追加</Button>}
+            <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">合計 {formatYen(totalPurchase)}</span>
           </div>
-          {purchaseItems.length === 0 ? (
-            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">買取品目はありません</p>
-          ) : (
-            <div className="space-y-1.5">
-              {purchaseItems.map(pi => (
-                <div key={pi.id} className="flex items-center justify-between gap-2 text-sm py-1.5 border-b border-[var(--md-sys-color-outline-variant)] last:border-0">
-                  <div className="min-w-0">
-                    <div className="text-[var(--md-sys-color-on-surface)] truncate">{pi.itemName}</div>
-                    <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{pi.category} ・ ×{pi.quantity}</div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(pi.purchasePrice * pi.quantity)}</span>
-                    {editable && <button type="button" onClick={() => deleteItem('purchase', pi.id)} disabled={deletingItemId === pi.id} className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50">削除</button>}
-                  </div>
-                </div>
-              ))}
-              <div className="flex justify-between pt-2 text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
-                <span>合計買取金額</span><span>{formatYen(totalPurchase)}</span>
-              </div>
-            </div>
-          )}
+          <PurchaseItemManager
+            parentType="deal"
+            parentId={deal.id}
+            items={purchaseItems}
+            categories={categories}
+            editable={editable}
+            onChanged={load}
+            onMessage={setMsg}
+          />
         </Card>
 
         {/* 請求項目（案件直下） */}
@@ -835,32 +800,6 @@ export default function DealDetailView({
         </div>
       </Modal>
 
-      {/* 買取品目を追加 */}
-      <Modal open={showAddPurchase} onClose={() => setShowAddPurchase(false)} title="買取品目を追加" size="md">
-        <div className="space-y-4">
-          <TextField label="品名" value={purchaseForm.itemName} onChange={v => setPurchaseForm(prev => ({ ...prev, itemName: v }))} required />
-          <div>
-            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">カテゴリー <span className="text-[var(--md-sys-color-error)]">*</span></label>
-            <select
-              value={purchaseForm.category}
-              onChange={e => setPurchaseForm(prev => ({ ...prev, category: e.target.value }))}
-              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-            >
-              <option value="">カテゴリーを選択</option>
-              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <TextField label="数量" type="number" value={String(purchaseForm.quantity)} onChange={v => setPurchaseForm(prev => ({ ...prev, quantity: Number(v) || 1 }))} />
-            <TextField label="買取金額（円）" type="number" value={purchaseForm.purchasePrice} onChange={v => setPurchaseForm(prev => ({ ...prev, purchasePrice: v }))} />
-          </div>
-          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">画像・バーコード・AI査定など詳細な編集は訪問詳細で行えます。</p>
-          <div className="flex justify-end gap-3 pt-1">
-            <Button variant="outlined" type="button" onClick={() => setShowAddPurchase(false)}>キャンセル</Button>
-            <Button onClick={addPurchaseItem} loading={savingPurchase} disabled={savingPurchase || !purchaseForm.itemName || !purchaseForm.category}>追加</Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* 請求項目を追加 */}
       <Modal open={showAddWork} onClose={() => setShowAddWork(false)} title="請求項目を追加" size="md">

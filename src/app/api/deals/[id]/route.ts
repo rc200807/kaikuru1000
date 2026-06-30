@@ -64,7 +64,11 @@ export async function GET(
       // 案件直下の品目・書類（再ペアレント後の正）
       purchaseItems: {
         orderBy: { createdAt: 'asc' },
-        select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
+        select: {
+          id: true, itemName: true, category: true, quantity: true, purchasePrice: true,
+          imageUrls: true, janCode: true, rakutenData: true, aiResearch: true, aiResearchedAt: true,
+          inventoryItem: { select: { id: true } },
+        },
       },
       workItems: {
         orderBy: { createdAt: 'asc' },
@@ -94,8 +98,24 @@ export async function GET(
     id: e.id, visitScheduleId: e.visitScheduleId, validUntil: e.validUntil, purchaseAmount: e.purchaseAmount, billingAmount: e.billingAmount,
     emailSentAt: e.emailSentAt, customerEmail: e.customerEmail, hasPdf: !!e.pdfBase64, hasInvoicePdf: !!e.invoicePdfBase64,
   } : null
+  // 案件直下の買取品目: 画像をプロキシURL化・JSONをパース（訪問詳細と同等のフォーム用）
+  const dealPurchaseItems = deal.purchaseItems.map((item) => {
+    let images: string[] = []
+    try { images = JSON.parse(item.imageUrls || '[]') } catch { /* ignore */ }
+    let rakutenData: any = null
+    if (item.rakutenData) { try { rakutenData = JSON.parse(item.rakutenData) } catch { /* ignore */ } }
+    let aiResearch: any = null
+    if (item.aiResearch) { try { aiResearch = JSON.parse(item.aiResearch) } catch { /* ignore */ } }
+    return {
+      id: item.id, itemName: item.itemName, category: item.category, quantity: item.quantity, purchasePrice: item.purchasePrice,
+      imageUrls: images.map((_: string, idx: number) => `/api/purchase-items/${item.id}/images/${idx}`),
+      janCode: item.janCode, rakutenData, aiResearch, aiResearchedAt: item.aiResearchedAt,
+      convertedInventoryId: item.inventoryItem?.id ?? null,
+    }
+  })
   const shaped = {
     ...dealRest,
+    purchaseItems: dealPurchaseItems,
     hasPreConsent: !!preConsentSignature,
     dealContract: shapeContract(dealContract),
     dealEstimate: shapeEstimate(dealEstimate),

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
+import { recomputeDealAmounts } from '@/lib/deal-amounts'
 
 /** 買取品目一覧取得 */
 export async function GET(
@@ -76,6 +77,7 @@ export async function POST(
     const created = await tx.purchaseItem.create({
       data: {
         visitScheduleId: id,
+        dealId: schedule.dealId,  // 案件にも紐づける（再ペアレント後の正・両系統を同期）
         itemName,
         category,
         imageUrls: JSON.stringify(imageUrls || []),
@@ -86,10 +88,11 @@ export async function POST(
       },
     })
 
-    // purchaseAmount 再計算
+    // purchaseAmount 再計算（訪問＝後方互換／案件＝正）
     const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId: id } })
     const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
     await tx.visitSchedule.update({ where: { id }, data: { purchaseAmount: total } })
+    if (schedule.dealId) await recomputeDealAmounts(tx, schedule.dealId)
 
     return created
   })

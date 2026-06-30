@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { recomputeDealAmounts } from '@/lib/deal-amounts'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    include: { visitSchedule: { select: { storeId: true } } },
+    include: { visitSchedule: { select: { storeId: true } }, deal: { select: { storeId: true } } },
   })
   if (!item) return { error: '品目が見つかりません', status: 404 }
-  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
-    return { error: 'Forbidden', status: 403 }
+  if (sessionUser.role === 'store') {
+    const ownStore = item.deal?.storeId === sessionUser.id || item.visitSchedule?.storeId === sessionUser.id
+    if (!ownStore) return { error: 'Forbidden', status: 403 }
   }
   return { item }
 }
@@ -47,7 +49,8 @@ export async function PATCH(
       data: updateData,
     })
 
-    // purchaseAmount 再計算（訪問が紐づく場合のみ。案件側の再計算は Phase 2 で対応）
+    // 案件合計を再計算（正）。訪問合計も後方互換で維持。
+    if (result.dealId) await recomputeDealAmounts(tx, result.dealId)
     if (result.visitScheduleId) {
       const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId: result.visitScheduleId } })
       const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
@@ -76,11 +79,13 @@ export async function DELETE(
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
 
   const visitScheduleId = access.item!.visitScheduleId
+  const dealId = access.item!.dealId
 
   await prisma.$transaction(async (tx) => {
     await tx.purchaseItem.delete({ where: { id: itemId } })
 
-    // purchaseAmount 再計算（訪問が紐づく場合のみ）
+    // 案件合計を再計算（正）。訪問合計も後方互換で維持。
+    if (dealId) await recomputeDealAmounts(tx, dealId)
     if (visitScheduleId) {
       const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId } })
       const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)

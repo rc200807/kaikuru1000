@@ -61,6 +61,21 @@ export async function GET(
           },
         },
       },
+      // 案件直下の品目・書類（再ペアレント後の正）
+      purchaseItems: {
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
+      },
+      workItems: {
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, workName: true, unitPrice: true, quantity: true },
+      },
+      salesContract: {
+        select: { id: true, agreedAt: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
+      },
+      estimate: {
+        select: { id: true, validUntil: true, purchaseAmount: true, billingAmount: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
+      },
     },
   })
 
@@ -69,9 +84,21 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // PDF本体（base64）は返さず、有無のbooleanへ変換してペイロードを軽量化
+  // PDF本体・署名base64は返さず有無のbooleanへ。案件直下の書類も同様に整形。
+  const { preConsentSignature, salesContract: dealContract, estimate: dealEstimate, ...dealRest } = deal
+  const shapeContract = (c: typeof dealContract) => c ? {
+    id: c.id, agreedAt: c.agreedAt, emailSentAt: c.emailSentAt, customerEmail: c.customerEmail,
+    hasPdf: !!c.pdfBase64, hasInvoicePdf: !!c.invoicePdfBase64,
+  } : null
+  const shapeEstimate = (e: typeof dealEstimate) => e ? {
+    id: e.id, validUntil: e.validUntil, purchaseAmount: e.purchaseAmount, billingAmount: e.billingAmount,
+    emailSentAt: e.emailSentAt, customerEmail: e.customerEmail, hasPdf: !!e.pdfBase64, hasInvoicePdf: !!e.invoicePdfBase64,
+  } : null
   const shaped = {
-    ...deal,
+    ...dealRest,
+    hasPreConsent: !!preConsentSignature,
+    dealContract: shapeContract(dealContract),
+    dealEstimate: shapeEstimate(dealEstimate),
     visitSchedules: deal.visitSchedules.map(vs => ({
       ...vs,
       salesContract: vs.salesContract
@@ -114,7 +141,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId, occurredAt } = body
+  const { detail, status, storeId, occurredAt, preConsentSignature } = body
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -135,6 +162,11 @@ export async function PATCH(
   if (occurredAt !== undefined) {
     const d = new Date(occurredAt)
     if (!isNaN(d.getTime())) updateData.occurredAt = d
+  }
+  // 事前同意の署名（案件単位）。空文字/null でクリア可。
+  if (preConsentSignature !== undefined) {
+    updateData.preConsentSignature = preConsentSignature || null
+    updateData.preConsentAt = preConsentSignature ? new Date() : null
   }
 
   const updated = await prisma.deal.update({

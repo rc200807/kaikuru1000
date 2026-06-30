@@ -9,7 +9,7 @@ async function verifyAccess(itemId: string, sessionUser: any) {
     include: { visitSchedule: { select: { storeId: true } } },
   })
   if (!item) return { error: '作業品目が見つかりません', status: 404 }
-  if (sessionUser.role === 'store' && item.visitSchedule.storeId !== sessionUser.id) {
+  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
     return { error: 'Forbidden', status: 403 }
   }
   return { item }
@@ -43,10 +43,12 @@ export async function PATCH(
       data: updateData,
     })
 
-    // billingAmount 再計算
-    const allItems = await tx.workItem.findMany({ where: { visitScheduleId: result.visitScheduleId } })
-    const total = allItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
-    await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { billingAmount: total } })
+    // billingAmount 再計算（訪問が紐づく場合のみ。案件側の再計算は Phase 2 で対応）
+    if (result.visitScheduleId) {
+      const allItems = await tx.workItem.findMany({ where: { visitScheduleId: result.visitScheduleId } })
+      const total = allItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+      await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { billingAmount: total } })
+    }
 
     return result
   })
@@ -74,10 +76,12 @@ export async function DELETE(
   await prisma.$transaction(async (tx) => {
     await tx.workItem.delete({ where: { id: itemId } })
 
-    // billingAmount 再計算
-    const allItems = await tx.workItem.findMany({ where: { visitScheduleId } })
-    const total = allItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
-    await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { billingAmount: total } })
+    // billingAmount 再計算（訪問が紐づく場合のみ）
+    if (visitScheduleId) {
+      const allItems = await tx.workItem.findMany({ where: { visitScheduleId } })
+      const total = allItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
+      await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { billingAmount: total } })
+    }
   })
 
   return NextResponse.json({ deleted: true })

@@ -62,7 +62,7 @@ export async function GET(
     return NextResponse.json({ error: '品目が見つかりません' }, { status: 404 })
   }
 
-  if (sessionUser.role === 'store' && item.visitSchedule.storeId !== sessionUser.id) {
+  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -98,7 +98,7 @@ export async function POST(
     return NextResponse.json({ error: '品目が見つかりません' }, { status: 404 })
   }
 
-  if (sessionUser.role === 'store' && item.visitSchedule.storeId !== sessionUser.id) {
+  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

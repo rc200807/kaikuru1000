@@ -290,8 +290,10 @@ model LeadSource {
 // 買取品目（訪問ごとに記録する買取商品）
 model PurchaseItem {
   id              String        @id @default(cuid())
-  visitScheduleId String
-  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  visitScheduleId String?
+  visitSchedule   VisitSchedule? @relation(fields: [visitScheduleId], references: [id], onDelete: SetNull)
+  dealId          String?                     // 案件への紐づけ（再ペアレント。これが正）
+  deal            Deal?         @relation(fields: [dealId], references: [id], onDelete: Cascade)
   itemName        String                      // 品名
   category        String                      // カテゴリー名（表示用）
   categoryId      String?                     // PurchaseCategoryへの参照
@@ -308,13 +310,16 @@ model PurchaseItem {
   updatedAt       DateTime @updatedAt
 
   @@index([visitScheduleId])
+  @@index([dealId])
 }
 
-// 作業品目（訪問ごとの請求作業）
+// 作業品目（案件ごとの請求作業）
 model WorkItem {
   id              String        @id @default(cuid())
-  visitScheduleId String
-  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  visitScheduleId String?
+  visitSchedule   VisitSchedule? @relation(fields: [visitScheduleId], references: [id], onDelete: SetNull)
+  dealId          String?                     // 案件への紐づけ（再ペアレント。これが正）
+  deal            Deal?         @relation(fields: [dealId], references: [id], onDelete: Cascade)
   workName        String                      // 作業名
   unitPrice       Int      @default(0)        // 単価（円）
   quantity        Int      @default(1)        // 数量
@@ -322,6 +327,7 @@ model WorkItem {
   updatedAt       DateTime @updatedAt
 
   @@index([visitScheduleId])
+  @@index([dealId])
 }
 
 // 管理者
@@ -436,8 +442,10 @@ model DeliveryShipment {
 // 見積書（買取金額・請求金額・有効期限を記録。署名・顧客情報は不要）
 model Estimate {
   id              String        @id @default(cuid())
-  visitScheduleId String        @unique
-  visitSchedule   VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  visitScheduleId String?       @unique
+  visitSchedule   VisitSchedule? @relation(fields: [visitScheduleId], references: [id], onDelete: SetNull)
+  dealId          String?       @unique         // 案件への紐づけ（再ペアレント。1案件1見積）
+  deal            Deal?         @relation(fields: [dealId], references: [id], onDelete: Cascade)
   purchaseAmount  Int                         // 買取金額（円）
   billingAmount   Int                         // 請求金額（円）
   validUntil      DateTime                    // 見積有効期限
@@ -453,8 +461,10 @@ model Estimate {
 // 売買契約書（署名・PDF保存）
 model SalesContract {
   id                    String        @id @default(cuid())
-  visitScheduleId       String        @unique
-  visitSchedule         VisitSchedule @relation(fields: [visitScheduleId], references: [id], onDelete: Cascade)
+  visitScheduleId       String?       @unique
+  visitSchedule         VisitSchedule? @relation(fields: [visitScheduleId], references: [id], onDelete: SetNull)
+  dealId                String?       @unique     // 案件への紐づけ（再ペアレント。1案件1契約）
+  deal                  Deal?         @relation(fields: [dealId], references: [id], onDelete: Cascade)
   signatureData         String        // 売買契約への顧客署名（base64 PNG data URL）
   invoiceSignatureData  String?       // 請求書への顧客署名（base64 PNG data URL）
   pdfBase64             String?       @db.Text  // 売買契約書PDF（base64）
@@ -529,7 +539,15 @@ model Deal {
   createdByType String?                     // 作成者種別（store/admin/superadmin/hr/customer/partner）
   createdById   String?                     // 作成者ID（Store.id / Admin.id など・スナップショット）
   createdByName String?                     // 作成者名（スナップショット）
+  purchaseAmount Int?                       // 買取金額合計（案件配下の買取品目合計・自動計算）
+  billingAmount  Int?                       // 請求金額合計（案件配下の請求項目合計・自動計算）
+  preConsentSignature String? @db.Text      // 事前同意の署名画像（base64）
+  preConsentAt        DateTime?             // 事前同意日時
   visitSchedules VisitSchedule[]           // 1案件:N訪問予定（任意リンク）
+  purchaseItems  PurchaseItem[]            // 案件配下の買取品目
+  workItems      WorkItem[]                // 案件配下の請求項目
+  salesContract  SalesContract?            // 案件の売買契約書（1:1）
+  estimate       Estimate?                 // 案件の見積（1:1）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

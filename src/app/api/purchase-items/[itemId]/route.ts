@@ -9,7 +9,7 @@ async function verifyAccess(itemId: string, sessionUser: any) {
     include: { visitSchedule: { select: { storeId: true } } },
   })
   if (!item) return { error: '品目が見つかりません', status: 404 }
-  if (sessionUser.role === 'store' && item.visitSchedule.storeId !== sessionUser.id) {
+  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
     return { error: 'Forbidden', status: 403 }
   }
   return { item }
@@ -47,10 +47,12 @@ export async function PATCH(
       data: updateData,
     })
 
-    // purchaseAmount 再計算
-    const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId: result.visitScheduleId } })
-    const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
-    await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { purchaseAmount: total } })
+    // purchaseAmount 再計算（訪問が紐づく場合のみ。案件側の再計算は Phase 2 で対応）
+    if (result.visitScheduleId) {
+      const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId: result.visitScheduleId } })
+      const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
+      await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { purchaseAmount: total } })
+    }
 
     return result
   })
@@ -78,10 +80,12 @@ export async function DELETE(
   await prisma.$transaction(async (tx) => {
     await tx.purchaseItem.delete({ where: { id: itemId } })
 
-    // purchaseAmount 再計算
-    const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId } })
-    const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
-    await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { purchaseAmount: total } })
+    // purchaseAmount 再計算（訪問が紐づく場合のみ）
+    if (visitScheduleId) {
+      const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId } })
+      const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
+      await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { purchaseAmount: total } })
+    }
   })
 
   return NextResponse.json({ deleted: true })

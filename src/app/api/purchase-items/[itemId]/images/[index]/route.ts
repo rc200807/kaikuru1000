@@ -26,11 +26,11 @@ export async function GET(
 
   // 認可チェック
   if (sessionUser.role === 'customer') {
-    if (item.visitSchedule.userId !== sessionUser.id) {
+    if (item.visitSchedule?.userId !== sessionUser.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   } else if (sessionUser.role === 'store') {
-    if (item.visitSchedule.storeId !== sessionUser.id) {
+    if (item.visitSchedule?.storeId !== sessionUser.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }

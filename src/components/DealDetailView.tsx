@@ -819,8 +819,20 @@ export default function DealDetailView({
       {/* 事前同意（署名） */}
       <Modal open={showConsentModal} onClose={() => setShowConsentModal(false)} title="事前同意の取得" size="md">
         <div className="space-y-4">
-          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-            お客様に内容をご確認いただき、下の枠内に署名をお願いします。
+          {/* 同意文面（訪問詳細の事前同意と同一文面） */}
+          <div className="rounded-[var(--md-sys-shape-small,8px)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-4 max-h-[40vh] overflow-y-auto">
+            <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">弊社サービスをご利用のお客様へ</h3>
+            <div className="text-sm text-[var(--md-sys-color-on-surface-variant)] space-y-3 leading-relaxed">
+              <p className="indent-4">この度は、弊社高価古物買取サービスにお申込みいただき、ありがとうございます。お手数ではありますが、担当査定員がお客様のご自宅に訪問し、査定をさせていただく前に必ずご一読ください。</p>
+              <p className="indent-4">法令を遵守したお取引をさせていただくために、必要な内容となっておりますのでご協力の程、よろしくお願いいたします。</p>
+              <p className="indent-4">弊社コールセンター受付担当のご案内により、お客様のご自宅で買取に関する提案のご承諾をいただきました品種は下記になります。</p>
+              <p className="font-semibold text-[var(--md-sys-color-on-surface)]">家電類／ブランド家具類／骨董品類／着物類／ブランド類／金券類／金／宝飾品類／酒類／車／玩具類／楽器類</p>
+              <p className="indent-4">弊社ではお客様からの申し込み時に、査定員から上記品種に関する買取の提案について、ご承諾いただいております。査定員による買取の提案について、ご承諾いただけないお客様のご自宅への訪問購入は行っておりません。</p>
+              <p className="indent-4">また、いただきました個人情報については、個人情報保護法に従い取り扱い、適切に管理させていただきます。</p>
+            </div>
+          </div>
+          <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">
+            上記内容に同意します。下の枠内にご署名をお願いします。
           </p>
           <SignaturePad onSignatureChange={setConsentDraft} initialDataUrl={null} />
           <div className="flex justify-end gap-3 pt-1">

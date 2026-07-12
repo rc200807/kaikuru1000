@@ -13,6 +13,12 @@ type VisitSchedule = {
   store: Store
   user: { id: string; name: string } | null
 }
+type Deal = {
+  id: string
+  occurredAt: string
+  store: Store | null
+  user: { id: string; name: string } | null
+}
 type PurchaseItem = {
   id: string
   itemName: string
@@ -26,8 +32,34 @@ type PurchaseItem = {
   aiResearch: string | null
   aiResearchedAt: string | null
   createdAt: string
-  visitSchedule: VisitSchedule
+  visitSchedule: VisitSchedule | null
+  deal: Deal | null
   purchaseCategory: Category | null
+}
+
+// 買取品目の由来（訪問予定 or 案件）から表示用の店舗・担当/顧客・日付を導出
+function itemOrigin(item: PurchaseItem): { storeName: string; personName: string | null; date: string | null } {
+  if (item.visitSchedule) {
+    return {
+      storeName: item.visitSchedule.store?.name ?? '-',
+      personName: item.visitSchedule.user?.name ?? null,
+      date: item.visitSchedule.visitDate ?? null,
+    }
+  }
+  if (item.deal) {
+    return {
+      storeName: item.deal.store?.name ?? '-',
+      personName: item.deal.user?.name ?? null,
+      date: item.deal.occurredAt ?? null,
+    }
+  }
+  return { storeName: '-', personName: null, date: null }
+}
+
+function fmtDate(d: string | null): string {
+  if (!d) return '-'
+  const dt = new Date(d)
+  return isNaN(dt.getTime()) ? '-' : dt.toLocaleDateString('ja-JP')
 }
 
 type ListResponse = { items: PurchaseItem[]; total: number; page: number; limit: number }
@@ -270,6 +302,7 @@ export default function AdminPurchaseItemsPage() {
               {items.map((item, i) => {
                 const images = parseUrls(item.imageUrls)
                 const hasAi = !!item.aiResearchedAt
+                const origin = itemOrigin(item)
                 return (
                   <button
                     key={item.id}
@@ -336,14 +369,14 @@ export default function AdminPurchaseItemsPage() {
                     </div>
                     {/* 店舗 */}
                     <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.visitSchedule.store.name}
-                      {item.visitSchedule.user?.name ? (
-                        <span style={{ opacity: 0.7 }}> ・ {item.visitSchedule.user.name}</span>
+                      {origin.storeName}
+                      {origin.personName ? (
+                        <span style={{ opacity: 0.7 }}> ・ {origin.personName}</span>
                       ) : null}
                     </div>
                     {/* 訪問日 */}
                     <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
-                      {new Date(item.visitSchedule.visitDate).toLocaleDateString('ja-JP')}
+                      {fmtDate(origin.date)}
                     </div>
                   </button>
                 )
@@ -375,6 +408,7 @@ export default function AdminPurchaseItemsPage() {
 function DetailDrawer({ item, onClose }: { item: PurchaseItem; onClose: () => void }) {
   const images = parseUrls(item.imageUrls)
   const ai = parseAi(item.aiResearch)
+  const origin = itemOrigin(item)
   const rakuten = (() => {
     if (!item.rakutenData) return null
     try { return JSON.parse(item.rakutenData) } catch { return null }
@@ -393,8 +427,8 @@ function DetailDrawer({ item, onClose }: { item: PurchaseItem; onClose: () => vo
           <div>
             <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700 }}>{item.itemName}</h2>
             <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>
-              {item.visitSchedule.store.name} ・ {new Date(item.visitSchedule.visitDate).toLocaleString('ja-JP', { dateStyle: 'medium' })}
-              {item.visitSchedule.user?.name ? ` ・ ${item.visitSchedule.user.name} 様` : ''}
+              {origin.storeName} ・ {fmtDate(origin.date)}
+              {origin.personName ? ` ・ ${origin.personName} 様` : ''}
             </div>
           </div>
           <button onClick={onClose} aria-label="閉じる" style={{ border: 'none', background: 'transparent', color: 'var(--md-sys-color-on-surface)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>

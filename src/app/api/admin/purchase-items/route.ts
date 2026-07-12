@@ -57,6 +57,14 @@ export async function GET(request: NextRequest) {
             user: { select: { id: true, name: true } },
           },
         },
+        deal: {
+          select: {
+            id: true,
+            occurredAt: true,
+            store: { select: { id: true, name: true, code: true } },
+            user: { select: { id: true, name: true } },
+          },
+        },
         purchaseCategory: { select: { id: true, name: true } },
       },
       orderBy: [

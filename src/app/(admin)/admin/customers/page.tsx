@@ -2405,7 +2405,7 @@ export default function AdminCustomersPage() {
               <textarea
                 value={wizardDealDetail}
                 onChange={e => setWizardDealDetail(e.target.value)}
-                rows={3}
+                rows={6}
                 placeholder="買取内容・状況など。入力すると顧客と同時に案件を作成します"
                 className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-none"
               />

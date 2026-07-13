@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { startOfMonth, subMonths, subDays, startOfDay, format } from 'date-fns'
+import { jstMonthKey, jstDateKey } from '@/lib/datetime'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -74,9 +75,9 @@ export async function GET(request: NextRequest) {
   })
 
   const monthlyNewMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyNewMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyNewMap[jstMonthKey(subMonths(now, i))] = 0
   for (const u of newUsersInRange) {
-    const m = format(u.createdAt, 'yyyy-MM')
+    const m = jstMonthKey(u.createdAt)
     if (m in monthlyNewMap) monthlyNewMap[m]++
   }
   const monthlyNewCustomers = Object.entries(monthlyNewMap).map(([month, count]) => ({
@@ -92,14 +93,14 @@ export async function GET(request: NextRequest) {
   })
 
   const monthlyVisitMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyVisitMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyVisitMap[jstMonthKey(subMonths(now, i))] = 0
   const dailyMap: Record<string, number> = {}
-  for (let i = 29; i >= 0; i--) dailyMap[format(subDays(now, i), 'yyyy-MM-dd')] = 0
+  for (let i = 29; i >= 0; i--) dailyMap[jstDateKey(subDays(now, i))] = 0
 
   for (const v of visitsInRange) {
-    const m = format(v.visitDate, 'yyyy-MM')
+    const m = jstMonthKey(v.visitDate)
     if (m in monthlyVisitMap) monthlyVisitMap[m]++
-    const d = format(v.visitDate, 'yyyy-MM-dd')
+    const d = jstDateKey(v.visitDate)
     if (d in dailyMap) dailyMap[d]++
   }
 
@@ -124,9 +125,9 @@ export async function GET(request: NextRequest) {
   })
 
   const monthlyAmountMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyAmountMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyAmountMap[jstMonthKey(subMonths(now, i))] = 0
   for (const v of completedVisitsRecent) {
-    const m = format(v.visitDate, 'yyyy-MM')
+    const m = jstMonthKey(v.visitDate)
     if (m in monthlyAmountMap) monthlyAmountMap[m] += v.purchaseAmount ?? 0
   }
   const monthlyPurchaseAmount = Object.entries(monthlyAmountMap).map(([month, amount]) => ({
@@ -209,7 +210,7 @@ export async function GET(request: NextRequest) {
     select: { createdAt: true },
   })
   const monthlyDealMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyDealMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyDealMap[jstMonthKey(subMonths(now, i))] = 0
   for (const d of dealsForTrend) {
     const m = format(d.createdAt, 'yyyy-MM')
     if (m in monthlyDealMap) monthlyDealMap[m]++

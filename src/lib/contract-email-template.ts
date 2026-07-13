@@ -64,11 +64,11 @@ function escape(s: string): string {
 }
 
 function fmtDate(d: Date): string {
-  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
+  return d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 function fmtDateTime(d: Date): string {
-  return d.toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function addDays(d: Date, days: number): Date {

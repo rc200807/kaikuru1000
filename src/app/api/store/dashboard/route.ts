@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { startOfMonth, subMonths, startOfDay, format } from 'date-fns'
+import { startOfMonth, subMonths, startOfDay } from 'date-fns'
+import { jstMonthKey } from '@/lib/datetime'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -73,10 +74,10 @@ export async function GET(request: NextRequest) {
 
   // ── 月次買取金額の推移（自店舗・直近12ヶ月） ──
   const monthlyAmountMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyAmountMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyAmountMap[jstMonthKey(subMonths(now, i))] = 0
   for (const v of myVisits) {
     if (v.status !== 'completed') continue
-    const m = format(v.visitDate, 'yyyy-MM')
+    const m = jstMonthKey(v.visitDate)
     if (m in monthlyAmountMap) monthlyAmountMap[m] += v.purchaseAmount ?? 0
   }
   const monthlyPurchaseAmount = Object.entries(monthlyAmountMap).map(([month, amount]) => ({
@@ -86,9 +87,9 @@ export async function GET(request: NextRequest) {
 
   // ── 月次訪問件数の推移（自店舗・直近12ヶ月） ──
   const monthlyVisitMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyVisitMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyVisitMap[jstMonthKey(subMonths(now, i))] = 0
   for (const v of myVisits) {
-    const m = format(v.visitDate, 'yyyy-MM')
+    const m = jstMonthKey(v.visitDate)
     if (m in monthlyVisitMap) monthlyVisitMap[m]++
   }
   const monthlyVisits = Object.entries(monthlyVisitMap).map(([month, count]) => ({
@@ -135,9 +136,9 @@ export async function GET(request: NextRequest) {
     select: { createdAt: true },
   })
   const monthlyDealMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyDealMap[format(subMonths(now, i), 'yyyy-MM')] = 0
+  for (let i = 11; i >= 0; i--) monthlyDealMap[jstMonthKey(subMonths(now, i))] = 0
   for (const d of myDeals) {
-    const m = format(d.createdAt, 'yyyy-MM')
+    const m = jstMonthKey(d.createdAt)
     if (m in monthlyDealMap) monthlyDealMap[m]++
   }
   const monthlyDeals = Object.entries(monthlyDealMap).map(([month, count]) => ({ month: month.slice(5) + '月', count }))

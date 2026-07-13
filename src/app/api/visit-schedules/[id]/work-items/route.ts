@@ -53,7 +53,7 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { workName, unitPrice, quantity } = body
+  const { workName, unitPrice, quantity, notes } = body
 
   if (!workName) {
     return NextResponse.json({ error: '作業名は必須です' }, { status: 400 })
@@ -67,6 +67,7 @@ export async function POST(
         workName,
         unitPrice: unitPrice ?? 0,
         quantity: quantity ?? 1,
+        notes: notes || null,
       },
     })
 

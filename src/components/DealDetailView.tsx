@@ -18,7 +18,7 @@ import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatu
 import { formatYen } from '@/lib/currency'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
-type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number }
+type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
 type ContractInfo = { id: string; visitScheduleId?: string | null; agreedAt: string; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 type EstimateInfo = { id: string; visitScheduleId?: string | null; validUntil: string; purchaseAmount: number; billingAmount: number; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 
@@ -148,7 +148,7 @@ export default function DealDetailView({
   // 買取品目（PurchaseItemManager に委譲）／請求項目の登録（案件キー）
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [showAddWork, setShowAddWork] = useState(false)
-  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1 })
+  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1, notes: '' })
   const [savingWork, setSavingWork] = useState(false)
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
 
@@ -205,12 +205,13 @@ export default function DealDetailView({
         workName: workForm.workName,
         unitPrice: Number(workForm.unitPrice) || 0,
         quantity: Number(workForm.quantity) || 1,
+        notes: workForm.notes.trim() || null,
       }),
     })
     setSavingWork(false)
     if (res.ok) {
       setShowAddWork(false)
-      setWorkForm({ workName: '', unitPrice: '', quantity: 1 })
+      setWorkForm({ workName: '', unitPrice: '', quantity: 1, notes: '' })
       load()
     } else setMsg({ type: 'error', text: '請求項目の追加に失敗しました' })
   }
@@ -667,6 +668,7 @@ export default function DealDetailView({
                   <div className="min-w-0">
                     <div className="text-[var(--md-sys-color-on-surface)] truncate">{wi.workName}</div>
                     <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{formatYen(wi.unitPrice)} ・ ×{wi.quantity}</div>
+                    {wi.notes && <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words">備考: {wi.notes}</div>}
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(wi.unitPrice * wi.quantity)}</span>
@@ -809,6 +811,7 @@ export default function DealDetailView({
             <TextField label="単価（円）" type="number" value={workForm.unitPrice} onChange={v => setWorkForm(prev => ({ ...prev, unitPrice: v }))} />
             <TextField label="数量" type="number" value={String(workForm.quantity)} onChange={v => setWorkForm(prev => ({ ...prev, quantity: Number(v) || 1 }))} />
           </div>
+          <TextField label="備考" rows={2} value={workForm.notes} onChange={v => setWorkForm(prev => ({ ...prev, notes: v }))} />
           <div className="flex justify-end gap-3 pt-1">
             <Button variant="outlined" type="button" onClick={() => setShowAddWork(false)}>キャンセル</Button>
             <Button onClick={addWorkItem} loading={savingWork} disabled={savingWork || !workForm.workName}>追加</Button>

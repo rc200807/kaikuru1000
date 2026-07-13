@@ -152,37 +152,10 @@ export default function EstimatePage() {
       let pdfBase64: string | null = null
       let invoicePdfBase64: string | null = null
       try {
-        // フォント読み込み完了を待ってからレンダリング（PDFが空・崩れるのを防ぐ）
-        try { await (document as any).fonts?.ready } catch {}
-        const { default: jsPDF } = await import('jspdf')
-        const { default: html2canvas } = await import('html2canvas-pro')
-        const genPdf = async (el: HTMLElement): Promise<string | null> => {
-          const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
-          const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-          const pageWidth = pdf.internal.pageSize.getWidth()
-          const pageHeight = pdf.internal.pageSize.getHeight()
-          const imgWidth = pageWidth - 20
-          const imgHeight = (canvas.height * imgWidth) / canvas.width
-          let yOffset = 10
-          let remainingHeight = imgHeight
-          let sourceY = 0
-          while (remainingHeight > 0) {
-            const printHeight = Math.min(remainingHeight, pageHeight - 20)
-            const sourceHeight = (printHeight / imgHeight) * canvas.height
-            const pageCanvas = document.createElement('canvas')
-            pageCanvas.width = canvas.width
-            pageCanvas.height = sourceHeight
-            const ctx = pageCanvas.getContext('2d')!
-            ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
-            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
-            remainingHeight -= printHeight
-            sourceY += sourceHeight
-            if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
-          }
-          return pdf.output('datauristring').split(',')[1]
-        }
-        if (saleEstimateRef.current) pdfBase64 = await genPdf(saleEstimateRef.current)
-        if (invoiceEstimateRef.current) invoicePdfBase64 = await genPdf(invoiceEstimateRef.current)
+        const { elementToPdf } = await import('@/lib/pdf-export')
+        // 要素のブロック境界で改ページするため文字が途中で切れない
+        if (saleEstimateRef.current) pdfBase64 = await elementToPdf(saleEstimateRef.current, { mode: 'base64' })
+        if (invoiceEstimateRef.current) invoicePdfBase64 = await elementToPdf(invoiceEstimateRef.current, { mode: 'base64' })
       } catch (pdfErr) {
         console.error('PDF生成エラー:', pdfErr)
       }

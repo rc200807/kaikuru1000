@@ -70,33 +70,10 @@ function ContractViewContent() {
     setDownloading(true)
     setPdfError('')
     try {
-      try { await (document as any).fonts?.ready } catch {}
-      const { default: jsPDF } = await import('jspdf')
-      const { default: html2canvas } = await import('html2canvas-pro')
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pageWidth - 20
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let yOffset = 10
-      let remainingHeight = imgHeight
-      let sourceY = 0
-      while (remainingHeight > 0) {
-        const printHeight = Math.min(remainingHeight, pageHeight - 20)
-        const sourceHeight = (printHeight / imgHeight) * canvas.height
-        const pageCanvas = document.createElement('canvas')
-        pageCanvas.width = canvas.width
-        pageCanvas.height = sourceHeight
-        const ctx = pageCanvas.getContext('2d')!
-        ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
-        remainingHeight -= printHeight
-        sourceY += sourceHeight
-        if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
-      }
+      const { elementToPdf } = await import('@/lib/pdf-export')
       const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      pdf.save(`売買契約書_${ymd}.pdf`)
+      // 要素のブロック境界で改ページするため文字が途中で切れない
+      await elementToPdf(el, { mode: 'save', filename: `売買契約書_${ymd}.pdf` })
     } catch (e) {
       console.error('PDF生成エラー:', e)
       setPdfError('PDFの生成に失敗しました。お手数ですが、時間をおいて再度お試しください。')
@@ -230,7 +207,9 @@ function ContractViewContent() {
     (sum, item) => sum + item.unitPrice * item.quantity,
     0
   )
-  const finalPayment = purchaseTotal - workTotal
+  // 差し引き（買取−請求）は表示しない。売買契約書と請求書はそれぞれ独立した書類として扱う。
+  const invoiceVisitId = visitId || magicAuth?.contractId || contract.id
+  const invoicePdfHref = `/api/magic-link/document-pdf?type=contract&kind=invoice&visitId=${invoiceVisitId}${magicAuth?.userId ? `&userId=${magicAuth.userId}` : ''}`
 
   const formatDate = (date: Date) =>
     `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
@@ -402,68 +381,6 @@ function ContractViewContent() {
               </div>
             )}
 
-            {/* Work items */}
-            {contract.workItems.length > 0 && (
-              <div>
-                <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
-                  作業品目
-                </h2>
-                <div className="bg-white/40 rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-white/30 border-b border-white/60">
-                        <th className="text-left px-3 py-2 text-gray-600 font-medium">作業名</th>
-                        <th className="text-right px-3 py-2 text-gray-600 font-medium">数量</th>
-                        <th className="text-right px-3 py-2 text-gray-600 font-medium">単価</th>
-                        <th className="text-right px-3 py-2 text-gray-600 font-medium">小計</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contract.workItems.map((item) => (
-                        <tr key={item.id} className="border-b border-white/40">
-                          <td className="px-3 py-2 text-gray-900">{item.workName}</td>
-                          <td className="px-3 py-2 text-gray-900 text-right">{item.quantity}</td>
-                          <td className="px-3 py-2 text-gray-900 text-right">{formatCurrency(item.unitPrice)}円</td>
-                          <td className="px-3 py-2 text-gray-900 text-right font-medium">{formatCurrency(item.unitPrice * item.quantity)}円</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-white/30 border-t border-white/60">
-                        <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">作業合計</td>
-                        <td className="px-3 py-2 text-right font-bold text-gray-700">{formatCurrency(workTotal)}円</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Final payment */}
-            <div className="bg-red-50/50 backdrop-blur-sm rounded-xl p-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-gray-600 text-xs mb-1">お支払い金額（買取金額 - 作業費用）</p>
-                  <p className="text-2xl font-bold text-[#B91C1C]">
-                    {formatCurrency(finalPayment)}
-                    <span className="text-base font-medium ml-1">円</span>
-                  </p>
-                </div>
-              </div>
-              {purchaseTotal > 0 && workTotal > 0 && (
-                <div className="mt-3 pt-3 border-t border-red-200/40 text-xs text-gray-600 space-y-1">
-                  <div className="flex justify-between">
-                    <span>買取合計</span>
-                    <span>{formatCurrency(purchaseTotal)}円</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>作業費用</span>
-                    <span>-{formatCurrency(workTotal)}円</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Signature */}
             {contract.salesContract?.signatureData && (
               <div>
@@ -584,6 +501,54 @@ function ContractViewContent() {
             </div>
           </div>
         </div>
+
+        {/* 請求書（売買契約書とは別の独立した書類） */}
+        {contract.workItems.length > 0 && (
+          <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 sm:p-8">
+            <div className="bg-gray-900 text-white px-6 py-4 text-center rounded-xl mb-5">
+              <h2 className="text-lg font-bold tracking-wider">請求書</h2>
+            </div>
+            <div className="bg-white/40 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-white/30 border-b border-white/60">
+                    <th className="text-left px-3 py-2 text-gray-600 font-medium">作業名</th>
+                    <th className="text-right px-3 py-2 text-gray-600 font-medium">数量</th>
+                    <th className="text-right px-3 py-2 text-gray-600 font-medium">単価</th>
+                    <th className="text-right px-3 py-2 text-gray-600 font-medium">小計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contract.workItems.map((item) => (
+                    <tr key={item.id} className="border-b border-white/40">
+                      <td className="px-3 py-2 text-gray-900">{item.workName}</td>
+                      <td className="px-3 py-2 text-gray-900 text-right">{item.quantity}</td>
+                      <td className="px-3 py-2 text-gray-900 text-right">{formatCurrency(item.unitPrice)}円</td>
+                      <td className="px-3 py-2 text-gray-900 text-right font-medium">{formatCurrency(item.unitPrice * item.quantity)}円</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-white/30 border-t border-white/60">
+                    <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">請求金額合計</td>
+                    <td className="px-3 py-2 text-right font-bold text-[#B91C1C]">{formatCurrency(workTotal)}円</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {contract.hasInvoicePdf && (
+              <div className="text-center mt-5">
+                <a
+                  href={invoicePdfHref}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-800 rounded-2xl font-semibold text-sm shadow-sm hover:bg-gray-50 transition-all active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  請求書PDFをダウンロード
+                </a>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* PDFダウンロード（表示中の契約書をその場でPDF化） */}
         <div className="mt-6 bg-white/70 backdrop-blur-xl rounded-2xl border border-white/50 shadow-sm p-6 text-center">

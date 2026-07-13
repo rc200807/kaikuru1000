@@ -42,12 +42,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
 
   const body = await request.json()
-  const { workName, unitPrice, quantity } = body
+  const { workName, unitPrice, quantity, notes } = body
   if (!workName) return NextResponse.json({ error: '作業名は必須です' }, { status: 400 })
 
   const item = await prisma.$transaction(async (tx) => {
     const created = await tx.workItem.create({
-      data: { dealId: id, workName, unitPrice: Number(unitPrice) || 0, quantity: quantity ?? 1 },
+      data: { dealId: id, workName, unitPrice: Number(unitPrice) || 0, quantity: quantity ?? 1, notes: notes || null },
     })
     await recomputeDealAmounts(tx, id)
     return created

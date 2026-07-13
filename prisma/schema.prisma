@@ -305,6 +305,8 @@ model PurchaseItem {
   rakutenData     String?  @db.Text           // 楽天商品検索APIの結果 (JSON文字列)
   aiResearch      String?                     // AI市場調査結果 (JSON文字列)
   aiResearchedAt  DateTime?                   // AI調査実行日時
+  isAdditionalRequest Boolean @default(false) // 追加依頼品タグ
+  notes           String?  @db.Text           // 備考
   inventoryItem   InventoryItem?              // 変換先の在庫（1:1。未変換は null）
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -323,6 +325,7 @@ model WorkItem {
   workName        String                      // 作業名
   unitPrice       Int      @default(0)        // 単価（円）
   quantity        Int      @default(1)        // 数量
+  notes           String?  @db.Text           // 備考
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

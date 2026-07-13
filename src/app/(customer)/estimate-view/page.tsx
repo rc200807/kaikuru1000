@@ -41,33 +41,10 @@ function EstimateViewContent() {
     setDownloading(true)
     setPdfError('')
     try {
-      try { await (document as any).fonts?.ready } catch {}
-      const { default: jsPDF } = await import('jspdf')
-      const { default: html2canvas } = await import('html2canvas-pro')
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pageWidth - 20
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let yOffset = 10
-      let remainingHeight = imgHeight
-      let sourceY = 0
-      while (remainingHeight > 0) {
-        const printHeight = Math.min(remainingHeight, pageHeight - 20)
-        const sourceHeight = (printHeight / imgHeight) * canvas.height
-        const pageCanvas = document.createElement('canvas')
-        pageCanvas.width = canvas.width
-        pageCanvas.height = sourceHeight
-        const ctx = pageCanvas.getContext('2d')!
-        ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
-        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
-        remainingHeight -= printHeight
-        sourceY += sourceHeight
-        if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
-      }
+      const { elementToPdf } = await import('@/lib/pdf-export')
       const ymd = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-      pdf.save(`見積書_${ymd}.pdf`)
+      // 要素のブロック境界で改ページするため文字が途中で切れない
+      await elementToPdf(el, { mode: 'save', filename: `見積書_${ymd}.pdf` })
     } catch (e) {
       console.error('PDF生成エラー:', e)
       setPdfError('PDFの生成に失敗しました。お手数ですが、時間をおいて再度お試しください。')

@@ -9,6 +9,7 @@ import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
+import WeekSchedulePicker from '@/components/store/WeekSchedulePicker'
 import { useBusinessHours } from '@/hooks/useBusinessHours'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import DataTable from '@/components/DataTable'
@@ -416,6 +417,7 @@ export default function StoreCustomersPage() {
       <Modal
         open={showAddCustomer}
         onClose={() => setShowAddCustomer(false)}
+        size={wizardStep === 3 ? 'lg' : 'md'}
         title={
           wizardStep === 1 ? '新規顧客追加'
           : wizardStep === 2 ? '案件を作成（任意）'
@@ -545,8 +547,14 @@ export default function StoreCustomersPage() {
         {wizardStep === 3 && (
           <div className="space-y-4">
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-              {createdDealId ? '案件を作成しました。' : ''}訪問予定を追加できます（不要な場合はスキップ）。
+              {createdDealId ? '案件を作成しました。' : ''}訪問予定を追加できます（不要な場合はスキップ）。他の予定の空き枠を確認しながら選べます。
             </p>
+            <WeekSchedulePicker
+              value={{ visitDate: scheduleForm.visitDate, startTime: scheduleForm.startTime }}
+              onSelect={(visitDate, startTime) => setScheduleForm(f => ({ ...f, visitDate, startTime: startTime || f.startTime }))}
+              bizStart={bizHours?.start}
+              bizEnd={bizHours?.end}
+            />
             <div>
               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">訪問日 <span className="text-[var(--md-sys-color-error,#B3261E)]">*</span></label>
               <input

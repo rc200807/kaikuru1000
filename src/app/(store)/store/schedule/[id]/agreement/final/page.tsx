@@ -483,11 +483,16 @@ export default function FinalAgreementPage() {
 
   const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
+  // 請求項目が無い案件は請求書セクション・署名ごと不要
+  const hasInvoice = (visit?.workItems.length ?? 0) > 0
 
   const handleSubmit = async () => {
-    if (!agreedSale || !saleSignature || !agreedInvoice || !invoiceSignature || !visit) return
+    if (!visit) return
+    if (!agreedSale || !saleSignature) return
+    if (hasInvoice && (!agreedInvoice || !invoiceSignature)) return
     const emailTrimmed = customerEmailInput.trim()
-    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+    // メールは任意。入力がある場合のみ形式を検証する
+    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
       setMessage({ type: 'error', text: 'メールアドレスを正しく入力してください' })
       return
     }
@@ -498,38 +503,10 @@ export default function FinalAgreementPage() {
       let pdfBase64: string | null = null
       let invoicePdfBase64: string | null = null
       try {
-        const { default: jsPDF } = await import('jspdf')
-        const { default: html2canvas } = await import('html2canvas-pro')
-
-        // 要素を A4 複数ページPDFのbase64に変換するヘルパー
-        const genPdf = async (el: HTMLElement): Promise<string | null> => {
-          const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false })
-          const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-          const pageWidth = pdf.internal.pageSize.getWidth()
-          const pageHeight = pdf.internal.pageSize.getHeight()
-          const imgWidth = pageWidth - 20
-          const imgHeight = (canvas.height * imgWidth) / canvas.width
-          let yOffset = 10
-          let remainingHeight = imgHeight
-          let sourceY = 0
-          while (remainingHeight > 0) {
-            const printHeight = Math.min(remainingHeight, pageHeight - 20)
-            const sourceHeight = (printHeight / imgHeight) * canvas.height
-            const pageCanvas = document.createElement('canvas')
-            pageCanvas.width = canvas.width
-            pageCanvas.height = sourceHeight
-            const ctx = pageCanvas.getContext('2d')!
-            ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight)
-            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, yOffset, imgWidth, printHeight)
-            remainingHeight -= printHeight
-            sourceY += sourceHeight
-            if (remainingHeight > 0) { pdf.addPage(); yOffset = 10 }
-          }
-          return pdf.output('datauristring').split(',')[1]
-        }
-
-        if (saleRef.current) pdfBase64 = await genPdf(saleRef.current)
-        if (invoiceRef.current) invoicePdfBase64 = await genPdf(invoiceRef.current)
+        const { elementToPdf } = await import('@/lib/pdf-export')
+        // 要素のブロック境界で改ページするため文字が途中で切れない
+        if (saleRef.current) pdfBase64 = await elementToPdf(saleRef.current, { mode: 'base64' })
+        if (hasInvoice && invoiceRef.current) invoicePdfBase64 = await elementToPdf(invoiceRef.current, { mode: 'base64' })
       } catch (pdfErr) {
         console.error('PDF生成エラー:', pdfErr)
       }
@@ -918,6 +895,7 @@ export default function FinalAgreementPage() {
       </div>{/* /saleRef */}
 
       {/* ──── PDF出力対象エリア②：請求書（請求・運営会社情報） ──── */}
+      {hasInvoice && (
       <div ref={invoiceRef} className="space-y-5 bg-white p-1 rounded-xl">
 
         {/* ──── 請求書 ──── */}
@@ -1013,7 +991,8 @@ export default function FinalAgreementPage() {
           </div>
         </Card>
 
-      </div>{/* /invoiceRef */}
+      </div>
+      )}{/* /invoiceRef */}
 
       {/* お客様情報・送付先（前のページで入力済み・確認用） */}
       <Card variant="elevated" padding="md">
@@ -1028,7 +1007,7 @@ export default function FinalAgreementPage() {
         </div>
         <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-2">職業・電話番号・メールアドレスは前のページ（本人確認の下）でご記入ください。提出後、顧客情報および売買契約書に反映されます。</p>
         {!customerEmailInput.trim() && (
-          <p className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] mt-1">提出にはメールアドレスが必要です。「修正する」から前のページでご入力ください。</p>
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">メールアドレスは任意です。未入力の場合、控えのメール送信はスキップされます（「修正する」から入力も可能）。</p>
         )}
       </Card>
 
@@ -1059,7 +1038,7 @@ export default function FinalAgreementPage() {
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={!agreedSale || !saleSignature || !agreedInvoice || !invoiceSignature || !customerEmailInput.trim() || submitting}
+          disabled={!agreedSale || !saleSignature || (hasInvoice && (!agreedInvoice || !invoiceSignature)) || submitting}
         >
           {submitting ? (
             <span className="flex items-center gap-2">

@@ -32,6 +32,7 @@ type Schedule = {
   revisitNote: string | null
   user: { id: string; name: string; address: string; phone: string }
   store: { id: string; name: string }
+  deal: { id: string; status: string } | null
   salesContract: { id: string } | null
 }
 
@@ -558,9 +559,9 @@ export default function StoreSchedulePage() {
                         <Button
                           variant="filled"
                           size="sm"
-                          onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                          onClick={() => router.push(schedule.deal ? `/store/deals/${schedule.deal.id}` : `/store/schedule/${schedule.id}`)}
                         >
-                          編集
+                          案件情報を見る
                         </Button>
                         {schedule.salesContract && (
                           <Button
@@ -617,9 +618,9 @@ export default function StoreSchedulePage() {
                         <Button
                           variant="filled"
                           size="sm"
-                          onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                          onClick={() => router.push(schedule.deal ? `/store/deals/${schedule.deal.id}` : `/store/schedule/${schedule.id}`)}
                         >
-                          詳細
+                          案件情報を見る
                         </Button>
                       </div>
                     </div>
@@ -655,7 +656,7 @@ export default function StoreSchedulePage() {
                       <tr
                         key={schedule.id}
                         className="border-b border-[var(--md-sys-color-surface-container-high)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors cursor-pointer"
-                        onClick={() => router.push(`/store/schedule/${schedule.id}`)}
+                        onClick={() => router.push(schedule.deal ? `/store/deals/${schedule.deal.id}` : `/store/schedule/${schedule.id}`)}
                       >
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
                           {format(new Date(schedule.visitDate), 'yyyy/M/d（E）', { locale: ja })}
@@ -690,9 +691,9 @@ export default function StoreSchedulePage() {
                               <div className="absolute right-0 top-full mt-1 z-50 min-w-40 bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-medium)] shadow-lg py-1 text-sm">
                                 <button
                                   className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"
-                                  onClick={() => { setOpenMenuId(null); router.push(`/store/schedule/${schedule.id}`) }}
+                                  onClick={() => { setOpenMenuId(null); router.push(schedule.deal ? `/store/deals/${schedule.deal.id}` : `/store/schedule/${schedule.id}`) }}
                                 >
-                                  詳細・編集
+                                  案件情報を見る
                                 </button>
                                 <button
                                   className="w-full text-left px-4 py-2 hover:bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] transition-colors"

@@ -3848,13 +3848,23 @@ function MyPageContent() {
                                 </div>
                               )}
 
-                              {/* お支払い金額 */}
-                              {visit.purchaseAmount != null && (
-                                <div className="bg-[#B91C1C]/5 rounded-lg p-3 flex justify-between items-center">
-                                  <span className="text-xs font-bold text-gray-800">お支払い金額</span>
-                                  <span className="text-base font-bold text-[#B91C1C]">
-                                    ¥{((visit.purchaseAmount || 0) - (visit.billingAmount || 0)).toLocaleString()}
-                                  </span>
+                              {/* 買取・請求金額（相殺せず個別表示） */}
+                              {(visit.purchaseAmount != null || visit.billingAmount != null) && (
+                                <div className="bg-[#B91C1C]/5 rounded-lg p-3 space-y-1.5">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs font-bold text-gray-800">買取金額</span>
+                                    <span className="text-base font-bold text-[#B91C1C]">
+                                      ¥{(visit.purchaseAmount || 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  {(visit.billingAmount || 0) > 0 && (
+                                    <div className="flex justify-between items-center">
+                                      <span className="text-xs font-bold text-gray-800">請求金額</span>
+                                      <span className="text-base font-bold text-gray-800">
+                                        ¥{(visit.billingAmount || 0).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

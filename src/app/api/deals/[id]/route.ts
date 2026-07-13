@@ -45,7 +45,7 @@ export async function GET(
             select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
           },
           workItems: {
-            select: { id: true, workName: true, unitPrice: true, quantity: true },
+            select: { id: true, workName: true, unitPrice: true, quantity: true, notes: true },
           },
           salesContract: {
             select: {
@@ -67,12 +67,13 @@ export async function GET(
         select: {
           id: true, itemName: true, category: true, quantity: true, purchasePrice: true,
           imageUrls: true, janCode: true, rakutenData: true, aiResearch: true, aiResearchedAt: true,
+          isAdditionalRequest: true, notes: true,
           inventoryItem: { select: { id: true } },
         },
       },
       workItems: {
         orderBy: { createdAt: 'asc' },
-        select: { id: true, workName: true, unitPrice: true, quantity: true },
+        select: { id: true, workName: true, unitPrice: true, quantity: true, notes: true },
       },
       salesContract: {
         select: { id: true, visitScheduleId: true, agreedAt: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
@@ -110,6 +111,7 @@ export async function GET(
       id: item.id, itemName: item.itemName, category: item.category, quantity: item.quantity, purchasePrice: item.purchasePrice,
       imageUrls: images.map((_: string, idx: number) => `/api/purchase-items/${item.id}/images/${idx}`),
       janCode: item.janCode, rakutenData, aiResearch, aiResearchedAt: item.aiResearchedAt,
+      isAdditionalRequest: item.isAdditionalRequest, notes: item.notes,
       convertedInventoryId: item.inventoryItem?.id ?? null,
     }
   })

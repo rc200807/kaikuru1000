@@ -74,7 +74,9 @@ export async function POST(
   if (!signatureData) {
     return NextResponse.json({ error: '売買契約への署名が必要です' }, { status: 400 })
   }
-  if (!invoiceSignatureData) {
+  // 請求項目が無い案件は請求書自体が不要 → 請求書署名も任意
+  const hasInvoice = workItems.length > 0
+  if (hasInvoice && !invoiceSignatureData) {
     return NextResponse.json({ error: '請求書への署名が必要です' }, { status: 400 })
   }
 

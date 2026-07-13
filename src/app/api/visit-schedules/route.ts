@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
   const storeId = searchParams.get('storeId')
   const userId = searchParams.get('userId')
   const dealId = searchParams.get('dealId')
+  const from = searchParams.get('from')
+  const to = searchParams.get('to')
 
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
@@ -27,6 +29,12 @@ export async function GET(request: NextRequest) {
   if (dealId) where.dealId = dealId
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
   if (sessionUser.role === 'store') where.storeId = sessionUser.id
+  // 訪問日の範囲フィルタ（週間カレンダー等での絞り込み用）
+  if (from || to) {
+    where.visitDate = {}
+    if (from) where.visitDate.gte = new Date(from)
+    if (to) where.visitDate.lte = new Date(to)
+  }
 
   const [schedules, total] = await Promise.all([
     prisma.visitSchedule.findMany({

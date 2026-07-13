@@ -213,12 +213,20 @@ export default function AdminVisitDetailPage() {
           </Card>
         )}
 
-        {/* 金額サマリー */}
+        {/* 金額サマリー（相殺せず個別表示） */}
         {(visit.purchaseItems.length > 0 || visit.workItems.length > 0) && (
           <Card variant="elevated" padding="md">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">お支払い金額（買取額 - 作業費）</span>
-              <span className="text-xl font-bold text-[var(--portal-primary)]">{fmt(purchaseTotal - workTotal)}</span>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">買取金額合計</span>
+                <span className="text-xl font-bold text-[var(--portal-primary)]">{fmt(purchaseTotal)}</span>
+              </div>
+              {workTotal > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">請求金額合計</span>
+                  <span className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">{fmt(workTotal)}</span>
+                </div>
+              )}
             </div>
           </Card>
         )}

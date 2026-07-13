@@ -38,6 +38,7 @@ export async function PATCH(
   if (body.workName !== undefined) updateData.workName = body.workName
   if (body.unitPrice !== undefined) updateData.unitPrice = body.unitPrice
   if (body.quantity !== undefined) updateData.quantity = body.quantity
+  if (body.notes !== undefined) updateData.notes = body.notes || null
 
   const updated = await prisma.$transaction(async (tx) => {
     const result = await tx.workItem.update({

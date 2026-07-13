@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
 
   const body = await request.json()
-  const { itemName, category, imageUrls, quantity, purchasePrice, janCode, rakutenData } = body
+  const { itemName, category, imageUrls, quantity, purchasePrice, janCode, rakutenData, isAdditionalRequest, notes } = body
   if (!itemName || !category) return NextResponse.json({ error: '品名とカテゴリーは必須です' }, { status: 400 })
 
   const item = await prisma.$transaction(async (tx) => {
@@ -61,6 +61,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         purchasePrice: purchasePrice ?? 0,
         janCode: janCode || null,
         rakutenData: rakutenData ? JSON.stringify(rakutenData) : null,
+        isAdditionalRequest: isAdditionalRequest ?? false,
+        notes: notes || null,
       },
     })
     await recomputeDealAmounts(tx, id)

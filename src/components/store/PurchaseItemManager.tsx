@@ -26,6 +26,8 @@ export type ManagedPurchaseItem = {
   rakutenData: RakutenProduct | null
   aiResearch: MarketResearch | null
   aiResearchedAt: string | null
+  isAdditionalRequest: boolean
+  notes: string | null
   convertedInventoryId: string | null
 }
 
@@ -58,7 +60,7 @@ export default function PurchaseItemManager({
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: '' as number | '', imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null })
+  const [form, setForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: '' as number | '', imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null, isAdditionalRequest: false, notes: '' })
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
@@ -82,7 +84,7 @@ export default function PurchaseItemManager({
   const msg = (m: { type: 'success' | 'error'; text: string }) => onMessage?.(m)
 
   function resetForm() {
-    setForm({ itemName: '', category: '', quantity: 1, purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null })
+    setForm({ itemName: '', category: '', quantity: 1, purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null, isAdditionalRequest: false, notes: '' })
     setEditingId(null)
     setShowForm(false)
     setJanLookupError(null)
@@ -97,6 +99,8 @@ export default function PurchaseItemManager({
       imageUrls: item.imageUrls,
       janCode: item.janCode || '',
       rakutenData: item.rakutenData || null,
+      isAdditionalRequest: item.isAdditionalRequest ?? false,
+      notes: item.notes || '',
     })
     setEditingId(item.id)
     setShowForm(true)
@@ -157,6 +161,7 @@ export default function PurchaseItemManager({
       itemName: form.itemName, category: form.category, quantity: form.quantity,
       purchasePrice: Number(form.purchasePrice) || 0, imageUrls: form.imageUrls,
       janCode: form.janCode || null, rakutenData: form.rakutenData || null,
+      isAdditionalRequest: form.isAdditionalRequest, notes: form.notes.trim() || null,
     }
     try {
       if (editingId) {
@@ -260,11 +265,15 @@ export default function PurchaseItemManager({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{item.itemName}</span>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{item.category}</span>
+                    {item.isAdditionalRequest && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 font-medium">追加依頼品</span>}
                     {item.janCode && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 font-mono">JAN: {item.janCode}</span>}
                   </div>
                   <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
                     数量: {item.quantity} × {formatYen(item.purchasePrice)} = <strong>{formatYen(item.purchasePrice * item.quantity)}</strong>
                   </div>
+                  {item.notes && (
+                    <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 whitespace-pre-wrap break-words">備考: {item.notes}</div>
+                  )}
                   {item.rakutenData && (
                     <div className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
                       {item.rakutenData.makerName && <span>{item.rakutenData.makerName}</span>}
@@ -400,6 +409,25 @@ export default function PurchaseItemManager({
                 </label>
               )}
             </div>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isAdditionalRequest}
+              onChange={(e) => setForm({ ...form, isAdditionalRequest: e.target.checked })}
+              className="w-4 h-4 rounded border-[var(--md-sys-color-outline)] accent-[var(--portal-primary)]"
+            />
+            <span className="text-sm text-[var(--md-sys-color-on-surface)]">追加依頼品として登録する</span>
+          </label>
+          <div>
+            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">備考</label>
+            <textarea
+              rows={2}
+              className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="補足事項があれば入力してください"
+            />
           </div>
           <div className="flex gap-2 justify-between">
             {editingId ? (

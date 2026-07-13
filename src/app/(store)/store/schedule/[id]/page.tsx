@@ -49,6 +49,7 @@ type WorkItem = {
   workName: string
   unitPrice: number
   quantity: number
+  notes: string | null
 }
 
 type MarketResearch = {
@@ -141,7 +142,7 @@ export default function VisitDetailPage() {
   // 作業品目フォーム
   const [showWorkForm, setShowWorkForm] = useState(false)
   const [editingWork, setEditingWork] = useState<WorkItem | null>(null)
-  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '' as number | '', quantity: 1 })
+  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '' as number | '', quantity: 1, notes: '' })
   const [savingWork, setSavingWork] = useState(false)
 
   // AI調査
@@ -396,13 +397,13 @@ export default function VisitDetailPage() {
 
   /* ─── 作業品目 ─── */
   function resetWorkForm() {
-    setWorkForm({ workName: '', unitPrice: '', quantity: 1 })
+    setWorkForm({ workName: '', unitPrice: '', quantity: 1, notes: '' })
     setEditingWork(null)
     setShowWorkForm(false)
   }
 
   function startEditWork(item: WorkItem) {
-    setWorkForm({ workName: item.workName, unitPrice: item.unitPrice, quantity: item.quantity })
+    setWorkForm({ workName: item.workName, unitPrice: item.unitPrice, quantity: item.quantity, notes: item.notes || '' })
     setEditingWork(item)
     setShowWorkForm(true)
   }
@@ -415,7 +416,7 @@ export default function VisitDetailPage() {
 
     setSavingWork(true)
 
-    const payload = { ...workForm, unitPrice: Number(workForm.unitPrice) || 0 }
+    const payload = { ...workForm, unitPrice: Number(workForm.unitPrice) || 0, notes: workForm.notes.trim() || null }
     if (editingWork) {
       await fetch(`/api/work-items/${editingWork.id}`, {
         method: 'PATCH',
@@ -1190,6 +1191,7 @@ export default function VisitDetailPage() {
                   <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
                     {fmtYen(item.unitPrice)} × {item.quantity} = <strong>{fmtYen(item.unitPrice * item.quantity)}</strong>
                   </div>
+                  {item.notes && <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 whitespace-pre-wrap break-words">備考: {item.notes}</div>}
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   <button onClick={() => startEditWork(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>
@@ -1246,6 +1248,16 @@ export default function VisitDetailPage() {
                 小計: <strong>{fmtYen((Number(workForm.unitPrice) || 0) * workForm.quantity)}</strong>
               </span>
             </div>
+          </div>
+          <div>
+            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">備考</label>
+            <textarea
+              rows={2}
+              className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+              value={workForm.notes}
+              onChange={(e) => setWorkForm({ ...workForm, notes: e.target.value })}
+              placeholder="補足事項があれば入力してください"
+            />
           </div>
           <div className="flex gap-2 justify-end pt-1">
             <Button variant="text" size="sm" onClick={resetWorkForm} disabled={savingWork}>キャンセル</Button>

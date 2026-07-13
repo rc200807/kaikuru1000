@@ -66,7 +66,7 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { itemName, category, imageUrls, quantity, purchasePrice, janCode, rakutenData } = body
+  const { itemName, category, imageUrls, quantity, purchasePrice, janCode, rakutenData, isAdditionalRequest, notes } = body
 
   if (!itemName || !category) {
     return NextResponse.json({ error: '品名とカテゴリーは必須です' }, { status: 400 })
@@ -85,6 +85,8 @@ export async function POST(
         purchasePrice: purchasePrice ?? 0,
         janCode: janCode || null,
         rakutenData: rakutenData ? JSON.stringify(rakutenData) : null,
+        isAdditionalRequest: isAdditionalRequest ?? false,
+        notes: notes || null,
       },
     })
 

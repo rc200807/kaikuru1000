@@ -149,6 +149,7 @@ export default function DealDetailView({
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [showAddWork, setShowAddWork] = useState(false)
   const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1, notes: '' })
+  const [showPreview, setShowPreview] = useState(false)
   const [savingWork, setSavingWork] = useState(false)
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
 
@@ -391,10 +392,11 @@ export default function DealDetailView({
 
         {/* 案件サマリー */}
         <Card variant="outlined" padding="md">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
             <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{ background: badge.bg, color: badge.fg }}>
               {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
             </span>
+            <Button size="sm" variant="outlined" onClick={() => setShowPreview(true)}>契約プレビュー</Button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
@@ -758,6 +760,121 @@ export default function DealDetailView({
       <datalist id="deal-staff-options">
         {members.map(m => <option key={m.id} value={m.name} />)}
       </datalist>
+
+      {/* 契約プレビュー（顧客と買取・請求・お支払い金額を確認） */}
+      <Modal open={showPreview} onClose={() => setShowPreview(false)} title="契約プレビュー" size="lg">
+        <div className="space-y-4">
+          <div className="rounded-lg px-3 py-2" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+            <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{deal.user.name} 様</span>
+            {deal.store ? <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]"> ・ {deal.store.name}</span> : null}
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">お客様と一緒に、買取内容・請求内容・お支払い金額をご確認ください。</p>
+          </div>
+
+          {/* 買取品目 */}
+          <div>
+            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] mb-2">買取品目</h3>
+            {purchaseItems.length === 0 ? (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">買取品目はありません</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-[var(--md-sys-color-outline-variant)]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]">
+                      <th className="text-left px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">品名</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">数量</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">単価</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">小計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseItems.map(it => (
+                      <tr key={it.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50 last:border-0">
+                        <td className="px-2 py-1.5 text-[var(--md-sys-color-on-surface)]">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{it.itemName}</span>
+                            {it.isAdditionalRequest && <span className="text-[9px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">追加依頼品</span>}
+                            <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">{it.category}</span>
+                          </div>
+                          {it.notes && <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words">備考: {it.notes}</div>}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{it.quantity}</td>
+                        <td className="px-2 py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{formatYen(it.purchasePrice)}</td>
+                        <td className="px-2 py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(it.purchasePrice * it.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[var(--md-sys-color-surface-container-low)]">
+                      <td colSpan={3} className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取合計</td>
+                      <td className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">{formatYen(totalPurchase)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* 請求項目 */}
+          <div>
+            <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] mb-2">請求項目</h3>
+            {workItems.length === 0 ? (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">請求項目はありません</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-[var(--md-sys-color-outline-variant)]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]">
+                      <th className="text-left px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">作業名</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">数量</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">単価</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">小計</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workItems.map(wi => (
+                      <tr key={wi.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50 last:border-0">
+                        <td className="px-2 py-1.5 text-[var(--md-sys-color-on-surface)]">
+                          <div>{wi.workName}</div>
+                          {wi.notes && <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words">備考: {wi.notes}</div>}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{wi.quantity}</td>
+                        <td className="px-2 py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{formatYen(wi.unitPrice)}</td>
+                        <td className="px-2 py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(wi.unitPrice * wi.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[var(--md-sys-color-surface-container-low)]">
+                      <td colSpan={3} className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">請求合計</td>
+                      <td className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">{formatYen(totalBilling)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* お支払い金額 */}
+          <div className="rounded-xl p-4 border border-[var(--portal-primary,#374151)]/30" style={{ background: 'var(--md-sys-color-surface-container-low)' }}>
+            <div className="space-y-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              <div className="flex justify-between"><span>買取合計</span><span>{formatYen(totalPurchase)}</span></div>
+              <div className="flex justify-between"><span>請求合計</span><span>− {formatYen(totalBilling)}</span></div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)] flex justify-between items-center">
+              <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">お支払い金額</span>
+              <span className="text-xl font-bold text-[var(--portal-primary,#374151)]">{formatYen(totalPurchase - totalBilling)}</span>
+            </div>
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+              お支払い金額 = 買取合計 − 請求合計
+              {totalPurchase - totalBilling < 0 && '（マイナスの場合はお客様からのお支払いとなります）'}
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <Button variant="text" onClick={() => setShowPreview(false)}>閉じる</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* この案件に訪問を追加 */}
       <Modal open={showAddVisit} onClose={() => setShowAddVisit(false)} title="この案件に訪問を追加" size="md">

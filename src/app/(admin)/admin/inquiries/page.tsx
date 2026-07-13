@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 
 type PurchaseMemo = {
   id: string
@@ -213,14 +214,12 @@ export default function AdminInquiriesPage() {
               />
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <select
+              <StoreFilterSelect
                 value={storeFilter}
-                onChange={e => setStoreFilter(e.target.value)}
-                style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 12 }}
-              >
-                <option value="">すべての店舗</option>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+                onChange={setStoreFilter}
+                stores={stores}
+                style={{ flex: 1 }}
+              />
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}

@@ -17,6 +17,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
+import ScheduleCalendar from '@/components/store/ScheduleCalendar'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type Schedule = {
@@ -372,6 +373,16 @@ export default function StoreSchedulePage() {
             {message.text}
           </MessageBanner>
         )}
+
+        {/* カレンダー（全体スケジュール：月間・週間・日間） */}
+        <section className="mb-8">
+          <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4">
+            カレンダー
+          </h3>
+          <Card variant="elevated" padding="md">
+            <ScheduleCalendar />
+          </Card>
+        </section>
 
         {/* 訪問リクエスト */}
         {!visitRequestsLoading && visitRequests.length > 0 && (

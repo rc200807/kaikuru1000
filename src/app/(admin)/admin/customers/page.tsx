@@ -12,6 +12,7 @@ import DataTable, { type Column } from '@/components/DataTable'
 import Modal from '@/components/Modal'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
+import TimeSelect from '@/components/TimeSelect'
 import MessageBanner from '@/components/MessageBanner'
 import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -201,7 +202,7 @@ export default function AdminCustomersPage() {
   const [creatingDeal, setCreatingDeal] = useState(false)
   const [detailSchedules, setDetailSchedules] = useState<VisitSchedule[]>([])
   const [detailSchedulesLoading, setDetailSchedulesLoading] = useState(false)
-  const [scheduleForm, setScheduleForm] = useState({ storeId: '', visitDate: '', note: '' })
+  const [scheduleForm, setScheduleForm] = useState({ storeId: '', visitDate: '', startTime: '', endTime: '', note: '' })
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false)
   const [scheduleMsg, setScheduleMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -238,7 +239,7 @@ export default function AdminCustomersPage() {
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
   const [wizardDealId, setWizardDealId] = useState<string | null>(null)
-  const [wizardSchedule, setWizardSchedule] = useState({ storeId: '', visitDate: '', note: '' })
+  const [wizardSchedule, setWizardSchedule] = useState({ storeId: '', visitDate: '', startTime: '', endTime: '', note: '' })
   const [wizardScheduleSubmitting, setWizardScheduleSubmitting] = useState(false)
 
   // URL同期用: 復元フラグ（URL由来の初回openでtabリセットを抑止）
@@ -367,7 +368,7 @@ export default function AdminCustomersPage() {
       setDetailTab('info')
     }
     setScheduleMsg(null)
-    setScheduleForm({ storeId: detailUser.store?.id || '', visitDate: '', note: '' })
+    setScheduleForm({ storeId: detailUser.store?.id || '', visitDate: '', startTime: '', endTime: '', note: '' })
     setDetailSchedulesLoading(true)
     setDetailSchedules([])
     fetch(`/api/visit-schedules?userId=${detailUser.id}`)
@@ -482,6 +483,8 @@ export default function AdminCustomersPage() {
         userId: detailUser.id,
         storeId: scheduleForm.storeId,
         visitDate: scheduleForm.visitDate,
+        startTime: scheduleForm.startTime || undefined,
+        endTime: scheduleForm.endTime || undefined,
         note: scheduleForm.note || undefined,
       }),
     })
@@ -498,7 +501,7 @@ export default function AdminCustomersPage() {
           : u
       ))
       setScheduleMsg({ type: 'success', text: '訪問スケジュールを追加しました' })
-      setScheduleForm(prev => ({ ...prev, visitDate: '', note: '' }))
+      setScheduleForm(prev => ({ ...prev, visitDate: '', startTime: '', endTime: '', note: '' }))
     } else {
       setScheduleMsg({ type: 'error', text: 'スケジュールの追加に失敗しました' })
     }
@@ -840,6 +843,8 @@ export default function AdminCustomersPage() {
             userId: addCreatedUser!.id,
             storeId: wizardSchedule.storeId,
             visitDate: wizardSchedule.visitDate,
+            startTime: wizardSchedule.startTime || undefined,
+            endTime: wizardSchedule.endTime || undefined,
             note: wizardSchedule.note || undefined,
             ...(wizardDealId ? { dealId: wizardDealId } : {}),
           }),
@@ -854,7 +859,7 @@ export default function AdminCustomersPage() {
     setAddCreatedUser(null)
     setWizardDealDetail('')
     setWizardDealId(null)
-    setWizardSchedule({ storeId: '', visitDate: '', note: '' })
+    setWizardSchedule({ storeId: '', visitDate: '', startTime: '', endTime: '', note: '' })
     setAddForm({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
     setAddStoreSearch('')
     setAddStoreOpen(false)
@@ -2073,6 +2078,10 @@ export default function AdminCustomersPage() {
                   onChange={v => setScheduleForm({ ...scheduleForm, visitDate: v })}
                   required
                 />
+                <div className="grid grid-cols-2 gap-3">
+                  <TimeSelect label="開始時間（任意）" value={scheduleForm.startTime} onChange={v => setScheduleForm(prev => ({ ...prev, startTime: v }))} />
+                  <TimeSelect label="終了時間（任意）" value={scheduleForm.endTime} onChange={v => setScheduleForm(prev => ({ ...prev, endTime: v }))} />
+                </div>
                 <TextField
                   label="メモ（任意）"
                   value={scheduleForm.note}
@@ -2454,6 +2463,10 @@ export default function AdminCustomersPage() {
               value={wizardSchedule.visitDate}
               onChange={v => setWizardSchedule(prev => ({ ...prev, visitDate: v }))}
             />
+            <div className="grid grid-cols-2 gap-3">
+              <TimeSelect label="開始時間（任意）" value={wizardSchedule.startTime} onChange={v => setWizardSchedule(prev => ({ ...prev, startTime: v }))} />
+              <TimeSelect label="終了時間（任意）" value={wizardSchedule.endTime} onChange={v => setWizardSchedule(prev => ({ ...prev, endTime: v }))} />
+            </div>
             <TextField
               label="メモ（任意）"
               value={wizardSchedule.note}

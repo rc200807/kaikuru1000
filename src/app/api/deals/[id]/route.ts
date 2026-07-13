@@ -115,10 +115,14 @@ export async function GET(
       convertedInventoryId: item.inventoryItem?.id ?? null,
     }
   })
+  // 紙契約書写真: 保存URLはプロキシURLに変換して返す
+  let paperImages: string[] = []
+  try { const a = JSON.parse(deal.paperContractImages || '[]'); if (Array.isArray(a)) paperImages = a } catch { /* ignore */ }
   const shaped = {
     ...dealRest,
     purchaseItems: dealPurchaseItems,
     hasPreConsent: !!preConsentSignature,
+    paperContractImages: paperImages.map((_: string, idx: number) => `/api/deals/${deal.id}/contract-images/${idx}`),
     dealContract: shapeContract(dealContract),
     dealEstimate: shapeEstimate(dealEstimate),
     visitSchedules: deal.visitSchedules.map(vs => ({

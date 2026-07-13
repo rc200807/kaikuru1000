@@ -65,3 +65,13 @@ export function formalName(operator: {
     ? `${operator.name}${prefix}`
     : `${prefix}${operator.name}`
 }
+
+/**
+ * 契約書・見積書に表示する店舗名（買取業者名）。
+ * 「買いクル○○店」形式にする。既に「買いクル」で始まる場合は二重付与しない。
+ */
+export function storeContractName(name: string | null | undefined): string {
+  const n = (name ?? '').trim()
+  if (!n) return '買いクル'
+  return n.startsWith('買いクル') ? n : `買いクル${n}`
+}

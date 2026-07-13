@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { storeContractName } from '@/lib/operator-utils'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
 
@@ -329,7 +330,7 @@ function ContractViewContent() {
               <div className="bg-white/40 rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex">
                   <span className="text-gray-500 w-20 shrink-0">店舗名</span>
-                  <span className="text-gray-900 font-medium">{contract.store.name}</span>
+                  <span className="text-gray-900 font-medium">{storeContractName(contract.store.name)}</span>
                 </div>
                 <div className="flex">
                   <span className="text-gray-500 w-20 shrink-0">住所</span>

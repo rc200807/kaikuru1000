@@ -4,7 +4,7 @@
  * を構築する。マイページリンクは別途呼び出し側で扱う（このモジュールはコンテンツ本文のみ）。
  */
 
-import { formalName } from '@/lib/operator-utils'
+import { formalName, storeContractName } from '@/lib/operator-utils'
 
 export type ContractEmailItem = {
   itemName: string
@@ -132,7 +132,7 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
         <td width="50%" valign="top" style="padding-left:6px;">
           <div style="background:#f9fafb;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.7;color:#1f2937;">
             <div style="font-weight:700;font-size:11px;color:#111827;margin-bottom:4px;">買取業者情報（買主）</div>
-            <div><strong>店舗名:</strong> ${escape(p.storeName)}</div>
+            <div><strong>店舗名:</strong> ${escape(storeContractName(p.storeName))}</div>
             ${p.storeAddress ? `<div><strong>住所:</strong> ${escape(p.storeAddress)}</div>` : ''}
             ${p.storePhone ? `<div><strong>電話:</strong> ${escape(p.storePhone)}</div>` : ''}
             ${p.staffName ? `<div><strong>担当者:</strong> ${escape(p.staffName)}</div>` : ''}
@@ -351,7 +351,7 @@ export function buildContractBodyText(p: ContractEmailParams): string {
   if (p.customerIdType) lines.push(`本人確認: ${p.customerIdType}`)
   lines.push('')
   lines.push('【買取業者情報（買主）】')
-  lines.push(`店舗名: ${p.storeName}`)
+  lines.push(`店舗名: ${storeContractName(p.storeName)}`)
   if (p.storeAddress) lines.push(`住所: ${p.storeAddress}`)
   if (p.storePhone) lines.push(`電話: ${p.storePhone}`)
   if (p.staffName) lines.push(`担当者: ${p.staffName}`)

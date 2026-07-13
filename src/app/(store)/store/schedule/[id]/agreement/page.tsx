@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { storeContractName } from '@/lib/operator-utils'
+import { isAddressMatch } from '@/lib/address-utils'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Card from '@/components/Card'
@@ -186,12 +188,14 @@ function IdDocumentUploadModal({
   open,
   userId,
   initialDocType,
+  registeredAddress,
   onClose,
   onSuccess,
 }: {
   open: boolean
   userId: string
   initialDocType?: string | null
+  registeredAddress?: string | null
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -206,6 +210,8 @@ function IdDocumentUploadModal({
   const [error, setError] = useState('')
   const [edit, setEdit] = useState<IdEditState>({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
   const [ocrWarning, setOcrWarning] = useState('')
+  // 顧客情報へ反映する項目（氏名/生年月日/住所）を個別に選択
+  const [apply, setApply] = useState({ name: true, birthDate: true, address: true })
 
   const needsBack = DOC_TYPES_REQUIRING_BACK.includes(docType)
 
@@ -217,6 +223,7 @@ function IdDocumentUploadModal({
       setBackFile(null); setBackPreview('')
       setError(''); setOcrWarning('')
       setEdit({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
+      setApply({ name: true, birthDate: true, address: true })
     }
   }, [open, initialDocType])
 
@@ -291,7 +298,7 @@ function IdDocumentUploadModal({
     }
   }
 
-  async function handleConfirm(applyToProfile: boolean) {
+  async function handleConfirm() {
     if (!edit.name.trim() || !edit.address.trim()) {
       setError('氏名と住所は必須です')
       return
@@ -308,7 +315,9 @@ function IdDocumentUploadModal({
           idBirthDate:    edit.birthDate.trim() || null,
           idDocumentType: edit.documentType || null,
           idLicenseNumber: edit.documentType === '運転免許証' ? (edit.licenseNumber.trim() || null) : null,
-          applyToProfile,
+          applyName:      apply.name,
+          applyAddress:   apply.address,
+          applyBirthDate: apply.birthDate,
         }),
       })
       if (!res.ok) {
@@ -323,6 +332,9 @@ function IdDocumentUploadModal({
       setSaving(false)
     }
   }
+
+  // OCR住所と事前登録住所の不一致判定（確認ステップで警告表示）
+  const addrMismatch = !!(registeredAddress && registeredAddress.trim() && edit.address.trim() && !isAddressMatch(registeredAddress, edit.address.trim()))
 
   return (
     <Modal open={open} onClose={onClose} title="お客様の身分証明証アップロード" size="lg">
@@ -423,6 +435,10 @@ function IdDocumentUploadModal({
                 placeholder="例: 1990-01-23"
                 className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
               />
+              <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                <input type="checkbox" checked={apply.birthDate} onChange={(e) => setApply(a => ({ ...a, birthDate: e.target.checked }))} className="w-3.5 h-3.5 accent-[var(--portal-primary)]" />
+                生年月日を顧客情報に反映
+              </label>
             </div>
           </div>
 
@@ -451,6 +467,10 @@ function IdDocumentUploadModal({
               onChange={(e) => setEdit({ ...edit, name: e.target.value })}
               className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
             />
+            <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              <input type="checkbox" checked={apply.name} onChange={(e) => setApply(a => ({ ...a, name: e.target.checked }))} className="w-3.5 h-3.5 accent-[var(--portal-primary)]" />
+              氏名を顧客情報に反映
+            </label>
           </div>
 
           <div>
@@ -463,22 +483,29 @@ function IdDocumentUploadModal({
               rows={2}
               className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40 resize-y"
             />
+            {addrMismatch && (
+              <div className="mt-1.5 p-2 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-800">
+                ⚠️ 読み取った住所が、事前に登録された住所と一致しません。<br />
+                <span className="opacity-80">登録住所: {registeredAddress}</span>
+              </div>
+            )}
+            <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              <input type="checkbox" checked={apply.address} onChange={(e) => setApply(a => ({ ...a, address: e.target.checked }))} className="w-3.5 h-3.5 accent-[var(--portal-primary)]" />
+              住所を顧客情報に反映
+            </label>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row gap-2 pt-2 items-center">
             <Button variant="text" onClick={() => setStep('upload')} disabled={saving}>
               ← 画像を選び直す
             </Button>
             <div className="flex-1" />
-            <Button variant="outlined" onClick={() => handleConfirm(false)} disabled={saving}>
-              {saving ? '保存中...' : '本人確認情報のみ保存'}
-            </Button>
-            <Button onClick={() => handleConfirm(true)} disabled={saving}>
-              {saving ? '保存中...' : '顧客情報に反映して保存'}
+            <Button onClick={() => handleConfirm()} disabled={saving}>
+              {saving ? '保存中...' : '保存'}
             </Button>
           </div>
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] text-right">
-            「顧客情報に反映」を選ぶと、お客様の氏名・住所が上の値で上書きされます。
+            チェックした項目のみ、お客様の顧客情報（氏名・生年月日・住所）に反映（上書き）されます。本人確認情報は常に保存されます。
           </p>
         </div>
       )}
@@ -745,6 +772,7 @@ export default function AgreementPage() {
         open={idModalOpen}
         userId={visit.user.id}
         initialDocType={visit.user.idDocumentType}
+        registeredAddress={visit.user.address}
         onClose={() => setIdModalOpen(false)}
         onSuccess={() => { fetchVisit() }}
       />
@@ -785,7 +813,7 @@ export default function AgreementPage() {
           </div>
           <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
             <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">店舗情報</div>
-            <div><span className="font-medium">店舗名:</span> {visit.store.name}</div>
+            <div><span className="font-medium">店舗名:</span> {storeContractName(visit.store.name)}</div>
             {visit.store.address && <div><span className="font-medium">住所:</span> {visit.store.address}</div>}
             {visit.store.phone && <div><span className="font-medium">電話:</span> {visit.store.phone}</div>}
             {staffName && <div><span className="font-medium">担当者:</span> {staffName}</div>}

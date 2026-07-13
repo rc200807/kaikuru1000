@@ -9,7 +9,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
-import { formalName } from '@/lib/operator-utils'
+import { formalName, storeContractName } from '@/lib/operator-utils'
 
 // base64 PDF を新規タブで開く（ブラウザのPDFビューアで確認・ダウンロードできる）
 function openPdfBase64(base64: string) {
@@ -726,7 +726,7 @@ export default function FinalAgreementPage() {
               </div>
               <div className="space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
                 <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1.5">買取業者情報（買主）</div>
-                <div><span className="font-medium">店舗名:</span> {visit.store.name}</div>
+                <div><span className="font-medium">店舗名:</span> {storeContractName(visit.store.name)}</div>
                 {visit.store.address && <div><span className="font-medium">住所:</span> {visit.store.address}</div>}
                 {visit.store.phone && <div><span className="font-medium">電話:</span> {visit.store.phone}</div>}
                 {staffName && <div><span className="font-medium">担当者:</span> {staffName}</div>}

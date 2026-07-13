@@ -16,6 +16,7 @@ import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatYen } from '@/lib/currency'
+import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
@@ -63,6 +64,7 @@ type Deal = {
   workItems: WorkItem[]
   dealContract: ContractInfo | null
   dealEstimate: EstimateInfo | null
+  paperContractImages: string[]
 }
 
 function fmtDate(d?: string | null) {
@@ -150,6 +152,7 @@ export default function DealDetailView({
   const [showAddWork, setShowAddWork] = useState(false)
   const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1, notes: '' })
   const [showPreview, setShowPreview] = useState(false)
+  const [uploadingContract, setUploadingContract] = useState(false)
   const [savingWork, setSavingWork] = useState(false)
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
 
@@ -224,6 +227,37 @@ export default function DealDetailView({
     const res = await fetch(path, { method: 'DELETE' })
     setDeletingItemId(null)
     if (res.ok) load()
+    else setMsg({ type: 'error', text: '削除に失敗しました' })
+  }
+
+  // 紙で作成した売買契約書の写真アップロード / 削除
+  async function handlePaperContractUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploadingContract(true)
+    setMsg(null)
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const converted = await convertToJpegIfNeeded(files[i])
+        const fd = new FormData()
+        fd.append('file', converted)
+        const res = await fetch(`/api/deals/${dealId}/contract-images`, { method: 'POST', body: fd })
+        if (!res.ok) { setMsg({ type: 'error', text: '写真のアップロードに失敗しました' }); break }
+      }
+      await load()
+      setMsg({ type: 'success', text: '契約書の写真をアップロードしました' })
+    } catch {
+      setMsg({ type: 'error', text: '写真のアップロードに失敗しました' })
+    } finally {
+      setUploadingContract(false)
+      e.target.value = ''
+    }
+  }
+
+  async function deletePaperContract(index: number) {
+    if (!confirm('この写真を削除しますか？')) return
+    const res = await fetch(`/api/deals/${dealId}/contract-images?index=${index}`, { method: 'DELETE' })
+    if (res.ok) { await load(); setMsg({ type: 'success', text: '写真を削除しました' }) }
     else setMsg({ type: 'error', text: '削除に失敗しました' })
   }
 
@@ -724,6 +758,36 @@ export default function DealDetailView({
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </Card>
+
+        {/* 紙の売買契約書（写真） */}
+        <Card variant="outlined" padding="md">
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <SectionTitle>紙の売買契約書（写真）</SectionTitle>
+            {editable && (
+              <label className={`text-xs px-3 py-1.5 rounded-full border border-[var(--md-sys-color-outline-variant)] text-[var(--portal-primary)] hover:bg-[var(--md-sys-color-surface-container-high)] ${uploadingContract ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}>
+                {uploadingContract ? 'アップロード中...' : '＋ 写真を追加'}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple className="hidden" onChange={handlePaperContractUpload} disabled={uploadingContract} />
+              </label>
+            )}
+          </div>
+          {deal.paperContractImages.length === 0 ? (
+            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">紙で作成した売買契約書の写真はありません{editable ? '。「＋ 写真を追加」からアップロードできます。' : ''}</p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {deal.paperContractImages.map((url, idx) => (
+                <div key={idx} className="relative">
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`紙契約書 ${idx + 1}`} className="w-24 h-24 object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
+                  </a>
+                  {editable && (
+                    <button type="button" onClick={() => deletePaperContract(idx)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--md-sys-color-error)] text-white text-xs flex items-center justify-center shadow">×</button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </Card>

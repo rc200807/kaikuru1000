@@ -31,6 +31,7 @@ model User {
   phone2         String?   // 追加連絡先 1（任意）
   phone3         String?   // 追加連絡先 2（任意）
   address        String
+  birthDate      String?             // 生年月日（顧客プロフィール。身分証OCRから選択反映）
   internalNote   String?   @db.Text  // 店舗・管理者のみ閲覧可能な内部メモ（顧客には非公開）
   password       String
   licenseKeyId   String?   @unique
@@ -546,6 +547,7 @@ model Deal {
   billingAmount  Int?                       // 請求金額合計（案件配下の請求項目合計・自動計算）
   preConsentSignature String? @db.Text      // 事前同意の署名画像（base64）
   preConsentAt        DateTime?             // 事前同意日時
+  paperContractImages String  @default("[]") // 紙で作成した売買契約書の写真URL（JSON配列）
   visitSchedules VisitSchedule[]           // 1案件:N訪問予定（任意リンク）
   purchaseItems  PurchaseItem[]            // 案件配下の買取品目
   workItems      WorkItem[]                // 案件配下の請求項目

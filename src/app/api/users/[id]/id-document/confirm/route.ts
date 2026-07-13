@@ -16,7 +16,11 @@ const schema = z.object({
   idBirthDate:      z.string().max(50).nullable().optional(),
   idDocumentType:   z.string().max(50).nullable().optional(),
   idLicenseNumber:  z.string().max(50).nullable().optional(),
-  applyToProfile:   z.boolean().default(false),
+  applyToProfile:   z.boolean().default(false), // 後方互換（全項目を顧客情報へ反映）
+  // 項目別に顧客情報へ反映するか（未指定時は applyToProfile にフォールバック）
+  applyName:        z.boolean().optional(),
+  applyAddress:     z.boolean().optional(),
+  applyBirthDate:   z.boolean().optional(),
 })
 
 export async function PATCH(
@@ -41,6 +45,10 @@ export async function PATCH(
   }
 
   const { idName, idAddress, idBirthDate, idDocumentType, idLicenseNumber, applyToProfile } = parsed.data
+  // 項目別フラグ（未指定は applyToProfile にフォールバック＝後方互換）
+  const applyName = parsed.data.applyName ?? applyToProfile
+  const applyAddress = parsed.data.applyAddress ?? applyToProfile
+  const applyBirthDate = parsed.data.applyBirthDate ?? applyToProfile
 
   const user = await prisma.user.findUnique({ where: { id }, select: { address: true } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -55,14 +63,15 @@ export async function PATCH(
   // 運転免許証など、免許番号が確認・修正された場合は内部の売買記録用に保存
   if (idLicenseNumber !== undefined) updateData.idLicenseNumber = idLicenseNumber
 
-  if (applyToProfile) {
-    updateData.name = idName
+  // 選択された項目のみ顧客プロフィールへ反映
+  if (applyName) updateData.name = idName
+  if (applyBirthDate && idBirthDate) updateData.birthDate = idBirthDate
+  if (applyAddress) {
     updateData.address = idAddress
-    // プロファイルに反映した場合は住所一致扱い
     updateData.addressMismatch = false
     updateData.addressVerified = true
   } else {
-    // 登録住所との一致を再計算
+    // 住所を反映しない場合は登録住所との一致を再計算
     const compareAgainst = user.address
     if (compareAgainst) {
       const matched = isAddressMatch(compareAgainst, idAddress)
@@ -73,5 +82,5 @@ export async function PATCH(
 
   await prisma.user.update({ where: { id }, data: updateData })
 
-  return NextResponse.json({ success: true, appliedToProfile: applyToProfile })
+  return NextResponse.json({ success: true, appliedName: applyName, appliedAddress: applyAddress, appliedBirthDate: applyBirthDate })
 }

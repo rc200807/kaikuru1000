@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { buildInvoiceNotesHtml, buildTokushohoHtml } from '@/lib/legal-texts'
+import { storeContractName } from '@/lib/operator-utils'
 
 interface EstimateData {
   id: string
@@ -123,7 +124,7 @@ function EstimateViewContent() {
           {/* 店舗情報 */}
           <div className="space-y-1 p-3 rounded-lg bg-gray-50 text-xs text-gray-600 mb-4">
             <div className="text-[11px] font-bold text-gray-800 mb-1.5">見積発行店舗</div>
-            <div><span className="font-medium">店舗名:</span> {data.store.name}</div>
+            <div><span className="font-medium">店舗名:</span> {storeContractName(data.store.name)}</div>
             {data.store.address && <div><span className="font-medium">住所:</span> {data.store.address}</div>}
             {data.store.phone && <div><span className="font-medium">電話:</span> {data.store.phone}</div>}
             {data.estimate.staffName && <div><span className="font-medium">担当者:</span> {data.estimate.staffName}</div>}

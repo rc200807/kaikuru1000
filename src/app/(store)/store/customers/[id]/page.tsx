@@ -1085,7 +1085,12 @@ export default function StoreCustomerDetailPage() {
                       .filter(s => s.dealId === deal.id)
                       .sort((a, b) => new Date(b.visitDate).getTime() - new Date(a.visitDate).getTime())
                     return (
-                      <div key={deal.id} className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3">
+                      <button
+                        key={deal.id}
+                        type="button"
+                        onClick={() => router.push(`/store/deals/${deal.id}`)}
+                        className="w-full text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
+                      >
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.fg }}>
                             {DEAL_STATUS_LABEL[deal.status] ?? deal.status}
@@ -1100,7 +1105,7 @@ export default function StoreCustomerDetailPage() {
                             <span className="ml-1">（{linked.slice(0, 3).map(s => fmtMD(s.visitDate)).join(' / ')}{linked.length > 3 ? ' …' : ''}）</span>
                           )}
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                   {dealsList.length > 5 && (

@@ -129,6 +129,8 @@ model Store {
   inquirySheetUrl           String?  @db.Text     // 共有用URL
   inquirySheetSharedEmails  String?  @db.Text     // JSON配列: 共有許可済みのメールアドレス
   inquirySheetIssuedAt      DateTime?             // 発行日時
+  // 対応エリア（出張買取などの対応可能地域）。JSON: [{ prefecture: string, cities: string[] }]
+  serviceAreas              String?  @default("[]") @db.Text
   customers  User[]
   visitSchedules VisitSchedule[]
   visitRequests  VisitRequest[]

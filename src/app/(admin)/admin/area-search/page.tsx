@@ -45,12 +45,15 @@ type StoreResult = {
   distanceKm: number | null
   lat: number | null
   lng: number | null
+  inServiceArea?: boolean
+  serviceAreaLabel?: string | null
 }
 
 type SearchResponse = {
   query: string
   center: { lat: number; lng: number } | null
   results: StoreResult[]
+  serviceAreaMatchCount?: number
   totalStores: number
 }
 
@@ -455,6 +458,19 @@ export default function AdminAreaSearchPage() {
                   </span>
                 </div>
 
+                {typeof result.serviceAreaMatchCount === 'number' && (
+                  <div className="mx-3 mb-2 px-3 py-2 rounded-lg text-[12px] font-medium flex items-center gap-2"
+                    style={result.serviceAreaMatchCount > 0
+                      ? { background: 'rgba(16,185,129,0.14)', color: '#059669' }
+                      : { background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                    {result.serviceAreaMatchCount > 0 ? (
+                      <>✓ この住所は <b>{result.serviceAreaMatchCount}</b> 店舗の対応エリアに含まれます</>
+                    ) : (
+                      <>この住所を対応エリアに登録している店舗はありません</>
+                    )}
+                  </div>
+                )}
+
                 {result.results.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <svg className="w-10 h-10 mx-auto mb-2 text-[var(--md-sys-color-outline)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -467,7 +483,9 @@ export default function AdminAreaSearchPage() {
                 ) : (
                   <div className="p-3 pt-2 space-y-2">
                     {result.results.map((store, idx) => {
-                      const badge = getScoreBadge(store.score, store.matchReason)
+                      const badge = store.inServiceArea
+                        ? { color: 'from-emerald-600 to-green-600', text: '対応エリア', icon: '✓' }
+                        : getScoreBadge(store.score, store.matchReason)
                       const selected = selectedStoreId === store.id
                       return (
                         <button
@@ -502,6 +520,9 @@ export default function AdminAreaSearchPage() {
                                 <span className="text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)]">約 {store.distanceKm} km</span>
                               )}
                             </div>
+                            {store.inServiceArea && store.serviceAreaLabel && (
+                              <p className="mt-1 text-[11px] font-medium text-emerald-600">対応エリア: {store.serviceAreaLabel}</p>
+                            )}
                             {store.address && (
                               <p className="mt-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-all line-clamp-2">{store.address}</p>
                             )}

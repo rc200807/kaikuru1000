@@ -133,6 +133,42 @@ export function isAddressMatch(registered: string, idAddress: string): boolean {
   return false
 }
 
+/** 店舗の対応エリア1件（都道府県＋その中の市区町村リスト） */
+export type ServiceArea = { prefecture: string; cities: string[] }
+
+/** serviceAreas の JSON 文字列を安全にパースする */
+export function parseServiceAreas(json: string | null | undefined): ServiceArea[] {
+  if (!json) return []
+  try {
+    const arr = JSON.parse(json)
+    if (!Array.isArray(arr)) return []
+    return arr
+      .filter((a) => a && typeof a.prefecture === 'string' && Array.isArray(a.cities))
+      .map((a) => ({ prefecture: a.prefecture, cities: a.cities.filter((c: unknown) => typeof c === 'string') }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 入力住所が対応エリアに含まれるか判定する。
+ * - 市区町村名（HeartRails の正式名。例「横浜市西区」「厚木市」「葉山町」）が住所文字列に含まれ、
+ *   かつ都道府県が一致すれば「対応エリア内」とみなす。
+ * @returns 一致したエリアのラベル（例「神奈川県厚木市」）。含まれなければ null。
+ */
+export function matchServiceArea(address: string, areas: ServiceArea[]): string | null {
+  if (!address || areas.length === 0) return null
+  const { prefecture } = extractAddressParts(address)
+  for (const area of areas) {
+    // 都道府県が判定できる場合は一致を要求（判定不能なら市区町村名の包含のみで判定）
+    if (prefecture && area.prefecture && area.prefecture !== prefecture) continue
+    for (const city of area.cities) {
+      if (city && address.includes(city)) return `${area.prefecture}${city}`
+    }
+  }
+  return null
+}
+
 export function extractAddressParts(address: string): { prefecture: string; city: string } {
   const prefMatch = address.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
   const prefecture = prefMatch?.[1] || ''

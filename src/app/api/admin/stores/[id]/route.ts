@@ -73,6 +73,7 @@ export async function PATCH(
       'storeStatus', 'openingDate', 'closingDate',
       'googleBusinessUrl', 'oikuraPageUrl', 'bankInfo',
       'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail', 'calendarInviteEmail',
+      'serviceAreas',
     ] as const
     const data: Record<string, any> = {}
     for (const field of allowedFields) {
@@ -93,6 +94,7 @@ export async function PATCH(
         storeStatus: true, openingDate: true, closingDate: true,
         googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
         invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
+        serviceAreas: true,
         _count: { select: { customers: true } },
       },
     })
@@ -121,6 +123,7 @@ export async function GET(
       storeStatus: true, openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
       invoiceNumber: true, antiquePermitNumber: true,
+      serviceAreas: true,
       isActive: true,
       _count: { select: { customers: true } },
     },

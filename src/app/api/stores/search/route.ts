@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { scoreStoresByAddress, extractAddressParts, haversineDistanceKm } from '@/lib/address-utils'
+import { scoreStoresByAddress, extractAddressParts, haversineDistanceKm, parseServiceAreas, matchServiceArea } from '@/lib/address-utils'
 
 /**
  * HeartRails GeoAPIで住所の緯度経度を取得
@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
       email: true,
       lat: true,
       lng: true,
+      serviceAreas: true,
     },
     orderBy: { code: 'asc' },
   })
@@ -79,29 +80,61 @@ export async function GET(request: NextRequest) {
   }
 
   const scored = scoreStoresByAddress(address.trim(), stores, customerCoords, storeCoords)
+  const scoredById = new Map(scored.map(s => [s.id, s]))
 
-  const results = scored.slice(0, limit).map(s => {
-    const full = stores.find(st => st.id === s.id)
-    return {
-      id: s.id,
-      name: s.name,
-      code: s.code,
-      prefecture: s.prefecture,
-      address: s.address,
-      phone: full?.phone || null,
-      email: full?.email || null,
-      score: s.score,
-      matchReason: s.matchReason,
-      distanceKm: s.distanceKm,
-      lat: storeCoords.get(s.id)?.lat ?? null,
-      lng: storeCoords.get(s.id)?.lng ?? null,
-    }
-  })
+  // 対応エリア判定 + 近隣スコアを統合した結果を作る。
+  // 対応エリアに登録された店舗は、地理スコアが付かなくても必ず表示し、最上位に並べる。
+  const enriched = stores
+    .map(store => {
+      const areaLabel = matchServiceArea(address.trim(), parseServiceAreas(store.serviceAreas))
+      const inServiceArea = !!areaLabel
+      const sc = scoredById.get(store.id)
+      if (!inServiceArea && !sc) return null
+
+      const coords = storeCoords.get(store.id)
+      let distanceKm = sc?.distanceKm ?? null
+      if (distanceKm == null && customerCoords && coords) {
+        distanceKm = Math.round(haversineDistanceKm(customerCoords.lat, customerCoords.lng, coords.lat, coords.lng) * 10) / 10
+      }
+      const baseScore = sc?.score ?? 0
+      // 対応エリア内は最優先（+1000）。並び替え用の総合スコア。
+      const rankScore = (inServiceArea ? 1000 : 0) + baseScore
+      const matchReason = inServiceArea ? '対応エリアに登録' : (sc?.matchReason || '')
+
+      return {
+        id: store.id,
+        name: store.name,
+        code: store.code,
+        prefecture: store.prefecture,
+        address: store.address,
+        phone: store.phone || null,
+        email: store.email || null,
+        score: baseScore,
+        matchReason,
+        distanceKm,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
+        inServiceArea,
+        serviceAreaLabel: areaLabel,
+        rankScore,
+      }
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+    .sort((a, b) => {
+      if (b.rankScore !== a.rankScore) return b.rankScore - a.rankScore
+      if (a.distanceKm !== null && b.distanceKm !== null) return a.distanceKm - b.distanceKm
+      if (a.distanceKm !== null) return -1
+      if (b.distanceKm !== null) return 1
+      return 0
+    })
+
+  const results = enriched.slice(0, limit).map(({ rankScore: _rankScore, ...r }) => r)
 
   return NextResponse.json({
     query: address.trim(),
     center: customerCoords, // 入力住所の座標（町域センター。地図の中心・マーカー用）
     results,
+    serviceAreaMatchCount: enriched.filter(s => s.inServiceArea).length,
     totalStores: stores.length,
   })
 }

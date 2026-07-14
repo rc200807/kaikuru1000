@@ -6,6 +6,8 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StoreDashboard from '@/components/admin/StoreDashboard'
+import ServiceAreaEditor from '@/components/admin/ServiceAreaEditor'
+import { parseServiceAreas } from '@/lib/address-utils'
 
 type DetailTab = 'dashboard' | 'info' | 'line'
 const DETAIL_TABS: { key: DetailTab; label: string }[] = [
@@ -30,6 +32,7 @@ type Store = {
   bankInfo?: string | null
   invoiceNumber?: string | null
   antiquePermitNumber?: string | null
+  serviceAreas?: string | null
   isActive: boolean
   _count?: { customers: number }
 }
@@ -270,6 +273,7 @@ export default function StoreDetailPage() {
       bankInfo: store.bankInfo || '',
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
+      serviceAreas: store.serviceAreas || '[]',
     })
     setEditMode(true)
   }
@@ -499,6 +503,10 @@ export default function StoreDetailPage() {
                 style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
               />
             </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>対応エリア（出張買取などの対応可能地域）</label>
+              <ServiceAreaEditor value={editForm.serviceAreas || '[]'} onChange={json => setEditForm({ ...editForm, serviceAreas: json })} />
+            </div>
             {editError && <p style={{ color: '#f87171', fontSize: 13, marginTop: 12 }}>{editError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button
@@ -534,6 +542,29 @@ export default function StoreDetailPage() {
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>銀行情報</div>
             <pre style={{ fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12, margin: 0 }}>{store.bankInfo}</pre>
+          </div>
+        )}
+        {!editMode && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>対応エリア</div>
+            {(() => {
+              const areas = parseServiceAreas(store.serviceAreas)
+              if (areas.length === 0) return <p style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', margin: 0 }}>未登録</p>
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {areas.map(a => (
+                    <div key={a.prefecture}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--md-sys-color-on-surface)' }}>{a.prefecture}</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                        {a.cities.map(c => (
+                          <span key={c} style={{ padding: '2px 8px', borderRadius: 999, background: 'rgba(79,142,247,0.15)', color: '#4f8ef7', fontSize: 12 }}>{c}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
         )}
       </Section>

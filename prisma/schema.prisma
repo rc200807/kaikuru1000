@@ -136,6 +136,7 @@ model Store {
   communityThreads   CommunityThread[]
   communityReplies   CommunityReply[]
   communityReactions CommunityReaction[]
+  chatRoom           ChatRoom?
   googleCalendar StoreGoogleCalendar?
   storeLinksFrom StoreLink[] @relation("StoreLinkFrom")
   storeLinksTo   StoreLink[] @relation("StoreLinkTo")
@@ -229,6 +230,7 @@ model StoreMember {
   deals          Deal[]
   estimates      Estimate[]
   accessLogs     AccessLog[]
+  chatMessages   ChatMessage[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -363,6 +365,7 @@ model Admin {
   forms          Form[]
   invitedPartners SalesPartner[]           @relation("SalesPartnerInvitedBy")
   partnerInvitationsCreated SalesPartnerInvitation[] @relation("SalesPartnerInvCreatedBy")
+  chatMessages   ChatMessage[]
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -1295,4 +1298,76 @@ model SupplierAccount {
   note        String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ========================================
+// 本部⇄店舗チャット
+// ========================================
+
+// チャットルーム（1店舗につき1ルーム。本部と当該店舗のやり取りの場）
+model ChatRoom {
+  id            String          @id @default(cuid())
+  storeId       String          @unique
+  store         Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  lastMessageAt DateTime?       // 一覧の並び替え用（最新メッセージ日時）
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  messages      ChatMessage[]
+  readStates    ChatReadState[]
+
+  @@index([lastMessageAt])
+}
+
+// チャットメッセージ（parentId が null ならチャンネル直下、値ありならスレッド返信）
+model ChatMessage {
+  id             String         @id @default(cuid())
+  roomId         String
+  room           ChatRoom       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  parentId       String?        // スレッド親メッセージID（null = チャンネル直下）
+  parent         ChatMessage?   @relation("ChatThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        ChatMessage[]  @relation("ChatThread")
+  authorType     String         // "admin" | "store"
+  authorAdminId  String?
+  authorAdmin    Admin?         @relation(fields: [authorAdminId], references: [id], onDelete: SetNull)
+  authorMemberId String?
+  authorMember   StoreMember?   @relation(fields: [authorMemberId], references: [id], onDelete: SetNull)
+  authorName     String         // 表示用スナップショット（本部担当者名 / メンバー名 / 店舗名）
+  body           String         @db.Text
+  attachments    String         @default("[]") @db.Text  // JSON配列: [{url,name,mimeType,size,kind:"image"|"file"}]
+  editedAt       DateTime?      // 編集日時（未編集は null）
+  deletedAt      DateTime?      // ソフト削除日時（未削除は null）
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  reactions      ChatReaction[]
+
+  @@index([roomId, createdAt])
+  @@index([parentId])
+}
+
+// メッセージへの絵文字リアクション（actor 単位でトグル）
+model ChatReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  emoji     String
+  actorType String      // "admin" | "store"
+  actorId   String      // adminId または memberId（なければ storeId）
+  actorName String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, actorType, actorId, emoji])
+  @@index([messageId])
+}
+
+// 既読状態（ルーム × 閲覧者ごとの最終既読日時。未読バッジ・既読表示の両方を導出）
+model ChatReadState {
+  id         String   @id @default(cuid())
+  roomId     String
+  room       ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  readerType String   // "admin" | "store"
+  readerId   String   // adminId / memberId（なければ storeId）
+  lastReadAt DateTime @default(now())
+
+  @@unique([roomId, readerType, readerId])
+  @@index([roomId])
 }

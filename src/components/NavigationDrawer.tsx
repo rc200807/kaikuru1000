@@ -100,6 +100,15 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    href: '/admin/chat',
+    label: '店舗チャット',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/deals',
     label: '案件管理',
     icon: (
@@ -171,8 +180,33 @@ export default function NavigationDrawer() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [chatUnread, setChatUnread] = useState(0)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const user = session?.user as any
+
+  // 店舗チャットの未読ルーム数（フォーカス時・定期・遷移時に更新）
+  useEffect(() => {
+    if (!user?.role) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/admin/chat/unread-count')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setChatUnread(data.count ?? 0)
+      } catch { /* noop */ }
+    }
+    load()
+    const timer = setInterval(() => { if (!document.hidden) load() }, 30000)
+    window.addEventListener('focus', load)
+    window.addEventListener('chat:activity', load)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('focus', load)
+      window.removeEventListener('chat:activity', load)
+    }
+  }, [user?.role, pathname])
 
   // Close user menu on outside click
   useEffect(() => {
@@ -220,7 +254,12 @@ export default function NavigationDrawer() {
               `}
             >
               <span className="flex-shrink-0">{item.icon}</span>
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.href === '/admin/chat' && chatUnread > 0 && (
+                <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-[#dc2626] text-white text-[10px] font-bold flex items-center justify-center">
+                  {chatUnread > 99 ? '99+' : chatUnread}
+                </span>
+              )}
             </Link>
           )
         })}

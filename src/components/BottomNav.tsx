@@ -100,6 +100,15 @@ const menuNavItems = [
     ),
   },
   {
+    href: '/store/chat',
+    label: '本部チャット',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+      </svg>
+    ),
+  },
+  {
     href: '/store/inquiries',
     label: '問い合わせ',
     icon: (
@@ -190,6 +199,7 @@ export default function BottomNav() {
   const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([])
   const [switching, setSwitching] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [chatUnread, setChatUnread] = useState(0)
 
   // Fetch unread announcement count
   useEffect(() => {
@@ -204,6 +214,26 @@ export default function BottomNav() {
       const onFocus = () => fetchUnread()
       window.addEventListener('focus', onFocus)
       return () => window.removeEventListener('focus', onFocus)
+    }
+  }, [user?.id, pathname])
+
+  // Fetch unread 本部チャット count
+  useEffect(() => {
+    if (!user?.id) return
+    const fetchChatUnread = () => {
+      fetch('/api/store/chat/unread-count')
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(data => setChatUnread(data.count || 0))
+        .catch(() => {})
+    }
+    fetchChatUnread()
+    const timer = setInterval(() => { if (!document.hidden) fetchChatUnread() }, 30000)
+    window.addEventListener('focus', fetchChatUnread)
+    window.addEventListener('chat:activity', fetchChatUnread)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', fetchChatUnread)
+      window.removeEventListener('chat:activity', fetchChatUnread)
     }
   }, [user?.id, pathname])
 
@@ -342,7 +372,8 @@ export default function BottomNav() {
             <div className="grid grid-cols-3 gap-1">
               {menuNavItems.map(item => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/')
-                const showBadge = item.href === '/store/announcements' && unreadCount > 0
+                const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : 0
+                const showBadge = badgeCount > 0
                 return (
                   <Link
                     key={item.href}
@@ -360,7 +391,7 @@ export default function BottomNav() {
                       {item.icon}
                       {showBadge && (
                         <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] flex items-center justify-center px-1 rounded-full bg-[var(--store-primary)] text-white text-[9px] font-bold leading-none">
-                          {unreadCount > 99 ? '99+' : unreadCount}
+                          {badgeCount > 99 ? '99+' : badgeCount}
                         </span>
                       )}
                     </div>
@@ -434,7 +465,7 @@ export default function BottomNav() {
             `}
           >
             <div className={`
-              px-4 py-1 rounded-full transition-colors
+              relative px-4 py-1 rounded-full transition-colors
               ${menuOpen ? 'bg-[var(--store-primary-container)]' : ''}
             `}>
               {menuOpen ? (
@@ -445,6 +476,9 @@ export default function BottomNav() {
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
+              )}
+              {!menuOpen && chatUnread > 0 && (
+                <span className="absolute top-0.5 right-2.5 w-2 h-2 rounded-full bg-[var(--store-primary)]" />
               )}
             </div>
             メニュー

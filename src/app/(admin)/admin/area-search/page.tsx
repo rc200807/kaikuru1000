@@ -168,25 +168,6 @@ export default function AdminAreaSearchPage() {
     await runSearch(fullAddress)
   }
 
-  async function handleQuickAddress(addr: string) {
-    // テキスト検索モードに切り替えて即検索
-    setSearchMode('simple')
-    setSimpleAddress(addr)
-
-    // 詳細モードの値も設定しておく
-    const prefMatch = addr.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
-    if (prefMatch) {
-      const pref = prefMatch[1]
-      const rest = addr.slice(pref.length)
-      setPrefecture(pref)
-      setCityInput(rest)
-      setDetail('')
-      fetchCities(pref)
-    }
-
-    await runSearch(addr)
-  }
-
   // 郵便番号から住所を引き当て、各入力欄へ反映する（検索はしない＝ある程度の自動入力）
   async function lookupPostal(code: string) {
     const digits = code.replace(/[^0-9]/g, '')
@@ -447,22 +428,6 @@ export default function AdminAreaSearchPage() {
               )}
             </form>
 
-            {/* クイック住所 */}
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
-              {[
-                '東京都渋谷区', '東京都新宿区', '大阪府大阪市北区',
-                '愛知県名古屋市中区', '福岡県福岡市博多区', '北海道札幌市中央区',
-              ].map(q => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => { if (searchMode === 'simple') { setSimpleAddress(q) } else { handleQuickAddress(q) } }}
-                  className="text-[11px] px-2.5 py-1 rounded-full border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)] transition-all"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* 検索結果リスト（スクロール） */}

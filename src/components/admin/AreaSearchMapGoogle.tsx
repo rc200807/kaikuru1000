@@ -14,6 +14,17 @@ declare global {
   }
 }
 
+// 店舗マーカーを見やすくするための地図スタイル（POI・交通機関・道路アイコン等を間引く）
+const MAP_STYLE = [
+  // 施設（POI）のラベル・アイコンを非表示（公園などの面塗りは残す）
+  { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+  // 駅・バス停・路線を非表示
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  // 道路上の国道番号バッジ等のアイコンを非表示（道路名・道路形状は残す）
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+]
+
 function loadGoogleMaps(key: string): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject()
   if (window.google?.maps) return Promise.resolve()
@@ -95,6 +106,8 @@ export default function AreaSearchMapGoogle({
         mapRef.current = new g.maps.Map(containerRef.current, {
           center: { lat: 35.681236, lng: 139.767125 }, zoom: 11,
           mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+          clickableIcons: false, // 施設アイコンのクリック（Google側の吹き出し）を無効化
+          styles: MAP_STYLE,
         })
         infoRef.current = new g.maps.InfoWindow()
       }

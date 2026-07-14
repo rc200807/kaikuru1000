@@ -72,6 +72,8 @@ export default function ScheduleCalendar() {
   const [cursor, setCursor] = useState<Date>(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()) })
   const [schedules, setSchedules] = useState<RawSchedule[]>([])
   const [loading, setLoading] = useState(false)
+  // クリックした予定の簡易詳細ポップオーバー（Googleカレンダー風）
+  const [popover, setPopover] = useState<{ event: CalEvent; x: number; y: number } | null>(null)
 
   const range = useMemo(() => {
     if (view === 'day') return { from: cursor, to: cursor }
@@ -114,7 +116,11 @@ export default function ScheduleCalendar() {
     return map
   }, [events])
 
-  const openEvent = (e: CalEvent) => {
+  // 予定クリック → 直接遷移せず簡易詳細ポップオーバーを開く
+  const handleEventClick = (e: CalEvent, ev: React.MouseEvent) => {
+    setPopover({ event: e, x: ev.clientX, y: ev.clientY })
+  }
+  const goToDeal = (e: CalEvent) => {
     const baseId = e.id.replace(/-rev$/, '')
     router.push(e.dealId ? `/store/deals/${e.dealId}` : `/store/schedule/${baseId}`)
   }
@@ -153,24 +159,58 @@ export default function ScheduleCalendar() {
         </div>
       </div>
 
-      {view === 'month' && <MonthView cursor={cursor} eventsByDate={eventsByDate} todayKey={todayKey} onEvent={openEvent} onPickDay={(d) => { setCursor(d); setView('day') }} />}
-      {view === 'week' && <TimeGrid days={weekDays} eventsByDate={eventsByDate} todayKey={todayKey} bizStartH={bizStartH} bizEndH={bizEndH} hourHeight={48} onEvent={openEvent} onPickDay={(d) => { setCursor(d); setView('day') }} />}
-      {view === 'day' && <TimeGrid days={[cursor]} eventsByDate={eventsByDate} todayKey={todayKey} bizStartH={bizStartH} bizEndH={bizEndH} hourHeight={60} onEvent={openEvent} single />}
+      {view === 'month' && <MonthView cursor={cursor} eventsByDate={eventsByDate} todayKey={todayKey} onEvent={handleEventClick} onPickDay={(d) => { setCursor(d); setView('day') }} />}
+      {view === 'week' && <TimeGrid days={weekDays} eventsByDate={eventsByDate} todayKey={todayKey} bizStartH={bizStartH} bizEndH={bizEndH} hourHeight={48} onEvent={handleEventClick} onPickDay={(d) => { setCursor(d); setView('day') }} />}
+      {view === 'day' && <TimeGrid days={[cursor]} eventsByDate={eventsByDate} todayKey={todayKey} bizStartH={bizStartH} bizEndH={bizEndH} hourHeight={60} onEvent={handleEventClick} single />}
+
+      {/* 予定の簡易詳細ポップオーバー */}
+      {popover && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setPopover(null)} />
+          <div
+            className="fixed z-50 w-[280px] max-w-[calc(100vw-16px)] rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-xl p-4"
+            style={{
+              left: typeof window !== 'undefined' ? Math.min(popover.x, window.innerWidth - 296) : popover.x,
+              top: typeof window !== 'undefined' ? Math.min(popover.y, window.innerHeight - 240) : popover.y,
+            }}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusStyle(popover.event.status)}`}>
+                {popover.event.kind === 'revisit' ? '引取' : '訪問'}・{STATUS_LABEL[popover.event.status] ?? popover.event.status}
+              </span>
+              <button type="button" onClick={() => setPopover(null)} className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] leading-none text-lg" aria-label="閉じる">×</button>
+            </div>
+            <p className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{popover.event.name} 様</p>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+              {popover.event.start ? `${popover.event.start}${popover.event.end ? `〜${popover.event.end}` : ''}` : '時間未定'}
+            </p>
+            {popover.event.address && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 break-words">{popover.event.address}</p>}
+            {popover.event.note && <p className="text-xs text-[var(--md-sys-color-on-surface-faint)] mt-1 break-words whitespace-pre-wrap">{popover.event.note}</p>}
+            <button
+              type="button"
+              onClick={() => { const e = popover.event; setPopover(null); goToDeal(e) }}
+              className="mt-3 w-full text-center text-sm font-medium px-3 py-2 rounded-lg bg-[var(--portal-primary)] text-white hover:opacity-90"
+            >
+              案件ページへ
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
 /* ───────────── 月間 ───────────── */
-function MonthChip({ e, onEvent }: { e: CalEvent; onEvent: (e: CalEvent) => void }) {
+function MonthChip({ e, onEvent }: { e: CalEvent; onEvent: (e: CalEvent, ev: React.MouseEvent) => void }) {
   return (
-    <button type="button" onClick={() => onEvent(e)} title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}`} className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}>
+    <button type="button" onClick={(ev) => onEvent(e, ev)} title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}`} className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}>
       {e.start ? <span className="font-medium">{e.start} </span> : null}{e.name}
     </button>
   )
 }
 
 function MonthView({ cursor, eventsByDate, todayKey, onEvent, onPickDay }: {
-  cursor: Date; eventsByDate: Record<string, CalEvent[]>; todayKey: string; onEvent: (e: CalEvent) => void; onPickDay: (d: Date) => void
+  cursor: Date; eventsByDate: Record<string, CalEvent[]>; todayKey: string; onEvent: (e: CalEvent, ev: React.MouseEvent) => void; onPickDay: (d: Date) => void
 }) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
   const gridStart = startOfWeekMonday(first)
@@ -241,7 +281,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
   bizStartH: number
   bizEndH: number
   hourHeight: number
-  onEvent: (e: CalEvent) => void
+  onEvent: (e: CalEvent, ev: React.MouseEvent) => void
   onPickDay?: (d: Date) => void
   single?: boolean
 }) {
@@ -290,7 +330,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
             {days.map((d) => (
               <div key={ymd(d)} className="p-0.5 space-y-0.5 border-l border-[var(--md-sys-color-outline-variant)]">
                 {(eventsByDate[ymd(d)] ?? []).filter(e => toMin(e.start) === null).map(e => (
-                  <button key={e.id} type="button" onClick={() => onEvent(e)} className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}>{e.kind === 'revisit' ? '引取: ' : ''}{e.name}</button>
+                  <button key={e.id} type="button" onClick={(ev) => onEvent(e, ev)} className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}>{e.kind === 'revisit' ? '引取: ' : ''}{e.name}</button>
                 ))}
               </div>
             ))}
@@ -328,7 +368,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
                     <button
                       key={e.id}
                       type="button"
-                      onClick={() => onEvent(e)}
+                      onClick={(ev) => onEvent(e, ev)}
                       title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.address ? ` / ${e.address}` : ''}${e.note ? ` / ${e.note}` : ''}`}
                       className={`absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left leading-tight hover:opacity-90 hover:z-10 shadow-sm ${statusStyle(e.status)}`}
                       style={{ top, height, left: `calc(${pos.left * 100}% + 2px)`, width: `calc(${pos.width * 100}% - 4px)` }}

@@ -7,8 +7,17 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
-import SearchFilterBar from '@/components/SearchFilterBar'
 import DataTable, { type Column } from '@/components/DataTable'
+import FilterChipBar from '@/components/list/FilterChipBar'
+import BulkActionBar from '@/components/list/BulkActionBar'
+import ViewTabs, { type ListView } from '@/components/list/ViewTabs'
+import ColumnPicker from '@/components/list/ColumnPicker'
+import PageNav from '@/components/list/PageNav'
+import AdvancedFilterPanel from '@/components/list/AdvancedFilterPanel'
+import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
+import {
+  adminChips, adminAdvFields, ADMIN_PRESET_VIEWS, FILTER_PARAM_KEYS, parseFilterString, TYPE_OPTIONS,
+} from '@/components/list/customer-filter-defs'
 import Modal from '@/components/Modal'
 import CustomerMergeModal from '@/components/CustomerMergeModal'
 import Button from '@/components/Button'
@@ -131,6 +140,22 @@ const INQUIRY_STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
   completed: { bg: 'rgba(74,222,128,0.15)',  fg: '#4ade80' },
 }
 
+// URLと同期するクエリキー（フィルタ + ページ）
+const QUERY_PARAM_KEYS = [...FILTER_PARAM_KEYS, 'page'] as const
+
+// 「列を編集」で切り替えられる列（顧客名・操作は常時表示）
+const ADMIN_COLUMN_OPTIONS = [
+  { key: 'contact', label: '連絡先' },
+  { key: 'store', label: '担当店舗' },
+  { key: 'customerType', label: 'タイプ' },
+  { key: 'createdAt', label: '登録日' },
+]
+const ADMIN_DEFAULT_COLS = ADMIN_COLUMN_OPTIONS.map(c => c.key)
+const ADMIN_COLS_STORAGE_KEY = 'kk-admin-customers-cols'
+
+// テーブル列キー → サーバーソートフィールド
+const SORT_FIELD_BY_COL: Record<string, string> = { name: 'furigana', createdAt: 'createdAt' }
+
 function KpiCard({ label, value, unit, icon }: { label: string; value: string; unit?: string; icon: React.ReactNode }) {
   return (
     <div className="relative rounded-2xl p-4 overflow-hidden" style={{ background: '#171717', border: '1px solid #262626' }}>
@@ -152,11 +177,28 @@ export default function AdminCustomersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [stores, setStores] = useState<Store[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filterStore, setFilterStore] = useState('')
-  const [filterCustomerType, setFilterCustomerType] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [showInactive, setShowInactive] = useState(false)
+
+  // フィルタ・ソート・ページ状態（URLと双方向同期）
+  const { params, setParams, replaceParams, ready } = useListQueryState(QUERY_PARAM_KEYS)
+  const filterQuery = serializeParams(params, FILTER_PARAM_KEYS)
+  const showInactive = params.includeInactive === 'true'
+
+  // 保存ビュー
+  const [savedViews, setSavedViews] = useState<ListView[]>([])
+
+  // 行選択・一括操作
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [allMatching, setAllMatching] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null)
+  const [bulkModal, setBulkModal] = useState<'assignStore' | 'setType' | 'setLeadSource' | null>(null)
+  const [bulkStoreId, setBulkStoreId] = useState('')
+  const [bulkTypeValue, setBulkTypeValue] = useState('regular')
+  const [bulkLeadSource, setBulkLeadSource] = useState('')
+
+  // 表示列・詳細フィルター
+  const [visibleCols, setVisibleCols] = useState<string[]>(ADMIN_DEFAULT_COLS)
+  const [advOpen, setAdvOpen] = useState(false)
 
   // 訪問ステータス（動的取得）
   const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
@@ -167,15 +209,14 @@ export default function AdminCustomersPage() {
   )
 
   // ページネーション
-  const [usersPage, setUsersPage] = useState(1)
-  const [usersHasMore, setUsersHasMore] = useState(false)
   const [usersTotal, setUsersTotal] = useState(0)
+  const USERS_LIMIT = 50
+  const page = Math.max(1, parseInt(params.page || '1', 10) || 1)
+  const pageCount = Math.max(1, Math.ceil(usersTotal / USERS_LIMIT))
   // 全件集計
   const [statsTotal, setStatsTotal] = useState(0)
   const [statsUnassigned, setStatsUnassigned] = useState(0)
   const [statsIdMissing, setStatsIdMissing] = useState(0)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const USERS_LIMIT = 50
 
   // 削除・無効化処理中のユーザーID
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -271,19 +312,15 @@ export default function AdminCustomersPage() {
       .catch(() => {})
   }, [])
 
-  // 顧客取得用クエリ（検索・店舗・タイプ・有効/無効・ページ）を組み立て
+  // 顧客取得用クエリ（フィルタ・ソート＋ページ）を組み立て
   const buildUserParams = useCallback((pageNum: number) => {
-    const params = new URLSearchParams()
-    if (showInactive) params.set('includeInactive', 'true')
-    if (search.trim()) params.set('search', search.trim())
-    if (filterStore) params.set('storeId', filterStore)
-    if (filterCustomerType) params.set('customerType', filterCustomerType)
-    params.set('page', String(pageNum))
-    params.set('limit', String(USERS_LIMIT))
-    return params.toString()
-  }, [showInactive, search, filterStore, filterCustomerType])
+    const sp = new URLSearchParams(filterQuery)
+    sp.set('page', String(pageNum))
+    sp.set('limit', String(USERS_LIMIT))
+    return sp.toString()
+  }, [filterQuery])
 
-  // 店舗・流入経路・全件集計（フィルタに依存しない）
+  // 店舗・流入経路・全件集計・保存ビュー（フィルタに依存しない）
   useEffect(() => {
     if (status !== 'authenticated') return
     const sessionUser = session.user as any
@@ -302,28 +339,165 @@ export default function AdminCustomersPage() {
         setStatsIdMissing(statsData.idMissing ?? 0)
       }
     }).catch(() => {})
-  }, [status, session, showInactive])
+  }, [status, session, showInactive, router])
 
-  // 顧客一覧（全顧客対象にサーバー側で検索・絞り込み。検索はデバウンス）
+  // 保存ビューを取得
   useEffect(() => {
     if (status !== 'authenticated') return
+    fetch('/api/list-views?portal=admin')
+      .then(r => r.ok ? r.json() : { views: [] })
+      .then(d => setSavedViews((d.views || []).map((v: any) => ({
+        id: v.id, name: v.name, filters: v.filters,
+        columns: v.columns ? JSON.parse(v.columns) : null,
+      }))))
+      .catch(() => {})
+  }, [status])
+
+  // 表示列をlocalStorageから復元
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ADMIN_COLS_STORAGE_KEY)
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr) && arr.length > 0) {
+          setVisibleCols(arr.filter((k: string) => ADMIN_DEFAULT_COLS.includes(k)))
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  function updateVisibleCols(cols: string[]) {
+    setVisibleCols(cols)
+    try { localStorage.setItem(ADMIN_COLS_STORAGE_KEY, JSON.stringify(cols)) } catch { /* ignore */ }
+  }
+
+  // 顧客一覧（全顧客対象にサーバー側で検索・絞り込み・ソート。検索はデバウンス）
+  useEffect(() => {
+    if (status !== 'authenticated' || !ready) return
     const sessionUser = session.user as any
     if (!['admin','superadmin','hr'].includes(sessionUser.role)) return
     const handle = setTimeout(() => {
-      fetch(`/api/admin/users?${buildUserParams(1)}`)
+      fetch(`/api/admin/users?${buildUserParams(page)}`)
         .then(r => r.json())
         .then(data => {
           const list = data?.users ?? (Array.isArray(data) ? data : [])
           setUsers(list)
           setUsersTotal(data?.total ?? list.length)
-          setUsersPage(1)
-          setUsersHasMore((data?.total ?? list.length) > USERS_LIMIT)
           setLoading(false)
         })
         .catch(() => setLoading(false))
-    }, search.trim() ? 300 : 0)
+    }, params.search?.trim() ? 300 : 0)
     return () => clearTimeout(handle)
-  }, [status, session, showInactive, search, filterStore, filterCustomerType, buildUserParams, mergeRefresh])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session, ready, filterQuery, page, buildUserParams, mergeRefresh])
+
+  // フィルタ・ページが変わったら行選択を解除
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setAllMatching(false)
+  }, [filterQuery, page])
+
+  // ---- 保存ビュー ----
+  const views: ListView[] = [...ADMIN_PRESET_VIEWS, ...savedViews]
+  const activeViewId = views.find(
+    v => serializeParams(parseFilterString(v.filters), FILTER_PARAM_KEYS) === filterQuery
+  )?.id ?? null
+
+  function handleSelectView(v: ListView) {
+    replaceParams(parseFilterString(v.filters))
+    if (v.columns && v.columns.length > 0) {
+      updateVisibleCols(v.columns.filter(k => ADMIN_DEFAULT_COLS.includes(k)))
+    }
+  }
+
+  async function handleSaveView(name: string) {
+    const res = await fetch('/api/list-views', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal: 'admin', name, filters: filterQuery, columns: visibleCols }),
+    })
+    if (res.ok) {
+      const v = await res.json()
+      setSavedViews(prev => [...prev, { id: v.id, name: v.name, filters: v.filters, columns: visibleCols }])
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setMessage({ type: 'error', text: data.error || 'ビューの保存に失敗しました' })
+    }
+  }
+
+  async function handleDeleteView(v: ListView) {
+    if (!confirm(`ビュー「${v.name}」を削除しますか？`)) return
+    const res = await fetch(`/api/list-views/${v.id}`, { method: 'DELETE' })
+    if (res.ok) setSavedViews(prev => prev.filter(x => x.id !== v.id))
+  }
+
+  // ---- サーバーサイドソート ----
+  const [sortField, sortDirRaw] = (params.sort || '').split(':')
+  const serverSort = sortField
+    ? { key: sortField === 'furigana' ? 'name' : sortField, dir: (sortDirRaw === 'desc' ? 'desc' : 'asc') as 'asc' | 'desc' }
+    : null
+
+  function handleSortChange(colKey: string) {
+    const field = SORT_FIELD_BY_COL[colKey]
+    if (!field) return
+    const nextDir = sortField === field && sortDirRaw !== 'desc' ? 'desc' : 'asc'
+    setParams({ sort: `${field}:${nextDir}` })
+  }
+
+  // ---- 一括操作 ----
+  const effectiveSelectedCount = allMatching ? usersTotal : selectedIds.size
+
+  function handleBulkAction(key: string) {
+    if (key === 'export') {
+      const qs = allMatching || selectedIds.size === 0
+        ? filterQuery
+        : `ids=${encodeURIComponent([...selectedIds].join(','))}`
+      window.location.href = `/api/admin/users/export${qs ? `?${qs}` : ''}`
+      return
+    }
+    if (key === 'activate' || key === 'deactivate') {
+      submitBulk('setActive', { isActive: key === 'activate' }, key === 'activate' ? '有効化' : '無効化')
+      return
+    }
+    if (key === 'assignStore' || key === 'setType' || key === 'setLeadSource') {
+      setBulkModal(key)
+    }
+  }
+
+  async function submitBulk(action: string, payload: any, label: string, opts?: { skipConfirm?: boolean }) {
+    // モーダル経由のアクションはモーダル自体が確認UIのためconfirmを省略
+    if (!opts?.skipConfirm && !confirm(`${effectiveSelectedCount.toLocaleString()}件の顧客を${label}します。よろしいですか？\n※一括操作ではメール通知は送信されません`)) return
+    setBulkBusy(action)
+    try {
+      const res = await fetch('/api/admin/users/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          ...(allMatching ? { filters: filterQuery } : { ids: [...selectedIds] }),
+          payload,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: `${data.count}件の顧客を${label}しました` })
+        setBulkModal(null)
+        setSelectedIds(new Set())
+        setAllMatching(false)
+        // 一覧を再取得
+        const listRes = await fetch(`/api/admin/users?${buildUserParams(page)}`)
+        const listData = await listRes.json()
+        const list = listData?.users ?? []
+        setUsers(list)
+        setUsersTotal(listData?.total ?? list.length)
+      } else {
+        setMessage({ type: 'error', text: data.error || '一括操作に失敗しました' })
+      }
+    } catch {
+      setMessage({ type: 'error', text: '一括操作に失敗しました' })
+    }
+    setBulkBusy(null)
+  }
 
   // URLから顧客ID・タブを復元
   useEffect(() => {
@@ -347,20 +521,6 @@ export default function AdminCustomersPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading])
-
-  async function loadMoreUsers() {
-    setLoadingMore(true)
-    const nextPage = usersPage + 1
-    try {
-      const res = await fetch(`/api/admin/users?${buildUserParams(nextPage)}`)
-      const data = await res.json()
-      const list = data?.users ?? (Array.isArray(data) ? data : [])
-      setUsers(prev => [...prev, ...list])
-      setUsersPage(nextPage)
-      setUsersHasMore(nextPage * USERS_LIMIT < (data?.total ?? 0))
-    } catch { /* ignore */ }
-    setLoadingMore(false)
-  }
 
   // 顧客詳細モーダルを開いたときにスケジュール取得
   useEffect(() => {
@@ -816,18 +976,12 @@ export default function AdminCustomersPage() {
       }
 
       // ユーザー一覧を再取得（バックグラウンドで）
-      const params = new URLSearchParams()
-      if (showInactive) params.set('includeInactive', 'true')
-      params.set('page', '1')
-      params.set('limit', String(USERS_LIMIT))
-      fetch(`/api/admin/users?${params.toString()}`)
+      fetch(`/api/admin/users?${buildUserParams(1)}`)
         .then(r => r.json())
         .then(usersData => {
           const list = usersData?.users ?? (Array.isArray(usersData) ? usersData : [])
           setUsers(list)
           setUsersTotal(usersData?.total ?? list.length)
-          setUsersPage(1)
-          setUsersHasMore((usersData?.total ?? list.length) > USERS_LIMIT)
         })
         .catch(() => {})
 
@@ -1097,6 +1251,18 @@ export default function AdminCustomersPage() {
       },
     },
     {
+      key: 'createdAt',
+      header: '登録日',
+      hideOnMobile: true,
+      render: (user) => (
+        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
+          {user.createdAt ? format(new Date(user.createdAt), 'yyyy/MM/dd', { locale: ja }) : '—'}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (user) => user.createdAt ?? '',
+    },
+    {
       key: 'actions',
       header: '',
       render: (user) => (
@@ -1114,6 +1280,13 @@ export default function AdminCustomersPage() {
         </div>
       ),
     },
+  ]
+
+  // 「列を編集」の設定を反映（顧客名は先頭・操作列は末尾に固定）
+  const displayedColumns = [
+    columns[0],
+    ...visibleCols.map(k => columns.find(c => c.key === k)).filter(Boolean) as Column<User>[],
+    columns[columns.length - 1],
   ]
 
   return (
@@ -1171,78 +1344,204 @@ export default function AdminCustomersPage() {
           </MessageBanner>
         )}
 
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)]">顧客一覧</h2>
-          <Button onClick={() => setShowAddCustomer(true)}>
-            新規顧客追加
-          </Button>
+        {/* 保存ビュータブ */}
+        <ViewTabs
+          views={views}
+          activeId={activeViewId}
+          dirty={false}
+          onSelect={handleSelectView}
+          onSaveCurrent={handleSaveView}
+          onDelete={handleDeleteView}
+        />
+
+        {/* 検索 + アクション */}
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--md-sys-color-outline)]">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+            <input
+              type="text"
+              value={params.search || ''}
+              onChange={e => setParams({ search: e.target.value })}
+              placeholder="氏名・ふりがな・メール・電話で検索..."
+              className="w-full h-10 pl-9 pr-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            />
+          </div>
+          <div className="flex gap-2 items-center flex-wrap">
+            <ColumnPicker options={ADMIN_COLUMN_OPTIONS} visible={visibleCols} onChange={updateVisibleCols} />
+            <Button variant="outlined" onClick={() => handleBulkAction('export')}>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12L12 7.5m0 0l4.5 4.5M12 7.5V21" />
+                </svg>
+                CSVエクスポート
+              </span>
+            </Button>
+            <Button onClick={() => setShowAddCustomer(true)}>
+              新規顧客追加
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4 px-4 sm:px-6 flex-wrap">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <div
-              onClick={() => setShowInactive(prev => !prev)}
-              className={`relative w-9 h-5 rounded-full transition-colors ${
-                showInactive ? 'bg-[var(--portal-primary,#374151)]' : 'bg-[var(--md-sys-color-outline)]'
-              }`}
-            >
-              <div className={`absolute top-0.5 w-4 h-4 bg-[var(--toggle-thumb,#fff)] rounded-full shadow transition-transform ${
-                showInactive ? 'translate-x-4' : 'translate-x-0.5'
-              }`} />
-            </div>
-            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-              無効化済みを表示
-            </span>
-          </label>
+        {/* クイックフィルタチップ */}
+        <div className="mb-4">
+          <FilterChipBar
+            chips={adminChips(stores, leadSources)}
+            values={params}
+            onChange={(patch) => setParams(patch)}
+            trailing={
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAdvOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium text-[var(--portal-primary,#374151)] hover:bg-[var(--md-sys-color-surface-container-high)]"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
+                    <path strokeLinecap="round" d="M4 6h16M7 12h10M10 18h4" />
+                  </svg>
+                  詳細フィルター
+                </button>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none ml-1">
+                  <input
+                    type="checkbox"
+                    checked={showInactive}
+                    onChange={() => setParams({ includeInactive: showInactive ? '' : 'true' })}
+                    className="w-3.5 h-3.5 accent-[var(--portal-primary,#374151)]"
+                  />
+                  <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">無効化済みを表示</span>
+                </label>
+              </>
+            }
+          />
         </div>
 
-        <SearchFilterBar
-          filters={[
-            { key: 'search', label: '検索', type: 'text', placeholder: '氏名・メールで検索...' },
-            {
-              key: 'store', label: '店舗', type: 'select',
-              options: [
-                { value: 'unassigned', label: '未割り当て' },
-                ...stores.map(s => ({ value: s.id, label: s.name })),
-              ],
-            },
-            {
-              key: 'customerType', label: '顧客タイプ', type: 'select',
-              options: CUSTOMER_TYPES.map(t => ({ value: t, label: CUSTOMER_TYPE_LABEL[t] })),
-            },
+        {/* 一括操作バー */}
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          totalCount={usersTotal}
+          allMatching={allMatching}
+          onSelectAllMatching={() => setAllMatching(true)}
+          onClearSelection={() => { setSelectedIds(new Set()); setAllMatching(false) }}
+          actions={[
+            { key: 'assignStore', label: '店舗割り当て' },
+            { key: 'setType', label: 'タイプ変更' },
+            { key: 'setLeadSource', label: '流入経路設定' },
+            { key: 'export', label: 'CSVエクスポート' },
+            { key: 'activate', label: '有効化' },
+            { key: 'deactivate', label: '無効化', tone: 'danger' },
           ]}
-          values={{ search, store: filterStore, customerType: filterCustomerType }}
-          onChange={(key, value) => {
-            if (key === 'search') setSearch(value)
-            if (key === 'store') setFilterStore(value)
-            if (key === 'customerType') setFilterCustomerType(value)
-          }}
-          onClear={() => { setSearch(''); setFilterStore(''); setFilterCustomerType('') }}
-          className="mb-4"
+          onAction={handleBulkAction}
+          busyAction={bulkBusy}
         />
 
         <div className="bg-[var(--md-sys-color-surface-container-lowest,#fff)] rounded-[var(--md-sys-shape-medium)] shadow-[var(--md-sys-elevation-1)] overflow-hidden">
           <DataTable<User>
-            columns={columns}
+            columns={displayedColumns}
             data={filtered}
             rowKey={(user) => user.id}
             emptyTitle="該当する顧客がいません"
+            selectable
+            selectedKeys={allMatching ? new Set(filtered.map(u => u.id)) : selectedIds}
+            onSelectionChange={(keys) => { setSelectedIds(keys); setAllMatching(false) }}
+            serverSort={serverSort}
+            onSortChange={handleSortChange}
           />
         </div>
 
-        {usersHasMore && (
-          <div className="flex justify-center mt-6">
-            <Button
-              variant="tonal"
-              onClick={loadMoreUsers}
-              loading={loadingMore}
-              disabled={loadingMore}
+        <div className="flex items-center justify-center gap-3">
+          <PageNav page={page} pageCount={pageCount} onChange={(p) => setParams({ page: String(p) })} />
+        </div>
+        <p className="text-center text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2">
+          {usersTotal.toLocaleString()}件中 {usersTotal === 0 ? 0 : (page - 1) * USERS_LIMIT + 1}〜{Math.min(page * USERS_LIMIT, usersTotal)}件を表示
+        </p>
+      </div>
+
+      {/* 詳細フィルター */}
+      <AdvancedFilterPanel
+        open={advOpen}
+        onClose={() => setAdvOpen(false)}
+        fields={adminAdvFields(stores, leadSources)}
+        values={params}
+        onApply={(patch) => setParams(patch)}
+        fetchCount={async (draft) => {
+          const qs = serializeParams({ ...params, ...draft }, FILTER_PARAM_KEYS)
+          const res = await fetch(`/api/admin/users?page=1&limit=1${qs ? `&${qs}` : ''}`)
+          const data = await res.json()
+          return data?.total ?? 0
+        }}
+      />
+
+      {/* 一括操作モーダル（店舗割り当て / タイプ変更 / 流入経路設定） */}
+      <Modal
+        open={bulkModal !== null}
+        onClose={() => setBulkModal(null)}
+        title={
+          bulkModal === 'assignStore' ? '店舗を一括割り当て'
+          : bulkModal === 'setType' ? '顧客タイプを一括変更'
+          : '流入経路を一括設定'
+        }
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+            選択中の{effectiveSelectedCount.toLocaleString()}件に適用します。一括操作ではメール通知は送信されません。
+          </p>
+          {bulkModal === 'assignStore' && (
+            <select
+              value={bulkStoreId}
+              onChange={e => setBulkStoreId(e.target.value)}
+              className="w-full h-11 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
             >
-              {loadingMore ? '読み込み中...' : `もっと読み込む（${users.length} / ${usersTotal}件）`}
+              <option value="">店舗を選択...</option>
+              {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
+          {bulkModal === 'setType' && (
+            <select
+              value={bulkTypeValue}
+              onChange={e => setBulkTypeValue(e.target.value)}
+              className="w-full h-11 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+            >
+              {TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )}
+          {bulkModal === 'setLeadSource' && (
+            <select
+              value={bulkLeadSource}
+              onChange={e => setBulkLeadSource(e.target.value)}
+              className="w-full h-11 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+            >
+              <option value="">未設定に戻す</option>
+              {leadSources.map(ls => <option key={ls.id} value={ls.name}>{ls.name}</option>)}
+            </select>
+          )}
+          <div className="flex gap-3">
+            <Button variant="text" onClick={() => setBulkModal(null)} disabled={!!bulkBusy}>
+              キャンセル
+            </Button>
+            <Button
+              variant="filled"
+              fullWidth
+              loading={!!bulkBusy}
+              disabled={!!bulkBusy || (bulkModal === 'assignStore' && !bulkStoreId)}
+              onClick={() => {
+                if (bulkModal === 'assignStore') {
+                  const storeName = stores.find(s => s.id === bulkStoreId)?.name ?? ''
+                  submitBulk('assignStore', { storeId: bulkStoreId }, `「${storeName}」に割り当て`, { skipConfirm: true })
+                } else if (bulkModal === 'setType') {
+                  const label = TYPE_OPTIONS.find(o => o.value === bulkTypeValue)?.label ?? bulkTypeValue
+                  submitBulk('setType', { customerType: bulkTypeValue }, `タイプ「${label}」に変更`, { skipConfirm: true })
+                } else if (bulkModal === 'setLeadSource') {
+                  submitBulk('setLeadSource', { leadSource: bulkLeadSource || null }, `流入経路「${bulkLeadSource || '未設定'}」に設定`, { skipConfirm: true })
+                }
+              }}
+            >
+              適用する
             </Button>
           </div>
-        )}
-      </div>
+        </div>
+      </Modal>
 
       {/* 顧客詳細モーダル */}
       <Modal

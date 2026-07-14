@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { buildStoreCustomersWhere, parseCustomerSort } from '@/lib/customer-list-query'
 
 export async function GET(
   request: NextRequest,
@@ -21,20 +22,10 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
-  const search = (searchParams.get('search') || '').trim()
 
-  // 検索: 全担当顧客を対象に氏名・ふりがな・メール・電話で部分一致（電話はハイフン無しでも一致）
-  const where: any = { storeId: id, mergedIntoUserId: null } // 統合で吸収された顧客は一覧に出さない
-  if (search) {
-    const phoneDigits = search.replace(/[-ー\s]/g, '')
-    where.OR = [
-      { name:     { contains: search, mode: 'insensitive' } },
-      { furigana: { contains: search, mode: 'insensitive' } },
-      { email:    { contains: search, mode: 'insensitive' } },
-      { phone:    { contains: search } },
-      ...(phoneDigits && phoneDigits !== search ? [{ phone: { contains: phoneDigits } }] : []),
-    ]
-  }
+  // 検索・タイプ・登録日・訪問状況などの絞り込みは共有ヘルパーで解釈（全担当顧客対象）
+  const where = buildStoreCustomersWhere(id, searchParams)
+  const orderBy = parseCustomerSort(searchParams, { name: 'asc' })
 
   const [customers, total] = await Promise.all([
     prisma.user.findMany({
@@ -60,7 +51,7 @@ export async function GET(
         take: 1,
       },
     },
-    orderBy: { name: 'asc' },
+    orderBy,
     skip: (page - 1) * limit,
     take: limit,
   }),

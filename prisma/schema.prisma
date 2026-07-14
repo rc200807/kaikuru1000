@@ -1250,6 +1250,21 @@ model StripeWebhookEvent {
   createdAt DateTime @default(now())
 }
 
+// 顧客一覧の保存ビュー（フィルタ・列・ソートのセットをタブとして保存）
+model SavedListView {
+  id        String   @id @default(cuid())
+  portal    String                                           // "admin" | "store"
+  ownerId   String                                           // 保存したユーザー（管理者 or 店舗）のセッションID
+  name      String
+  filters   String   @db.Text                                // 一覧APIクエリ文字列（例: "types=regular&lastVisit=over90"）
+  columns   String?  @db.Text                                // 表示列キーのJSON配列
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([portal, ownerId])
+}
+
 // 発注先アカウント（仕入先サイトのログイン情報）。パスワードはAES-256-GCMで暗号化保存。
 model SupplierAccount {
   id          String   @id @default(cuid())

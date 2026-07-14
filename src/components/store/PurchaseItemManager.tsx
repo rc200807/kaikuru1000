@@ -232,7 +232,6 @@ export default function PurchaseItemManager({
       {editable && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <Button size="sm" variant="outlined" onClick={() => { resetForm(); setShowForm(true) }}>＋ 品目を追加</Button>
-          <Button size="sm" variant="outlined" onClick={() => setShowScanner(true)}>バーコード読取</Button>
           <button
             onClick={addThousandYenBox}
             disabled={saving}

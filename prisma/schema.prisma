@@ -33,6 +33,8 @@ model User {
   address        String
   birthDate      String?             // 生年月日（顧客プロフィール。身分証OCRから選択反映）
   internalNote   String?   @db.Text  // 店舗・管理者のみ閲覧可能な内部メモ（顧客には非公開）
+  mergedIntoUserId String?           // 顧客統合で吸収された場合の統合先User.id（論理削除の目印）
+  mergedAt         DateTime?         // 統合された日時
   password       String
   licenseKeyId   String?   @unique
   licenseKey     LicenseKey? @relation(fields: [licenseKeyId], references: [id])

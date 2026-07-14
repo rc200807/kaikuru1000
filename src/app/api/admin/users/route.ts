@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
 
-  const where: any = {}
+  const where: any = { mergedIntoUserId: null } // 統合で吸収された顧客は一覧に出さない
   if (!includeInactive) where.isActive = true
   // 担当店舗フィルタ（unassigned=未割り当て）
   if (storeId === 'unassigned') where.storeId = null

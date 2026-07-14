@@ -10,6 +10,7 @@ import AppBar from '@/components/AppBar'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import DataTable, { type Column } from '@/components/DataTable'
 import Modal from '@/components/Modal'
+import CustomerMergeModal from '@/components/CustomerMergeModal'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
@@ -188,6 +189,8 @@ export default function AdminCustomersPage() {
 
   // 顧客詳細モーダル
   const [detailUser, setDetailUser] = useState<User | null>(null)
+  const [showMerge, setShowMerge] = useState(false)
+  const [mergeRefresh, setMergeRefresh] = useState(0)
   const [detailTab, setDetailTab] = useState<DetailTab>('info')
   // 顧客に紐づくお問い合わせ
   const [customerInquiries, setCustomerInquiries] = useState<CustomerInquiry[]>([])
@@ -319,7 +322,7 @@ export default function AdminCustomersPage() {
         .catch(() => setLoading(false))
     }, search.trim() ? 300 : 0)
     return () => clearTimeout(handle)
-  }, [status, session, showInactive, search, filterStore, filterCustomerType, buildUserParams])
+  }, [status, session, showInactive, search, filterStore, filterCustomerType, buildUserParams, mergeRefresh])
 
   // URLから顧客ID・タブを復元
   useEffect(() => {
@@ -1256,6 +1259,13 @@ export default function AdminCustomersPage() {
                   <Button
                     size="sm"
                     variant="outlined"
+                    onClick={() => setShowMerge(true)}
+                  >
+                    統合
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outlined"
                     disabled={deletingId === detailUser.id}
                     loading={deletingId === detailUser.id}
                     className="text-[var(--md-sys-color-error)] border-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)]"
@@ -2158,6 +2168,22 @@ export default function AdminCustomersPage() {
           </>
         )}
       </Modal>
+
+      {/* 顧客統合モーダル */}
+      {detailUser && (
+        <CustomerMergeModal
+          open={showMerge}
+          onClose={() => setShowMerge(false)}
+          base={{ id: detailUser.id, name: detailUser.name, furigana: detailUser.furigana, email: detailUser.email, phone: detailUser.phone, address: detailUser.address, birthDate: (detailUser as any).birthDate }}
+          onSearch={async (q) => {
+            const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&limit=20`)
+            const data = await res.json()
+            const list = data?.users ?? (Array.isArray(data) ? data : [])
+            return list.map((u: any) => ({ id: u.id, name: u.name, furigana: u.furigana, email: u.email, phone: u.phone, address: u.address, birthDate: u.birthDate }))
+          }}
+          onMerged={() => { setShowMerge(false); closeDetailModal(); setMergeRefresh(x => x + 1) }}
+        />
+      )}
 
       {/* 新規顧客追加ウィザードモーダル */}
       <Modal

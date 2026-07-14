@@ -8,6 +8,7 @@ import { ja } from 'date-fns/locale'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
+import CustomerMergeModal from '@/components/CustomerMergeModal'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
@@ -263,6 +264,7 @@ export default function StoreCustomerDetailPage() {
     leadSource: string
   }
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [showMerge, setShowMerge] = useState(false)
   const [editDraft, setEditDraft] = useState<EditDraft>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
   const [savingEdit, setSavingEdit] = useState(false)
   const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
@@ -1126,12 +1128,20 @@ export default function StoreCustomerDetailPage() {
             <Card>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">顧客情報</h2>
-                <button
-                  onClick={openEditModal}
-                  className="text-xs text-[var(--portal-primary)] hover:underline"
-                >
-                  顧客情報を編集
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowMerge(true)}
+                    className="text-xs text-[var(--portal-primary)] hover:underline"
+                  >
+                    統合
+                  </button>
+                  <button
+                    onClick={openEditModal}
+                    className="text-xs text-[var(--portal-primary)] hover:underline"
+                  >
+                    顧客情報を編集
+                  </button>
+                </div>
               </div>
               <dl className="space-y-3">
                 {[
@@ -2158,6 +2168,23 @@ export default function StoreCustomerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* 顧客統合モーダル */}
+      {customer && (
+        <CustomerMergeModal
+          open={showMerge}
+          onClose={() => setShowMerge(false)}
+          base={{ id: customer.id, name: customer.name, furigana: customer.furigana, email: customer.email, phone: customer.phone, address: customer.address, birthDate: (customer as any).birthDate }}
+          onSearch={async (q) => {
+            const storeId = (session?.user as any).id
+            const res = await fetch(`/api/stores/${storeId}/customers?search=${encodeURIComponent(q)}&limit=20`)
+            const data = await res.json()
+            const list = data?.customers ?? (Array.isArray(data) ? data : [])
+            return list.map((u: any) => ({ id: u.id, name: u.name, furigana: u.furigana, email: u.email, phone: u.phone, address: u.address, birthDate: u.birthDate }))
+          }}
+          onMerged={() => { setShowMerge(false); window.location.href = '/store/customers' }}
+        />
+      )}
 
       {/* 顧客情報編集モーダル */}
       <BottomSheet open={editModalOpen} onClose={() => !savingEdit && setEditModalOpen(false)} title="顧客情報を編集" desktopMaxWidth="sm:max-w-2xl">

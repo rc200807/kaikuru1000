@@ -24,7 +24,7 @@ export async function GET(
   const search = (searchParams.get('search') || '').trim()
 
   // 検索: 全担当顧客を対象に氏名・ふりがな・メール・電話で部分一致（電話はハイフン無しでも一致）
-  const where: any = { storeId: id }
+  const where: any = { storeId: id, mergedIntoUserId: null } // 統合で吸収された顧客は一覧に出さない
   if (search) {
     const phoneDigits = search.replace(/[-ー\s]/g, '')
     where.OR = [

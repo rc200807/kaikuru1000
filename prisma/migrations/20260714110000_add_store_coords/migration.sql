@@ -1,0 +1,3 @@
+-- 店舗の緯度経度（ジオコーディング結果のキャッシュ）
+ALTER TABLE "Store" ADD COLUMN "lat" DOUBLE PRECISION;
+ALTER TABLE "Store" ADD COLUMN "lng" DOUBLE PRECISION;

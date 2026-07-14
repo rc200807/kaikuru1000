@@ -49,6 +49,8 @@ export async function GET(request: NextRequest) {
       address: true,
       phone: true,
       email: true,
+      lat: true,
+      lng: true,
     },
     orderBy: { code: 'asc' },
   })
@@ -56,16 +58,24 @@ export async function GET(request: NextRequest) {
   // 顧客の座標を取得
   const customerCoords = await geocode(address.trim())
 
-  // 全店舗の座標を並列取得
+  // 店舗座標: DBキャッシュ(lat/lng)を優先。未取得のものだけジオコーディングして永続化（write-through）。
   const storeCoords = new Map<string, { lat: number; lng: number }>()
-  if (customerCoords) {
-    const geocodePromises = stores.map(async (store) => {
+  const needGeocode: typeof stores = []
+  for (const store of stores) {
+    if (store.lat != null && store.lng != null) storeCoords.set(store.id, { lat: store.lat, lng: store.lng })
+    else needGeocode.push(store)
+  }
+  if (customerCoords && needGeocode.length > 0) {
+    await Promise.all(needGeocode.map(async (store) => {
       const addr = store.address || (store.prefecture || '')
       if (!addr) return
       const coords = await geocode(addr)
-      if (coords) storeCoords.set(store.id, coords)
-    })
-    await Promise.all(geocodePromises)
+      if (coords) {
+        storeCoords.set(store.id, coords)
+        // 次回以降の再ジオコーディングを避けるためDBに保存（失敗は無視）
+        try { await prisma.store.update({ where: { id: store.id }, data: { lat: coords.lat, lng: coords.lng } }) } catch { /* ignore */ }
+      }
+    }))
   }
 
   const scored = scoreStoresByAddress(address.trim(), stores, customerCoords, storeCoords)

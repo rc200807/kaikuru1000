@@ -78,6 +78,11 @@ export default function AdminAreaSearchPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null)
 
+  // 郵便番号→住所オートフィル
+  const [postalCode, setPostalCode] = useState('')
+  const [postalLoading, setPostalLoading] = useState(false)
+  const [postalError, setPostalError] = useState<string | null>(null)
+
   // 都道府県選択時に市区町村を取得
   const fetchCities = useCallback(async (pref: string) => {
     if (!pref) { setCities([]); return }
@@ -182,6 +187,44 @@ export default function AdminAreaSearchPage() {
     await runSearch(addr)
   }
 
+  // 郵便番号から住所を引き当て、各入力欄へ反映する（検索はしない＝ある程度の自動入力）
+  async function lookupPostal(code: string) {
+    const digits = code.replace(/[^0-9]/g, '')
+    if (digits.length !== 7) { setPostalError('7桁の郵便番号を入力してください'); return }
+    setPostalLoading(true)
+    setPostalError(null)
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      const data = await res.json()
+      if (!res.ok || !data.address) {
+        setPostalError('住所が見つかりませんでした')
+        return
+      }
+      // zipcloud が返す「以下に掲載がない場合」等の町域プレースホルダは除外
+      let town: string = data.town || ''
+      if (/以下に掲載がない場合|次に番地がくる|一円$/.test(town)) town = ''
+      // 詳細入力・テキスト検索の双方へ反映（モードは変更しない）
+      setPrefecture(data.prefecture || '')
+      if (data.prefecture) fetchCities(data.prefecture)
+      setCityInput(data.city || '')
+      setDetail(town)
+      setSimpleAddress(`${data.prefecture || ''}${data.city || ''}${town}`)
+      setShowSuggestions(false)
+      setResult(null); setSelectedStoreId(null)
+    } catch {
+      setPostalError('郵便番号の検索に失敗しました')
+    } finally {
+      setPostalLoading(false)
+    }
+  }
+
+  function handlePostalChange(v: string) {
+    setPostalCode(v)
+    setPostalError(null)
+    // 7桁揃ったら自動で住所反映
+    if (v.replace(/[^0-9]/g, '').length === 7) lookupPostal(v)
+  }
+
   function getScoreBadge(score: number, reason: string) {
     if (score >= 20) return { color: 'from-emerald-500 to-green-500', text: reason, icon: '◎' }
     if (score >= 15) return { color: 'from-teal-500 to-emerald-500', text: reason, icon: '◎' }
@@ -223,6 +266,37 @@ export default function AdminAreaSearchPage() {
         <div className="absolute z-[500] top-3 left-3 right-3 sm:right-auto sm:w-[384px] flex flex-col rounded-2xl bg-[var(--md-sys-color-surface)] shadow-2xl ring-1 ring-black/10 max-h-[calc(100%-1.5rem)] sm:bottom-3 sm:max-h-none">
           {/* 検索ヘッダー（固定） */}
           <div className="flex-shrink-0 p-3 rounded-t-2xl">
+            {/* 郵便番号から住所を自動入力 */}
+            <div className="mb-2.5">
+              <label className="block text-[11px] font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-1">郵便番号から住所を自動入力</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={postalCode}
+                  onChange={e => handlePostalChange(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); lookupPostal(postalCode) } }}
+                  placeholder="例: 1500041"
+                  maxLength={8}
+                  className={`${inputCls} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => lookupPostal(postalCode)}
+                  disabled={postalLoading || postalCode.replace(/[^0-9]/g, '').length !== 7}
+                  className="h-10 px-3 flex-shrink-0 text-xs font-semibold rounded-lg border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] disabled:opacity-40 transition-all flex items-center gap-1"
+                >
+                  {postalLoading ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : '住所反映'}
+                </button>
+              </div>
+              {postalError && <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{postalError}</p>}
+            </div>
+
             {/* モード切替 */}
             <div className="flex gap-1 mb-2.5 p-0.5 bg-[var(--md-sys-color-surface-container-high)] rounded-lg">
               <button

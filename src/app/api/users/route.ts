@@ -8,10 +8,16 @@ import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { recordAccessLog } from '@/lib/access-log'
+import { buildUserNameData } from '@/lib/name-utils'
 
 const registerSchema = z.object({
-  name:         z.string().min(1, '氏名は必須です').max(100),
-  furigana:     z.string().min(1, 'ふりがなは必須です').max(100),
+  // 新形式（姓・名分割）と旧形式（結合 name/furigana）の両方を受理
+  name:          z.string().max(100).optional().or(z.literal('')),
+  furigana:      z.string().max(100).optional().or(z.literal('')),
+  lastName:      z.string().max(50).optional().or(z.literal('')),
+  firstName:     z.string().max(50).optional().or(z.literal('')),
+  lastNameKana:  z.string().max(50).optional().or(z.literal('')),
+  firstNameKana: z.string().max(50).optional().or(z.literal('')),
   email:        z.string().email('有効なメールアドレスを入力してください').optional().or(z.literal('')),
   phone:        z.string().max(20).optional().or(z.literal('')).transform(v => (v ?? '').replace(/[-ー\s]/g, '')),
   address:      z.string().max(200).optional().or(z.literal('')),
@@ -22,6 +28,8 @@ const registerSchema = z.object({
   leadSource:   z.string().max(100).optional(), // 流入経路
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
+  .refine(d => (d.lastName?.trim() && d.firstName?.trim()) || d.name?.trim(), { message: '氏名は必須です' })
+  .refine(d => (d.lastNameKana?.trim() && d.firstNameKana?.trim()) || d.furigana?.trim(), { message: 'ふりがなは必須です' })
 
 // 顧客登録（ライセンスキー必須 or 通常買取はキー不要）
 export async function POST(request: NextRequest) {
@@ -35,7 +43,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error }, { status: 400 })
     }
 
-    const { name, furigana, email, phone, password, licenseKey, customerType, customerTypes, leadSource, skipLicenseKey } = parsed.data
+    const { email, phone, password, licenseKey, customerType, customerTypes, leadSource, skipLicenseKey } = parsed.data
+    const nameData = buildUserNameData(parsed.data)
     const address = parsed.data.address ?? ''
     const leadSourceValue = leadSource && leadSource.trim() ? leadSource.trim() : null
 
@@ -73,7 +82,7 @@ export async function POST(request: NextRequest) {
     if (isLicenseFree || skipLicenseKey || !licenseKey) {
       const user = await prisma.user.create({
         data: {
-          name, furigana, email: email || null, phone, address,
+          ...nameData, email: email || null, phone, address,
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,
@@ -126,7 +135,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          name, furigana, email, phone, address,
+          ...nameData, email, phone, address,
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,

@@ -9,6 +9,7 @@ import { sendFormSubmissionNotification } from '@/lib/mailer'
 import { decrypt } from '@/lib/encrypt'
 import { buildExternalPayload, parseHeaders, postToExternalApi } from '@/lib/forms/externalApi'
 import { isCustomerType, parseCustomerTypes, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { buildUserNameData } from '@/lib/name-utils'
 
 /** フォーム回答から顧客フィールドを抽出。fieldMap で指定された fieldId の値を読む。 */
 function extractCustomerFields(
@@ -28,9 +29,23 @@ function extractCustomerFields(
     }
     return ''
   }
+  // name 型フィールドの分割値をそのまま取り出す（User の姓名分割フィールドに保存する用）
+  const getSplit = (key: string): { last: string; first: string } | null => {
+    const fieldId = fieldMap[key]
+    if (!fieldId) return null
+    const v = answers[fieldId]
+    if (v && typeof v === 'object') {
+      const o = v as any
+      if (o.last && o.first) return { last: String(o.last).trim(), first: String(o.first).trim() }
+      if (o.lastFurigana && o.firstFurigana) return { last: String(o.lastFurigana).trim(), first: String(o.firstFurigana).trim() }
+    }
+    return null
+  }
   return {
     name:       get('name'),
     furigana:   get('furigana'),
+    nameSplit:     getSplit('name'),
+    furiganaSplit: getSplit('furigana'),
     email:      get('email'),
     phone:      get('phone').replace(/[-ー\s]/g, ''),
     address:    get('address'),
@@ -113,8 +128,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           const hashed = await bcrypt.hash(randomPassword, 10)
           const created = await prisma.user.create({
             data: {
-              name:     cf.name,
-              furigana: cf.furigana || cf.name,
+              ...buildUserNameData({
+                name:          cf.name,
+                furigana:      cf.furigana || cf.name,
+                lastName:      cf.nameSplit?.last,
+                firstName:     cf.nameSplit?.first,
+                lastNameKana:  cf.furiganaSplit?.last,
+                firstNameKana: cf.furiganaSplit?.first,
+              }),
               email:    cf.email || null,
               phone:    cf.phone,
               address:  cf.address,

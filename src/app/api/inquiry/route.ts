@@ -6,6 +6,7 @@ import { sendInquiryAutoReply } from '@/lib/mailer'
 import { enqueueEmail } from '@/lib/email-queue'
 import { checkInquiryRateLimit, getClientIp } from '@/lib/inquiry-rate-limit'
 import { verifyTurnstile } from '@/lib/turnstile'
+import { buildUserNameData } from '@/lib/name-utils'
 
 // SMTP送信を await するため、関数の最大実行時間を延ばす（Pro/Enterprise必須）
 export const maxDuration = 60
@@ -19,7 +20,17 @@ function getBaseUrl() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { storeCode, name, furigana, phone, email, postalCode, address, inquiryType, details, items, turnstileToken } = body
+    const { storeCode, phone, email, postalCode, address, inquiryType, details, items, turnstileToken } = body
+
+    // 氏名: 分割値（新フォーム）・結合値（旧クライアント）の両方を受理し、6フィールドに正規化
+    // Inquiry には結合値を保存、User 自動作成時は分割値も保存する
+    const nameData = buildUserNameData({
+      name: body.name, furigana: body.furigana,
+      lastName: body.lastName, firstName: body.firstName,
+      lastNameKana: body.lastNameKana, firstNameKana: body.firstNameKana,
+    })
+    const name = nameData.name
+    const furigana = nameData.furigana
 
     // --- バリデーション ---
     const missing: string[] = []
@@ -105,8 +116,7 @@ export async function POST(request: NextRequest) {
         try {
           newUser = await prisma.user.create({
             data: {
-              name,
-              furigana,
+              ...nameData,
               phone: normalizedPhone,
               address,
               email,

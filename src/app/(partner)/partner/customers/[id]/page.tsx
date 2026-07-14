@@ -3,11 +3,16 @@
 import { useEffect, useState, use as usePromise } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { getSplitName } from '@/lib/name-utils'
 
 type Customer = {
   id: string
   name: string
   furigana: string
+  lastName: string | null
+  firstName: string | null
+  lastNameKana: string | null
+  firstNameKana: string | null
   email: string | null
   phone: string
   address: string
@@ -37,8 +42,10 @@ export default function PartnerCustomerDetailPage({ params }: { params: Promise<
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   // 基本情報フォーム
-  const [name, setName] = useState('')
-  const [furigana, setFurigana] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastNameKana, setLastNameKana] = useState('')
+  const [firstNameKana, setFirstNameKana] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
@@ -61,8 +68,11 @@ export default function PartnerCustomerDetailPage({ params }: { params: Promise<
       .then((c: Customer | null) => {
         if (!c) return
         setCustomer(c)
-        setName(c.name)
-        setFurigana(c.furigana)
+        const split = getSplitName(c)
+        setLastName(split.lastName)
+        setFirstName(split.firstName)
+        setLastNameKana(split.lastNameKana)
+        setFirstNameKana(split.firstNameKana)
         setEmail(c.email ?? '')
         setPhone(c.phone)
         setAddress(c.address)
@@ -91,7 +101,8 @@ export default function PartnerCustomerDetailPage({ params }: { params: Promise<
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name, furigana, email: email || null, phone, address,
+        lastName, firstName, lastNameKana, firstNameKana,
+        email: email || null, phone, address,
         customerType, visitFrequencyMonths: Number(visitFrequencyMonths) || 1,
       }),
     })
@@ -145,8 +156,10 @@ export default function PartnerCustomerDetailPage({ params }: { params: Promise<
       <section className="bg-[#141414] rounded-2xl p-5 border border-[rgba(255,255,255,0.06)] mb-5">
         <h2 className="text-base font-bold mb-3">基本情報</h2>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Field label="氏名"><Input value={name} onChange={setName} /></Field>
-          <Field label="フリガナ"><Input value={furigana} onChange={setFurigana} /></Field>
+          <Field label="姓"><Input value={lastName} onChange={setLastName} /></Field>
+          <Field label="名"><Input value={firstName} onChange={setFirstName} /></Field>
+          <Field label="セイ（フリガナ）"><Input value={lastNameKana} onChange={setLastNameKana} /></Field>
+          <Field label="メイ（フリガナ）"><Input value={firstNameKana} onChange={setFirstNameKana} /></Field>
           <Field label="メール"><Input type="email" value={email} onChange={setEmail} /></Field>
           <Field label="電話"><Input value={phone} onChange={setPhone} /></Field>
           <div className="sm:col-span-2"><Field label="住所"><Input value={address} onChange={setAddress} /></Field></div>

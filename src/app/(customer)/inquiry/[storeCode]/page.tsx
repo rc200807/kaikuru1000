@@ -39,8 +39,10 @@ export default function InquiryPage() {
   const [storeLoading, setStoreLoading] = useState(true)
 
   // Form fields
-  const [name, setName] = useState('')
-  const [furigana, setFurigana] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastNameKana, setLastNameKana] = useState('')
+  const [firstNameKana, setFirstNameKana] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [postalCode, setPostalCode] = useState('')
@@ -204,8 +206,10 @@ export default function InquiryPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeCode,
-          name,
-          furigana,
+          lastName,
+          firstName,
+          lastNameKana,
+          firstNameKana,
           phone: cleanPhone,
           email: email || undefined,
           postalCode: cleanPostalCode || undefined,
@@ -295,21 +299,39 @@ export default function InquiryPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <GlassInput
-          label="氏名"
-          value={name}
-          onChange={setName}
-          required
-          placeholder="山田 太郎"
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <GlassInput
+            label="姓"
+            value={lastName}
+            onChange={setLastName}
+            required
+            placeholder="山田"
+          />
+          <GlassInput
+            label="名"
+            value={firstName}
+            onChange={setFirstName}
+            required
+            placeholder="太郎"
+          />
+        </div>
 
-        <GlassInput
-          label="フリガナ"
-          value={furigana}
-          onChange={setFurigana}
-          required
-          placeholder="ヤマダ タロウ"
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <GlassInput
+            label="セイ（フリガナ）"
+            value={lastNameKana}
+            onChange={setLastNameKana}
+            required
+            placeholder="ヤマダ"
+          />
+          <GlassInput
+            label="メイ（フリガナ）"
+            value={firstNameKana}
+            onChange={setFirstNameKana}
+            required
+            placeholder="タロウ"
+          />
+        </div>
 
         <GlassInput
           label="電話番号"
@@ -530,7 +552,7 @@ export default function InquiryPage() {
             loading={loading}
             disabled={
               loading
-              || !name.trim() || !furigana.trim() || !phone.trim()
+              || !lastName.trim() || !firstName.trim() || !lastNameKana.trim() || !firstNameKana.trim() || !phone.trim()
               || !email.trim() || !postalCode.trim() || !address.trim()
               // CAPTCHAキー設定時のみトークンを必須にする
               || (!!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken)

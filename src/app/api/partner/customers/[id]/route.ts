@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePartner } from '@/lib/partner-auth'
 import { z } from 'zod'
+import { buildUserNameUpdateData } from '@/lib/name-utils'
 
 const updateSchema = z.object({
   name:                 z.string().min(1).max(120).optional(),
   furigana:             z.string().max(120).optional(),
+  lastName:             z.string().max(60).optional().or(z.literal('')),
+  firstName:            z.string().max(60).optional().or(z.literal('')),
+  lastNameKana:         z.string().max(60).optional().or(z.literal('')),
+  firstNameKana:        z.string().max(60).optional().or(z.literal('')),
   email:                z.string().email().nullable().optional().or(z.literal('')),
   phone:                z.string().max(40).optional(),
   address:              z.string().max(500).optional(),
@@ -30,6 +35,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       id: true,
       name: true,
       furigana: true,
+      lastName: true,
+      firstName: true,
+      lastNameKana: true,
+      firstNameKana: true,
       email: true,
       phone: true,
       address: true,
@@ -69,7 +78,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'バリデーションエラー' }, { status: 400 })
   }
-  const data: any = { ...parsed.data }
+  // 氏名・ふりがな系は結合値・分割値を整合させて更新（それ以外はそのまま）
+  const { name, furigana, lastName, firstName, lastNameKana, firstNameKana, ...restData } = parsed.data
+  const data: any = {
+    ...restData,
+    ...buildUserNameUpdateData({ name, furigana, lastName, firstName, lastNameKana, firstNameKana }),
+  }
   if (data.email === '') data.email = null
 
   const updated = await prisma.user.update({

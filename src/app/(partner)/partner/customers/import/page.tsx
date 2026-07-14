@@ -60,7 +60,7 @@ export default function PartnerCustomerImportPage() {
       <section className="rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[#0f0f0f] p-5 mb-6">
         <h2 className="text-sm font-semibold mb-2">1. テンプレートをダウンロード</h2>
         <p className="text-xs text-[#a3a3a3] mb-3">
-          列：<code>ライセンスキー*</code> / <code>氏名*</code> / <code>フリガナ</code> / <code>メール</code> / <code>電話</code> / <code>住所</code>
+          列：<code>ライセンスキー*</code> / <code>姓*</code> / <code>名*</code> / <code>姓フリガナ</code> / <code>名フリガナ</code> / <code>メール</code> / <code>電話</code> / <code>住所</code>（旧形式の「氏名 / フリガナ」列も取込可）
         </p>
         <a
           href="/api/partner/customers/import"

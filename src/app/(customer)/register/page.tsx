@@ -30,8 +30,10 @@ export default function RegisterPage() {
 
   const [formData, setFormData] = useState({
     licenseKey: '',
-    name: '',
-    furigana: '',
+    lastName: '',
+    firstName: '',
+    lastNameKana: '',
+    firstNameKana: '',
     email: '',
     phone: '',
     address: '',
@@ -100,8 +102,10 @@ export default function RegisterPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: formData.name,
-        furigana: formData.furigana,
+        lastName: formData.lastName,
+        firstName: formData.firstName,
+        lastNameKana: formData.lastNameKana,
+        firstNameKana: formData.firstNameKana,
         email: formData.email,
         phone: formData.phone,
         address: '', // 住所は身分証OCRから自動登録する
@@ -325,20 +329,36 @@ export default function RegisterPage() {
             基本情報の入力
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <GlassInput
-              label="氏名"
-              value={formData.name}
-              onChange={(val) => { setFormData({ ...formData, name: val }); setError('') }}
+              label="姓"
+              value={formData.lastName}
+              onChange={(val) => { setFormData({ ...formData, lastName: val }); setError('') }}
               required
-              placeholder="山田 太郎"
+              placeholder="山田"
             />
             <GlassInput
-              label="ふりがな"
-              value={formData.furigana}
-              onChange={(val) => { setFormData({ ...formData, furigana: val }); setError('') }}
+              label="名"
+              value={formData.firstName}
+              onChange={(val) => { setFormData({ ...formData, firstName: val }); setError('') }}
               required
-              placeholder="やまだ たろう"
+              placeholder="太郎"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <GlassInput
+              label="せい（ふりがな）"
+              value={formData.lastNameKana}
+              onChange={(val) => { setFormData({ ...formData, lastNameKana: val }); setError('') }}
+              required
+              placeholder="やまだ"
+            />
+            <GlassInput
+              label="めい（ふりがな）"
+              value={formData.firstNameKana}
+              onChange={(val) => { setFormData({ ...formData, firstNameKana: val }); setError('') }}
+              required
+              placeholder="たろう"
             />
           </div>
 

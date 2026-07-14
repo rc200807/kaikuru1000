@@ -6,10 +6,14 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseCsv, buildCsv } from '@/lib/csv-parser'
 import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType, isCustomerType } from '@/lib/customer-types'
+import { buildUserNameData } from '@/lib/name-utils'
 
+// 新形式テンプレート（姓・名分割）。旧形式「氏名/フリガナ」列のCSVも取込時に受理する（後方互換）
 const COLUMNS: { header: string; required?: boolean }[] = [
-  { header: '氏名',         required: true },
-  { header: 'フリガナ' },
+  { header: '姓',           required: true },
+  { header: '名',           required: true },
+  { header: '姓フリガナ' },
+  { header: '名フリガナ' },
   { header: 'メール' },
   { header: '電話',         required: true },
   { header: '電話2' },
@@ -36,7 +40,7 @@ export async function GET() {
 
   const headers = COLUMNS.map(c => c.required ? `${c.header}*` : c.header)
   const sample = [
-    '山田 太郎', 'ヤマダ タロウ', 'yamada@example.com',
+    '山田', '太郎', 'ヤマダ', 'タロウ', 'yamada@example.com',
     '090-1234-5678', '03-1234-5678', '',
     '東京都渋谷区...',
     '訪問型',  // 'visit' | 'delivery' | 'regular' | 'akikuru' or 日本語
@@ -100,7 +104,12 @@ export async function POST(req: NextRequest) {
   const idxOf: Record<string, number> = {}
   for (let i = 0; i < headerRow.length; i++) idxOf[headerRow[i]] = i
 
-  const missing = COLUMNS.filter(c => c.required && !(c.header in idxOf)).map(c => c.header)
+  // 氏名列: 新形式「姓」「名」または旧形式「氏名」のどちらかが必要（後方互換）
+  const hasSplitCols = '姓' in idxOf && '名' in idxOf
+  const hasLegacyName = '氏名' in idxOf
+  const missing: string[] = []
+  if (!hasSplitCols && !hasLegacyName) missing.push('姓・名（または旧形式の「氏名」）')
+  if (!('電話' in idxOf)) missing.push('電話')
   if (missing.length > 0) {
     return NextResponse.json({ error: `必須列が見つかりません: ${missing.join(', ')}` }, { status: 400 })
   }
@@ -118,8 +127,17 @@ export async function POST(req: NextRequest) {
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r]
     const lineNo = r + 1
-    const name      = get(row, '氏名')
-    const furigana  = get(row, 'フリガナ')
+    // 新形式（姓/名）優先、旧形式（氏名/フリガナ）はスペース分割で取込
+    const nameData = buildUserNameData({
+      name:          get(row, '氏名'),
+      furigana:      get(row, 'フリガナ'),
+      lastName:      hasSplitCols ? get(row, '姓') : '',
+      firstName:     hasSplitCols ? get(row, '名') : '',
+      lastNameKana:  get(row, '姓フリガナ'),
+      firstNameKana: get(row, '名フリガナ'),
+    })
+    const name      = nameData.name
+    const furigana  = nameData.furigana
     const emailRaw  = get(row, 'メール')
     const phone     = get(row, '電話').replace(/[-ー\s]/g, '')
     const phone2Raw = get(row, '電話2').replace(/[-ー\s]/g, '')
@@ -158,8 +176,12 @@ export async function POST(req: NextRequest) {
       }
 
       if (existingId) {
-        const data: Record<string, unknown> = { name, phone }
-        if (furigana) data.furigana = furigana
+        const data: Record<string, unknown> = { name, lastName: nameData.lastName, firstName: nameData.firstName, phone }
+        if (furigana) {
+          data.furigana = furigana
+          data.lastNameKana = nameData.lastNameKana
+          data.firstNameKana = nameData.firstNameKana
+        }
         if (address)  data.address  = address
         if (phone2Raw) data.phone2 = phone2Raw
         if (phone3Raw) data.phone3 = phone3Raw
@@ -174,7 +196,7 @@ export async function POST(req: NextRequest) {
         const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10)
         await prisma.user.create({
           data: {
-            name,
+            ...nameData,
             furigana: furigana || '',
             phone,
             phone2: phone2Raw || null,

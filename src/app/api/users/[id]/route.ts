@@ -5,12 +5,17 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
+import { buildUserNameUpdateData } from '@/lib/name-utils'
 
 const VALID_CUSTOMER_TYPES = ['visit', 'delivery', 'regular', 'akikuru'] as const
 
 const updateUserSchema = z.object({
   name:             z.string().min(1).max(100).optional(),
   furigana:         z.string().min(1).max(100).optional(),
+  lastName:         z.string().max(50).optional().or(z.literal('')),
+  firstName:        z.string().max(50).optional().or(z.literal('')),
+  lastNameKana:     z.string().max(50).optional().or(z.literal('')),
+  firstNameKana:    z.string().max(50).optional().or(z.literal('')),
   email:            z.string().email().nullable().optional().or(z.literal('')),
   phone:            z.string().max(20).optional(),
   phone2:           z.string().max(20).nullable().optional(),
@@ -95,16 +100,16 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, furigana, email, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
+  const { name, furigana, lastName, firstName, lastNameKana, firstNameKana,
+          email, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
           internalNote, customerType, customerTypes, visitFrequencyMonths, occupation, leadSource,
           bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  const updateData: any = {}
-  if (name) updateData.name = name
-  if (furigana) updateData.furigana = furigana
+  // 氏名: 分割値（新UI）優先。旧クライアントの結合 name のみでも分割値を自動生成して整合を保つ
+  const updateData: any = { ...buildUserNameUpdateData({ name, furigana, lastName, firstName, lastNameKana, firstNameKana }) }
   // メール: 空文字なら null
   if (email !== undefined) updateData.email = (email && typeof email === 'string') ? email.trim() : null
   if (phone !== undefined) updateData.phone = phone.replace(/[-ー\s]/g, '')

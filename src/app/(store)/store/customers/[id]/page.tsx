@@ -21,6 +21,7 @@ import type { Status } from '@/components/StatusBadge'
 import MessageBanner from '@/components/MessageBanner'
 import EmptyState from '@/components/EmptyState'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
+import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 import { isSelectableVisitStatus } from '@/lib/visit-status'
 
@@ -252,8 +253,10 @@ export default function StoreCustomerDetailPage() {
 
   // 顧客情報編集モーダル state
   type EditDraft = {
-    name: string
-    furigana: string
+    lastName: string
+    firstName: string
+    lastNameKana: string
+    firstNameKana: string
     email: string
     phone: string
     phone2: string
@@ -265,7 +268,7 @@ export default function StoreCustomerDetailPage() {
   }
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [showMerge, setShowMerge] = useState(false)
-  const [editDraft, setEditDraft] = useState<EditDraft>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
+  const [editDraft, setEditDraft] = useState<EditDraft>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
   const [savingEdit, setSavingEdit] = useState(false)
   const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
 
@@ -279,8 +282,7 @@ export default function StoreCustomerDetailPage() {
   function openEditModal() {
     if (!customer) return
     setEditDraft({
-      name: customer.name,
-      furigana: customer.furigana,
+      ...getSplitName(customer as any),
       email: customer.email || '',
       phone: customer.phone || '',
       phone2: customer.phone2 || '',
@@ -295,8 +297,8 @@ export default function StoreCustomerDetailPage() {
 
   async function saveCustomerEdit() {
     if (!customer) return
-    if (!editDraft.name.trim() || !editDraft.furigana.trim()) {
-      setMsg({ type: 'error', text: '氏名とふりがなは必須です' })
+    if (!editDraft.lastName.trim() || !editDraft.firstName.trim() || !editDraft.lastNameKana.trim() || !editDraft.firstNameKana.trim()) {
+      setMsg({ type: 'error', text: '姓・名とふりがなは必須です' })
       return
     }
     setSavingEdit(true)
@@ -305,8 +307,10 @@ export default function StoreCustomerDetailPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: editDraft.name.trim(),
-          furigana: editDraft.furigana.trim(),
+          lastName: editDraft.lastName.trim(),
+          firstName: editDraft.firstName.trim(),
+          lastNameKana: editDraft.lastNameKana.trim(),
+          firstNameKana: editDraft.firstNameKana.trim(),
           email: editDraft.email.trim() || null,
           phone: editDraft.phone.trim(),
           phone2: editDraft.phone2.trim() || null,
@@ -321,8 +325,12 @@ export default function StoreCustomerDetailPage() {
       if (res.ok) {
         setCustomer(prev => prev ? {
           ...prev,
-          name: editDraft.name.trim(),
-          furigana: editDraft.furigana.trim(),
+          name: combineName(editDraft.lastName, editDraft.firstName),
+          furigana: combineName(editDraft.lastNameKana, editDraft.firstNameKana),
+          lastName: editDraft.lastName.trim(),
+          firstName: editDraft.firstName.trim(),
+          lastNameKana: editDraft.lastNameKana.trim(),
+          firstNameKana: editDraft.firstNameKana.trim(),
           email: editDraft.email.trim() || null,
           phone: editDraft.phone.trim(),
           phone2: editDraft.phone2.trim() || null,
@@ -2191,8 +2199,14 @@ export default function StoreCustomerDetailPage() {
         <div className="space-y-4">
           <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <TextField label="氏名" value={editDraft.name} onChange={v => setEditDraft(d => ({ ...d, name: v }))} required autoComplete="off" name="kk-edit-name" />
-            <TextField label="ふりがな" value={editDraft.furigana} onChange={v => setEditDraft(d => ({ ...d, furigana: v }))} required autoComplete="off" name="kk-edit-furigana" />
+            <div className="grid grid-cols-2 gap-3">
+              <TextField label="姓" value={editDraft.lastName} onChange={v => setEditDraft(d => ({ ...d, lastName: v }))} required autoComplete="off" name="kk-edit-last-name" />
+              <TextField label="名" value={editDraft.firstName} onChange={v => setEditDraft(d => ({ ...d, firstName: v }))} required autoComplete="off" name="kk-edit-first-name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextField label="せい（ふりがな）" value={editDraft.lastNameKana} onChange={v => setEditDraft(d => ({ ...d, lastNameKana: v }))} required autoComplete="off" name="kk-edit-last-kana" />
+              <TextField label="めい（ふりがな）" value={editDraft.firstNameKana} onChange={v => setEditDraft(d => ({ ...d, firstNameKana: v }))} required autoComplete="off" name="kk-edit-first-kana" />
+            </div>
             <TextField label="メールアドレス（任意）" type="email" value={editDraft.email} onChange={v => setEditDraft(d => ({ ...d, email: v }))} autoComplete="off" name="kk-edit-email" />
             <TextField label="電話番号（任意）" type="tel" value={editDraft.phone} onChange={v => setEditDraft(d => ({ ...d, phone: v }))} autoComplete="off" name="kk-edit-phone" />
             <TextField label="電話番号 2（任意）" type="tel" value={editDraft.phone2} onChange={v => setEditDraft(d => ({ ...d, phone2: v }))} autoComplete="off" name="kk-edit-phone2" />
@@ -2244,7 +2258,7 @@ export default function StoreCustomerDetailPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="text" onClick={() => setEditModalOpen(false)} disabled={savingEdit}>キャンセル</Button>
-            <Button onClick={saveCustomerEdit} disabled={savingEdit || !editDraft.name.trim() || !editDraft.furigana.trim()} loading={savingEdit}>
+            <Button onClick={saveCustomerEdit} disabled={savingEdit || !editDraft.lastName.trim() || !editDraft.firstName.trim() || !editDraft.lastNameKana.trim() || !editDraft.firstNameKana.trim()} loading={savingEdit}>
               {savingEdit ? '保存中...' : '保存'}
             </Button>
           </div>

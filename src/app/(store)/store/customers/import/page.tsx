@@ -63,7 +63,7 @@ export default function StoreCustomerImportPage() {
         <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">1. テンプレートをダウンロード</h2>
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 leading-relaxed">
           以下の列を含むCSVファイルを準備してください（* は必須）。<br />
-          <code className="text-[10px]">氏名* / フリガナ / メール / 電話* / 電話2 / 電話3 / 住所 / 顧客タイプ / 訪問頻度（月） / 内部メモ</code>
+          <code className="text-[10px]">姓* / 名* / 姓フリガナ / 名フリガナ / メール / 電話* / 電話2 / 電話3 / 住所 / 顧客タイプ / 訪問頻度（月） / 内部メモ</code>
         </p>
         <a
           href="/api/store/customers/import"
@@ -91,7 +91,8 @@ export default function StoreCustomerImportPage() {
             ・新規顧客は自店舗（あなたのアカウント）に紐づきます。仮パスワードが自動生成されます。<br />
             ・メールアドレスが既存顧客と一致した場合は更新（空欄列はスキップ）。<br />
             ・顧客タイプは「訪問型」「宅配型」「通常買取」「アキクル」（または英語キー <code className="text-[10px]">visit/delivery/regular/akikuru</code>）。<br />
-            ・必須項目（氏名・電話）が空の行はエラーとして報告されます。
+            ・必須項目（姓・名・電話）が空の行はエラーとして報告されます。<br />
+            ・旧形式の「氏名 / フリガナ」列のCSVもそのまま取り込めます（スペースで姓・名に自動分割）。
           </p>
         </form>
       </Card>

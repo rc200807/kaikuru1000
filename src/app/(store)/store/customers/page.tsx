@@ -56,7 +56,7 @@ export default function StoreCustomersPage() {
   // 新規顧客追加（顧客作成 → 案件作成 → 訪問予定追加 の一連ウィザード）
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1) // 1:顧客 2:案件 3:予定 4:完了
-  const [addCustomerForm, setAddCustomerForm] = useState({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
+  const [addCustomerForm, setAddCustomerForm] = useState({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
   const [createdCustomer, setCreatedCustomer] = useState<{ id: string; name: string } | null>(null)
   const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
   const [dealForm, setDealForm] = useState({ detail: '', occurredAt: todayStr() })
@@ -143,7 +143,7 @@ export default function StoreCustomersPage() {
     setShowAddCustomer(true)
     setWizardStep(1)
     setAddCustomerMsg(null)
-    setAddCustomerForm({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
+    setAddCustomerForm({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
     setCreatedCustomer(null)
     setDealForm({ detail: '', occurredAt: todayStr() })
     setCreatedDealId(null)
@@ -160,8 +160,10 @@ export default function StoreCustomersPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: addCustomerForm.name,
-          furigana: addCustomerForm.furigana,
+          lastName: addCustomerForm.lastName,
+          firstName: addCustomerForm.firstName,
+          lastNameKana: addCustomerForm.lastNameKana,
+          firstNameKana: addCustomerForm.firstNameKana,
           email: addCustomerForm.email,
           phone: addCustomerForm.phone,
           address: addCustomerForm.address,
@@ -178,7 +180,7 @@ export default function StoreCustomersPage() {
         return
       }
       const created = await res.json()
-      setCreatedCustomer({ id: created.id, name: created.name ?? addCustomerForm.name })
+      setCreatedCustomer({ id: created.id, name: created.name ?? `${addCustomerForm.lastName} ${addCustomerForm.firstName}`.trim() })
       await refreshCustomers() // 一覧に即時反映
       setWizardStep(2)
     } catch {
@@ -456,8 +458,14 @@ export default function StoreCustomersPage() {
           <form onSubmit={handleCreateCustomer} className="space-y-4" autoComplete="off">
             <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
             <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
-            <TextField label="氏名" value={addCustomerForm.name} onChange={v => setAddCustomerForm(f => ({ ...f, name: v }))} required placeholder="山田 太郎" autoComplete="off" name="kk-cust-name" />
-            <TextField label="ふりがな" value={addCustomerForm.furigana} onChange={v => setAddCustomerForm(f => ({ ...f, furigana: v }))} required placeholder="やまだ たろう" autoComplete="off" name="kk-cust-furigana" />
+            <div className="grid grid-cols-2 gap-3">
+              <TextField label="姓" value={addCustomerForm.lastName} onChange={v => setAddCustomerForm(f => ({ ...f, lastName: v }))} required placeholder="山田" autoComplete="off" name="kk-cust-last-name" />
+              <TextField label="名" value={addCustomerForm.firstName} onChange={v => setAddCustomerForm(f => ({ ...f, firstName: v }))} required placeholder="太郎" autoComplete="off" name="kk-cust-first-name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextField label="せい（ふりがな）" value={addCustomerForm.lastNameKana} onChange={v => setAddCustomerForm(f => ({ ...f, lastNameKana: v }))} required placeholder="やまだ" autoComplete="off" name="kk-cust-last-kana" />
+              <TextField label="めい（ふりがな）" value={addCustomerForm.firstNameKana} onChange={v => setAddCustomerForm(f => ({ ...f, firstNameKana: v }))} required placeholder="たろう" autoComplete="off" name="kk-cust-first-kana" />
+            </div>
             <TextField label="メールアドレス（任意）" type="email" value={addCustomerForm.email} onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))} placeholder="taro@example.com" autoComplete="off" name="kk-cust-email" />
             <TextField label="電話番号（任意）" type="tel" value={addCustomerForm.phone} onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))} placeholder="090-1234-5678" autoComplete="off" name="kk-cust-phone" />
             <div>
@@ -499,7 +507,7 @@ export default function StoreCustomersPage() {
               ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
             </p>
             <div className="flex gap-3 pt-2">
-              <Button type="submit" variant="filled" loading={addCustomerSubmitting} disabled={addCustomerSubmitting || !addCustomerForm.name || !addCustomerForm.furigana} fullWidth>
+              <Button type="submit" variant="filled" loading={addCustomerSubmitting} disabled={addCustomerSubmitting || !addCustomerForm.lastName || !addCustomerForm.firstName || !addCustomerForm.lastNameKana || !addCustomerForm.firstNameKana} fullWidth>
                 {addCustomerSubmitting ? '登録中...' : '次へ（顧客を登録）'}
               </Button>
             </div>

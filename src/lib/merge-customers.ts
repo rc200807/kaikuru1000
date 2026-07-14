@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { splitName } from '@/lib/name-utils'
 
 type Client = Prisma.TransactionClient | typeof prisma
 
@@ -61,6 +62,18 @@ export async function mergeCustomers(
   const data: Record<string, unknown> = {}
   for (const key of MERGE_SCALAR_FIELDS) {
     if (scalars[key] !== undefined) data[key] = scalars[key]
+  }
+  // 氏名・ふりがな（結合値）が選択された場合は姓名分割フィールドもセットで整合させる
+  // （結合値は常に分割値から "姓 名" 形式で生成されるため、再分割で正確に復元できる）
+  if (typeof data.name === 'string' && data.name) {
+    const s = splitName(data.name)
+    data.lastName = s.last || null
+    data.firstName = s.first || null
+  }
+  if (typeof data.furigana === 'string' && data.furigana) {
+    const s = splitName(data.furigana)
+    data.lastNameKana = s.last || null
+    data.firstNameKana = s.first || null
   }
   if (Object.keys(data).length > 0) {
     await tx.user.update({ where: { id: survivorId }, data })

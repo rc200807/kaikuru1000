@@ -26,6 +26,10 @@ model User {
   id             String    @id @default(cuid())
   name           String
   furigana       String
+  lastName       String?   // 姓（分割入力。結合値 name が正データ）
+  firstName      String?   // 名
+  lastNameKana   String?   // 姓ふりがな
+  firstNameKana  String?   // 名ふりがな
   email          String?   @unique
   phone          String
   phone2         String?   // 追加連絡先 1（任意）

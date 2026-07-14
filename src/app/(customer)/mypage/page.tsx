@@ -18,6 +18,7 @@ import { convertToJpegIfNeeded, createPreviewUrl } from '@/lib/image-utils'
 import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, customerView, type CustomerType } from '@/lib/customer-types'
 import { calcAge, needsFamilyConsent, isMinorBlockedFromDelivery } from '@/lib/age'
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
+import { getSplitName } from '@/lib/name-utils'
 
 type UserData = {
   id: string
@@ -130,7 +131,7 @@ function MyPageContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const memoImageInputRef = useRef<HTMLInputElement>(null)
 
-  const [editForm, setEditForm] = useState({ name: '', furigana: '', phone: '', address: '' })
+  const [editForm, setEditForm] = useState({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', phone: '', address: '' })
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
 
   // 振込先口座
@@ -282,7 +283,7 @@ function MyPageContent() {
           if (data.customerType && data.customerType !== (session?.user as any)?.customerType) {
             updateSession({ customerType: data.customerType })
           }
-          setEditForm({ name: data.name, furigana: data.furigana, phone: data.phone, address: data.address })
+          setEditForm({ ...getSplitName(data), phone: data.phone, address: data.address })
           setBankForm({
             bankName:      data.bankName      ?? '',
             branchName:    data.branchName    ?? '',
@@ -2507,17 +2508,31 @@ function MyPageContent() {
                 プロフィール編集
               </h2>
               <form onSubmit={handleSaveProfile} className="space-y-5 max-w-lg">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <TextField
-                    label="氏名"
-                    value={editForm.name}
-                    onChange={(val) => setEditForm({ ...editForm, name: val })}
+                    label="姓"
+                    value={editForm.lastName}
+                    onChange={(val) => setEditForm({ ...editForm, lastName: val })}
                     required
                   />
                   <TextField
-                    label="ふりがな"
-                    value={editForm.furigana}
-                    onChange={(val) => setEditForm({ ...editForm, furigana: val })}
+                    label="名"
+                    value={editForm.firstName}
+                    onChange={(val) => setEditForm({ ...editForm, firstName: val })}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <TextField
+                    label="せい（ふりがな）"
+                    value={editForm.lastNameKana}
+                    onChange={(val) => setEditForm({ ...editForm, lastNameKana: val })}
+                    required
+                  />
+                  <TextField
+                    label="めい（ふりがな）"
+                    value={editForm.firstNameKana}
+                    onChange={(val) => setEditForm({ ...editForm, firstNameKana: val })}
                     required
                   />
                 </div>

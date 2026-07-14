@@ -4,14 +4,18 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { requirePartner } from '@/lib/partner-auth'
 import { parseCsv, buildCsv } from '@/lib/csv-parser'
+import { buildUserNameData } from '@/lib/name-utils'
 
-const COLUMNS: { header: string; field: 'licenseKey' | 'name' | 'furigana' | 'email' | 'phone' | 'address'; required?: boolean }[] = [
-  { header: 'ライセンスキー', field: 'licenseKey', required: true },
-  { header: '氏名',           field: 'name',       required: true },
-  { header: 'フリガナ',       field: 'furigana' },
-  { header: 'メール',         field: 'email' },
-  { header: '電話',           field: 'phone' },
-  { header: '住所',           field: 'address' },
+// 新形式テンプレート（姓・名分割）。旧形式「氏名/フリガナ」列のCSVも取込時に受理する（後方互換）
+const COLUMNS: { header: string; required?: boolean }[] = [
+  { header: 'ライセンスキー', required: true },
+  { header: '姓',             required: true },
+  { header: '名',             required: true },
+  { header: '姓フリガナ' },
+  { header: '名フリガナ' },
+  { header: 'メール' },
+  { header: '電話' },
+  { header: '住所' },
 ]
 
 type RowError = { row: number; licenseKey?: string; message: string }
@@ -22,7 +26,7 @@ export async function GET() {
   if (!partner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const headers = COLUMNS.map(c => c.required ? `${c.header}*` : c.header)
-  const sample = ['LICENSE-XXXX', '山田 太郎', 'ヤマダ タロウ', 'yamada@example.com', '090-1234-5678', '東京都渋谷区...']
+  const sample = ['LICENSE-XXXX', '山田', '太郎', 'ヤマダ', 'タロウ', 'yamada@example.com', '090-1234-5678', '東京都渋谷区...']
   const csv = buildCsv([headers, sample])
 
   return new NextResponse(csv, {
@@ -61,7 +65,12 @@ export async function POST(req: NextRequest) {
   const idxOf: Record<string, number> = {}
   for (let i = 0; i < headerRow.length; i++) idxOf[headerRow[i]] = i
 
-  const missing = COLUMNS.filter(c => c.required && !(c.header in idxOf)).map(c => c.header)
+  // 氏名列: 新形式「姓」「名」または旧形式「氏名」のどちらかが必要（後方互換）
+  const hasSplitCols = '姓' in idxOf && '名' in idxOf
+  const hasLegacyName = '氏名' in idxOf
+  const missing: string[] = []
+  if (!('ライセンスキー' in idxOf)) missing.push('ライセンスキー')
+  if (!hasSplitCols && !hasLegacyName) missing.push('姓・名（または旧形式の「氏名」）')
   if (missing.length > 0) {
     return NextResponse.json({ error: `必須列が見つかりません: ${missing.join(', ')}` }, { status: 400 })
   }
@@ -93,10 +102,19 @@ export async function POST(req: NextRequest) {
     const row = rows[r]
     const lineNo = r + 1
     const licenseKey = get(row, 'ライセンスキー')
-    const name = get(row, '氏名')
+    // 新形式（姓/名）優先、旧形式（氏名/フリガナ）はスペース分割で取込
+    const nameData = buildUserNameData({
+      name:          get(row, '氏名'),
+      furigana:      get(row, 'フリガナ'),
+      lastName:      hasSplitCols ? get(row, '姓') : '',
+      firstName:     hasSplitCols ? get(row, '名') : '',
+      lastNameKana:  get(row, '姓フリガナ'),
+      firstNameKana: get(row, '名フリガナ'),
+    })
+    const name = nameData.name
 
     if (!licenseKey) { errors.push({ row: lineNo, message: 'ライセンスキーが空です' }); continue }
-    if (!name)       { errors.push({ row: lineNo, licenseKey, message: '氏名が空です' }); continue }
+    if (!name)       { errors.push({ row: lineNo, licenseKey, message: '氏名（姓・名）が空です' }); continue }
 
     const lk = keyMap.get(licenseKey)
     if (!lk) {
@@ -111,15 +129,19 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    const furigana = get(row, 'フリガナ')
+    const furigana = nameData.furigana
     const phone    = get(row, '電話')
     const address  = get(row, '住所')
 
     try {
       if (lk.user) {
         // 更新（空欄カラムは上書きしない）
-        const data: Record<string, unknown> = { name }
-        if (furigana) data.furigana = furigana
+        const data: Record<string, unknown> = { name, lastName: nameData.lastName, firstName: nameData.firstName }
+        if (furigana) {
+          data.furigana = furigana
+          data.lastNameKana = nameData.lastNameKana
+          data.firstNameKana = nameData.firstNameKana
+        }
         if (phone)    data.phone    = phone
         if (address)  data.address  = address
         if (emailRaw !== '') data.email = email
@@ -131,7 +153,7 @@ export async function POST(req: NextRequest) {
         await prisma.$transaction([
           prisma.user.create({
             data: {
-              name,
+              ...nameData,
               furigana: furigana || '',
               phone:    phone    || '',
               address:  address  || '',

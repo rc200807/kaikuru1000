@@ -20,6 +20,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import BankSearch from '@/components/customer/BankSearch'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
@@ -211,7 +212,7 @@ export default function AdminCustomersPage() {
 
   // 顧客情報編集
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState<{ name: string; furigana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number; leadSource: string }>({ name: '', furigana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1, leadSource: '' })
+  const [editForm, setEditForm] = useState<{ lastName: string; firstName: string; lastNameKana: string; firstNameKana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number; leadSource: string }>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1, leadSource: '' })
   const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
   const [changingFrequency, setChangingFrequency] = useState<string | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
@@ -230,7 +231,7 @@ export default function AdminCustomersPage() {
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [addStep, setAddStep] = useState<1 | 2>(1)
   const [addForm, setAddForm] = useState({
-    name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
+    lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addStoreSearch, setAddStoreSearch] = useState('')
@@ -559,8 +560,7 @@ export default function AdminCustomersPage() {
     if (!detailUser) return
     const types = parseCustomerTypes((detailUser as any).customerTypes, detailUser.customerType)
     setEditForm({
-      name: detailUser.name,
-      furigana: detailUser.furigana,
+      ...getSplitName(detailUser as any),
       email: detailUser.email || '',
       phone: detailUser.phone,
       phone2: (detailUser as any).phone2 || '',
@@ -583,8 +583,10 @@ export default function AdminCustomersPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: editForm.name,
-          furigana: editForm.furigana,
+          lastName: editForm.lastName,
+          firstName: editForm.firstName,
+          lastNameKana: editForm.lastNameKana,
+          firstNameKana: editForm.firstNameKana,
           email: editForm.email,
           phone: editForm.phone,
           phone2: editForm.phone2,
@@ -600,8 +602,12 @@ export default function AdminCustomersPage() {
       if (res.ok) {
         const updated = await res.json()
         const patch = {
-          name: updated.name ?? editForm.name,
-          furigana: updated.furigana ?? editForm.furigana,
+          name: updated.name ?? combineName(editForm.lastName, editForm.firstName),
+          furigana: updated.furigana ?? combineName(editForm.lastNameKana, editForm.firstNameKana),
+          lastName: updated.lastName ?? editForm.lastName,
+          firstName: updated.firstName ?? editForm.firstName,
+          lastNameKana: updated.lastNameKana ?? editForm.lastNameKana,
+          firstNameKana: updated.firstNameKana ?? editForm.firstNameKana,
           email: updated.email ?? editForm.email,
           phone: updated.phone ?? editForm.phone,
           phone2: updated.phone2 ?? editForm.phone2,
@@ -761,8 +767,10 @@ export default function AdminCustomersPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: addForm.name,
-          furigana: addForm.furigana,
+          lastName: addForm.lastName,
+          firstName: addForm.firstName,
+          lastNameKana: addForm.lastNameKana,
+          firstNameKana: addForm.firstNameKana,
           email: addForm.email,
           phone: addForm.phone,
           address: addForm.address,
@@ -824,7 +832,7 @@ export default function AdminCustomersPage() {
         .catch(() => {})
 
       // ウィザードのステップ2（訪問スケジュール）へ
-      setAddCreatedUser({ id: created.id, name: addForm.name })
+      setAddCreatedUser({ id: created.id, name: created.name ?? combineName(addForm.lastName, addForm.firstName) })
       setWizardDealId(newDealId)
       setWizardSchedule(prev => ({ ...prev, storeId: addForm.storeId || '' }))
       setAddSubmitting(false)
@@ -863,7 +871,7 @@ export default function AdminCustomersPage() {
     setWizardDealDetail('')
     setWizardDealId(null)
     setWizardSchedule({ storeId: '', visitDate: '', startTime: '', endTime: '', note: '' })
-    setAddForm({ name: '', furigana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
+    setAddForm({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
     setAddStoreSearch('')
     setAddStoreOpen(false)
     setMessage({ type: 'success', text: `${name} を追加しました` })
@@ -1310,18 +1318,34 @@ export default function AdminCustomersPage() {
 
                 {editMode ? (
                   <div className="space-y-3">
-                    <TextField
-                      label="氏名"
-                      value={editForm.name}
-                      onChange={v => setEditForm(prev => ({ ...prev, name: v }))}
-                      required
-                    />
-                    <TextField
-                      label="ふりがな"
-                      value={editForm.furigana}
-                      onChange={v => setEditForm(prev => ({ ...prev, furigana: v }))}
-                      required
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <TextField
+                        label="姓"
+                        value={editForm.lastName}
+                        onChange={v => setEditForm(prev => ({ ...prev, lastName: v }))}
+                        required
+                      />
+                      <TextField
+                        label="名"
+                        value={editForm.firstName}
+                        onChange={v => setEditForm(prev => ({ ...prev, firstName: v }))}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <TextField
+                        label="せい（ふりがな）"
+                        value={editForm.lastNameKana}
+                        onChange={v => setEditForm(prev => ({ ...prev, lastNameKana: v }))}
+                        required
+                      />
+                      <TextField
+                        label="めい（ふりがな）"
+                        value={editForm.firstNameKana}
+                        onChange={v => setEditForm(prev => ({ ...prev, firstNameKana: v }))}
+                        required
+                      />
+                    </div>
                     <TextField
                       label="メールアドレス（任意）"
                       value={editForm.email}
@@ -1452,7 +1476,7 @@ export default function AdminCustomersPage() {
                       </Button>
                       <Button
                         onClick={handleSaveCustomer}
-                        disabled={editSubmitting || !editForm.name || !editForm.furigana || !editForm.phone}
+                        disabled={editSubmitting || !editForm.lastName || !editForm.firstName || !editForm.lastNameKana || !editForm.firstNameKana || !editForm.phone}
                         loading={editSubmitting}
                       >
                         {editSubmitting ? '保存中...' : '保存'}
@@ -2221,24 +2245,46 @@ export default function AdminCustomersPage() {
           <form onSubmit={handleAddCustomer} className="space-y-4" autoComplete="off">
             <input type="text" name="prevent-autofill" autoComplete="off" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
             <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
-            <TextField
-              label="氏名"
-              value={addForm.name}
-              onChange={v => setAddForm(prev => ({ ...prev, name: v }))}
-              required
-              placeholder="山田 太郎"
-              autoComplete="off"
-              name="kk-cust-name"
-            />
-            <TextField
-              label="ふりがな"
-              value={addForm.furigana}
-              onChange={v => setAddForm(prev => ({ ...prev, furigana: v }))}
-              required
-              placeholder="やまだ たろう"
-              autoComplete="off"
-              name="kk-cust-furigana"
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <TextField
+                label="姓"
+                value={addForm.lastName}
+                onChange={v => setAddForm(prev => ({ ...prev, lastName: v }))}
+                required
+                placeholder="山田"
+                autoComplete="off"
+                name="kk-cust-last-name"
+              />
+              <TextField
+                label="名"
+                value={addForm.firstName}
+                onChange={v => setAddForm(prev => ({ ...prev, firstName: v }))}
+                required
+                placeholder="太郎"
+                autoComplete="off"
+                name="kk-cust-first-name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <TextField
+                label="せい（ふりがな）"
+                value={addForm.lastNameKana}
+                onChange={v => setAddForm(prev => ({ ...prev, lastNameKana: v }))}
+                required
+                placeholder="やまだ"
+                autoComplete="off"
+                name="kk-cust-last-kana"
+              />
+              <TextField
+                label="めい（ふりがな）"
+                value={addForm.firstNameKana}
+                onChange={v => setAddForm(prev => ({ ...prev, firstNameKana: v }))}
+                required
+                placeholder="たろう"
+                autoComplete="off"
+                name="kk-cust-first-kana"
+              />
+            </div>
             <TextField
               label="メールアドレス（任意）"
               value={addForm.email}
@@ -2453,7 +2499,7 @@ export default function AdminCustomersPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={addSubmitting || !addForm.name || !addForm.furigana}
+                disabled={addSubmitting || !addForm.lastName || !addForm.firstName || !addForm.lastNameKana || !addForm.firstNameKana}
                 loading={addSubmitting}
               >
                 {addSubmitting ? '登録中...' : '登録して次へ →'}

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { CUSTOMER_TYPES, isCustomerType, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { recordAccessLog } from '@/lib/access-log'
+import { buildUserNameUpdateData } from '@/lib/name-utils'
 
 const VALID_CUSTOMER_TYPES = CUSTOMER_TYPES as readonly string[]
 
@@ -79,14 +80,19 @@ export async function PATCH(
     return NextResponse.json({ id: updated.id, visitFrequencyMonths: updated.visitFrequencyMonths })
   }
 
-  // 顧客情報の編集（name が含まれていればプロフィール編集とみなす）
-  if (typeof body.name === 'string') {
-    const data: Record<string, unknown> = {}
-
-    if (body.name?.trim()) data.name = body.name.trim()
-    else return NextResponse.json({ error: '氏名は必須です' }, { status: 400 })
-
-    if (typeof body.furigana === 'string') data.furigana = body.furigana.trim()
+  // 顧客情報の編集（name または姓・名が含まれていればプロフィール編集とみなす）
+  if (typeof body.name === 'string' || typeof body.lastName === 'string' || typeof body.firstName === 'string') {
+    // 分割値（新UI）優先。旧クライアントの結合 name のみでも分割値を自動生成
+    const nameData = buildUserNameUpdateData({
+      name:          typeof body.name === 'string' ? body.name : undefined,
+      furigana:      typeof body.furigana === 'string' ? body.furigana : undefined,
+      lastName:      typeof body.lastName === 'string' ? body.lastName : undefined,
+      firstName:     typeof body.firstName === 'string' ? body.firstName : undefined,
+      lastNameKana:  typeof body.lastNameKana === 'string' ? body.lastNameKana : undefined,
+      firstNameKana: typeof body.firstNameKana === 'string' ? body.firstNameKana : undefined,
+    })
+    if (!nameData.name) return NextResponse.json({ error: '氏名は必須です' }, { status: 400 })
+    const data: Record<string, unknown> = { ...nameData }
     if (typeof body.phone === 'string') data.phone = body.phone.replace(/[-ー\s]/g, '')
     if (typeof body.phone2 === 'string') data.phone2 = body.phone2.replace(/[-ー\s]/g, '') || null
     if (typeof body.phone3 === 'string') data.phone3 = body.phone3.replace(/[-ー\s]/g, '') || null
@@ -118,7 +124,7 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id },
       data,
-      select: { id: true, name: true, furigana: true, email: true, phone: true, phone2: true, phone3: true, address: true, internalNote: true, customerType: true, customerTypes: true, visitFrequencyMonths: true, occupation: true, leadSource: true },
+      select: { id: true, name: true, furigana: true, lastName: true, firstName: true, lastNameKana: true, firstNameKana: true, email: true, phone: true, phone2: true, phone3: true, address: true, internalNote: true, customerType: true, customerTypes: true, visitFrequencyMonths: true, occupation: true, leadSource: true },
     })
     await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `顧客情報を編集「${updated.name}」`, req: request })
     return NextResponse.json(updated)

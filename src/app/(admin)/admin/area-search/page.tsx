@@ -3,8 +3,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+
+const AreaSearchMap = dynamic(() => import('@/components/admin/AreaSearchMap'), { ssr: false })
+
+function scoreColor(score: number): string {
+  if (score >= 20) return '#10b981'
+  if (score >= 15) return '#14b8a6'
+  if (score >= 10) return '#e8927c'
+  if (score >= 5) return '#3b82f6'
+  return '#f59e0b'
+}
 
 const PREFECTURES = [
   '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県',
@@ -29,10 +40,13 @@ type StoreResult = {
   score: number
   matchReason: string
   distanceKm: number | null
+  lat: number | null
+  lng: number | null
 }
 
 type SearchResponse = {
   query: string
+  center: { lat: number; lng: number } | null
   results: StoreResult[]
   totalStores: number
 }
@@ -59,6 +73,7 @@ export default function AdminAreaSearchPage() {
   const [searching, setSearching] = useState(false)
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null)
 
   // 都道府県選択時に市区町村を取得
   const fetchCities = useCallback(async (pref: string) => {
@@ -97,7 +112,7 @@ export default function AdminAreaSearchPage() {
     setPrefecture(pref)
     setCityInput('')
     setDetail('')
-    setResult(null)
+    setResult(null); setSelectedStoreId(null)
     fetchCities(pref)
   }
 
@@ -123,7 +138,7 @@ export default function AdminAreaSearchPage() {
     if (!fullAddress) return
     setSearching(true)
     setError(null)
-    setResult(null)
+    setResult(null); setSelectedStoreId(null)
 
     try {
       const res = await fetch(`/api/stores/search?address=${encodeURIComponent(fullAddress)}&limit=5`)
@@ -160,7 +175,7 @@ export default function AdminAreaSearchPage() {
     // 即座に検索実行
     setSearching(true)
     setError(null)
-    setResult(null)
+    setResult(null); setSelectedStoreId(null)
     try {
       const res = await fetch(`/api/stores/search?address=${encodeURIComponent(addr)}&limit=5`)
       if (!res.ok) {
@@ -191,7 +206,7 @@ export default function AdminAreaSearchPage() {
     <>
       <AppBar title="エリア検索" subtitle="住所から近隣店舗を検索" />
 
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* 検索フォーム */}
         <div className="bg-[var(--md-sys-color-surface-container)] rounded-2xl p-6 border border-[var(--md-sys-color-outline-variant)]">
           {/* モード切替タブ */}
@@ -474,6 +489,8 @@ export default function AdminAreaSearchPage() {
               </p>
             </div>
 
+            <div className="grid lg:grid-cols-[minmax(300px,360px)_1fr] gap-4 items-start">
+              <div className="order-2 lg:order-1 lg:max-h-[76vh] lg:overflow-y-auto lg:pr-1 space-y-3">
             {result.results.length === 0 ? (
               <div className="bg-[var(--md-sys-color-surface-container)] rounded-2xl p-8 text-center border border-[var(--md-sys-color-outline-variant)]">
                 <svg className="w-12 h-12 mx-auto mb-3 text-[var(--md-sys-color-outline)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -490,7 +507,8 @@ export default function AdminAreaSearchPage() {
                   return (
                     <div
                       key={store.id}
-                      className="bg-[var(--md-sys-color-surface-container)] rounded-2xl border border-[var(--md-sys-color-outline-variant)] overflow-hidden hover:border-[var(--portal-primary,#374151)]/50 transition-all"
+                      onClick={() => setSelectedStoreId(store.id)}
+                      className={`bg-[var(--md-sys-color-surface-container)] rounded-2xl border overflow-hidden hover:border-[var(--portal-primary,#374151)]/50 transition-all cursor-pointer ${selectedStoreId === store.id ? 'border-[var(--portal-primary,#374151)] ring-2 ring-[var(--portal-primary,#374151)]/30' : 'border-[var(--md-sys-color-outline-variant)]'}`}
                     >
                       <div className="flex items-stretch">
                         {/* 順位バー */}
@@ -564,6 +582,18 @@ export default function AdminAreaSearchPage() {
                 })}
               </div>
             )}
+              </div>{/* /左カラム（リスト） */}
+
+              {/* 右カラム: 地図 */}
+              <div className="order-1 lg:order-2 h-[48vh] lg:h-[76vh] lg:sticky lg:top-4 rounded-xl overflow-hidden border border-[var(--md-sys-color-outline-variant)]">
+                <AreaSearchMap
+                  center={result.center}
+                  stores={result.results.map((s, i) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, color: scoreColor(s.score), matchReason: s.matchReason, distanceKm: s.distanceKm, rank: i + 1 }))}
+                  selectedId={selectedStoreId}
+                  onSelect={setSelectedStoreId}
+                />
+              </div>
+            </div>{/* /グリッド */}
           </div>
         )}
 

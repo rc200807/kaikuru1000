@@ -83,11 +83,14 @@ export async function GET(request: NextRequest) {
       score: s.score,
       matchReason: s.matchReason,
       distanceKm: s.distanceKm,
+      lat: storeCoords.get(s.id)?.lat ?? null,
+      lng: storeCoords.get(s.id)?.lng ?? null,
     }
   })
 
   return NextResponse.json({
     query: address.trim(),
+    center: customerCoords, // 入力住所の座標（町域センター。地図の中心・マーカー用）
     results,
     totalStores: stores.length,
   })

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
+import { recomputeDealAmounts } from '@/lib/deal-amounts'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -167,10 +168,13 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId, occurredAt, preConsentSignature } = body
+  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent } = body
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
+  }
+  if (purchaseUpliftPercent !== undefined && ![0, 10, 15].includes(Number(purchaseUpliftPercent))) {
+    return NextResponse.json({ error: '無効な上乗せ率です' }, { status: 400 })
   }
 
   const deal = await prisma.deal.findUnique({ where: { id } })
@@ -194,6 +198,8 @@ export async function PATCH(
     updateData.preConsentSignature = preConsentSignature || null
     updateData.preConsentAt = preConsentSignature ? new Date() : null
   }
+  // 買取金額の上乗せ率（0/10/15%）
+  if (purchaseUpliftPercent !== undefined) updateData.purchaseUpliftPercent = Number(purchaseUpliftPercent)
 
   const updated = await prisma.deal.update({
     where: { id },
@@ -205,6 +211,11 @@ export async function PATCH(
       _count: { select: { visitSchedules: true } },
     },
   })
+
+  // 上乗せ率が変わったら買取合計（purchaseAmount）を再計算
+  if (purchaseUpliftPercent !== undefined) {
+    try { await recomputeDealAmounts(prisma, id) } catch (e) { console.error('[Deal] 上乗せ再計算に失敗:', e) }
+  }
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `案件を更新`, req: request })
   return NextResponse.json(updated)

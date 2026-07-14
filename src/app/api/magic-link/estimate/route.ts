@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     include: {
       user: { select: { id: true, name: true, phone: true, address: true, email: true, idAddress: true, idName: true } },
       store: { select: { id: true, name: true, address: true, phone: true } },
+      deal: { select: { purchaseUpliftPercent: true } },
     },
   })
 
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
     id: schedule.id,
     user: schedule.user,
     store: schedule.store,
+    purchaseUpliftPercent: schedule.deal?.purchaseUpliftPercent ?? 0,
     estimate: {
       id: estimate.id,
       validUntil: estimate.validUntil,

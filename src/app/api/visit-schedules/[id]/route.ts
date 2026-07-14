@@ -40,7 +40,7 @@ export async function GET(
           },
         },
       },
-      deal: { select: { id: true, status: true } },
+      deal: { select: { id: true, status: true, purchaseUpliftPercent: true } },
     },
   })
 
@@ -92,6 +92,7 @@ export async function GET(
     ...schedule,
     purchaseItems: items,
     workItems: workItemsRaw,
+    purchaseUpliftPercent: schedule.deal?.purchaseUpliftPercent ?? 0,
   })
 }
 

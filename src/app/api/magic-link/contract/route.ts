@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
           phone: true,
         },
       },
+      deal: { select: { purchaseUpliftPercent: true } },
     },
   })
 
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
     purchaseAmount,
     billingAmount,
     staffName: schedule.staffName,
+    purchaseUpliftPercent: schedule.deal?.purchaseUpliftPercent ?? 0,
     user: schedule.user,
     store: schedule.store,
     purchaseItems: purchaseItems.map((item) => ({

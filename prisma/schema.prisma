@@ -543,8 +543,9 @@ model Deal {
   createdByType String?                     // 作成者種別（store/admin/superadmin/hr/customer/partner）
   createdById   String?                     // 作成者ID（Store.id / Admin.id など・スナップショット）
   createdByName String?                     // 作成者名（スナップショット）
-  purchaseAmount Int?                       // 買取金額合計（案件配下の買取品目合計・自動計算）
+  purchaseAmount Int?                       // 買取金額合計（案件配下の買取品目合計×上乗せ・自動計算）
   billingAmount  Int?                       // 請求金額合計（案件配下の請求項目合計・自動計算）
+  purchaseUpliftPercent Int @default(0)     // 買取金額の上乗せ率（0/10/15%。キャンペーン等）
   preConsentSignature String? @db.Text      // 事前同意の署名画像（base64）
   preConsentAt        DateTime?             // 事前同意日時
   paperContractImages String  @default("[]") // 紙で作成した売買契約書の写真URL（JSON配列）

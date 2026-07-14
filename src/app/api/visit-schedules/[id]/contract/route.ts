@@ -265,7 +265,9 @@ export async function POST(
     const notifyTo = schedule.store.contractNotifyEmail || schedule.store.email
     if (notifyTo) {
       const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-      const purchaseTotal = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+      const purchaseBase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+      const upliftPct = dealId ? (await prisma.deal.findUnique({ where: { id: dealId }, select: { purchaseUpliftPercent: true } }))?.purchaseUpliftPercent ?? 0 : 0
+      const purchaseTotal = purchaseBase + Math.round(purchaseBase * upliftPct / 100)
       const billingTotal = workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)
       await sendContractCreatedNotification({
         to: notifyTo,

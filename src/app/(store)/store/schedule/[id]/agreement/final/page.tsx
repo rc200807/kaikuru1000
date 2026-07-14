@@ -186,6 +186,7 @@ type VisitDetail = {
   }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
+  purchaseUpliftPercent?: number
 }
 
 type ExistingContract = {
@@ -481,7 +482,10 @@ export default function FinalAgreementPage() {
 
   const fmtYen = (n: number) => `¥${n.toLocaleString()}`
 
-  const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
+  const purchaseBase = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
+  const upliftPct = visit?.purchaseUpliftPercent ?? 0
+  const upliftAmount = Math.round(purchaseBase * upliftPct / 100)
+  const purchaseTotal = purchaseBase + upliftAmount
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
   // 請求項目が無い案件は請求書セクション・署名ごと不要
   const hasInvoice = (visit?.workItems.length ?? 0) > 0
@@ -758,6 +762,18 @@ export default function FinalAgreementPage() {
                 ))}
               </tbody>
               <tfoot>
+                {upliftPct > 0 && (
+                  <>
+                    <tr>
+                      <td colSpan={4} className="py-1 text-right text-[var(--md-sys-color-on-surface-variant)]">小計</td>
+                      <td className="py-1 text-right text-[var(--md-sys-color-on-surface)]">{fmtYen(purchaseBase)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={4} className="py-1 text-right text-[var(--md-sys-color-on-surface-variant)]">買取金額 {upliftPct}%上乗せ</td>
+                      <td className="py-1 text-right text-[var(--md-sys-color-on-surface)]">＋{fmtYen(upliftAmount)}</td>
+                    </tr>
+                  </>
+                )}
                 <tr>
                   <td colSpan={4} className="py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取金額合計</td>
                   <td className="py-2 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td>

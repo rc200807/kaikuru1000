@@ -59,8 +59,10 @@ export async function POST(
     return NextResponse.json({ error: '見積有効期限が不正です' }, { status: 400 })
   }
 
-  // 金額はサーバー側で品目から算出（クライアントの値は信用しない）
-  const purchaseAmount = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  // 金額はサーバー側で品目から算出（クライアントの値は信用しない）。買取は上乗せ率を反映。
+  const purchaseBase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const upliftPct = dealId ? (await prisma.deal.findUnique({ where: { id: dealId }, select: { purchaseUpliftPercent: true } }))?.purchaseUpliftPercent ?? 0 : 0
+  const purchaseAmount = purchaseBase + Math.round(purchaseBase * upliftPct / 100)
   const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
 
   // フロントから受け取ったメールアドレスを優先（無ければ既存のUser.email）

@@ -12,6 +12,7 @@ interface EstimateData {
   estimate: { id: string; validUntil: string; staffName: string | null; purchaseAmount: number; billingAmount: number; createdAt: string }
   hasPdf?: boolean
   hasInvoicePdf?: boolean
+  purchaseUpliftPercent?: number
   purchaseItems: { id: string; itemName: string | null; category: string | null; quantity: number; purchasePrice: number }[]
   workItems: { id: string; workName: string | null; unitPrice: number; quantity: number }[]
 }
@@ -108,7 +109,10 @@ function EstimateViewContent() {
     )
   }
 
-  const purchaseTotal = data.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const purchaseBase = data.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const upliftPct = data.purchaseUpliftPercent ?? 0
+  const upliftAmount = Math.round(purchaseBase * upliftPct / 100)
+  const purchaseTotal = purchaseBase + upliftAmount
   const workTotal = data.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
 
   return (
@@ -191,6 +195,12 @@ function EstimateViewContent() {
           {/* 合計 */}
           <table className="w-full text-sm border-t-2 border-gray-200">
             <tbody>
+              {upliftPct > 0 && (
+                <>
+                  <tr><td className="py-1 text-gray-500">小計</td><td className="py-1 text-right text-gray-700">{yen(purchaseBase)}</td></tr>
+                  <tr><td className="py-1 text-gray-500">買取金額 {upliftPct}%上乗せ</td><td className="py-1 text-right text-gray-700">＋{yen(upliftAmount)}</td></tr>
+                </>
+              )}
               <tr className="border-b border-gray-100">
                 <td className="py-3 text-gray-600">買取金額 合計</td>
                 <td className="py-3 text-right font-bold text-lg text-[#B91C1C]">{yen(purchaseTotal)}</td>

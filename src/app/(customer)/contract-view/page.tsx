@@ -12,6 +12,7 @@ interface ContractData {
   status: string
   purchaseAmount: number | null
   billingAmount: number | null
+  purchaseUpliftPercent?: number
   staffName: string | null
   user: {
     id: string
@@ -204,6 +205,9 @@ function ContractViewContent() {
     (sum, item) => sum + item.purchasePrice * item.quantity,
     0
   )
+  const upliftPct = contract.purchaseUpliftPercent ?? 0
+  const purchaseUpliftAmount = Math.round(purchaseTotal * upliftPct / 100)
+  const purchaseTotalWithUplift = purchaseTotal + purchaseUpliftAmount
   const workTotal = contract.workItems.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0
@@ -372,9 +376,21 @@ function ContractViewContent() {
                       ))}
                     </tbody>
                     <tfoot>
+                      {upliftPct > 0 && (
+                        <>
+                          <tr>
+                            <td colSpan={4} className="px-3 py-1 text-right text-gray-600">小計</td>
+                            <td className="px-3 py-1 text-right text-gray-800">{formatCurrency(purchaseTotal)}円</td>
+                          </tr>
+                          <tr>
+                            <td colSpan={4} className="px-3 py-1 text-right text-gray-600">買取金額 {upliftPct}%上乗せ</td>
+                            <td className="px-3 py-1 text-right text-gray-800">＋{formatCurrency(purchaseUpliftAmount)}円</td>
+                          </tr>
+                        </>
+                      )}
                       <tr className="bg-white/30 border-t border-white/60">
                         <td colSpan={4} className="px-3 py-2 text-right font-bold text-gray-700">買取合計</td>
-                        <td className="px-3 py-2 text-right font-bold text-[#B91C1C]">{formatCurrency(purchaseTotal)}円</td>
+                        <td className="px-3 py-2 text-right font-bold text-[#B91C1C]">{formatCurrency(purchaseTotalWithUplift)}円</td>
                       </tr>
                     </tfoot>
                   </table>

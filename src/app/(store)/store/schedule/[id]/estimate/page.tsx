@@ -26,6 +26,7 @@ type VisitDetail = {
   }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
+  purchaseUpliftPercent?: number
 }
 
 type ExistingEstimate = {
@@ -131,7 +132,10 @@ export default function EstimatePage() {
   useEffect(() => { if (session) fetchData() }, [session, fetchData])
 
   const fmtYen = (n: number) => `¥${n.toLocaleString()}`
-  const purchaseTotal = visit?.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0) ?? 0
+  const purchaseBase = visit?.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0) ?? 0
+  const upliftPct = visit?.purchaseUpliftPercent ?? 0
+  const upliftAmount = Math.round(purchaseBase * upliftPct / 100)
+  const purchaseTotal = purchaseBase + upliftAmount
   const workTotal = visit?.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) ?? 0
 
   const handleSubmit = async () => {
@@ -309,7 +313,15 @@ export default function EstimatePage() {
             </table>
           ) : <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">買取品目は登録されていません</p>}
           <table className="w-full text-sm border-t-2 border-[var(--md-sys-color-outline-variant)]">
-            <tbody><tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td></tr></tbody>
+            <tbody>
+              {upliftPct > 0 && (
+                <>
+                  <tr><td className="py-1 text-[var(--md-sys-color-on-surface-variant)]">小計</td><td className="py-1 text-right text-[var(--md-sys-color-on-surface)]">{fmtYen(purchaseBase)}</td></tr>
+                  <tr><td className="py-1 text-[var(--md-sys-color-on-surface-variant)]">買取金額 {upliftPct}%上乗せ</td><td className="py-1 text-right text-[var(--md-sys-color-on-surface)]">＋{fmtYen(upliftAmount)}</td></tr>
+                </>
+              )}
+              <tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td></tr>
+            </tbody>
           </table>
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
           <div className="mt-4" dangerouslySetInnerHTML={{ __html: buildTokushohoHtml() }} />

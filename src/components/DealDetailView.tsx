@@ -65,6 +65,7 @@ type Deal = {
   dealContract: ContractInfo | null
   dealEstimate: EstimateInfo | null
   paperContractImages: string[]
+  purchaseUpliftPercent: number
 }
 
 function fmtDate(d?: string | null) {
@@ -153,6 +154,7 @@ export default function DealDetailView({
   const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1, notes: '' })
   const [showPreview, setShowPreview] = useState(false)
   const [uploadingContract, setUploadingContract] = useState(false)
+  const [savingUplift, setSavingUplift] = useState(false)
   const [savingWork, setSavingWork] = useState(false)
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
 
@@ -259,6 +261,21 @@ export default function DealDetailView({
     const res = await fetch(`/api/deals/${dealId}/contract-images?index=${index}`, { method: 'DELETE' })
     if (res.ok) { await load(); setMsg({ type: 'success', text: '写真を削除しました' }) }
     else setMsg({ type: 'error', text: '削除に失敗しました' })
+  }
+
+  // 買取金額の上乗せ率（10%/15%）。同じ値を再度押すと解除（排他トグル）
+  async function saveUplift(pct: number) {
+    if (!deal) return
+    const next = (deal.purchaseUpliftPercent ?? 0) === pct ? 0 : pct
+    setSavingUplift(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purchaseUpliftPercent: next }),
+    })
+    setSavingUplift(false)
+    if (res.ok) { await load(); setMsg({ type: 'success', text: next > 0 ? `買取金額を${next}%上乗せしました` : '上乗せを解除しました' }) }
+    else setMsg({ type: 'error', text: '上乗せの更新に失敗しました' })
   }
 
   async function savePreConsent(signature: string | null) {
@@ -394,7 +411,10 @@ export default function DealDetailView({
   // 案件直下の品目（再ペアレント後の正）
   const purchaseItems = deal.purchaseItems ?? []
   const workItems = deal.workItems ?? []
-  const totalPurchase = deal.purchaseAmount ?? purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const upliftPct = deal.purchaseUpliftPercent ?? 0
+  const basePurchase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const upliftAmount = Math.round(basePurchase * upliftPct / 100)
+  const totalPurchase = basePurchase + upliftAmount
   const totalBilling = deal.billingAmount ?? workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const dealContract = deal.dealContract
   const dealEstimate = deal.dealEstimate
@@ -672,12 +692,42 @@ export default function DealDetailView({
           </div>
         </Card>
 
-        {/* 買取品目（案件直下・訪問詳細と同等の機能：画像/バーコード/AI査定/1000円ボックス/在庫化） */}
+        {/* 買取品目（案件直下・訪問詳細と同等の機能：画像/AI査定/1000円ボックス/在庫化） */}
         <Card variant="outlined" padding="md">
           <div className="flex items-center justify-between mb-3 gap-2">
             <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">買取品目（{purchaseItems.length}件）</h2>
-            <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">合計 {formatYen(totalPurchase)}</span>
+            <div className="text-right">
+              <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">合計 {formatYen(totalPurchase)}</span>
+              {upliftPct > 0 && (
+                <div className="text-[11px] text-[var(--portal-primary)]">（買取 {formatYen(basePurchase)} ＋{upliftPct}%上乗せ {formatYen(upliftAmount)}）</div>
+              )}
+            </div>
           </div>
+
+          {/* 買取金額の上乗せ（10%/15%・排他トグル） */}
+          {editable && (
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">買取金額の上乗せ:</span>
+              {[10, 15].map(pct => {
+                const active = upliftPct === pct
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => saveUplift(pct)}
+                    disabled={savingUplift}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${active ? 'bg-[var(--portal-primary)] text-white border-[var(--portal-primary)]' : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'}`}
+                  >
+                    {pct}%UP{active ? ' ✓' : ''}
+                  </button>
+                )
+              })}
+              {upliftPct > 0 && (
+                <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">（同じボタンをもう一度押すと解除）</span>
+              )}
+            </div>
+          )}
+
           <PurchaseItemManager
             parentType="deal"
             parentId={deal.id}
@@ -868,6 +918,18 @@ export default function DealDetailView({
                     ))}
                   </tbody>
                   <tfoot>
+                    {upliftPct > 0 && (
+                      <>
+                        <tr>
+                          <td colSpan={3} className="px-2 py-1 text-right text-[var(--md-sys-color-on-surface-variant)]">小計</td>
+                          <td className="px-2 py-1 text-right text-[var(--md-sys-color-on-surface)]">{formatYen(basePurchase)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} className="px-2 py-1 text-right text-[var(--portal-primary)]">買取金額 {upliftPct}%上乗せ</td>
+                          <td className="px-2 py-1 text-right text-[var(--portal-primary)]">＋{formatYen(upliftAmount)}</td>
+                        </tr>
+                      </>
+                    )}
                     <tr className="bg-[var(--md-sys-color-surface-container-low)]">
                       <td colSpan={3} className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取合計</td>
                       <td className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">{formatYen(totalPurchase)}</td>

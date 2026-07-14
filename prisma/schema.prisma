@@ -772,6 +772,8 @@ model Announcement {
   adminId     String
   admin       Admin     @relation(fields: [adminId], references: [id])
   reads       AnnouncementRead[]
+  reactions   AnnouncementReaction[]
+  comments    AnnouncementComment[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1373,4 +1375,101 @@ model ChatReadState {
 
   @@unique([roomId, readerType, readerId])
   @@index([roomId])
+}
+
+// ========================================
+// お知らせへのリアクション・コメント（店舗側）
+// ========================================
+
+// お知らせへの絵文字リアクション（店舗単位でトグル）
+model AnnouncementReaction {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  emoji          String
+  storeId        String       // リアクションした店舗（店舗単位で1絵文字1回）
+  createdAt      DateTime     @default(now())
+
+  @@unique([announcementId, storeId, emoji])
+  @@index([announcementId])
+}
+
+// お知らせへのコメント
+model AnnouncementComment {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  authorType     String       // "store" | "admin"
+  storeId        String?      // 店舗コメント時の店舗ID
+  memberId       String?      // 店舗メンバー個人（任意）
+  authorName     String
+  body           String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([announcementId])
+}
+
+// ========================================
+// 知恵袋（店舗間のQ&A）
+// ========================================
+
+// 質問
+model Question {
+  id         String   @id @default(cuid())
+  title      String
+  body       String   @db.Text
+  category   String   // カテゴリ（固定リストから選択）
+  storeId    String
+  memberId   String?
+  authorName String
+  isResolved Boolean  @default(false) // 解決済み（ベストアンサー選定で true）
+  answers    Answer[]
+  reactions  QuestionReaction[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+// 回答
+model Answer {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  body       String   @db.Text
+  storeId    String
+  memberId   String?
+  authorName String
+  isBest     Boolean  @default(false) // ベストアンサー
+  reactions  AnswerReaction[]
+  createdAt  DateTime @default(now())
+
+  @@index([questionId])
+}
+
+// 質問へのリアクション（「気になる」等）
+model QuestionReaction {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  emoji      String
+  storeId    String
+  createdAt  DateTime @default(now())
+
+  @@unique([questionId, storeId, emoji])
+  @@index([questionId])
+}
+
+// 回答へのリアクション（「役に立った」等）
+model AnswerReaction {
+  id        String   @id @default(cuid())
+  answerId  String
+  answer    Answer   @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  emoji     String
+  storeId   String
+  createdAt DateTime @default(now())
+
+  @@unique([answerId, storeId, emoji])
+  @@index([answerId])
 }

@@ -7,6 +7,9 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import ReactionBar from '@/components/store/ReactionBar'
+import CommentSection, { type Comment } from '@/components/store/CommentSection'
+import { ANNOUNCEMENT_EMOJIS } from '@/lib/chiebukuro'
 
 type AnnouncementCategory = {
   id: string
@@ -24,6 +27,8 @@ type Announcement = {
   announcementCategory: AnnouncementCategory | null
   publishedAt: string
   admin: { name: string }
+  reactions: { emoji: string; count: number; reacted: boolean }[]
+  comments: Comment[]
 }
 
 const CATEGORIES: Record<string, { label: string; color: string }> = {
@@ -65,6 +70,31 @@ export default function StoreAnnouncementDetailPage() {
       fetch(`/api/store/announcements/${params.id}/read`, { method: 'POST' }).catch(() => {})
     }
   }, [status, params.id])
+
+  const refreshDetail = async () => {
+    const r = await fetch(`/api/store/announcements/${params.id}`)
+    if (r.ok) setAnnouncement(await r.json())
+  }
+
+  const toggleReaction = async (emoji: string) => {
+    await fetch(`/api/store/announcements/${params.id}/reactions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji }),
+    })
+    refreshDetail()
+  }
+
+  const addComment = async (body: string) => {
+    const r = await fetch(`/api/store/announcements/${params.id}/comments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }),
+    })
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || '送信に失敗しました') }
+    refreshDetail()
+  }
+
+  const deleteComment = async (commentId: string) => {
+    await fetch(`/api/store/announcements/${params.id}/comments/${commentId}`, { method: 'DELETE' })
+    refreshDetail()
+  }
 
   if (status === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage />
@@ -149,6 +179,22 @@ export default function StoreAnnouncementDetailPage() {
         className="prose prose-sm dark:prose-invert max-w-none text-[var(--md-sys-color-on-surface)] leading-relaxed"
         dangerouslySetInnerHTML={{ __html: announcement.content }}
       />
+
+      {/* リアクション */}
+      <div className="mt-8">
+        <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-2">リアクション</p>
+        <ReactionBar reactions={announcement.reactions} emojiSet={ANNOUNCEMENT_EMOJIS} onToggle={toggleReaction} />
+      </div>
+
+      {/* コメント */}
+      <div className="mt-8 pt-6 border-t border-[var(--md-sys-color-outline-variant)]">
+        <CommentSection
+          comments={announcement.comments}
+          onAdd={addComment}
+          onDelete={deleteComment}
+          placeholder="このお知らせへのコメントを入力…"
+        />
+      </div>
 
       {/* フッター */}
       <div className="mt-10 pt-4 border-t border-[var(--md-sys-color-outline-variant)]">

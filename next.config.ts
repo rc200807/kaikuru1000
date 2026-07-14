@@ -25,8 +25,8 @@ const securityHeaders = [
       "connect-src 'self' https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com https://maps.googleapis.com https://maps.gstatic.com",
       // Vercel Blob の動画再生を許可
       "media-src 'self' https://*.public.blob.vercel-storage.com",
-      // YouTube 埋め込み（研修動画）を許可
-      "frame-src 'self' https://www.youtube.com https://youtube.com",
+      // YouTube 埋め込み（研修動画）+ Vercel Blob の PDF プレビュー（チャット添付モーダル）を許可
+      "frame-src 'self' https://www.youtube.com https://youtube.com https://*.public.blob.vercel-storage.com",
       "frame-ancestors 'none'",
       "form-action 'self'",
     ].join('; '),

@@ -118,7 +118,7 @@ export default function AreaSearchMapGoogle({
     }
   }, [selectedId])
 
-  return <div ref={containerRef} className="w-full h-full min-h-[300px] rounded-xl overflow-hidden" style={{ background: '#e5e7eb' }} />
+  return <div ref={containerRef} className="w-full h-full min-h-[300px] overflow-hidden" style={{ background: '#e5e7eb' }} />
 }
 
 function escapeHtml(s: string): string {

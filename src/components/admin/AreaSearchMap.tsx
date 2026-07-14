@@ -38,6 +38,8 @@ export default function AreaSearchMap({
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return
     const map = L.map(containerRef.current, { center: [35.681236, 139.767125], zoom: 11, scrollWheelZoom: true })
+    // ズームコントロールは左フローティングパネルと重ならないよう右上へ
+    map.zoomControl.setPosition('topright')
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
@@ -108,7 +110,7 @@ export default function AreaSearchMap({
     }
   }, [selectedId])
 
-  return <div ref={containerRef} className="w-full h-full min-h-[300px] rounded-xl overflow-hidden" style={{ background: '#e5e7eb' }} />
+  return <div ref={containerRef} className="w-full h-full min-h-[300px] overflow-hidden" style={{ background: '#e5e7eb' }} />
 }
 
 function escapeHtml(s: string): string {

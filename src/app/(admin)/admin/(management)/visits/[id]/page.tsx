@@ -161,9 +161,9 @@ export default function AdminVisitDetailPage() {
                   <tr key={item.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
                     <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{item.itemName}</td>
                     <td className="py-1.5 text-[var(--md-sys-color-on-surface-variant)]">{item.category}</td>
-                    <td className="py-1.5 text-right">{item.quantity}</td>
-                    <td className="py-1.5 text-right">{fmt(item.purchasePrice)}</td>
-                    <td className="py-1.5 text-right font-medium">{fmt(item.purchasePrice * item.quantity)}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{item.quantity}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{fmt(item.purchasePrice)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmt(item.purchasePrice * item.quantity)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -196,9 +196,9 @@ export default function AdminVisitDetailPage() {
                 {visit.workItems.map(item => (
                   <tr key={item.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
                     <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{item.workName}</td>
-                    <td className="py-1.5 text-right">{item.quantity}</td>
-                    <td className="py-1.5 text-right">{fmt(item.unitPrice)}</td>
-                    <td className="py-1.5 text-right font-medium">{fmt(item.unitPrice * item.quantity)}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{item.quantity}</td>
+                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{fmt(item.unitPrice)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmt(item.unitPrice * item.quantity)}</td>
                   </tr>
                 ))}
               </tbody>

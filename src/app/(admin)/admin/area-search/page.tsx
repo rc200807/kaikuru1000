@@ -8,6 +8,9 @@ import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
 const AreaSearchMap = dynamic(() => import('@/components/admin/AreaSearchMap'), { ssr: false })
+const AreaSearchMapGoogle = dynamic(() => import('@/components/admin/AreaSearchMapGoogle'), { ssr: false })
+// NEXT_PUBLIC_GOOGLE_MAPS_API_KEY があれば Google Maps、無ければ OpenStreetMap
+const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
 function scoreColor(score: number): string {
   if (score >= 20) return '#10b981'
@@ -586,12 +589,12 @@ export default function AdminAreaSearchPage() {
 
               {/* 右カラム: 地図 */}
               <div className="order-1 lg:order-2 h-[48vh] lg:h-[76vh] lg:sticky lg:top-4 rounded-xl overflow-hidden border border-[var(--md-sys-color-outline-variant)]">
-                <AreaSearchMap
-                  center={result.center}
-                  stores={result.results.map((s, i) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, color: scoreColor(s.score), matchReason: s.matchReason, distanceKm: s.distanceKm, rank: i + 1 }))}
-                  selectedId={selectedStoreId}
-                  onSelect={setSelectedStoreId}
-                />
+                {(() => {
+                  const mapStores = result.results.map((s, i) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, color: scoreColor(s.score), matchReason: s.matchReason, distanceKm: s.distanceKm, rank: i + 1 }))
+                  return GOOGLE_MAPS_KEY
+                    ? <AreaSearchMapGoogle apiKey={GOOGLE_MAPS_KEY} center={result.center} stores={mapStores} selectedId={selectedStoreId} onSelect={setSelectedStoreId} />
+                    : <AreaSearchMap center={result.center} stores={mapStores} selectedId={selectedStoreId} onSelect={setSelectedStoreId} />
+                })()}
               </div>
             </div>{/* /グリッド */}
           </div>

@@ -327,6 +327,10 @@ textarea {
 /* ── Safe area (mobile bottom nav) ───────────────────── */
 .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+/* ── Chat: hover for icon buttons ────────────────────── */
+.chat-icon-btn { transition: background-color 120ms ease, color 120ms ease; }
+.chat-icon-btn:hover { background-color: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface); }
+
 /* ── Geist-like typography ───────────────────────────── */
 h1, h2, h3 { font-feature-settings: "liga" 1; }
 h1 { letter-spacing: -0.04em; }

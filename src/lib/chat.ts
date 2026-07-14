@@ -42,6 +42,7 @@ export type SerializedMessage = {
   parentId: string | null
   authorType: 'admin' | 'store'
   authorName: string
+  authorAvatar: string | null
   body: string
   attachments: ChatAttachment[]
   isDeleted: boolean
@@ -54,9 +55,11 @@ export type SerializedMessage = {
   replies?: SerializedMessage[]
 }
 
-/** リアクション込みでメッセージを取得する include */
+/** リアクション・送信者アバター込みでメッセージを取得する include */
 export const messageInclude = {
   reactions: true,
+  authorAdmin: { select: { avatar: true } },
+  authorMember: { select: { avatar: true } },
 } satisfies Prisma.ChatMessageInclude
 
 type MessageWithReactions = Prisma.ChatMessageGetPayload<{ include: typeof messageInclude }>
@@ -135,10 +138,14 @@ export function serializeMessage(
   viewer: ChatViewer,
   roomStoreId: string,
   replyCount = 0,
+  roomStoreAvatar: string | null = null,
 ): SerializedMessage {
   const isDeleted = !!m.deletedAt
   const authorActorId = actorIdOfMessage(m, roomStoreId)
   const mine = m.authorType === viewer.type && authorActorId === viewer.id
+  // 送信者アバター: 本部=管理者アバター / 店舗=メンバーアバター（店舗直ログインは店舗アバター）
+  const authorAvatar =
+    m.authorType === 'admin' ? m.authorAdmin?.avatar ?? null : m.authorMember?.avatar ?? roomStoreAvatar
 
   // リアクションを絵文字ごとに集約
   const grouped = new Map<string, SerializedReaction>()
@@ -155,6 +162,7 @@ export function serializeMessage(
     parentId: m.parentId,
     authorType: m.authorType as 'admin' | 'store',
     authorName: m.authorName,
+    authorAvatar: isDeleted ? null : authorAvatar,
     body: isDeleted ? '' : m.body,
     attachments: isDeleted ? [] : parseAttachments(m.attachments),
     isDeleted,
@@ -171,11 +179,15 @@ export function serializeMessage(
  * 削除済みでも返信がある親は残す（スレッド構造維持のため）。返信のない削除済みメッセージは除外。
  */
 export async function getSerializedThread(roomId: string, roomStoreId: string, viewer: ChatViewer) {
-  const messages = await prisma.chatMessage.findMany({
-    where: { roomId },
-    include: messageInclude,
-    orderBy: { createdAt: 'asc' },
-  })
+  const [messages, store] = await Promise.all([
+    prisma.chatMessage.findMany({
+      where: { roomId },
+      include: messageInclude,
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.store.findUnique({ where: { id: roomStoreId }, select: { avatar: true } }),
+  ])
+  const storeAvatar = store?.avatar ?? null
 
   const replyCountByParent = new Map<string, number>()
   for (const m of messages) {
@@ -197,8 +209,8 @@ export async function getSerializedThread(roomId: string, roomStoreId: string, v
     const replies = repliesByParent.get(m.id) ?? []
     // 返信も削除もない削除済みトップメッセージはスキップ
     if (m.deletedAt && replies.length === 0) continue
-    const serialized = serializeMessage(m, viewer, roomStoreId, replies.length)
-    serialized.replies = replies.map((r) => serializeMessage(r, viewer, roomStoreId))
+    const serialized = serializeMessage(m, viewer, roomStoreId, replies.length, storeAvatar)
+    serialized.replies = replies.map((r) => serializeMessage(r, viewer, roomStoreId, 0, storeAvatar))
     result.push(serialized)
   }
   return result

@@ -58,6 +58,11 @@ export default function AdminChatPage() {
     }
   }, [fetchRooms, search])
 
+  const handleActivity = useCallback(() => {
+    fetchRooms(search)
+    window.dispatchEvent(new Event('chat:activity'))
+  }, [fetchRooms, search])
+
   const selected = rooms.find((r) => r.storeId === selectedStoreId) ?? null
 
   const endpoints: ChatEndpoints | null = useMemo(() => {
@@ -223,7 +228,7 @@ export default function AdminChatPage() {
                   endpoints={endpoints}
                   accent={ACCENT}
                   emptyHint={`${selected.storeName}とのチャットです。メッセージを送ってみましょう。`}
-                  onActivity={() => { fetchRooms(search); window.dispatchEvent(new Event('chat:activity')) }}
+                  onActivity={handleActivity}
                 />
               </div>
             </>

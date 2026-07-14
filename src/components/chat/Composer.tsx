@@ -126,24 +126,36 @@ export default function Composer({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 6,
+          background: 'var(--md-sys-color-surface-container-lowest)',
+          border: '1px solid var(--md-sys-color-outline-variant)',
+          borderRadius: 24,
+          padding: '4px 6px 4px 6px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+        }}
+      >
         <button
           type="button"
           title="ファイル・画像を添付"
           onClick={() => fileRef.current?.click()}
+          className="chat-icon-btn"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 40,
-            height: 40,
-            borderRadius: 8,
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
             color: 'var(--md-sys-color-on-surface-variant)',
             flexShrink: 0,
             cursor: 'pointer',
           }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
           </svg>
         </button>
@@ -170,12 +182,12 @@ export default function Composer({
             flex: 1,
             resize: 'none',
             maxHeight: 160,
-            minHeight: 40,
-            borderRadius: 10,
-            border: '1px solid var(--md-sys-color-outline)',
-            background: 'var(--md-sys-color-surface-container-lowest)',
+            minHeight: 38,
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
             color: 'var(--md-sys-color-on-surface)',
-            padding: '9px 12px',
+            padding: '9px 4px',
             fontSize: 14,
             lineHeight: 1.4,
           }}
@@ -188,17 +200,18 @@ export default function Composer({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 40,
-            height: 40,
-            borderRadius: 8,
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
             background: accent,
             color: '#fff',
             flexShrink: 0,
             cursor: 'pointer',
-            opacity: sending || uploading || (!text.trim() && pending.filter((p) => p.url).length === 0) ? 0.4 : 1,
+            transition: 'opacity 150ms, transform 150ms',
+            opacity: sending || uploading || (!text.trim() && pending.filter((p) => p.url).length === 0) ? 0.35 : 1,
           }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
             <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
           </svg>
         </button>

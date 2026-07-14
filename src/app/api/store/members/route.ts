@@ -24,7 +24,7 @@ export async function GET() {
 
   const members = await prisma.storeMember.findMany({
     where: { storeId: sessionUser.id },
-    select: { id: true, name: true, email: true, createdAt: true },
+    select: { id: true, name: true, email: true, avatar: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -37,6 +37,10 @@ export async function POST(request: NextRequest) {
   const sessionUser = session?.user as any
   if (!session || sessionUser.role !== 'store') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  // メンバーの追加はオーナー（店舗アカウント）のみ
+  if (sessionUser.memberId) {
+    return NextResponse.json({ error: 'メンバーの追加はオーナーのみ可能です' }, { status: 403 })
   }
 
   const body = await request.json()

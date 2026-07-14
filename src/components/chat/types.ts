@@ -20,6 +20,7 @@ export type ChatMessage = {
   parentId: string | null
   authorType: 'admin' | 'store'
   authorName: string
+  authorAvatar: string | null
   body: string
   attachments: ChatAttachment[]
   isDeleted: boolean

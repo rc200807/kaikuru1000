@@ -9,6 +9,8 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const isLoginPage = pathname === '/store/login'
   const isAgreementPage = /\/store\/schedule\/[^/]+\/agreement/.test(pathname)
+  // チャットは自前で全高レイアウトを組むため、main の下部パディングを付けない
+  const isChatPage = pathname === '/store/chat'
 
   if (isLoginPage) {
     return <div data-portal="store">{children}</div>
@@ -29,7 +31,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
     <div data-portal="store" className="flex min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
       <ToastProvider>
         <NavigationRail />
-        <main className="flex-1 min-w-0 pb-20 md:pb-4">
+        <main className={`flex-1 min-w-0 ${isChatPage ? '' : 'pb-20 md:pb-4'}`}>
           {children}
         </main>
         <BottomNav />

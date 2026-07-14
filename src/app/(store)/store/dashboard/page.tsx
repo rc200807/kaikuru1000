@@ -256,7 +256,19 @@ export default function StoreDashboardPage() {
 
   return (
     <StorePage title="ダッシュボード" subtitle={storeName} width="data" className="space-y-6">
-      {/* ── 直近の案件（最上部） ── */}
+      {/* ── ランク + KPI ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="relative rounded-2xl p-4 overflow-hidden flex items-center justify-center bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-1)]">
+          <div className="text-center">
+            <p className="text-[10px] mb-2 text-[var(--md-sys-color-on-surface-variant)]">全店舗ランキング（当月）</p>
+            <RankBadge rank={myRank} />
+            <p className="text-[10px] mt-1 text-[var(--md-sys-color-on-surface-faint)]">/ {totalStores}店舗中</p>
+          </div>
+        </div>
+        {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
+      </div>
+
+      {/* ── 直近の案件 ── */}
       <ChartCard>
         <SectionHeading>直近の案件</SectionHeading>
         {recentDeals.length === 0 ? (
@@ -302,18 +314,6 @@ export default function StoreDashboardPage() {
           </div>
         )}
       </ChartCard>
-
-      {/* ── ランク + KPI ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="relative rounded-2xl p-4 overflow-hidden flex items-center justify-center bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-1)]">
-          <div className="text-center">
-            <p className="text-[10px] mb-2 text-[var(--md-sys-color-on-surface-variant)]">全店舗ランキング（当月）</p>
-            <RankBadge rank={myRank} />
-            <p className="text-[10px] mt-1 text-[var(--md-sys-color-on-surface-faint)]">/ {totalStores}店舗中</p>
-          </div>
-        </div>
-        {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
-      </div>
 
       {/* ── 買取金額推移 ── */}
       <ChartCard>

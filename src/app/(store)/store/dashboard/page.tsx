@@ -255,7 +255,8 @@ export default function StoreDashboardPage() {
   ]
 
   return (
-    <StorePage title="ダッシュボード" subtitle={storeName} width="data" className="space-y-6">
+    <StorePage title="ダッシュボード" subtitle={storeName} width="full">
+      <div className="max-w-[1400px] mx-auto space-y-6">
       {/* ── ランク + KPI ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="relative rounded-2xl p-4 overflow-hidden flex items-center justify-center bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-1)]">
@@ -268,53 +269,59 @@ export default function StoreDashboardPage() {
         {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
       </div>
 
-      {/* ── 直近の案件 ── */}
-      <ChartCard>
-        <SectionHeading>直近の案件</SectionHeading>
-        {recentDeals.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-sm text-[var(--md-sys-color-on-surface-faint)]">案件がありません</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {recentDeals.map((c, i) => {
-              const badge = DEAL_STATUS_BADGE[c.status as DealStatus] ?? { bg: 'var(--md-sys-color-surface-container-high)', fg: 'var(--md-sys-color-on-surface)' }
-              return (
-              <button
-                key={c.id}
-                onClick={() => router.push(`/store/deals/${c.id}`)}
-                className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer shadow-[var(--md-sys-elevation-1)] hover:bg-[var(--md-sys-color-surface-container)] animate-fade-in-up"
-                style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
-              >
-                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[var(--md-sys-color-surface-container-high)]">
-                  <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{c.customerName?.[0] ?? '?'}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{c.customerName} 様</span>
-                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: badge.bg, color: badge.fg }}>
-                      {DEAL_STATUS_LABEL[c.status as DealStatus] ?? c.status}
-                    </span>
-                  </div>
-                  <p className="text-xs truncate mt-0.5 text-[var(--md-sys-color-on-surface-variant)]">{c.address}</p>
-                  <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">発生日: {new Date(c.occurredAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' })}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  {c.purchaseAmount != null && c.purchaseAmount > 0 ? (
-                    <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">¥{c.purchaseAmount.toLocaleString()}</span>
-                  ) : (
-                    <span className="text-xs text-[var(--md-sys-color-on-surface-faint)]">未査定</span>
-                  )}
-                </div>
-                <svg className="w-4 h-4 flex-shrink-0 text-[var(--md-sys-color-on-surface-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            )})}
-          </div>
-        )}
-      </ChartCard>
+      {/* ── メインカラム（各種グラフ） + 右サイドバー（直近の案件） ── */}
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
+        {/* ── 直近の案件（右サイドバー・デスクトップはスティッキー） ── */}
+        <aside className="w-full lg:w-80 xl:w-96 shrink-0 lg:order-2 lg:sticky lg:top-6">
+          <ChartCard>
+            <SectionHeading>直近の案件</SectionHeading>
+            {recentDeals.length === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-sm text-[var(--md-sys-color-on-surface-faint)]">案件がありません</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentDeals.map((c, i) => {
+                  const badge = DEAL_STATUS_BADGE[c.status as DealStatus] ?? { bg: 'var(--md-sys-color-surface-container-high)', fg: 'var(--md-sys-color-on-surface)' }
+                  return (
+                  <button
+                    key={c.id}
+                    onClick={() => router.push(`/store/deals/${c.id}`)}
+                    className="w-full text-left flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer shadow-[var(--md-sys-elevation-1)] hover:bg-[var(--md-sys-color-surface-container)] animate-fade-in-up"
+                    style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[var(--md-sys-color-surface-container-high)]">
+                      <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{c.customerName?.[0] ?? '?'}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{c.customerName} 様</span>
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: badge.bg, color: badge.fg }}>
+                          {DEAL_STATUS_LABEL[c.status as DealStatus] ?? c.status}
+                        </span>
+                      </div>
+                      <p className="text-xs truncate mt-0.5 text-[var(--md-sys-color-on-surface-variant)]">{c.address}</p>
+                      <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">発生日: {new Date(c.occurredAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' })}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {c.purchaseAmount != null && c.purchaseAmount > 0 ? (
+                        <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">¥{c.purchaseAmount.toLocaleString()}</span>
+                      ) : (
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-faint)]">未査定</span>
+                      )}
+                    </div>
+                    <svg className="w-4 h-4 flex-shrink-0 text-[var(--md-sys-color-on-surface-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )})}
+              </div>
+            )}
+          </ChartCard>
+        </aside>
 
+        {/* ── メインカラム（各種グラフ） ── */}
+        <div className="flex-1 min-w-0 space-y-6 lg:order-1">
       {/* ── 買取金額推移 ── */}
       <ChartCard>
         <SectionHeading>買取金額の推移（月次・直近12ヶ月）</SectionHeading>
@@ -490,7 +497,9 @@ export default function StoreDashboardPage() {
           </div>
         )}
       </ChartCard>
-
+        </div>
+      </div>
+      </div>
     </StorePage>
   )
 }

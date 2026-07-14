@@ -97,26 +97,26 @@ export async function GET(request: NextRequest) {
     count,
   }))
 
-  // ── 本日の案件一覧 ──
-  const todaySchedules = await prisma.visitSchedule.findMany({
-    where: {
-      storeId,
-      visitDate: { gte: today, lt: tomorrow },
-    },
-    include: {
-      user: { select: { id: true, name: true, address: true, phone: true } },
-    },
-    orderBy: { visitDate: 'asc' },
+  // ── 本日の訪問件数（KPI用） ──
+  const todayCount = await prisma.visitSchedule.count({
+    where: { storeId, visitDate: { gte: today, lt: tomorrow } },
   })
 
-  const todayCases = todaySchedules.map(s => ({
-    id: s.id,
-    customerName: s.user.name,
-    address: s.user.address,
-    phone: s.user.phone,
-    status: s.status,
-    note: s.note,
-    purchaseAmount: s.purchaseAmount,
+  // ── 直近の案件（発生日の新しい順に最大10件） ──
+  const recentDealRows = await prisma.deal.findMany({
+    where: { storeId },
+    orderBy: { occurredAt: 'desc' },
+    take: 10,
+    include: { user: { select: { name: true, address: true } } },
+  })
+  const recentDeals = recentDealRows.map(d => ({
+    id: d.id,
+    customerName: d.user.name,
+    address: d.user.address,
+    status: d.status,
+    occurredAt: d.occurredAt,
+    purchaseAmount: d.purchaseAmount,
+    billingAmount: d.billingAmount,
   }))
 
   // ── 当月訪問件数 / 当月完了件数 ──
@@ -187,7 +187,8 @@ export async function GET(request: NextRequest) {
     currentMonthCompletedCount,
     monthlyPurchaseAmount,
     monthlyVisits,
-    todayCases,
+    todayCount,
+    recentDeals,
     // 追加指標
     prevMonthAmount,
     prevMonthVisitCount,

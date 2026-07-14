@@ -7,7 +7,7 @@ import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StoreDashboard from '@/components/admin/StoreDashboard'
 import ServiceAreaEditor from '@/components/admin/ServiceAreaEditor'
-import { parseServiceAreas } from '@/lib/address-utils'
+import { parseServiceAreas, extractMunicipality } from '@/lib/address-utils'
 
 type DetailTab = 'dashboard' | 'info' | 'line'
 const DETAIL_TABS: { key: DetailTab; label: string }[] = [
@@ -23,7 +23,9 @@ type Store = {
   email?: string | null
   phone?: string | null
   prefecture?: string | null
+  postalCode?: string | null
   address?: string | null
+  lineAddFriendUrl?: string | null
   storeStatus?: string | null
   openingDate?: string | null
   closingDate?: string | null
@@ -259,12 +261,20 @@ export default function StoreDetailPage() {
   function handleStartEdit() {
     if (!store) return
     setEditError('')
+    // 対応エリア未登録なら、店舗住所から都道府県＋同市区町村をデフォルト選択
+    let serviceAreas = store.serviceAreas || '[]'
+    if ((!store.serviceAreas || store.serviceAreas === '[]') && store.address) {
+      const { prefecture, municipality } = extractMunicipality(store.address)
+      if (prefecture && municipality) serviceAreas = JSON.stringify([{ prefecture, cities: [municipality] }])
+    }
     setEditForm({
       name: store.name || '',
       email: store.email || '',
       phone: store.phone || '',
+      postalCode: store.postalCode || '',
       address: store.address || '',
       prefecture: store.prefecture || '',
+      lineAddFriendUrl: store.lineAddFriendUrl || '',
       storeStatus: store.storeStatus || 'active',
       openingDate: store.openingDate ? store.openingDate.slice(0, 10) : '',
       closingDate: store.closingDate ? store.closingDate.slice(0, 10) : '',
@@ -273,9 +283,42 @@ export default function StoreDetailPage() {
       bankInfo: store.bankInfo || '',
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
-      serviceAreas: store.serviceAreas || '[]',
+      serviceAreas,
     })
     setEditMode(true)
+  }
+
+  /* 対応エリアが未登録のときのみ、住所から都道府県＋同市区町村をデフォルト選択 */
+  function seedServiceAreas(address: string, current: string): string {
+    if (current && current !== '[]') return current
+    const { prefecture, municipality } = extractMunicipality(address)
+    if (prefecture && municipality) return JSON.stringify([{ prefecture, cities: [municipality] }])
+    return current || '[]'
+  }
+
+  /* 住所入力時に対応エリアをデフォルト選択 */
+  function handleAddressChange(v: string) {
+    setEditForm(prev => ({ ...prev, address: v, serviceAreas: seedServiceAreas(v, prev.serviceAreas || '[]') }))
+  }
+
+  /* 郵便番号→住所の自動入力（7桁で zipcloud を照会） */
+  async function handlePostalChange(v: string) {
+    setEditForm(prev => ({ ...prev, postalCode: v }))
+    const digits = v.replace(/[^0-9]/g, '')
+    if (digits.length !== 7) return
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data.prefecture) return
+      const addr = data.address || `${data.prefecture}${data.city || ''}${data.town || ''}`
+      setEditForm(prev => ({
+        ...prev,
+        prefecture: data.prefecture,
+        address: addr,
+        serviceAreas: seedServiceAreas(addr, prev.serviceAreas || '[]'),
+      }))
+    } catch { /* ignore */ }
   }
 
   /* 編集保存 */
@@ -484,12 +527,14 @@ export default function StoreDetailPage() {
               <EditSelect label="ステータス" value={editForm.storeStatus} onChange={v => setEditForm({ ...editForm, storeStatus: v })} options={[{ value: 'active', label: '営業中' }, { value: 'closed', label: '閉店' }]} />
               <EditField label="電話番号" value={editForm.phone} onChange={v => setEditForm({ ...editForm, phone: v })} />
               <EditField label="メールアドレス" type="email" value={editForm.email} onChange={v => setEditForm({ ...editForm, email: v })} />
+              <EditField label="郵便番号（入力で住所を自動補完）" value={editForm.postalCode} onChange={handlePostalChange} placeholder="123-4567" />
               <EditField label="都道府県" value={editForm.prefecture} onChange={v => setEditForm({ ...editForm, prefecture: v })} />
-              <EditField label="住所" value={editForm.address} onChange={v => setEditForm({ ...editForm, address: v })} />
+              <EditField label="住所" value={editForm.address} onChange={handleAddressChange} />
               <EditField label="開業日" type="date" value={editForm.openingDate} onChange={v => setEditForm({ ...editForm, openingDate: v })} />
               <EditField label="閉店日" type="date" value={editForm.closingDate} onChange={v => setEditForm({ ...editForm, closingDate: v })} />
               <EditField label="GoogleビジネスURL" value={editForm.googleBusinessUrl} onChange={v => setEditForm({ ...editForm, googleBusinessUrl: v })} />
               <EditField label="おいくらページURL" value={editForm.oikuraPageUrl} onChange={v => setEditForm({ ...editForm, oikuraPageUrl: v })} />
+              <EditField label="LINE友達登録リンク" type="url" value={editForm.lineAddFriendUrl} onChange={v => setEditForm({ ...editForm, lineAddFriendUrl: v })} placeholder="https://lin.ee/..." />
               <EditField label="インボイス番号" value={editForm.invoiceNumber} onChange={v => setEditForm({ ...editForm, invoiceNumber: v })} />
               <EditField label="古物営業許可番号" value={editForm.antiquePermitNumber} onChange={v => setEditForm({ ...editForm, antiquePermitNumber: v })} />
             </div>
@@ -505,7 +550,11 @@ export default function StoreDetailPage() {
             </div>
             <div style={{ marginTop: 16 }}>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>対応エリア（出張買取などの対応可能地域）</label>
-              <ServiceAreaEditor value={editForm.serviceAreas || '[]'} onChange={json => setEditForm({ ...editForm, serviceAreas: json })} />
+              <ServiceAreaEditor
+                value={editForm.serviceAreas || '[]'}
+                onChange={json => setEditForm({ ...editForm, serviceAreas: json })}
+                focusPrefecture={extractMunicipality(editForm.address || '').prefecture}
+              />
             </div>
             {editError && <p style={{ color: '#f87171', fontSize: 13, marginTop: 12 }}>{editError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
@@ -530,10 +579,12 @@ export default function StoreDetailPage() {
             ['店舗コード', store.code],
             ['電話番号', store.phone],
             ['メール', store.email],
+            ['郵便番号', store.postalCode ? `〒${store.postalCode}` : null],
             ['都道府県', store.prefecture],
             ['住所', store.address],
             ['Googleビジネス', store.googleBusinessUrl ? <a href={store.googleBusinessUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
             ['おいくらページ', store.oikuraPageUrl ? <a href={store.oikuraPageUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
+            ['LINE友達登録リンク', store.lineAddFriendUrl ? <a href={store.lineAddFriendUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
             ['インボイス番号', store.invoiceNumber],
             ['古物営業許可番号', store.antiquePermitNumber],
           ]} />
@@ -908,13 +959,14 @@ export default function StoreDetailPage() {
 }
 
 /* ─── 補助コンポーネント ───────────────────────── */
-function EditField({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function EditField({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <div>
       <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>{label}</label>
       <input
         type={type}
         value={value || ''}
+        placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
         style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
       />

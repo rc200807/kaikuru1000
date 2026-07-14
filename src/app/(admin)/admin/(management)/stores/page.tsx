@@ -52,9 +52,24 @@ export default function AdminStoresPage() {
   // 新規店舗追加モーダル
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createForm, setCreateForm] = useState({
-    code: '', name: '', email: '', phone: '', prefecture: '', address: '',
+    code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '',
   })
   const [creating, setCreating] = useState(false)
+
+  // 郵便番号→住所の自動入力（7桁で zipcloud を照会）
+  async function handleCreatePostal(v: string) {
+    setCreateForm(prev => ({ ...prev, postalCode: v }))
+    const digits = v.replace(/[^0-9]/g, '')
+    if (digits.length !== 7) return
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data.prefecture) return
+      const addr = data.address || `${data.prefecture}${data.city || ''}${data.town || ''}`
+      setCreateForm(prev => ({ ...prev, prefecture: data.prefecture, address: addr }))
+    } catch { /* ignore */ }
+  }
 
   // パスワード表示モーダル
   const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string; storeId: string; storeEmail: string | null } | null>(null)
@@ -164,6 +179,7 @@ export default function AdminStoresPage() {
         email:      createForm.email.trim() || undefined,
         phone:      createForm.phone.trim() || undefined,
         prefecture: createForm.prefecture.trim() || undefined,
+        postalCode: createForm.postalCode.trim() || undefined,
         address:    createForm.address.trim() || undefined,
       }),
     })
@@ -172,7 +188,7 @@ export default function AdminStoresPage() {
 
     if (res.ok) {
       setShowCreateModal(false)
-      setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', address: '' })
+      setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '' })
       setPasswordModal({ storeName: createForm.name.trim(), password: data.password, storeId: data.store.id, storeEmail: data.store.email ?? null })
       refreshStores()
     } else {
@@ -662,6 +678,13 @@ export default function AdminStoresPage() {
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
             ※ 店舗コードは作成時に自動生成されます。
           </p>
+
+          <TextField
+            label="郵便番号（入力で住所を自動補完）"
+            value={createForm.postalCode}
+            onChange={handleCreatePostal}
+            placeholder="123-4567"
+          />
 
           <TextField
             label="都道府県"

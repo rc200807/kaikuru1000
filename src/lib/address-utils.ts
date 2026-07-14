@@ -169,6 +169,21 @@ export function matchServiceArea(address: string, areas: ServiceArea[]): string 
   return null
 }
 
+/**
+ * 住所から都道府県と「市区町村」（政令市は区まで、郡は町村まで）を抽出する。
+ * HeartRails getCities の正式名（例「横浜市西区」「多治見市」「三浦郡葉山町」）に極力一致させる。
+ */
+export function extractMunicipality(address: string): { prefecture: string; municipality: string } {
+  const { prefecture } = extractAddressParts(address)
+  const rest = prefecture ? address.slice(prefecture.length) : address
+  const seirei = rest.match(/^(.+?市.+?区)/) // 政令指定都市の区
+  if (seirei) return { prefecture, municipality: seirei[1] }
+  const gun = rest.match(/^(.+?郡.+?[町村])/) // 郡＋町村
+  if (gun) return { prefecture, municipality: gun[1] }
+  const m = rest.match(/^(.+?[市区町村])/)
+  return { prefecture, municipality: m?.[1] || '' }
+}
+
 export function extractAddressParts(address: string): { prefecture: string; city: string } {
   const prefMatch = address.match(/^(北海道|東京都|大阪府|京都府|.{2,3}県)/)
   const prefecture = prefMatch?.[1] || ''

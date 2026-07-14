@@ -117,6 +117,7 @@ model Store {
   closingDate         DateTime? // 閉店日
   googleBusinessUrl   String?   // Googleビジネスプロフィール URL
   oikuraPageUrl       String?   // おいくらページ URL
+  lineAddFriendUrl    String?   // LINE友達登録リンク（URL）
   bankInfo            String?   @db.Text  // 銀行情報（JSON or テキスト）
   invoiceNumber       String?   // インボイス番号
   antiquePermitNumber String?   // 古物営業許可番号

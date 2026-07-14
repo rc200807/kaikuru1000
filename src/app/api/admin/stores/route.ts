@@ -30,6 +30,7 @@ const createSchema = z.object({
   email:      z.string().email().optional().or(z.literal('')),
   phone:      z.string().max(20).optional(),
   prefecture: z.string().max(10).optional(),
+  postalCode: z.string().max(10).optional(),
   address:    z.string().max(200).optional(),
 })
 
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '入力内容が正しくありません' }, { status: 400 })
   }
 
-  const { name, email, phone, prefecture, address } = parsed.data
+  const { name, email, phone, prefecture, postalCode, address } = parsed.data
 
   // 店舗コード：手入力があればそれを使用（重複チェック）、無ければ自動生成
   let code = parsed.data.code?.trim()
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       email:      email      || null,
       phone:      phone      || null,
       prefecture: prefecture || null,
+      postalCode: postalCode || null,
       address:    address    || null,
       password:   hashedPassword,
     },

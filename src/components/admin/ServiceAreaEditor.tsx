@@ -21,9 +21,14 @@ function parse(json: string): ServiceArea[] {
  * 店舗の対応エリア編集: 都道府県を選ぶと市区町村を取得し、複数選択して登録する。
  * value は JSON 文字列 [{prefecture, cities:[]}]。変更のたび onChange に JSON 文字列を返す。
  */
-export default function ServiceAreaEditor({ value, onChange }: { value: string; onChange: (json: string) => void }) {
+export default function ServiceAreaEditor({ value, onChange, focusPrefecture }: { value: string; onChange: (json: string) => void; focusPrefecture?: string }) {
   const areas = useMemo(() => parse(value), [value])
-  const [selectedPref, setSelectedPref] = useState('')
+  const [selectedPref, setSelectedPref] = useState(focusPrefecture || '')
+
+  // 店舗住所から都道府県が判明したら、その都道府県を自動で開く
+  useEffect(() => {
+    if (focusPrefecture) setSelectedPref((prev) => (prev ? prev : focusPrefecture))
+  }, [focusPrefecture])
   const [cityOptions, setCityOptions] = useState<{ city: string; city_kana: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('')

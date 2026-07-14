@@ -71,7 +71,7 @@ export async function PATCH(
     const allowedFields = [
       'name', 'email', 'phone', 'address', 'postalCode', 'prefecture',
       'storeStatus', 'openingDate', 'closingDate',
-      'googleBusinessUrl', 'oikuraPageUrl', 'bankInfo',
+      'googleBusinessUrl', 'oikuraPageUrl', 'lineAddFriendUrl', 'bankInfo',
       'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail', 'calendarInviteEmail',
       'serviceAreas',
     ] as const
@@ -90,9 +90,9 @@ export async function PATCH(
       data,
       select: {
         id: true, code: true, name: true,
-        email: true, phone: true, prefecture: true, address: true,
+        email: true, phone: true, prefecture: true, postalCode: true, address: true,
         storeStatus: true, openingDate: true, closingDate: true,
-        googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+        googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
         invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
         serviceAreas: true,
         _count: { select: { customers: true } },
@@ -119,9 +119,9 @@ export async function GET(
     where: { id },
     select: {
       id: true, code: true, name: true,
-      email: true, phone: true, prefecture: true, address: true,
+      email: true, phone: true, prefecture: true, postalCode: true, address: true,
       storeStatus: true, openingDate: true, closingDate: true,
-      googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+      googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
       invoiceNumber: true, antiquePermitNumber: true,
       serviceAreas: true,
       isActive: true,

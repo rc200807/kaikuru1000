@@ -3,15 +3,24 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { recordAccessLog } from '@/lib/access-log'
 
 const MIN_PASSWORD_LENGTH = 8
 
+/** 読みやすい文字のみで初期パスワードを自動生成（0/O/l/I 等を除外） */
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  const bytes = randomBytes(12)
+  return Array.from(bytes).map(b => chars[b % chars.length]).join('')
+}
+
 const createMemberSchema = z.object({
   name:     z.string().min(1, '氏名は必須です').max(100),
   email:    z.string().email('有効なメールアドレスを入力してください'),
-  password: z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`),
+  // パスワードは任意。未指定なら自動生成する。
+  password: z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional(),
 })
 
 // 店舗メンバー一覧取得
@@ -50,7 +59,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { name, email, password } = parsed.data
+  const { name, email } = parsed.data
+
+  // メンバーの追加はオーナー（店舗アカウント）のみ
+  if (sessionUser.memberId) {
+    return NextResponse.json({ error: 'メンバーの追加はオーナーのみ可能です' }, { status: 403 })
+  }
 
   // 同一店舗内でのメール重複チェック
   const existingMember = await prisma.storeMember.findFirst({
@@ -60,12 +74,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'この店舗内で同じメールアドレスが既に使用されています' }, { status: 409 })
   }
 
-  const hashed = await bcrypt.hash(password, 10)
+  // パスワード未指定なら自動生成し、平文を一度だけ返す
+  const plainPassword = parsed.data.password || generatePassword()
+  const generated = !parsed.data.password
+  const hashed = await bcrypt.hash(plainPassword, 10)
   const member = await prisma.storeMember.create({
     data: { storeId: sessionUser.id, name, email, password: hashed },
-    select: { id: true, name: true, email: true, createdAt: true },
+    select: { id: true, name: true, email: true, avatar: true, createdAt: true },
   })
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `店舗メンバー追加「${member.name}」`, req: request })
-  return NextResponse.json(member, { status: 201 })
+  return NextResponse.json({ ...member, password: plainPassword, generated }, { status: 201 })
 }

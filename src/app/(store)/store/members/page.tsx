@@ -13,6 +13,7 @@ import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import ImageCropper from '@/components/ImageCropper'
 
 type Member = {
   id: string
@@ -48,7 +49,13 @@ export default function StoreMembersPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '' })
+  const [addCropSrc, setAddCropSrc] = useState<File | null>(null)   // トリミング対象の生ファイル
+  const [addAvatarFile, setAddAvatarFile] = useState<File | null>(null) // トリミング済みファイル
+  const [addAvatarPreview, setAddAvatarPreview] = useState<string | null>(null)
+  const addFileRef = useRef<HTMLInputElement>(null)
+  const [passwordResult, setPasswordResult] = useState<{ name: string; email: string; password: string } | null>(null)
+  const [pwCopied, setPwCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -78,26 +85,51 @@ export default function StoreMembersPage() {
     }
   }, [status])
 
+  function resetAddForm() {
+    setForm({ name: '', email: '' })
+    setAddCropSrc(null)
+    setAddAvatarFile(null)
+    setAddAvatarPreview(null)
+  }
+
+  function handleAddFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (f) setAddCropSrc(f) // クロップUIを開く
+    if (addFileRef.current) addFileRef.current.value = ''
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setMessage(null)
+    // パスワードは自動生成（body に password を送らない）
     const res = await fetch('/api/store/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ name: form.name, email: form.email }),
     })
-    setSaving(false)
-    if (res.ok) {
-      const created = await res.json()
-      setMembers(prev => [...prev, created])
-      setMessage({ type: 'success', text: `${form.name} さんのアカウントを作成しました` })
-      setShowForm(false)
-      setForm({ name: '', email: '', password: '' })
-    } else {
-      const d = await res.json()
+    if (!res.ok) {
+      setSaving(false)
+      const d = await res.json().catch(() => ({}))
       setMessage({ type: 'error', text: d.error || 'アカウントの作成に失敗しました' })
+      return
     }
+    const created = await res.json()
+    // 顔写真があればアップロード
+    let avatar: string | null = created.avatar ?? null
+    if (addAvatarFile) {
+      try {
+        const fd = new FormData()
+        fd.append('avatar', addAvatarFile)
+        const up = await fetch(`/api/store/members/${created.id}`, { method: 'PATCH', body: fd })
+        if (up.ok) { const u = await up.json(); avatar = u.avatar ?? avatar }
+      } catch { /* 写真アップロード失敗は致命的ではない */ }
+    }
+    setSaving(false)
+    setMembers(prev => [...prev, { id: created.id, name: created.name, email: created.email, avatar, createdAt: created.createdAt }])
+    setPasswordResult({ name: created.name, email: created.email, password: created.password })
+    setShowForm(false)
+    resetAddForm()
   }
 
   async function handleDelete(id: string, name: string) {
@@ -267,24 +299,84 @@ export default function StoreMembersPage() {
       {/* メンバー追加モーダル */}
       <Modal
         open={showForm}
-        onClose={() => { setShowForm(false); setForm({ name: '', email: '', password: '' }) }}
-        title="メンバー追加"
+        onClose={() => { setShowForm(false); resetAddForm() }}
+        title={addCropSrc ? '顔写真をトリミング' : 'メンバー追加'}
         size="sm"
-        footer={
+        footer={addCropSrc ? undefined : (
           <>
-            <Button variant="text" onClick={() => { setShowForm(false); setForm({ name: '', email: '', password: '' }) }}>キャンセル</Button>
+            <Button variant="text" onClick={() => { setShowForm(false); resetAddForm() }}>キャンセル</Button>
             <Button type="submit" loading={saving} onClick={() => { (document.getElementById('add-member-form') as HTMLFormElement)?.requestSubmit() }}>
               {saving ? '作成中...' : 'アカウント作成'}
             </Button>
           </>
-        }
+        )}
       >
-        <form id="add-member-form" onSubmit={handleAdd} className="space-y-4">
-          <TextField label="氏名" value={form.name} onChange={v => setForm({ ...form, name: v })} required placeholder="例：山田 太郎" />
-          <TextField label="メールアドレス" type="email" value={form.email} onChange={v => setForm({ ...form, email: v })} required placeholder="例：yamada@example.com" />
-          <TextField label="パスワード" type="password" value={form.password} onChange={v => setForm({ ...form, password: v })} required placeholder="8文字以上" helper="このパスワードをメンバーに伝えてください" />
-          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">顔写真は作成後に「編集」から設定できます。</p>
-        </form>
+        {addCropSrc ? (
+          <ImageCropper
+            file={addCropSrc}
+            onCropped={(f, url) => { setAddAvatarFile(f); setAddAvatarPreview(url); setAddCropSrc(null) }}
+            onCancel={() => setAddCropSrc(null)}
+          />
+        ) : (
+          <form id="add-member-form" onSubmit={handleAdd} className="space-y-4">
+            {/* 顔写真（アップロード→トリミング） */}
+            <div className="flex flex-col items-center gap-2">
+              <button type="button" onClick={() => addFileRef.current?.click()} className="relative group">
+                {addAvatarPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={addAvatarPreview} className="w-20 h-20 rounded-full object-cover border-4 border-[var(--md-sys-color-surface-container-high)]" alt="顔写真" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-[var(--md-sys-color-surface-container-high)] border-4 border-[var(--md-sys-color-outline-variant)] flex items-center justify-center">
+                    <svg className="w-7 h-7 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+              <button type="button" onClick={() => addFileRef.current?.click()} className="text-xs font-medium text-[var(--store-primary)]">
+                {addAvatarPreview ? '写真を変更' : '顔写真をアップロード（任意）'}
+              </button>
+              <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={handleAddFileSelect} />
+            </div>
+
+            <TextField label="氏名" value={form.name} onChange={v => setForm({ ...form, name: v })} required placeholder="例：山田 太郎" />
+            <TextField label="メールアドレス" type="email" value={form.email} onChange={v => setForm({ ...form, email: v })} required placeholder="例：yamada@example.com" />
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">パスワードは自動生成されます。作成後に一度だけ表示されますので、メンバーへお伝えください。</p>
+          </form>
+        )}
+      </Modal>
+
+      {/* パスワード発行結果モーダル */}
+      <Modal
+        open={!!passwordResult}
+        onClose={() => { setPasswordResult(null); setPwCopied(false) }}
+        title="アカウントを作成しました"
+        size="sm"
+        footer={<Button onClick={() => { setPasswordResult(null); setPwCopied(false) }}>閉じる</Button>}
+      >
+        {passwordResult && (
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+              <strong>{passwordResult.name}</strong> さんのアカウントを作成しました。<br />
+              以下の初期パスワードをメンバーへお伝えください。<span className="text-[var(--store-primary)]">この画面を閉じると再表示できません。</span>
+            </p>
+            <div className="rounded-lg bg-[var(--md-sys-color-surface-container-high)] p-3 space-y-2">
+              <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">メールアドレス</div>
+              <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)] break-all">{passwordResult.email}</div>
+              <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] pt-1">初期パスワード</div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-base font-mono font-bold text-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-surface-container-highest)] rounded px-3 py-2 break-all">{passwordResult.password}</code>
+                <Button
+                  size="sm"
+                  variant="tonal"
+                  onClick={() => { navigator.clipboard?.writeText(passwordResult.password); setPwCopied(true); setTimeout(() => setPwCopied(false), 2000) }}
+                >
+                  {pwCopied ? 'コピー済' : 'コピー'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* メンバー編集モーダル */}

@@ -60,6 +60,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '統合に失敗しました。時間をおいて再度お試しください。' }, { status: 500 })
   }
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `顧客を統合（${mergedId} → ${survivorId}）`, req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `顧客を統合（${mergedId} → ${survivorId}）`, req: request })
   return NextResponse.json({ success: true, survivorId })
 }

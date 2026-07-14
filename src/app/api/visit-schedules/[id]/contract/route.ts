@@ -284,7 +284,7 @@ export async function POST(
     console.error('[contract POST] 店舗通知メール送信失敗:', e)
   }
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '売買契約書を作成', req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: '売買契約書を作成', req: request })
   return NextResponse.json({
     success: true,
     contractId: contract.id,

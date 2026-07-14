@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, action: `顧客追加「${user.name}」`, req: request })
+      await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, memberId: sessionUser?.memberId ?? null, action: `顧客追加「${user.name}」`, req: request })
       return NextResponse.json({
         id: user.id,
         name: user.name,
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       return newUser
     })
 
-    await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, action: `顧客追加「${user.name}」`, req: request })
+    await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, memberId: sessionUser?.memberId ?? null, action: `顧客追加「${user.name}」`, req: request })
     return NextResponse.json({
       id: user.id,
       name: user.name,

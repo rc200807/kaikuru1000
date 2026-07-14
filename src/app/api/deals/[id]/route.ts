@@ -217,7 +217,7 @@ export async function PATCH(
     try { await recomputeDealAmounts(prisma, id) } catch (e) { console.error('[Deal] 上乗せ再計算に失敗:', e) }
   }
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `案件を更新`, req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `案件を更新`, req: request })
   return NextResponse.json(updated)
 }
 
@@ -246,6 +246,6 @@ export async function DELETE(
   }
   await prisma.deal.delete({ where: { id } })
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `案件を削除`, req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `案件を削除`, req: request })
   return NextResponse.json({ success: true })
 }

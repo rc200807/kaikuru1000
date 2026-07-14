@@ -51,6 +51,6 @@ export async function POST(request: NextRequest) {
     include: { listings: LISTINGS_SELECT },
   })
 
-  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, action: `在庫を登録「${title}」`, req: request })
+  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, memberId: user.memberId ?? null, action: `在庫を登録「${title}」`, req: request })
   return NextResponse.json(mapInventoryItem(item), { status: 201 })
 }

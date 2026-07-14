@@ -145,13 +145,16 @@ export const authOptions: NextAuthOptions = {
           const isValid = await bcrypt.compare(credentials.password, member.password)
           if (isValid) {
             await resetLoginFailures(key)
-            await recordAccessLog({ userType: 'store', userId: member.storeId, userName: member.name, action: 'login', req })
+            await recordAccessLog({ userType: 'store', userId: member.storeId, userName: member.name, memberId: member.id, action: 'login', req })
             return {
               id: member.storeId,
               email: member.email,
               name: member.name,
               avatar: member.avatar || null,
               role: 'store' as const,
+              // メンバー本人の識別子（行動帰属用。id は互換のため storeId のまま）
+              memberId: member.id,
+              memberName: member.name,
             }
           }
         }
@@ -338,6 +341,9 @@ export const authOptions: NextAuthOptions = {
         token.avatar = (user as any).avatar ?? null
         token.customerType = (user as any).customerType ?? null
         token.customerTypes = (user as any).customerTypes ?? null
+        // 店舗メンバーとしてのログイン時のみ設定される（店舗アカウント直ログインでは null）
+        token.memberId = (user as any).memberId ?? null
+        token.memberName = (user as any).memberName ?? null
       }
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
@@ -352,6 +358,7 @@ export const authOptions: NextAuthOptions = {
             token.name = targetStore.name
             token.email = targetStore.email || token.email
             token.avatar = targetStore.avatar || null
+            // memberId / memberName は保持する（切替先店舗での作業も同一人物に帰属させる）
           }
         }
         if (updatedSession.name !== undefined) token.name = updatedSession.name
@@ -369,6 +376,8 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).avatar = token.avatar ?? null
         ;(session.user as any).customerType = token.customerType ?? null
         ;(session.user as any).customerTypes = token.customerTypes ?? null
+        ;(session.user as any).memberId = token.memberId ?? null
+        ;(session.user as any).memberName = token.memberName ?? null
         if (token.name) session.user.name = token.name as string
         if (token.email) session.user.email = token.email as string
       }

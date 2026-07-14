@@ -62,6 +62,6 @@ export async function POST(request: NextRequest) {
     select: { id: true, name: true, email: true, createdAt: true },
   })
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `店舗メンバー追加「${member.name}」`, req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `店舗メンバー追加「${member.name}」`, req: request })
   return NextResponse.json(member, { status: 201 })
 }

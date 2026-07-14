@@ -9,6 +9,7 @@ const TABS = [
   { key: 'purchase-items', label: '買取品目' },
   { key: 'operators', label: '運営者情報' },
   { key: 'store-members', label: '店舗メンバー' },
+  { key: 'monitoring', label: 'モニタリング' },
 ]
 
 export default function ManagementLayout({ children }: { children: React.ReactNode }) {

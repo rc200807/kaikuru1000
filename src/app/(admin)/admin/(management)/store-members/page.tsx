@@ -146,6 +146,9 @@ export default function AdminStoreMembersPage() {
             {members.map((m, i) => (
               <div
                 key={m.id}
+                onClick={() => router.push(`/admin/store-members/${m.id}`)}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'var(--md-sys-color-surface-container-high)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                 style={{
                   padding: '10px 14px',
                   borderTop: i === 0 ? 'none' : '1px solid var(--md-sys-color-outline-variant)',
@@ -154,6 +157,8 @@ export default function AdminStoreMembersPage() {
                   gridTemplateColumns: '56px 1.4fr 1.4fr 1.4fr 1fr',
                   gap: 12,
                   alignItems: 'center',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s',
                 }}
               >
                 {/* アバター */}
@@ -173,7 +178,7 @@ export default function AdminStoreMembersPage() {
                 </div>
                 {/* メール */}
                 <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <a href={`mailto:${m.email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{m.email}</a>
+                  <a href={`mailto:${m.email}`} onClick={e => e.stopPropagation()} style={{ color: 'inherit', textDecoration: 'none' }}>{m.email}</a>
                 </div>
                 {/* 店舗 */}
                 <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

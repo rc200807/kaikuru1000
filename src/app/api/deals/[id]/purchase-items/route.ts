@@ -69,6 +69,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return created
   })
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `買取品目を登録「${item.itemName}」`, req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `買取品目を登録「${item.itemName}」`, req: request })
   return NextResponse.json(item, { status: 201 })
 }

@@ -133,7 +133,11 @@ export async function PATCH(
     updateData.preConsentSignature = preConsentSignature
     updateData.preConsentAt = new Date()
   }
-  if (staffName !== undefined) updateData.staffName = staffName
+  if (staffName !== undefined) {
+    updateData.staffName = staffName
+    // 担当者確定時に、店舗メンバーとしてログイン中なら本人へ帰属
+    if (sessionUser.memberId) updateData.memberId = sessionUser.memberId
+  }
   if (revisitDate !== undefined) updateData.revisitDate = revisitDate ? new Date(revisitDate) : null
   if (revisitStart !== undefined) updateData.revisitStart = revisitStart || null
   if (revisitEnd !== undefined) updateData.revisitEnd = revisitEnd || null
@@ -183,6 +187,6 @@ export async function PATCH(
     console.error('[GoogleCalendar] スケジュール更新時のカレンダー同期に失敗:', err)
   }
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '訪問記録を更新', req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: '訪問記録を更新', req: request })
   return NextResponse.json(updated)
 }

@@ -5,6 +5,14 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import StoreDashboard from '@/components/admin/StoreDashboard'
+
+type DetailTab = 'dashboard' | 'info' | 'line'
+const DETAIL_TABS: { key: DetailTab; label: string }[] = [
+  { key: 'dashboard', label: 'ダッシュボード' },
+  { key: 'info', label: '店舗情報・設定' },
+  { key: 'line', label: 'LINE' },
+]
 
 type Store = {
   id: string
@@ -70,6 +78,20 @@ export default function StoreDetailPage() {
   const storeId = params.id
 
   const [store, setStore] = useState<Store | null>(null)
+
+  // ページ内タブ（ダッシュボード / 店舗情報・設定 / LINE）。?tab= と同期
+  const [activeTab, setActiveTab] = useState<DetailTab>('dashboard')
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'info' || t === 'line' || t === 'dashboard') setActiveTab(t)
+  }, [])
+  const changeTab = (t: DetailTab) => {
+    setActiveTab(t)
+    const url = new URL(window.location.href)
+    if (t === 'dashboard') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', t)
+    window.history.replaceState(null, '', url.toString())
+  }
 
   /* 問い合わせ記録シート state */
   type InquirySheet = { spreadsheetId: string | null; url: string | null; sharedEmails: string[]; issuedAt: string | null }
@@ -401,13 +423,36 @@ export default function StoreDetailPage() {
               {resetting ? '処理中...' : 'PW再発行'}
             </button>
             <button
-              onClick={handleStartEdit}
+              onClick={() => { changeTab('info'); handleStartEdit() }}
               style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600 }}
             >
               編集
             </button>
           </div>
         )}
+      </div>
+
+      {/* ページ内タブ */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--md-sys-color-outline-variant)', marginBottom: 20 }}>
+        {DETAIL_TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => changeTab(t.key)}
+            style={{
+              padding: '10px 18px',
+              fontSize: 13,
+              fontWeight: activeTab === t.key ? 700 : 500,
+              color: activeTab === t.key ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-on-surface-variant)',
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === t.key ? '2px solid var(--portal-primary, #4f8ef7)' : '2px solid transparent',
+              cursor: 'pointer',
+              marginBottom: -1,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* メッセージバナー */}
@@ -422,6 +467,10 @@ export default function StoreDetailPage() {
         </div>
       )}
 
+      {/* ダッシュボード */}
+      {activeTab === 'dashboard' && <StoreDashboard storeId={storeId} />}
+
+      {activeTab === 'info' && (<>
       {/* 基本情報 */}
       <Section title="基本情報">
         {editMode ? (
@@ -618,7 +667,9 @@ export default function StoreDetailPage() {
           </div>
         )}
       </Section>
+      </>)}
 
+      {activeTab === 'line' && (<>
       {/* LINE チャネル */}
       <Section title={`紐付けLINEチャネル（${channels.length}件）`}>
         {channels.length === 0 ? (
@@ -764,6 +815,7 @@ export default function StoreDetailPage() {
           </div>
         )}
       </Section>
+      </>)}
 
       {/* PW再発行モーダル */}
       {pwModal && (

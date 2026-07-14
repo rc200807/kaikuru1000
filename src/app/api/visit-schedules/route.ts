@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
       endTime: endTime || null,
       note,
       status: 'scheduled',
+      memberId: sessionUser?.memberId ?? null,
     },
     include: {
       user: { select: { id: true, name: true, address: true, phone: true, internalNote: true, customerType: true } },
@@ -162,6 +163,6 @@ export async function POST(request: NextRequest) {
     console.error('[GoogleCalendar] カレンダー招待送信に失敗:', err)
   }
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '訪問予定を作成', req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: '訪問予定を作成', req: request })
   return NextResponse.json(schedule, { status: 201 })
 }

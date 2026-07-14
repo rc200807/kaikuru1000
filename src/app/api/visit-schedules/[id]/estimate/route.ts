@@ -100,6 +100,7 @@ export async function POST(
       billingAmount,
       validUntil: validUntilDate,
       staffName: typeof staffName === 'string' ? staffName : '',
+      memberId: sessionUser.memberId ?? null,
       customerEmail,
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
@@ -109,6 +110,7 @@ export async function POST(
       billingAmount,
       validUntil: validUntilDate,
       staffName: typeof staffName === 'string' ? staffName : '',
+      memberId: sessionUser.memberId ?? null,
       customerEmail,
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
@@ -180,7 +182,7 @@ export async function POST(
     }
   }
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '見積書を作成', req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: '見積書を作成', req: request })
   return NextResponse.json({
     success: true,
     estimateId: estimate.id,

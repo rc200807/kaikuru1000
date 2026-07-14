@@ -63,7 +63,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     include: { listings: LISTINGS_SELECT },
   })
 
-  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, action: `在庫を更新「${updated.title}」`, req: request })
+  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, memberId: user.memberId ?? null, action: `在庫を更新「${updated.title}」`, req: request })
   return NextResponse.json(mapInventoryItem(updated))
 }
 
@@ -92,6 +92,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
   await prisma.inventoryItem.delete({ where: { id } })
 
-  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, action: `在庫を削除「${item.title}」`, req: request })
+  await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, memberId: user.memberId ?? null, action: `在庫を削除「${item.title}」`, req: request })
   return NextResponse.json({ success: true })
 }

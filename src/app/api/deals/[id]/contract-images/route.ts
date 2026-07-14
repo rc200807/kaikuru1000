@@ -54,7 +54,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   list.push(url)
   await prisma.deal.update({ where: { id }, data: { paperContractImages: JSON.stringify(list) } })
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: '紙契約書の写真をアップロード', req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: '紙契約書の写真をアップロード', req: request })
   return NextResponse.json({ images: proxyUrls(id, list) }, { status: 201 })
 }
 

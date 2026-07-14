@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       data: { ...data, storeId, title, costPrice: Math.trunc(costPrice), sourcePurchaseItemId: purchaseItemId },
       include: { listings: LISTINGS_SELECT },
     })
-    await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, action: `買取品目を在庫化「${title}」`, req: request })
+    await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, memberId: user.memberId ?? null, action: `買取品目を在庫化「${title}」`, req: request })
     return NextResponse.json(mapInventoryItem(item), { status: 201 })
   } catch (e: any) {
     // sourcePurchaseItemId は @unique。競合は二重変換として 409

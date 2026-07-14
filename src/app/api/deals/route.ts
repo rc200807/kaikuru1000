@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
       createdByType: sessionUser.role ?? null,
       createdById: sessionUser.id ?? null,
       createdByName: sessionUser.name ?? null,
+      memberId: sessionUser.memberId ?? null,
     },
     include: {
       user: { select: { id: true, name: true, email: true, phone: true, customerType: true } },
@@ -132,6 +133,6 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `案件を作成「${deal.user.name}」`, req: request })
+  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `案件を作成「${deal.user.name}」`, req: request })
   return NextResponse.json(deal, { status: 201 })
 }

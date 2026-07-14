@@ -4,6 +4,7 @@ type AccessLogInput = {
   userType: string // customer/store/admin/superadmin/hr/sysadmin/partner
   userId?: string | null
   userName?: string | null
+  memberId?: string | null // 店舗メンバーとしてログイン中の場合の StoreMember.id（帰属用）
   action: string // login / 備品登録 / 発注ステータス更新 など
   req?: any // NextRequest（headers は Headers）または NextAuth authorize の req（headers は plain object）
 }
@@ -32,6 +33,7 @@ export async function recordAccessLog(input: AccessLogInput): Promise<void> {
         userType: input.userType,
         userId: input.userId ?? null,
         userName: input.userName ?? null,
+        memberId: input.memberId ?? null,
         action: input.action,
         ip: ip || null,
         userAgent: ua || null,

@@ -440,7 +440,7 @@ export default function StoreDashboardPage() {
         {/* ── 直近の案件（右サイドバー・デスクトップはスティッキー） ── */}
         <aside className="w-full lg:w-80 xl:w-96 shrink-0 lg:order-2 lg:sticky lg:top-6">
           <ChartCard>
-            <SectionHeading>直近の案件</SectionHeading>
+            <HighlightHeader title="直近の案件" href="/store/deals" />
             {recentDeals.length === 0 ? (
               <div className="text-center py-10">
                 <p className="text-sm text-[var(--md-sys-color-on-surface-faint)]">案件がありません</p>

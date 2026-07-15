@@ -241,11 +241,8 @@ function VideoCard({
       {/* サムネイル */}
       <div className="relative aspect-video bg-black">
         <VideoThumbnail thumbnailUrl={video.thumbnailUrl} videoUrl={video.videoUrl} />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
-          <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-            <svg className="w-7 h-7 text-[var(--store-primary)] ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-          </div>
-        </div>
+        {/* ホバー時のみ軽く暗転 */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
         {/* お気に入りトグル（☆） */}
         <button
           type="button"

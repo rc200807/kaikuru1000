@@ -36,7 +36,6 @@ export async function POST(
             select: {
               entityType: true,
               corporatePrefix: true,
-              prefixPosition: true,
               name: true,
               address: true,
               representativeName: true,

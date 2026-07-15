@@ -1,16 +1,15 @@
 'use client'
 
-import { useMemo } from 'react'
 import {
-  CORPORATE_PREFIXES, ENTITY_TYPES, ENTITY_TYPE_LABEL, PREFIX_POSITIONS, PREFIX_POSITION_LABEL,
-  formalName,
-  type EntityType, type PrefixPosition,
+  CORPORATE_PREFIXES, ENTITY_TYPES, ENTITY_TYPE_LABEL,
+  OPERATOR_SUPPORTED_SERVICES,
+  type EntityType, type OperatorSupportedServiceKey,
 } from '@/lib/operator-utils'
+import BankSearch from '@/components/customer/BankSearch'
 
 export type OperatorFormState = {
   entityType: EntityType
   corporatePrefix: string
-  prefixPosition: PrefixPosition
   name: string
   address: string
   representativeName: string
@@ -25,12 +24,17 @@ export type OperatorFormState = {
   antiqueLicenseHolder: string
   publicSafetyCommission: string
   service: string
+  supportedServices: OperatorSupportedServiceKey[]
+  bankName: string
+  branchName: string
+  accountType: string
+  accountNumber: string
+  accountHolder: string
 }
 
 export const INITIAL_FORM: OperatorFormState = {
   entityType: 'corporation',
   corporatePrefix: '株式会社',
-  prefixPosition: 'before',
   name: '',
   address: '',
   representativeName: '',
@@ -45,6 +49,12 @@ export const INITIAL_FORM: OperatorFormState = {
   antiqueLicenseHolder: '',
   publicSafetyCommission: '',
   service: '',
+  supportedServices: [],
+  bankName: '',
+  branchName: '',
+  accountType: '',
+  accountNumber: '',
+  accountHolder: '',
 }
 
 const labelStyle: React.CSSProperties = {
@@ -60,15 +70,15 @@ const inputStyle: React.CSSProperties = {
 export default function OperatorForm({ value, onChange }: { value: OperatorFormState; onChange: (next: OperatorFormState) => void }) {
   const isCorporation = value.entityType === 'corporation'
 
-  const formal = useMemo(() => formalName({
-    entityType: value.entityType,
-    corporatePrefix: value.corporatePrefix,
-    prefixPosition: value.prefixPosition,
-    name: value.name,
-  }), [value])
-
   function set<K extends keyof OperatorFormState>(key: K, v: OperatorFormState[K]) {
     onChange({ ...value, [key]: v })
+  }
+
+  function toggleService(key: OperatorSupportedServiceKey) {
+    const next = value.supportedServices.includes(key)
+      ? value.supportedServices.filter(k => k !== key)
+      : [...value.supportedServices, key]
+    set('supportedServices', next)
   }
 
   return (
@@ -83,30 +93,27 @@ export default function OperatorForm({ value, onChange }: { value: OperatorFormS
             </select>
           </div>
           {isCorporation && (
-            <>
-              <div>
-                <label style={labelStyle}>法人種別</label>
-                <select value={value.corporatePrefix} onChange={e => set('corporatePrefix', e.target.value)} style={inputStyle}>
-                  {CORPORATE_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>形態位置</label>
-                <select value={value.prefixPosition} onChange={e => set('prefixPosition', e.target.value as PrefixPosition)} style={inputStyle}>
-                  {PREFIX_POSITIONS.map(p => <option key={p} value={p}>{PREFIX_POSITION_LABEL[p]}</option>)}
-                </select>
-              </div>
-            </>
-          )}
-          <div>
-            <label style={labelStyle}>{isCorporation ? '会社名（種別を除く） *' : '屋号 *'}</label>
-            <input type="text" value={value.name} onChange={e => set('name', e.target.value)} style={inputStyle} placeholder={isCorporation ? '例: 買いクル' : '例: ○○商店'} />
-          </div>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={labelStyle}>正式名称（自動生成）</label>
-            <div style={{ ...inputStyle, background: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface-variant)' }}>
-              {formal || <span style={{ opacity: 0.5 }}>会社名を入力してください</span>}
+            <div>
+              <label style={labelStyle}>法人種別</label>
+              <select value={value.corporatePrefix} onChange={e => set('corporatePrefix', e.target.value)} style={inputStyle}>
+                {CORPORATE_PREFIXES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
             </div>
+          )}
+          <div style={{ gridColumn: isCorporation ? undefined : '1 / -1' }}>
+            <label style={labelStyle}>{isCorporation ? '法人名 *' : '屋号 *'}</label>
+            <input
+              type="text"
+              value={value.name}
+              onChange={e => set('name', e.target.value)}
+              style={inputStyle}
+              placeholder={isCorporation ? '例: 株式会社買いクル' : '例: ○○商店'}
+            />
+            {isCorporation && (
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                「株式会社」などの表記も含めて正式名称を入力してください
+              </p>
+            )}
           </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <label style={labelStyle}>所在地</label>
@@ -137,6 +144,18 @@ export default function OperatorForm({ value, onChange }: { value: OperatorFormS
         </Grid>
       </Section>
 
+      {/* 対応サービス */}
+      <Section title="対応サービス">
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {OPERATOR_SUPPORTED_SERVICES.map(s => (
+            <label key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={value.supportedServices.includes(s.key)} onChange={() => toggleService(s.key)} />
+              {s.label}
+            </label>
+          ))}
+        </div>
+      </Section>
+
       {/* 法人・税務情報 */}
       <Section title="法人・税務情報">
         <Grid>
@@ -156,6 +175,35 @@ export default function OperatorForm({ value, onChange }: { value: OperatorFormS
             <input type="text" value={value.invoiceNumber} onChange={e => set('invoiceNumber', e.target.value)} style={inputStyle} placeholder="T1234567890123" />
           </div>
         </Grid>
+      </Section>
+
+      {/* 銀行口座情報 */}
+      <Section title="銀行口座情報">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <BankSearch
+            bankName={value.bankName}
+            branchName={value.branchName}
+            onChange={({ bankName, branchName }) => onChange({ ...value, bankName, branchName })}
+          />
+          <Grid>
+            <div>
+              <label style={labelStyle}>口座種別</label>
+              <select value={value.accountType} onChange={e => set('accountType', e.target.value)} style={inputStyle}>
+                <option value="">選択してください</option>
+                <option value="普通">普通</option>
+                <option value="当座">当座</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>口座番号</label>
+              <input type="text" inputMode="numeric" value={value.accountNumber} onChange={e => set('accountNumber', e.target.value)} style={inputStyle} placeholder="1234567" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>口座名義</label>
+              <input type="text" value={value.accountHolder} onChange={e => set('accountHolder', e.target.value)} style={inputStyle} placeholder="カ）カイクル" />
+            </div>
+          </Grid>
+        </div>
       </Section>
 
       {/* 古物営業 */}

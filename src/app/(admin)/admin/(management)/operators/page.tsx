@@ -15,7 +15,6 @@ type Operator = {
   id: string
   entityType: string
   corporatePrefix: string | null
-  prefixPosition: string | null
   name: string
   representativeName: string
   invoiceRegistered: boolean

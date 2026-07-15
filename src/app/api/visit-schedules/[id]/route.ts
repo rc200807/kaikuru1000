@@ -32,7 +32,6 @@ export async function GET(
               id: true,
               entityType: true,
               corporatePrefix: true,
-              prefixPosition: true,
               name: true,
               address: true,
               representativeName: true,

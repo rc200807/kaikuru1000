@@ -23,7 +23,7 @@ type VisitDetail = {
   user: { id: string; email?: string | null }
   store: {
     id: string; name: string; address?: string | null; phone?: string | null
-    operator?: { entityType: string | null; corporatePrefix: string | null; prefixPosition: string | null; name: string; address?: string | null; representativeName?: string | null } | null
+    operator?: { entityType: string | null; corporatePrefix: string | null; name: string; address?: string | null; representativeName?: string | null } | null
   }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]

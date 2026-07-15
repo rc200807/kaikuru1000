@@ -165,9 +165,8 @@ model Operator {
   id                       String   @id @default(cuid())
   // 会社形態
   entityType               String                              // "corporation" | "sole_proprietor"
-  corporatePrefix          String?                             // "株式会社" | "有限会社" | "合同会社" など。個人事業主時は null
-  prefixPosition           String?                             // "before" | "after"。個人事業主時は null
-  name                     String                              // 会社名（プレフィックス除く）or 屋号
+  corporatePrefix          String?                             // 法人種別（分類用。"株式会社"等の文字は name に含めて入力する）
+  name                     String                              // 法人名（"株式会社○○"などプレフィックス込みのフルネーム）or 屋号
   address                  String?                             // 所在地
   representativeName       String                              // 代表者氏名
   representativeNameKana   String?                             // 代表者氏名（フリガナ）
@@ -184,6 +183,13 @@ model Operator {
   antiqueLicenseHolder     String?                             // 古物営業法届出名義
   publicSafetyCommission   String?                             // 管轄公安委員会
   service                  String?  @db.Text                   // 運営サービス（自由記述）
+  supportedServices        String   @default("[]")             // 対応サービス（複数選択。JSON配列: ["kaikuru","akikuru"]）
+  // 銀行口座情報（全銀データ検索で入力。User モデルと同じ構成）
+  bankName                 String?
+  branchName               String?
+  accountType              String?                             // "普通" | "当座"
+  accountNumber            String?
+  accountHolder            String?
   stores                   Store[]
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt

@@ -179,7 +179,6 @@ type VisitDetail = {
       id: string
       entityType: string | null
       corporatePrefix: string | null
-      prefixPosition: string | null
       name: string
       address: string | null
       representativeName: string

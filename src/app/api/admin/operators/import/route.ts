@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseCsv, buildCsv } from '@/lib/csv-parser'
-import { CORPORATE_PREFIXES, ENTITY_TYPES, PREFIX_POSITIONS } from '@/lib/operator-utils'
+import { CORPORATE_PREFIXES, ENTITY_TYPES, OPERATOR_SUPPORTED_SERVICES } from '@/lib/operator-utils'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -19,8 +19,7 @@ async function requireAdmin() {
 const COLUMN_MAP: { header: string; field: string; required?: boolean }[] = [
   { header: '会社形態',                         field: 'entityType', required: true },
   { header: '法人種別',                         field: 'corporatePrefix' },
-  { header: '形態位置',                         field: 'prefixPosition' },
-  { header: '会社名',                           field: 'name', required: true },
+  { header: '法人名',                           field: 'name', required: true },
   { header: '所在地',                           field: 'address' },
   { header: '代表者氏名',                       field: 'representativeName', required: true },
   { header: '代表者氏名（フリガナ）',           field: 'representativeNameKana' },
@@ -34,6 +33,12 @@ const COLUMN_MAP: { header: string; field: string; required?: boolean }[] = [
   { header: '古物営業法届出名義',               field: 'antiqueLicenseHolder' },
   { header: '管轄公安委員会',                   field: 'publicSafetyCommission' },
   { header: '運営サービス',                     field: 'service' },
+  { header: '対応サービス',                     field: 'supportedServices' },
+  { header: '銀行名',                           field: 'bankName' },
+  { header: '支店名',                           field: 'branchName' },
+  { header: '口座種別',                         field: 'accountType' },
+  { header: '口座番号',                         field: 'accountNumber' },
+  { header: '口座名義',                         field: 'accountHolder' },
 ]
 
 const ENTITY_TYPE_FROM_LABEL: Record<string, string> = {
@@ -42,14 +47,9 @@ const ENTITY_TYPE_FROM_LABEL: Record<string, string> = {
   '個人事業主':  'sole_proprietor',
   'sole_proprietor': 'sole_proprietor',
 }
-const PREFIX_POSITION_FROM_LABEL: Record<string, string> = {
-  '前':     'before',
-  '前置':    'before',
-  'before':  'before',
-  '後':     'after',
-  '後置':    'after',
-  'after':   'after',
-}
+const SUPPORTED_SERVICE_KEY_FROM_LABEL: Record<string, string> = Object.fromEntries(
+  OPERATOR_SUPPORTED_SERVICES.flatMap(s => [[s.label, s.key], [s.key, s.key]]),
+)
 
 function parseBool(v: string): boolean {
   const t = v.trim().toLowerCase()
@@ -63,10 +63,11 @@ export async function GET() {
 
   const headers = COLUMN_MAP.map(c => c.required ? `${c.header}*` : c.header)
   const sample = [
-    '法人', '株式会社', '前', '買いクル', '東京都渋谷区...',
+    '法人', '株式会社', '株式会社買いクル', '東京都渋谷区...',
     '山田 太郎', 'ヤマダ タロウ', '1234567890123', 'はい', 'T1234567890123',
     '03-1234-5678', 'info@example.com', '第123456789号', '東京都新宿区...',
-    '山田 太郎', '東京都公安委員会', '出張買取・宅配買取',
+    '山田 太郎', '東京都公安委員会', '出張買取・宅配買取', '買いクル,アキクル',
+    '○○銀行', '△△支店', '普通', '1234567', 'カ）カイクル',
   ]
   const csv = buildCsv([headers, sample])
   return new NextResponse(csv, {
@@ -156,24 +157,10 @@ export async function POST(req: NextRequest) {
       rec.corporatePrefix = null
     }
 
-    // prefixPosition
-    const posRaw = get('形態位置')
-    if (entityType === 'corporation' && posRaw) {
-      const pos = PREFIX_POSITION_FROM_LABEL[posRaw]
-      if (!pos || !PREFIX_POSITIONS.includes(pos as any)) {
-        errors.push({ row: r + 1, message: `形態位置が不正: "${posRaw}"（"前" or "後"）` })
-        invalid = true
-      } else {
-        rec.prefixPosition = pos
-      }
-    } else {
-      rec.prefixPosition = null
-    }
-
     // 文字列必須
-    const name = get('会社名')
+    const name = get('法人名')
     if (!name) {
-      errors.push({ row: r + 1, message: '会社名が空です' })
+      errors.push({ row: r + 1, message: '法人名が空です' })
       invalid = true
     } else {
       rec.name = name
@@ -199,10 +186,25 @@ export async function POST(req: NextRequest) {
       { header: '古物営業法届出名義',           field: 'antiqueLicenseHolder' },
       { header: '管轄公安委員会',               field: 'publicSafetyCommission' },
       { header: '運営サービス',                 field: 'service' },
+      { header: '銀行名',                       field: 'bankName' },
+      { header: '支店名',                       field: 'branchName' },
+      { header: '口座種別',                     field: 'accountType' },
+      { header: '口座番号',                     field: 'accountNumber' },
+      { header: '口座名義',                     field: 'accountHolder' },
     ]
     for (const { header, field } of optionalStringFields) {
       const v = get(header)
       rec[field] = v === '' ? null : v
+    }
+
+    // 対応サービス（カンマ区切りのラベルまたはキー。不明な値は無視）
+    const servicesRaw = get('対応サービス')
+    if (servicesRaw) {
+      const keys = servicesRaw.split(/[,、]/).map(s => s.trim()).filter(Boolean)
+        .map(s => SUPPORTED_SERVICE_KEY_FROM_LABEL[s]).filter((k): k is string => !!k)
+      rec.supportedServices = JSON.stringify(Array.from(new Set(keys)))
+    } else {
+      rec.supportedServices = '[]'
     }
 
     // invoiceRegistered

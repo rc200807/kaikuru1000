@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { deleteFile } from '@/lib/storage'
-import { ENTITY_TYPES, PREFIX_POSITIONS, CORPORATE_PREFIXES } from '@/lib/operator-utils'
+import { ENTITY_TYPES, CORPORATE_PREFIXES, OPERATOR_SUPPORTED_SERVICE_KEYS, parseSupportedServices } from '@/lib/operator-utils'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -16,7 +16,6 @@ async function requireAdmin() {
 const updateSchema = z.object({
   entityType:             z.enum(ENTITY_TYPES).optional(),
   corporatePrefix:        z.enum(CORPORATE_PREFIXES).nullable().optional(),
-  prefixPosition:         z.enum(PREFIX_POSITIONS).nullable().optional(),
   name:                   z.string().min(1).max(120).optional(),
   address:                z.string().max(200).nullable().optional(),
   representativeName:     z.string().min(1).max(100).optional(),
@@ -31,6 +30,12 @@ const updateSchema = z.object({
   antiqueLicenseHolder:   z.string().max(100).nullable().optional(),
   publicSafetyCommission: z.string().max(100).nullable().optional(),
   service:                z.string().max(2000).nullable().optional(),
+  supportedServices:      z.array(z.enum(OPERATOR_SUPPORTED_SERVICE_KEYS)).optional(),
+  bankName:               z.string().max(100).nullable().optional(),
+  branchName:             z.string().max(100).nullable().optional(),
+  accountType:            z.string().max(20).nullable().optional(),
+  accountNumber:          z.string().max(20).nullable().optional(),
+  accountHolder:          z.string().max(100).nullable().optional(),
 })
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,10 +50,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
   if (!operator) return NextResponse.json({ error: 'Not Found' }, { status: 404 })
-  // 契約書 path はクライアントに直接返さず、配信URL形式に置換
+  // 契約書 path はクライアントに直接返さず、配信URL形式に置換。supportedServices はJSON文字列→配列に変換
   return NextResponse.json({
     ...operator,
     contractFilePath: operator.contractFilePath ? `/api/admin/operators/${id}/contract` : null,
+    supportedServices: parseSupportedServices(operator.supportedServices),
   })
 }
 
@@ -63,15 +69,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'バリデーションエラー' }, { status: 400 })
   }
 
-  const data = { ...parsed.data } as Record<string, unknown>
+  const { supportedServices, ...rest } = parsed.data
+  const data = { ...rest } as Record<string, unknown>
+  if (supportedServices !== undefined) data.supportedServices = JSON.stringify(supportedServices)
   if (data.email === '') data.email = null
   if (data.entityType === 'sole_proprietor') {
     data.corporatePrefix = null
-    data.prefixPosition = null
   }
 
   const updated = await prisma.operator.update({ where: { id }, data })
-  return NextResponse.json(updated)
+  return NextResponse.json({ ...updated, supportedServices: parseSupportedServices(updated.supportedServices) })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

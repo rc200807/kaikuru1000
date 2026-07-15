@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import OperatorForm, { type OperatorFormState } from '@/components/admin/OperatorForm'
-import { formalName, type EntityType, type PrefixPosition } from '@/lib/operator-utils'
+import { formalName, type EntityType, type OperatorSupportedServiceKey } from '@/lib/operator-utils'
 
 type StoreLite = { id: string; name: string; code: string; operatorId?: string | null }
 
@@ -14,7 +14,6 @@ type Operator = {
   id: string
   entityType: string
   corporatePrefix: string | null
-  prefixPosition: string | null
   name: string
   address: string | null
   representativeName: string
@@ -31,6 +30,12 @@ type Operator = {
   antiqueLicenseHolder: string | null
   publicSafetyCommission: string | null
   service: string | null
+  supportedServices: OperatorSupportedServiceKey[]
+  bankName: string | null
+  branchName: string | null
+  accountType: string | null
+  accountNumber: string | null
+  accountHolder: string | null
   stores: StoreLite[]
   updatedAt: string
 }
@@ -39,7 +44,6 @@ function operatorToForm(op: Operator): OperatorFormState {
   return {
     entityType: (op.entityType === 'sole_proprietor' ? 'sole_proprietor' : 'corporation') as EntityType,
     corporatePrefix: op.corporatePrefix ?? '株式会社',
-    prefixPosition: ((op.prefixPosition === 'after' ? 'after' : 'before') as PrefixPosition),
     name: op.name,
     address: op.address ?? '',
     representativeName: op.representativeName,
@@ -54,6 +58,12 @@ function operatorToForm(op: Operator): OperatorFormState {
     antiqueLicenseHolder: op.antiqueLicenseHolder ?? '',
     publicSafetyCommission: op.publicSafetyCommission ?? '',
     service: op.service ?? '',
+    supportedServices: op.supportedServices ?? [],
+    bankName: op.bankName ?? '',
+    branchName: op.branchName ?? '',
+    accountType: op.accountType ?? '',
+    accountNumber: op.accountNumber ?? '',
+    accountHolder: op.accountHolder ?? '',
   }
 }
 
@@ -122,7 +132,6 @@ export default function OperatorDetailPage() {
         body: JSON.stringify({
           ...form,
           corporatePrefix: form.entityType === 'corporation' ? form.corporatePrefix : null,
-          prefixPosition: form.entityType === 'corporation' ? form.prefixPosition : null,
           email: form.email || null,
           address: form.address || null,
           representativeNameKana: form.representativeNameKana || null,
@@ -134,6 +143,11 @@ export default function OperatorDetailPage() {
           antiqueLicenseHolder: form.antiqueLicenseHolder || null,
           publicSafetyCommission: form.publicSafetyCommission || null,
           service: form.service || null,
+          bankName: form.bankName || null,
+          branchName: form.branchName || null,
+          accountType: form.accountType || null,
+          accountNumber: form.accountNumber || null,
+          accountHolder: form.accountHolder || null,
         }),
       })
       if (!res.ok) {
@@ -217,12 +231,7 @@ export default function OperatorDetailPage() {
     }
   }
 
-  const formal = formalName({
-    entityType: form.entityType,
-    corporatePrefix: form.corporatePrefix,
-    prefixPosition: form.prefixPosition,
-    name: form.name,
-  })
+  const formal = form.name
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: 1000, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>

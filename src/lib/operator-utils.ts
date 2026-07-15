@@ -12,15 +12,7 @@ export const ENTITY_TYPE_LABEL: Record<EntityType, string> = {
   sole_proprietor: '個人事業主',
 }
 
-export const PREFIX_POSITIONS = ['before', 'after'] as const
-export type PrefixPosition = typeof PREFIX_POSITIONS[number]
-
-export const PREFIX_POSITION_LABEL: Record<PrefixPosition, string> = {
-  before: '前（例: 株式会社A）',
-  after:  '後（例: A株式会社）',
-}
-
-/** 一般的な法人種別。順序は使用頻度順 */
+/** 一般的な法人種別。順序は使用頻度順（分類用。実際の法人名表記は name フィールドに直接入力する） */
 export const CORPORATE_PREFIXES = [
   '株式会社',
   '有限会社',
@@ -43,27 +35,36 @@ export function isEntityType(v: unknown): v is EntityType {
   return typeof v === 'string' && (ENTITY_TYPES as readonly string[]).includes(v)
 }
 
-export function isPrefixPosition(v: unknown): v is PrefixPosition {
-  return typeof v === 'string' && (PREFIX_POSITIONS as readonly string[]).includes(v)
+/**
+ * 表示用の正式名称。
+ * name フィールドに「株式会社○○」等プレフィックス込みのフルネームを直接入力してもらう方針のため、
+ * そのまま name を返す（法人・個人事業主の区別なし）。
+ */
+export function formalName(operator: { name: string }): string {
+  return operator.name
 }
 
-/**
- * 正式名称を組み立てる
- * - 個人事業主: 屋号そのまま
- * - 法人: prefixPosition に応じて prefix + name または name + prefix
- */
-export function formalName(operator: {
-  entityType: string | null | undefined
-  corporatePrefix: string | null | undefined
-  prefixPosition: string | null | undefined
-  name: string
-}): string {
-  if (operator.entityType !== 'corporation') return operator.name
-  const prefix = operator.corporatePrefix?.trim()
-  if (!prefix) return operator.name
-  return operator.prefixPosition === 'after'
-    ? `${operator.name}${prefix}`
-    : `${prefix}${operator.name}`
+/** 対応サービス（複数選択）のキー。順序はそのまま表示順になる。zod enum等でそのまま使えるようタプルで定義 */
+export const OPERATOR_SUPPORTED_SERVICE_KEYS = ['kaikuru', 'akikuru'] as const
+export type OperatorSupportedServiceKey = typeof OPERATOR_SUPPORTED_SERVICE_KEYS[number]
+
+export const OPERATOR_SUPPORTED_SERVICE_LABEL: Record<OperatorSupportedServiceKey, string> = {
+  kaikuru: '買いクル',
+  akikuru: 'アキクル',
+}
+export const OPERATOR_SUPPORTED_SERVICES = OPERATOR_SUPPORTED_SERVICE_KEYS.map(key => ({
+  key, label: OPERATOR_SUPPORTED_SERVICE_LABEL[key],
+}))
+
+/** 対応サービスのJSON文字列 ⇔ 配列 変換ヘルパー */
+export function parseSupportedServices(json: string | null | undefined): OperatorSupportedServiceKey[] {
+  if (!json) return []
+  try {
+    const arr = JSON.parse(json)
+    return Array.isArray(arr) ? arr.filter((v): v is OperatorSupportedServiceKey => OPERATOR_SUPPORTED_SERVICE_KEYS.includes(v)) : []
+  } catch {
+    return []
+  }
 }
 
 /**

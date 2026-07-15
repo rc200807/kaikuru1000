@@ -72,7 +72,6 @@ export async function getOperatorStores(sessionStoreId: string) {
         id: true,
         entityType: true,
         corporatePrefix: true,
-        prefixPosition: true,
         name: true,
         address: true,
         representativeName: true,

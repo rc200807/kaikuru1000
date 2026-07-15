@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { ENTITY_TYPES, PREFIX_POSITIONS, CORPORATE_PREFIXES } from '@/lib/operator-utils'
+import { ENTITY_TYPES, CORPORATE_PREFIXES, OPERATOR_SUPPORTED_SERVICE_KEYS } from '@/lib/operator-utils'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -15,7 +15,6 @@ async function requireAdmin() {
 const createSchema = z.object({
   entityType:             z.enum(ENTITY_TYPES),
   corporatePrefix:        z.enum(CORPORATE_PREFIXES).nullable().optional(),
-  prefixPosition:         z.enum(PREFIX_POSITIONS).nullable().optional(),
   name:                   z.string().min(1).max(120),
   address:                z.string().max(200).nullable().optional(),
   representativeName:     z.string().min(1).max(100),
@@ -30,6 +29,12 @@ const createSchema = z.object({
   antiqueLicenseHolder:   z.string().max(100).nullable().optional(),
   publicSafetyCommission: z.string().max(100).nullable().optional(),
   service:                z.string().max(2000).nullable().optional(),
+  supportedServices:      z.array(z.enum(OPERATOR_SUPPORTED_SERVICE_KEYS)).optional(),
+  bankName:               z.string().max(100).nullable().optional(),
+  branchName:             z.string().max(100).nullable().optional(),
+  accountType:            z.string().max(20).nullable().optional(),
+  accountNumber:          z.string().max(20).nullable().optional(),
+  accountHolder:          z.string().max(100).nullable().optional(),
 })
 
 export async function GET() {
@@ -56,14 +61,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'バリデーションエラー' }, { status: 400 })
   }
 
-  const data = { ...parsed.data }
+  const { supportedServices, ...rest } = parsed.data
+  const data: Record<string, unknown> = { ...rest, supportedServices: JSON.stringify(supportedServices ?? []) }
   if (data.email === '') data.email = null
-  // 個人事業主時はプレフィックス関連を強制 null
+  // 個人事業主時はプレフィックスを強制 null
   if (data.entityType === 'sole_proprietor') {
     data.corporatePrefix = null
-    data.prefixPosition = null
   }
 
-  const operator = await prisma.operator.create({ data })
+  const operator = await prisma.operator.create({ data: data as any })
   return NextResponse.json(operator, { status: 201 })
 }

@@ -37,7 +37,6 @@ export default function OperatorNewPage() {
           ...form,
           // 個人事業主時は不要フィールドを送らない（API側でも null 化される）
           corporatePrefix: form.entityType === 'corporation' ? form.corporatePrefix : null,
-          prefixPosition: form.entityType === 'corporation' ? form.prefixPosition : null,
           email: form.email || null,
           address: form.address || null,
           representativeNameKana: form.representativeNameKana || null,
@@ -49,6 +48,11 @@ export default function OperatorNewPage() {
           antiqueLicenseHolder: form.antiqueLicenseHolder || null,
           publicSafetyCommission: form.publicSafetyCommission || null,
           service: form.service || null,
+          bankName: form.bankName || null,
+          branchName: form.branchName || null,
+          accountType: form.accountType || null,
+          accountNumber: form.accountNumber || null,
+          accountHolder: form.accountHolder || null,
         }),
       })
       if (!res.ok) {

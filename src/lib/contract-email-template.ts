@@ -22,7 +22,6 @@ export type ContractEmailWork = {
 export type ContractEmailOperator = {
   entityType: string | null
   corporatePrefix: string | null
-  prefixPosition: string | null
   name: string
   address: string | null
   representativeName?: string

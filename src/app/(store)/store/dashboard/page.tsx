@@ -8,9 +8,12 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import Link from 'next/link'
 import StorePage from '@/components/store/StorePage'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import VideoThumbnail from '@/components/VideoThumbnail'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { formatJstDate } from '@/lib/datetime'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,41 @@ type DashboardData = {
   repeatRate?: number
   repeatCustomers?: number
   customersWithPurchase?: number
+}
+
+type HighlightVideo = {
+  id: string
+  title: string
+  thumbnailUrl: string | null
+  videoUrl: string
+  categoryName: string
+  publishedAt: string | null
+  viewed: boolean
+}
+type HighlightAnnouncement = {
+  id: string
+  title: string
+  category: string
+  announcementCategory: { name: string; color: string; icon: string } | null
+  priority: 'normal' | 'high' | 'urgent'
+  publishedAt: string | null
+  isRead: boolean
+}
+type HighlightVisit = {
+  id: string
+  dealId: string | null
+  customerName: string
+  address: string
+  visitDate: string
+  startTime: string | null
+  status: string
+  statusLabel: string
+  statusColor: string
+}
+type Highlights = {
+  videos: HighlightVideo[]
+  announcements: HighlightAnnouncement[]
+  visits: HighlightVisit[]
 }
 
 // 流入経路の円グラフ配色
@@ -159,12 +197,133 @@ function RankBadge({ rank }: { rank: number | null }) {
   )
 }
 
+function HighlightHeader({ title, href }: { title: string; href: string }) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{title}</h2>
+      <Link href={href} className="text-xs font-medium text-[var(--store-primary)] hover:underline flex items-center gap-0.5">
+        すべて
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+      </Link>
+    </div>
+  )
+}
+
+function HighlightEmpty({ text }: { text: string }) {
+  return <p className="text-xs text-center py-8 text-[var(--md-sys-color-on-surface-faint)]">{text}</p>
+}
+
+// 新着研修動画・新着お知らせ・直近の訪問（ダッシュボード上部の3カラム）
+function HighlightsRow({ highlights }: { highlights: Highlights }) {
+  const { videos, announcements, visits } = highlights
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── 新着研修動画 ── */}
+      <ChartCard>
+        <HighlightHeader title="新着研修動画" href="/store/training-videos" />
+        {videos.length === 0 ? (
+          <HighlightEmpty text="研修動画はまだありません" />
+        ) : (
+          <div className="space-y-1.5">
+            {videos.map(v => (
+              <Link
+                key={v.id}
+                href={`/store/training-videos/${v.id}`}
+                className="flex gap-3 p-1.5 rounded-xl hover:bg-[var(--md-sys-color-surface-container)] transition-colors group"
+              >
+                <div className="relative w-24 flex-shrink-0 aspect-video rounded-lg overflow-hidden bg-black">
+                  <VideoThumbnail thumbnailUrl={v.thumbnailUrl} videoUrl={v.videoUrl} />
+                  {v.viewed && (
+                    <span className="absolute bottom-1 right-1 text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-500 text-white shadow">✓</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 py-0.5">
+                  <h3 className="text-xs font-semibold line-clamp-2 text-[var(--md-sys-color-on-surface)] group-hover:text-[var(--store-primary)] transition-colors">{v.title}</h3>
+                  <p className="text-[11px] mt-1 text-[var(--md-sys-color-on-surface-faint)]">{v.categoryName}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </ChartCard>
+
+      {/* ── 新着のお知らせ ── */}
+      <ChartCard>
+        <HighlightHeader title="新着のお知らせ" href="/store/announcements" />
+        {announcements.length === 0 ? (
+          <HighlightEmpty text="お知らせはまだありません" />
+        ) : (
+          <div className="space-y-0.5">
+            {announcements.map(a => (
+              <Link
+                key={a.id}
+                href={`/store/announcements/${a.id}`}
+                className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-[var(--md-sys-color-surface-container)] transition-colors group"
+              >
+                <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${a.isRead ? 'bg-[var(--md-sys-color-outline-variant)]' : 'bg-[var(--store-primary)]'}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    {a.priority === 'urgent' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">緊急</span>}
+                    {a.priority === 'high' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">重要</span>}
+                    {a.announcementCategory && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${a.announcementCategory.color}20`, color: a.announcementCategory.color }}>
+                        {a.announcementCategory.icon} {a.announcementCategory.name}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className={`text-xs line-clamp-2 group-hover:text-[var(--store-primary)] transition-colors ${a.isRead ? 'font-normal text-[var(--md-sys-color-on-surface-variant)]' : 'font-semibold text-[var(--md-sys-color-on-surface)]'}`}>{a.title}</h3>
+                  {a.publishedAt && (
+                    <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">{formatJstDate(a.publishedAt, { year: 'numeric', month: 'numeric', day: 'numeric' })}</p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </ChartCard>
+
+      {/* ── 直近の訪問 ── */}
+      <ChartCard>
+        <HighlightHeader title="直近の訪問" href="/store/schedule" />
+        {visits.length === 0 ? (
+          <HighlightEmpty text="訪問予定はありません" />
+        ) : (
+          <div className="space-y-1.5">
+            {visits.map(v => (
+              <Link
+                key={v.id}
+                href={v.dealId ? `/store/deals/${v.dealId}` : `/store/schedule/${v.id}`}
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--md-sys-color-surface-container)] transition-colors group"
+              >
+                <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 bg-[var(--md-sys-color-surface-container-high)]">
+                  <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">{v.customerName?.[0] ?? '?'}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] truncate">{v.customerName} 様</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: `${v.statusColor}20`, color: v.statusColor }}>{v.statusLabel}</span>
+                  </div>
+                  <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">
+                    {formatJstDate(v.visitDate, { year: undefined, month: 'numeric', day: 'numeric', weekday: 'short' })}{v.startTime ? ` ${v.startTime}` : ''}
+                  </p>
+                </div>
+                <svg className="w-4 h-4 flex-shrink-0 text-[var(--md-sys-color-on-surface-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </Link>
+            ))}
+          </div>
+        )}
+      </ChartCard>
+    </div>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function StoreDashboardPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
+  const [highlights, setHighlights] = useState<Highlights | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -175,10 +334,14 @@ export default function StoreDashboardPage() {
     if (status !== 'authenticated') return
     const user = session.user as any
     if (user.role !== 'store') { router.push('/'); return }
-    fetch('/api/store/dashboard')
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+    Promise.all([
+      fetch('/api/store/dashboard').then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('/api/store/dashboard/highlights').then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([d, h]) => {
+      setData(d)
+      setHighlights(h)
+      setLoading(false)
+    })
   }, [status, session, router])
 
   if (loading || !data) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
@@ -268,6 +431,9 @@ export default function StoreDashboardPage() {
         </div>
         {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
       </div>
+
+      {/* ── 新着研修動画 / 新着のお知らせ / 直近の訪問 ── */}
+      {highlights && <HighlightsRow highlights={highlights} />}
 
       {/* ── メインカラム（各種グラフ） + 右サイドバー（直近の案件） ── */}
       <div className="flex flex-col lg:flex-row gap-6 lg:items-start">

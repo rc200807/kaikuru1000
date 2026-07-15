@@ -12,6 +12,7 @@ import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
+import VideoThumbnail from '@/components/VideoThumbnail'
 
 type VideoCategory = {
   id: string
@@ -65,6 +66,50 @@ function formatFileSize(bytes: number | null): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+/**
+ * ローカルの動画 File から指定秒地点のフレームをキャプチャして JPEG Blob を返す。
+ * blob: URL（同一オリジン）なので canvas が汚染されず確実に取得できる。
+ * デコード不可・失敗時は null を返す（呼び出し側でフォールバック）。
+ */
+function captureVideoFrame(file: File, atSeconds = 1): Promise<Blob | null> {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    let settled = false
+    const cleanup = () => { URL.revokeObjectURL(url); video.removeAttribute('src'); video.load?.() }
+    const done = (blob: Blob | null) => { if (settled) return; settled = true; cleanup(); resolve(blob) }
+
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.crossOrigin = 'anonymous'
+    // 保険: 一定時間で諦める
+    const timer = setTimeout(() => done(null), 15000)
+
+    video.onloadedmetadata = () => {
+      const d = video.duration
+      const t = isFinite(d) && d > 0 ? Math.min(atSeconds, d / 2) : atSeconds
+      try { video.currentTime = t > 0 ? t : 0 } catch { done(null) }
+    }
+    video.onseeked = () => {
+      try {
+        const w = video.videoWidth
+        const h = video.videoHeight
+        if (!w || !h) { clearTimeout(timer); done(null); return }
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { clearTimeout(timer); done(null); return }
+        ctx.drawImage(video, 0, 0, w, h)
+        canvas.toBlob(blob => { clearTimeout(timer); done(blob) }, 'image/jpeg', 0.82)
+      } catch { clearTimeout(timer); done(null) }
+    }
+    video.onerror = () => { clearTimeout(timer); done(null) }
+    video.src = url
+  })
 }
 
 export default function AdminTrainingVideosPage() {
@@ -217,6 +262,28 @@ export default function AdminTrainingVideosPage() {
       )
 
       setVideoForm(prev => ({ ...prev, videoUrl: blob.url, fileSize: file.size }))
+
+      // サムネイル未設定なら動画の1秒地点のフレームを自動生成して保存
+      if (!videoForm.thumbnailUrl) {
+        setMessage({ type: 'success', text: '動画をアップロードしました（サムネイルを自動生成中...）' })
+        try {
+          const frame = await captureVideoFrame(file, 1)
+          if (frame) {
+            const fd = new FormData()
+            fd.append('file', new File([frame], 'auto-thumbnail.jpg', { type: 'image/jpeg' }))
+            fd.append('type', 'thumbnail')
+            const res = await fetch('/api/admin/training-videos/upload', { method: 'POST', body: fd })
+            if (res.ok) {
+              const data = await res.json()
+              // 手動設定が無い場合のみ反映
+              setVideoForm(prev => (prev.thumbnailUrl ? prev : { ...prev, thumbnailUrl: data.url }))
+            }
+          }
+        } catch {
+          /* 自動生成に失敗しても手動で設定できるため無視 */
+        }
+      }
+
       setMessage({ type: 'success', text: '動画をアップロードしました' })
     } catch (err: any) {
       console.error('Video upload error:', err)
@@ -558,9 +625,12 @@ export default function AdminTrainingVideosPage() {
 
                 {/* サムネイル画像（任意） */}
                 <div>
-                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-2">
+                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
                     サムネイル画像（任意）
                   </label>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                    未設定の場合は動画から自動でキャプチャして設定します。
+                  </p>
                   {videoForm.thumbnailUrl ? (
                     <div className="flex items-start gap-3">
                       <img src={videoForm.thumbnailUrl} alt="" className="w-40 h-auto rounded-lg object-cover" />
@@ -703,15 +773,7 @@ export default function AdminTrainingVideosPage() {
                 >
                   {/* サムネイル / 動画プレビュー */}
                   <button onClick={() => setDetailVideo(v)} className="relative aspect-video bg-black/90 w-full">
-                    {v.thumbnailUrl ? (
-                      <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-                        <svg className="w-12 h-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-                        </svg>
-                      </div>
-                    )}
+                    <VideoThumbnail thumbnailUrl={v.thumbnailUrl} videoUrl={v.videoUrl} />
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
                       <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                     </div>

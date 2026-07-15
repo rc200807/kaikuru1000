@@ -65,6 +65,57 @@ async function uploadImageFiles(files: File[]): Promise<string[]> {
   return urls
 }
 
+/** 画像添付ボタン（分かりやすいボタン＋サムネイルプレビュー＋個別削除） */
+function ImageAttachButton({
+  inputRef,
+  images,
+  setImages,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>
+  images: File[]
+  setImages: (v: File[]) => void
+}) {
+  const previews = useMemo(() => images.map(f => URL.createObjectURL(f)), [images])
+  useEffect(() => () => { previews.forEach(url => URL.revokeObjectURL(url)) }, [previews])
+
+  return (
+    <div>
+      <input
+        ref={inputRef} type="file" accept="image/*" multiple
+        onChange={e => setImages(Array.from(e.target.files || []))}
+        style={{ display: 'none' }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 999, border: '1px solid var(--md-sys-color-outline)', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 14.25v4.5m0 0v4.5m0-4.5h4.5m-4.5 0H13.5M3.75 19.5h9.75a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
+        </svg>
+        {images.length > 0 ? `画像を選び直す（${images.length}枚）` : '画像を追加'}
+      </button>
+      {images.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {previews.map((url, i) => (
+            <div key={i} style={{ position: 'relative', width: 68, height: 68, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+              <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                type="button"
+                onClick={() => setImages(images.filter((_, idx) => idx !== i))}
+                aria-label="この画像を削除"
+                style={{ position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 13, lineHeight: '20px', textAlign: 'center', cursor: 'pointer', padding: 0 }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function StoreBugReportPage() {
   const { status } = useSession()
   const router = useRouter()
@@ -241,17 +292,12 @@ export default function StoreBugReportPage() {
                   style={{ marginTop: 4, width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
                 />
               </label>
-              <label style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
-                画像（任意・複数可・各10MB以下）
-                <input
-                  ref={fileInputRef} type="file" accept="image/*" multiple
-                  onChange={e => setFormImages(Array.from(e.target.files || []))}
-                  style={{ marginTop: 4, fontSize: 13 }}
-                />
-                {formImages.length > 0 && (
-                  <p style={{ margin: '4px 0 0', fontSize: 11 }}>{formImages.length} 枚を添付します</p>
-                )}
-              </label>
+              <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
+                <span>画像（任意・複数可・各10MB以下）</span>
+                <div style={{ marginTop: 6 }}>
+                  <ImageAttachButton inputRef={fileInputRef} images={formImages} setImages={setFormImages} />
+                </div>
+              </div>
               {formError && (
                 <p style={{ margin: 0, fontSize: 12, color: '#f87171' }}>{formError}</p>
               )}
@@ -412,12 +458,8 @@ function ReportDetail({
             placeholder="運営への追加情報・返信を入力..." rows={3}
             style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <input
-              ref={commentFileRef} type="file" accept="image/*" multiple
-              onChange={e => setCommentImages(Array.from(e.target.files || []))}
-              style={{ fontSize: 12 }}
-            />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+            <ImageAttachButton inputRef={commentFileRef} images={commentImages} setImages={setCommentImages} />
             <button
               type="submit" disabled={commentSubmitting || !commentBody.trim()}
               style={{ marginLeft: 'auto', padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', fontSize: 13, fontWeight: 600, cursor: commentSubmitting ? 'wait' : 'pointer', opacity: (commentSubmitting || !commentBody.trim()) ? 0.6 : 1 }}

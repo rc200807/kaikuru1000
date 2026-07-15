@@ -12,6 +12,7 @@ import MessageBanner from '@/components/MessageBanner'
 import DataTable, { type Column } from '@/components/DataTable'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { parseServiceAreas } from '@/lib/address-utils'
 
 type Store = {
   id: string
@@ -30,6 +31,7 @@ type Store = {
   bankInfo: string | null
   invoiceNumber: string | null
   antiquePermitNumber: string | null
+  serviceAreas: string | null
   _count: { customers: number }
 }
 
@@ -332,14 +334,21 @@ export default function AdminStoresPage() {
 
   const q = searchQ.trim().toLowerCase()
   const filtered = q
-    ? stores.filter(s =>
-        s.name.toLowerCase().includes(q) ||
-        s.code.toLowerCase().includes(q) ||
-        (s.prefecture || '').toLowerCase().includes(q) ||
-        (s.email || '').toLowerCase().includes(q) ||
-        (s.phone || '').includes(q) ||
-        (s.address || '').toLowerCase().includes(q)
-      )
+    ? stores.filter(s => {
+        const areaText = parseServiceAreas(s.serviceAreas)
+          .flatMap(a => [a.prefecture, ...a.cities])
+          .join(' ')
+          .toLowerCase()
+        return (
+          s.name.toLowerCase().includes(q) ||
+          s.code.toLowerCase().includes(q) ||
+          (s.prefecture || '').toLowerCase().includes(q) ||
+          (s.email || '').toLowerCase().includes(q) ||
+          (s.phone || '').includes(q) ||
+          (s.address || '').toLowerCase().includes(q) ||
+          areaText.includes(q)
+        )
+      })
     : stores
 
   const storeColumns: Column<Store>[] = [
@@ -366,6 +375,30 @@ export default function AdminStoresPage() {
       header: 'エリア',
       hideOnMobile: true,
       render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.prefecture || '\u2014'}</span>,
+    },
+    {
+      key: 'serviceAreas',
+      header: '\u5bfe\u5fdc\u30a8\u30ea\u30a2',
+      hideOnMobile: true,
+      render: (store) => {
+        const areas = parseServiceAreas(store.serviceAreas)
+        if (areas.length === 0) {
+          return <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">\u672a\u767b\u9332</span>
+        }
+        return (
+          <div className="flex flex-wrap gap-1 max-w-[220px]">
+            {areas.map(a => (
+              <span
+                key={a.prefecture}
+                title={a.cities.length > 0 ? `${a.prefecture}: ${a.cities.join('\u3001')}` : a.prefecture}
+                className="text-xs px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap"
+              >
+                {a.prefecture}{a.cities.length > 0 ? `\uff08${a.cities.length}\uff09` : ''}
+              </span>
+            ))}
+          </div>
+        )
+      },
     },
     {
       key: 'customers',

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       storeStatus: true, openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
       invoiceNumber: true, antiquePermitNumber: true,
-      operatorId: true,
+      operatorId: true, serviceAreas: true,
       _count: { select: { customers: true } },
     },
     orderBy: { code: 'asc' },

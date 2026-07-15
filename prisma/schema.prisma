@@ -118,7 +118,13 @@ model Store {
   googleBusinessUrl   String?   // Googleビジネスプロフィール URL
   oikuraPageUrl       String?   // おいくらページ URL
   lineAddFriendUrl    String?   // LINE友達登録リンク（URL）
-  bankInfo            String?   @db.Text  // 銀行情報（JSON or テキスト）
+  bankInfo            String?   @db.Text  // 銀行情報（レガシー自由記述。新規登録は下記の構造化フィールドを使用）
+  // 銀行口座情報（全銀データ検索で入力。User/Operatorモデルと同じ構成）
+  bankName            String?
+  branchName          String?
+  accountType         String?   // "普通" | "当座"
+  accountNumber       String?
+  accountHolder       String?
   invoiceNumber       String?   // インボイス番号
   antiquePermitNumber String?   // 古物営業許可番号
   lockPin             String?   // 画面ロック暗証番号（4〜6桁）

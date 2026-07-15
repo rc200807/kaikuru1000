@@ -7,6 +7,7 @@ import Link from 'next/link'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StoreDashboard from '@/components/admin/StoreDashboard'
 import ServiceAreaEditor from '@/components/admin/ServiceAreaEditor'
+import BankSearch from '@/components/customer/BankSearch'
 import { parseServiceAreas, extractMunicipality } from '@/lib/address-utils'
 
 type DetailTab = 'dashboard' | 'info' | 'line'
@@ -32,6 +33,11 @@ type Store = {
   googleBusinessUrl?: string | null
   oikuraPageUrl?: string | null
   bankInfo?: string | null
+  bankName?: string | null
+  branchName?: string | null
+  accountType?: string | null
+  accountNumber?: string | null
+  accountHolder?: string | null
   invoiceNumber?: string | null
   antiquePermitNumber?: string | null
   serviceAreas?: string | null
@@ -280,7 +286,11 @@ export default function StoreDetailPage() {
       closingDate: store.closingDate ? store.closingDate.slice(0, 10) : '',
       googleBusinessUrl: store.googleBusinessUrl || '',
       oikuraPageUrl: store.oikuraPageUrl || '',
-      bankInfo: store.bankInfo || '',
+      bankName: store.bankName || '',
+      branchName: store.branchName || '',
+      accountType: store.accountType || '',
+      accountNumber: store.accountNumber || '',
+      accountHolder: store.accountHolder || '',
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
       serviceAreas,
@@ -539,14 +549,24 @@ export default function StoreDetailPage() {
               <EditField label="古物営業許可番号" value={editForm.antiquePermitNumber} onChange={v => setEditForm({ ...editForm, antiquePermitNumber: v })} />
             </div>
             <div style={{ marginTop: 16 }}>
-              <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>銀行情報</label>
-              <textarea
-                value={editForm.bankInfo || ''}
-                onChange={e => setEditForm({ ...editForm, bankInfo: e.target.value })}
-                placeholder={'金融機関名:\n支店名:\n支店番号:\n口座種別: 普通/当座\n口座番号:\n口座名義:\n入金時の名義:'}
-                rows={6}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'inherit', resize: 'vertical' }}
-              />
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>銀行口座情報</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <BankSearch
+                  bankName={editForm.bankName || ''}
+                  branchName={editForm.branchName || ''}
+                  onChange={({ bankName, branchName }) => setEditForm({ ...editForm, bankName, branchName })}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <EditSelect
+                    label="口座種別"
+                    value={editForm.accountType || ''}
+                    onChange={v => setEditForm({ ...editForm, accountType: v })}
+                    options={[{ value: '', label: '選択してください' }, { value: '普通', label: '普通' }, { value: '当座', label: '当座' }]}
+                  />
+                  <EditField label="口座番号" value={editForm.accountNumber} onChange={v => setEditForm({ ...editForm, accountNumber: v })} placeholder="1234567" />
+                  <EditField label="口座名義" value={editForm.accountHolder} onChange={v => setEditForm({ ...editForm, accountHolder: v })} placeholder="カ）カイクル" />
+                </div>
+              </div>
             </div>
             <div style={{ marginTop: 16 }}>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>対応エリア（出張買取などの対応可能地域）</label>
@@ -589,10 +609,23 @@ export default function StoreDetailPage() {
             ['古物営業許可番号', store.antiquePermitNumber],
           ]} />
         )}
-        {!editMode && store.bankInfo && (
+        {!editMode && (store.bankName || store.accountNumber) && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>銀行情報</div>
+            <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>銀行口座情報</div>
+            <InfoGrid items={[
+              ['銀行名', store.bankName],
+              ['支店名', store.branchName],
+              ['口座種別', store.accountType],
+              ['口座番号', store.accountNumber],
+              ['口座名義', store.accountHolder],
+            ]} />
+          </div>
+        )}
+        {!editMode && !store.bankName && !store.accountNumber && store.bankInfo && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>銀行情報（従来の登録内容）</div>
             <pre style={{ fontSize: 13, whiteSpace: 'pre-wrap', background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12, margin: 0 }}>{store.bankInfo}</pre>
+            <p style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 6 }}>「編集」から新しい形式（全銀データ検索）で登録し直せます。</p>
           </div>
         )}
         {!editMode && (

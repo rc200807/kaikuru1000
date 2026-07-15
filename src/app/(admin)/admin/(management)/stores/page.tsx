@@ -12,6 +12,7 @@ import MessageBanner from '@/components/MessageBanner'
 import DataTable, { type Column } from '@/components/DataTable'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import BankSearch from '@/components/customer/BankSearch'
 import { parseServiceAreas } from '@/lib/address-utils'
 
 type Store = {
@@ -29,6 +30,11 @@ type Store = {
   googleBusinessUrl: string | null
   oikuraPageUrl: string | null
   bankInfo: string | null
+  bankName: string | null
+  branchName: string | null
+  accountType: string | null
+  accountNumber: string | null
+  accountHolder: string | null
   invoiceNumber: string | null
   antiquePermitNumber: string | null
   serviceAreas: string | null
@@ -295,7 +301,11 @@ export default function AdminStoresPage() {
       closingDate: store.closingDate ? store.closingDate.slice(0, 10) : '',
       googleBusinessUrl: store.googleBusinessUrl || '',
       oikuraPageUrl: store.oikuraPageUrl || '',
-      bankInfo: store.bankInfo || '',
+      bankName: store.bankName || '',
+      branchName: store.branchName || '',
+      accountType: store.accountType || '',
+      accountNumber: store.accountNumber || '',
+      accountHolder: store.accountHolder || '',
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
     })
@@ -931,15 +941,27 @@ export default function AdminStoresPage() {
                   </section>
 
                   <section>
-                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行情報</h3>
-                    <div>
-                      <textarea
-                        value={editForm.bankInfo || ''}
-                        onChange={e => setEditForm({...editForm, bankInfo: e.target.value})}
-                        placeholder={"金融機関名:\n支店名:\n支店番号:\n口座種別: 普通/当座\n口座番号:\n口座名義:\n入金時の名義:"}
-                        rows={6}
-                        className="w-full px-3 py-2 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-y"
+                    <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行口座情報</h3>
+                    <div className="space-y-3">
+                      <BankSearch
+                        bankName={editForm.bankName || ''}
+                        branchName={editForm.branchName || ''}
+                        onChange={({ bankName, branchName }) => setEditForm({ ...editForm, bankName, branchName })}
                       />
+                      <div>
+                        <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">口座種別</label>
+                        <select
+                          value={editForm.accountType || ''}
+                          onChange={e => setEditForm({ ...editForm, accountType: e.target.value })}
+                          className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                        >
+                          <option value="">選択してください</option>
+                          <option value="普通">普通</option>
+                          <option value="当座">当座</option>
+                        </select>
+                      </div>
+                      <TextField label="口座番号" value={editForm.accountNumber || ''} onChange={v => setEditForm({ ...editForm, accountNumber: v })} placeholder="1234567" />
+                      <TextField label="口座名義" value={editForm.accountHolder || ''} onChange={v => setEditForm({ ...editForm, accountHolder: v })} placeholder="カ）カイクル" />
                     </div>
                   </section>
                 </div>
@@ -1011,10 +1033,32 @@ export default function AdminStoresPage() {
                     </div>
                   </section>
 
-                  {detailStore.bankInfo && (
+                  {(detailStore.bankName || detailStore.accountNumber) && (
                     <section>
-                      <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行情報</h3>
+                      <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行口座情報</h3>
+                      <dl className="space-y-3">
+                        {[
+                          { label: '銀行名', value: detailStore.bankName },
+                          { label: '支店名', value: detailStore.branchName },
+                          { label: '口座種別', value: detailStore.accountType },
+                          { label: '口座番号', value: detailStore.accountNumber },
+                          { label: '口座名義', value: detailStore.accountHolder },
+                        ].map(item => (
+                          <div key={item.label} className="flex gap-3">
+                            <dt className="w-24 text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 pt-0.5">{item.label}</dt>
+                            <dd className="text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0">
+                              {item.value || <span className="text-[var(--md-sys-color-outline)]">{'—'}</span>}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </section>
+                  )}
+                  {!detailStore.bankName && !detailStore.accountNumber && detailStore.bankInfo && (
+                    <section>
+                      <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">銀行情報（従来の登録内容）</h3>
                       <pre className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)] p-3 border border-[var(--md-sys-color-outline-variant)]">{detailStore.bankInfo}</pre>
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2">「編集」から新しい形式（全銀データ検索）で登録し直せます。</p>
                     </section>
                   )}
 

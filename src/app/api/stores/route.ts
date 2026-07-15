@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       prefecture: true, address: true, phone: true, email: true,
       storeStatus: true, openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+      bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
       operatorId: true, serviceAreas: true,
       _count: { select: { customers: true } },

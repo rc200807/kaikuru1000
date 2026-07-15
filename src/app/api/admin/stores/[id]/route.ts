@@ -72,6 +72,7 @@ export async function PATCH(
       'name', 'email', 'phone', 'address', 'postalCode', 'prefecture',
       'storeStatus', 'openingDate', 'closingDate',
       'googleBusinessUrl', 'oikuraPageUrl', 'lineAddFriendUrl', 'bankInfo',
+      'bankName', 'branchName', 'accountType', 'accountNumber', 'accountHolder',
       'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail', 'calendarInviteEmail',
       'serviceAreas',
     ] as const
@@ -93,6 +94,7 @@ export async function PATCH(
         email: true, phone: true, prefecture: true, postalCode: true, address: true,
         storeStatus: true, openingDate: true, closingDate: true,
         googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
+        bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
         invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
         serviceAreas: true,
         _count: { select: { customers: true } },
@@ -122,6 +124,7 @@ export async function GET(
       email: true, phone: true, prefecture: true, postalCode: true, address: true,
       storeStatus: true, openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
+      bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
       serviceAreas: true,
       isActive: true,

@@ -8,6 +8,7 @@ import { ja } from 'date-fns/locale'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import CompletionModal from '@/components/store/CompletionModal'
 import { QRCodeSVG } from 'qrcode.react'
 import { formalName, storeContractName } from '@/lib/operator-utils'
 import { buildInvoiceNotesHtml, buildTokushohoHtml } from '@/lib/legal-texts'
@@ -84,6 +85,8 @@ export default function EstimatePage() {
   const [copied, setCopied] = useState(false)
   // 作成後に確認できるよう、生成したPDFを保持（自動ダウンロードはしない）
   const [generatedPdfs, setGeneratedPdfs] = useState<{ sale: string | null; invoice: string | null }>({ sale: null, invoice: null })
+  // 完了モーダル（作成完了と同時にQR・リンクを表示）
+  const [showCompletion, setShowCompletion] = useState(false)
 
   async function generateEstimateLink() {
     if (!visit) return
@@ -192,6 +195,10 @@ export default function EstimatePage() {
 
       // 自動ダウンロードはせず、確認用に保持（「PDFを確認する」ボタンから開く）
       setGeneratedPdfs({ sale: pdfBase64, invoice: invoicePdfBase64 })
+
+      // 完了と同時にお客様用リンクを発行し、QR・リンクのモーダルを表示
+      generateEstimateLink()
+      setShowCompletion(true)
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message ?? '送信に失敗しました' })
     } finally {
@@ -432,6 +439,24 @@ export default function EstimatePage() {
           ) : existing ? '見積書を再送信' : '見積書を出力・送信'}
         </Button>
       </div>
+
+      {/* 完了モーダル（QR・リンク・次アクション） */}
+      <CompletionModal
+        open={showCompletion}
+        onClose={() => setShowCompletion(false)}
+        title="見積書を作成しました"
+        subtitle={message?.type === 'success' ? message.text : undefined}
+        url={magicUrl}
+        urlLoading={magicLoading}
+        linkDescription="お客様のスマホでこのQRコードを読み取ると、見積書の閲覧・PDFダウンロードができます。"
+        validityNote="このリンクは72時間有効です。"
+        pdfButtons={[
+          ...(generatedPdfs.sale ? [{ label: '買取見積PDFを確認', onClick: () => openPdfBase64(generatedPdfs.sale!) }] : []),
+          ...(generatedPdfs.invoice ? [{ label: '請求見積PDFを確認', onClick: () => openPdfBase64(generatedPdfs.invoice!) }] : []),
+        ]}
+        backLabel={backLabel}
+        onBack={() => router.push(backHref)}
+      />
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import CompletionModal from '@/components/store/CompletionModal'
 import { formalName, storeContractName } from '@/lib/operator-utils'
 
 // base64 PDF を新規タブで開く（ブラウザのPDFビューアで確認・ダウンロードできる）
@@ -344,6 +345,8 @@ export default function FinalAgreementPage() {
   const [generatedPdfs, setGeneratedPdfs] = useState<{ sale: string | null; invoice: string | null }>({ sale: null, invoice: null })
   const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null)
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
+  // 完了モーダル（作成完了と同時にQR・リンクを表示）
+  const [showCompletion, setShowCompletion] = useState(false)
   const [customerEmailInput, setCustomerEmailInput] = useState('')
   const [occupationInput, setOccupationInput] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
@@ -559,6 +562,9 @@ export default function FinalAgreementPage() {
 
       // 自動ダウンロードはせず、確認用に保持（「PDFを確認する」ボタンから開く）
       setGeneratedPdfs({ sale: pdfBase64, invoice: invoicePdfBase64 })
+
+      // 完了と同時にQR・リンクのモーダルを表示
+      setShowCompletion(true)
     } catch (e: any) {
       setMessage({ type: 'error', text: e.message ?? '送信に失敗しました' })
     } finally {
@@ -1064,6 +1070,27 @@ export default function FinalAgreementPage() {
           ) : existingContract ? '再提出・再送信' : '同意して提出・送信'}
         </Button>
       </div>
+
+      {/* 完了モーダル（QR・リンク・次アクション） */}
+      <CompletionModal
+        open={showCompletion}
+        onClose={() => setShowCompletion(false)}
+        title="売買契約書が完成しました"
+        subtitle={message?.type === 'success' ? message.text : undefined}
+        url={magicLinkUrl}
+        urlLoading={magicLinkLoading}
+        linkDescription="お客様のスマホでこのQRコードを読み取ると、マイページで契約書を確認できます。"
+        validityNote="このリンクは72時間有効です。"
+        pdfButtons={[
+          ...(generatedPdfs.sale ? [{ label: '売買契約書PDFを確認', onClick: () => openPdfBase64(generatedPdfs.sale!) }] : []),
+          ...(generatedPdfs.invoice ? [{ label: '請求書PDFを確認', onClick: () => openPdfBase64(generatedPdfs.invoice!) }] : []),
+        ]}
+        backLabel={fromDealId ? '案件詳細' : '訪問詳細'}
+        onBack={() => {
+          setShowCompletion(false)
+          navigateWithPinCheck(fromDealId ? `/store/deals/${fromDealId}` : `/store/schedule/${scheduleId}`)
+        }}
+      />
     </div>
   )
 }

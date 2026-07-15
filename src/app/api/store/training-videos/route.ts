@@ -35,12 +35,17 @@ export async function GET() {
             where: { storeId },
             select: { playCount: true, lastViewedAt: true },
           },
+          favorites: {
+            where: { storeId },
+            select: { id: true },
+          },
+          _count: { select: { likes: true } },
         },
       },
     },
   })
 
-  // 動画があるカテゴリのみ返し、各動画に viewed フラグを付与
+  // 動画があるカテゴリのみ返し、各動画に viewed / favorited / likeCount フラグを付与
   const result = categories
     .filter(c => c.videos.length > 0)
     .map(c => ({
@@ -48,12 +53,14 @@ export async function GET() {
       name: c.name,
       videos: c.videos.map(v => {
         const view = v.views[0]
-        const { views, ...rest } = v
+        const { views, favorites, _count, ...rest } = v
         return {
           ...rest,
           viewed: !!view,
           playCount: view?.playCount ?? 0,
           lastViewedAt: view?.lastViewedAt ?? null,
+          favorited: favorites.length > 0,
+          likeCount: _count.likes,
         }
       }),
     }))

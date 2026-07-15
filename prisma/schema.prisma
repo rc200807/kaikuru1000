@@ -824,12 +824,55 @@ model TrainingVideo {
   adminId       String
   admin         Admin          @relation(fields: [adminId], references: [id])
   views         TrainingVideoView[]
+  likes         TrainingVideoLike[]
+  comments      TrainingVideoComment[]
+  favorites     TrainingVideoFavorite[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
   @@index([categoryId])
   @@index([isPublished])
   @@index([adminId])
+}
+
+// 研修動画への「いいね（Good）」（店舗単位でトグル）
+model TrainingVideoLike {
+  id              String        @id @default(cuid())
+  trainingVideoId String
+  trainingVideo   TrainingVideo @relation(fields: [trainingVideoId], references: [id], onDelete: Cascade)
+  storeId         String
+  createdAt       DateTime      @default(now())
+
+  @@unique([trainingVideoId, storeId])
+  @@index([trainingVideoId])
+}
+
+// 研修動画へのコメント（店舗／本部）
+model TrainingVideoComment {
+  id              String        @id @default(cuid())
+  trainingVideoId String
+  trainingVideo   TrainingVideo @relation(fields: [trainingVideoId], references: [id], onDelete: Cascade)
+  authorType      String        // "store" | "admin"
+  storeId         String?       // 店舗コメント時の店舗ID
+  memberId        String?       // 店舗メンバー個人（任意）
+  authorName      String
+  body            String        @db.Text
+  createdAt       DateTime      @default(now())
+
+  @@index([trainingVideoId])
+}
+
+// 研修動画のお気に入り（店舗単位）
+model TrainingVideoFavorite {
+  id              String        @id @default(cuid())
+  trainingVideoId String
+  trainingVideo   TrainingVideo @relation(fields: [trainingVideoId], references: [id], onDelete: Cascade)
+  storeId         String
+  createdAt       DateTime      @default(now())
+
+  @@unique([trainingVideoId, storeId])
+  @@index([trainingVideoId])
+  @@index([storeId])
 }
 
 // 研修動画の店舗別視聴ステータス（店舗×動画でユニーク、再生回数を保持）

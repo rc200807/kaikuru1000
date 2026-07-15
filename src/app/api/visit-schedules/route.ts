@@ -6,6 +6,7 @@ import { createCalendarEvent, createCalendarInvitation } from '@/lib/google-cale
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
 import { ensureDealForVisit } from '@/lib/ensure-deal'
+import { resolveStoreScope } from '@/lib/store-scope'
 
 // 訪問スケジュール一覧
 export async function GET(request: NextRequest) {
@@ -28,7 +29,11 @@ export async function GET(request: NextRequest) {
   if (userId) where.userId = userId
   if (dealId) where.dealId = dealId
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
-  if (sessionUser.role === 'store') where.storeId = sessionUser.id
+  if (sessionUser.role === 'store') {
+    // 運営者スコープ（?storeIds=）対応。同一運営者所属をサーバ側で検証（不正IDは除外）
+    const scope = await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
+    where.storeId = scope.isMulti ? { in: scope.storeIds } : sessionUser.id
+  }
   // 訪問日の範囲フィルタ（週間カレンダー等での絞り込み用）
   if (from || to) {
     where.visitDate = {}

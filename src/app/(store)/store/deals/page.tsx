@@ -7,6 +7,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 import { DEAL_STATUSES, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 
 type Deal = {
@@ -15,6 +16,7 @@ type Deal = {
   status: string
   createdAt: string
   user: { id: string; name: string; phone: string; customerType: string } | null
+  store: { id: string; name: string; code: string } | null
   inquiry: { id: string; inquiryType: string } | null
   _count?: { visitSchedules: number }
 }
@@ -27,20 +29,24 @@ export default function StoreDealsPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchText, setSearchText] = useState('')
   const [stats, setStats] = useState<{ counts: Record<string, number>; total: number } | null>(null)
+  const scope = useStoreScope()
+  const scopeKey = scope.selectedIds.join(',')
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
   useEffect(() => {
-    if (authStatus === 'authenticated') { fetchDeals(); fetchStats() }
+    if (authStatus === 'authenticated' && !scope.loading) { fetchDeals(); fetchStats() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus])
+  }, [authStatus, scope.loading, scopeKey])
+
+  const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
 
   async function fetchDeals() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/deals?limit=200`)
+      const res = await fetch(`/api/deals?limit=200${scopeQs}`)
       if (res.ok) {
         const data = await res.json()
         setDeals(data.deals ?? [])
@@ -54,7 +60,7 @@ export default function StoreDealsPage() {
 
   async function fetchStats() {
     try {
-      const res = await fetch(`/api/deals?stats=1`)
+      const res = await fetch(`/api/deals?stats=1${scopeQs}`)
       if (res.ok) {
         const data = await res.json()
         setStats(data.stats ?? null)
@@ -69,7 +75,7 @@ export default function StoreDealsPage() {
     return deals.filter(d => {
       if (filterStatus !== 'all' && d.status !== filterStatus) return false
       if (q) {
-        const hay = [d.user?.name ?? '', d.user?.phone ?? '', d.detail ?? ''].join(' ').toLowerCase()
+        const hay = [d.user?.name ?? '', d.user?.phone ?? '', d.detail ?? '', d.store?.name ?? ''].join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -172,6 +178,11 @@ export default function StoreDealsPage() {
                       >
                         {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
                       </span>
+                      {scope.isMulti && deal.store && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                          {deal.store.name}
+                        </span>
+                      )}
                       {deal.inquiry && (
                         <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">問い合わせ由来</span>
                       )}

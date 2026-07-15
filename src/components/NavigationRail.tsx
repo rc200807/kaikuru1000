@@ -4,12 +4,24 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 
 type LinkedStore = {
   id: string
   name: string
   code: string
   avatar: string | null
+}
+
+/** 組織管理ナビ項目（運営者あり かつ 組織管理者のみ表示） */
+export const ORG_NAV_ITEM = {
+  href: '/store/organization',
+  label: '組織管理',
+  icon: (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" />
+    </svg>
+  ),
 }
 
 const navItems = [
@@ -163,6 +175,7 @@ export default function NavigationRail() {
   const [chatUnread, setChatUnread] = useState(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const scope = useStoreScope()
 
   // Fetch unread announcement count
   useEffect(() => {
@@ -264,7 +277,7 @@ export default function NavigationRail() {
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto thin-scrollbar">
-        {navItems.map(item => {
+        {[...navItems, ...(scope.availableStores.length > 0 && scope.isOrgAdmin ? [ORG_NAV_ITEM] : [])].map(item => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
           const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : 0
           const showBadge = badgeCount > 0
@@ -299,11 +312,60 @@ export default function NavigationRail() {
         {/* Popup menu (opens upward) */}
         {userMenuOpen && (
           <div className="absolute bottom-full left-2 right-2 mb-1 rounded-lg bg-[var(--md-sys-color-surface)] shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.08)] overflow-hidden z-50">
+            {/* 表示する店舗（運営者配下の複数店舗スコープ。表示のみで操作店舗は変わらない） */}
+            {scope.availableStores.length >= 2 && (
+              <>
+                <div className="px-3 pt-2.5 pb-1.5 flex items-center justify-between">
+                  <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-faint)] uppercase tracking-wider">表示する店舗</p>
+                  {scope.selectedIds.length < scope.availableStores.length ? (
+                    <button onClick={scope.selectAll} className="text-[10px] font-medium text-[var(--store-primary)] hover:underline">すべて選択</button>
+                  ) : (
+                    <button onClick={scope.resetToSelf} className="text-[10px] font-medium text-[var(--store-primary)] hover:underline">自店舗のみ</button>
+                  )}
+                </div>
+                <div className="max-h-40 overflow-y-auto">
+                  {scope.availableStores.map(store => {
+                    const isSelf = store.id === user?.id
+                    const checked = scope.selectedIds.includes(store.id)
+                    return (
+                      <button
+                        key={store.id}
+                        onClick={() => scope.toggleStore(store.id)}
+                        disabled={isSelf}
+                        className="w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors hover:bg-[var(--md-sys-color-surface-container-high)] disabled:opacity-100"
+                        title={isSelf ? 'ログイン中の店舗は常に表示されます' : undefined}
+                      >
+                        <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-colors ${
+                          checked ? 'bg-[var(--store-primary)] border-[var(--store-primary)]' : 'border-[var(--md-sys-color-outline)]'
+                        } ${isSelf ? 'opacity-60' : ''}`}>
+                          {checked && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          )}
+                        </span>
+                        {store.avatar ? (
+                          <img src={store.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+                            <span className="text-white text-[9px] font-semibold">{store.name[0]}</span>
+                          </div>
+                        )}
+                        <p className="text-xs text-[var(--md-sys-color-on-surface)] truncate flex-1">
+                          {store.name}
+                          {isSelf && <span className="ml-1 text-[9px] text-[var(--md-sys-color-on-surface-faint)]">（ログイン中）</span>}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+                <hr className="border-[rgba(0,0,0,0.08)]" />
+              </>
+            )}
+
             {/* Store switcher */}
             {hasLinkedStores && (
               <>
                 <div className="px-3 pt-2.5 pb-1.5">
-                  <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-faint)] uppercase tracking-wider">店舗を切り替え</p>
+                  <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface-faint)] uppercase tracking-wider">操作する店舗を切り替え</p>
                 </div>
                 <div className="max-h-36 overflow-y-auto">
                   {linkedStores.map(store => {
@@ -394,7 +456,11 @@ export default function NavigationRail() {
           )}
           <div className="min-w-0 flex-1 text-left">
             <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate">{user?.name ?? '店舗'}</p>
-            <p className="text-[10px] text-[var(--md-sys-color-on-surface-faint)] truncate">{user?.email ?? ''}</p>
+            {scope.isMulti ? (
+              <p className="text-[10px] font-semibold text-[var(--store-primary)] truncate">{scope.selectedIds.length}店舗を表示中</p>
+            ) : (
+              <p className="text-[10px] text-[var(--md-sys-color-on-surface-faint)] truncate">{user?.email ?? ''}</p>
+            )}
           </div>
           <svg className={`w-4 h-4 text-[var(--md-sys-color-on-surface-faint)] shrink-0 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4" />

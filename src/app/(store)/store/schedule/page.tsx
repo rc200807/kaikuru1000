@@ -18,6 +18,7 @@ import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import ScheduleCalendar from '@/components/store/ScheduleCalendar'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type Schedule = {
@@ -62,6 +63,10 @@ export default function StoreSchedulePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const bizHours = useBusinessHours()
+  const scope = useStoreScope()
+  const scopeKey = scope.selectedIds.join(',')
+  // 複数店舗表示時は storeIds= で横断取得（サーバ側で同一運営者を検証）。単一時は従来どおり
+  const scheduleScopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -149,10 +154,10 @@ export default function StoreSchedulePage() {
   }, [status])
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && !scope.loading) {
       const storeId = (session.user as any).id
       Promise.all([
-        fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}`).then(r => r.json()),
+        fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}${scheduleScopeQs}`).then(r => r.json()),
         fetch(`/api/stores/${storeId}/customers`).then(r => r.json()),
       ]).then(([schedData, custData]) => {
         const schedList = schedData?.schedules ?? (Array.isArray(schedData) ? schedData : [])
@@ -165,14 +170,15 @@ export default function StoreSchedulePage() {
         setLoading(false)
       }).catch(() => setLoading(false))
     }
-  }, [status, session])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session, scope.loading, scopeKey])
 
   async function loadMoreSchedules() {
     setLoadingMore(true)
     const storeId = (session?.user as any).id
     const nextPage = schedulesPage + 1
     try {
-      const res = await fetch(`/api/visit-schedules?storeId=${storeId}&page=${nextPage}&limit=${SCHEDULES_LIMIT}`)
+      const res = await fetch(`/api/visit-schedules?storeId=${storeId}&page=${nextPage}&limit=${SCHEDULES_LIMIT}${scheduleScopeQs}`)
       const data = await res.json()
       const list = data?.schedules ?? (Array.isArray(data) ? data : [])
       setSchedules(prev => [...prev, ...list])
@@ -192,7 +198,7 @@ export default function StoreSchedulePage() {
       setVisitRequests(prev => prev.filter(r => r.id !== requestId))
       // refresh schedules
       const storeId = (session?.user as any).id
-      fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}`)
+      fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}${scheduleScopeQs}`)
         .then(r => r.json())
         .then(schedData => {
           const schedList = schedData?.schedules ?? (Array.isArray(schedData) ? schedData : [])
@@ -540,7 +546,12 @@ export default function StoreSchedulePage() {
                       <div className="text-xs">{format(new Date(schedule.visitDate), '（E）', { locale: ja })}</div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
+                        {scope.isMulti && schedule.store && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{schedule.store.name}</span>
+                        )}
+                      </div>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{schedule.user.address}</p>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{schedule.user.phone}</p>
                       {schedule.note && (
@@ -598,11 +609,14 @@ export default function StoreSchedulePage() {
                       <div className="text-xs">{format(new Date(schedule.revisitDate!), '（E）', { locale: ja })}</div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700">
                           後日引取
                         </span>
+                        {scope.isMulti && schedule.store && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{schedule.store.name}</span>
+                        )}
                       </div>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{schedule.user.address}</p>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{schedule.user.phone}</p>
@@ -672,7 +686,12 @@ export default function StoreSchedulePage() {
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
                           {format(new Date(schedule.visitDate), 'yyyy/M/d（E）', { locale: ja })}
                         </td>
-                        <td className="px-3 py-3 font-medium text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{schedule.user.name}</td>
+                        <td className="px-3 py-3 font-medium text-[var(--md-sys-color-on-surface)] whitespace-nowrap">
+                          {schedule.user.name}
+                          {scope.isMulti && schedule.store && (
+                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] font-normal">{schedule.store.name}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-40 truncate hidden md:table-cell">{schedule.user.address}</td>
                         <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                           <select
@@ -783,6 +802,12 @@ export default function StoreSchedulePage() {
         }
       >
         <form id="add-schedule-form" onSubmit={handleAddSchedule} className="space-y-4">
+          {/* 複数店舗表示中でも、登録は常にログイン中の店舗に帰属する（帰属事故防止の明示） */}
+          {scope.isMulti && (
+            <div className="px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-200">
+              登録先: <span className="font-semibold">{(session?.user as any)?.name ?? 'ログイン中の店舗'}</span>（複数店舗を表示中ですが、新しい予定はログイン中の店舗に登録されます）
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">
               顧客 <span className="text-[var(--md-sys-color-error)]">*</span>

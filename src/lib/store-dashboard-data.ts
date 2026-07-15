@@ -1,6 +1,9 @@
 // 店舗ダッシュボードの集計ロジック（店舗ポータル /api/store/dashboard と
 // 管理ポータル /api/admin/stores/[id]/dashboard で共用）。
 // レスポンス形状は従来の店舗ダッシュボードAPIと完全一致させること（店舗側の退行防止）。
+// 複数店舗（運営者スコープ）対応: storeId に配列を渡すと選択店舗群の合算になる。
+// 単一店舗時は既存キーの型・値が完全一致すること。追加は optional キーのみ
+// （myStoreRanks / perStore / recentDeals[].storeName）。
 import { prisma } from '@/lib/prisma'
 import { startOfMonth, subMonths, startOfDay } from 'date-fns'
 import { jstMonthKey } from '@/lib/datetime'
@@ -10,7 +13,11 @@ export type StoreDashboardOptions = {
   revealAmounts?: boolean
 }
 
-export async function buildStoreDashboard(storeId: string, opts: StoreDashboardOptions = {}) {
+export async function buildStoreDashboard(storeIdInput: string | string[], opts: StoreDashboardOptions = {}) {
+  const storeIds = Array.isArray(storeIdInput) ? storeIdInput : [storeIdInput]
+  const isMulti = storeIds.length > 1
+  const storeId = storeIds[0] // 単一店舗時の互換用（myRank 判定など）
+  const storeFilter = { storeId: { in: storeIds } }
   const now = new Date()
   const currentMonthStart = startOfMonth(now)
   const twelveMonthsAgo = startOfMonth(subMonths(now, 11))
@@ -18,10 +25,10 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
 
-  // ── 自店舗の訪問データ（直近12ヶ月） ──
+  // ── 自店舗（選択店舗群）の訪問データ（直近12ヶ月） ──
   const myVisits = await prisma.visitSchedule.findMany({
-    where: { storeId, visitDate: { gte: twelveMonthsAgo } },
-    select: { visitDate: true, purchaseAmount: true, status: true },
+    where: { ...storeFilter, visitDate: { gte: twelveMonthsAgo } },
+    select: { visitDate: true, purchaseAmount: true, status: true, storeId: true },
   })
 
   // ── 自店舗の当月買取金額 ──
@@ -57,20 +64,32 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
     amount: a._sum.purchaseAmount ?? 0,
   }))
 
-  // 自店舗の順位
+  // 自店舗の順位（複数選択時は合算に順位が定義できないため null。店舗別順位は myStoreRanks で返す）
   const myRankIndex = ranking.findIndex(r => r.storeId === storeId)
-  const myRank = myRankIndex >= 0 ? myRankIndex + 1 : null
+  const myRank = isMulti ? null : (myRankIndex >= 0 ? myRankIndex + 1 : null)
   const totalStores = await prisma.store.count({ where: { isActive: true } })
 
   // TOP10（店舗向けは金額非表示のため amount を返さない。管理向けは revealAmounts で含める）
   const top10 = ranking.slice(0, 10).map((r, i) => ({
     rank: i + 1,
     name: r.name,
-    isMe: r.storeId === storeId,
+    isMe: storeIds.includes(r.storeId),
     // 相対バー表示用（最大値比）
     ratio: ranking.length > 0 ? r.amount / ranking[0].amount : 0,
     ...(opts.revealAmounts ? { amount: r.amount } : {}),
   }))
+
+  // 複数選択時のみ: 選択店舗ごとの当月ランキング順位
+  const scopeStoreNames = isMulti
+    ? await prisma.store.findMany({ where: { id: { in: storeIds } }, select: { id: true, name: true } })
+    : []
+  const scopeNameMap = new Map(scopeStoreNames.map(s => [s.id, s.name]))
+  const myStoreRanks = isMulti
+    ? storeIds.map(id => {
+        const idx = ranking.findIndex(r => r.storeId === id)
+        return { storeId: id, name: scopeNameMap.get(id) ?? '', rank: idx >= 0 ? idx + 1 : null }
+      })
+    : undefined
 
   // ── 月次買取金額の推移（自店舗・直近12ヶ月） ──
   const monthlyAmountMap: Record<string, number> = {}
@@ -99,15 +118,18 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
 
   // ── 本日の訪問件数（KPI用） ──
   const todayCount = await prisma.visitSchedule.count({
-    where: { storeId, visitDate: { gte: today, lt: tomorrow } },
+    where: { ...storeFilter, visitDate: { gte: today, lt: tomorrow } },
   })
 
   // ── 直近の案件（発生日の新しい順に最大10件） ──
   const recentDealRows = await prisma.deal.findMany({
-    where: { storeId },
+    where: storeFilter,
     orderBy: { occurredAt: 'desc' },
     take: 10,
-    include: { user: { select: { name: true, address: true } } },
+    include: {
+      user: { select: { name: true, address: true } },
+      store: { select: { name: true } },
+    },
   })
   const recentDeals = recentDealRows.map(d => ({
     id: d.id,
@@ -117,6 +139,7 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
     occurredAt: d.occurredAt,
     purchaseAmount: d.purchaseAmount,
     billingAmount: d.billingAmount,
+    ...(isMulti ? { storeName: d.store?.name ?? null } : {}),
   }))
 
   // ── 当月訪問件数 / 当月完了件数 ──
@@ -132,8 +155,8 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
 
   // ── 自店舗の案件（直近12ヶ月：推移用） ──
   const myDeals = await prisma.deal.findMany({
-    where: { storeId, createdAt: { gte: twelveMonthsAgo } },
-    select: { createdAt: true },
+    where: { ...storeFilter, createdAt: { gte: twelveMonthsAgo } },
+    select: { createdAt: true, storeId: true },
   })
   const monthlyDealMap: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) monthlyDealMap[jstMonthKey(subMonths(now, i))] = 0
@@ -148,7 +171,7 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
   // ── 案件ステータスの内訳＋契約率（自店舗・全期間） ──
   const dealStatusAgg = await prisma.deal.groupBy({
     by: ['status'],
-    where: { storeId },
+    where: storeFilter,
     _count: { _all: true },
   })
   const dealStatusBreakdown = dealStatusAgg.map(g => ({ status: g.status, count: g._count._all }))
@@ -161,7 +184,7 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
   // ── 流入経路の内訳（自店舗の顧客） ──
   const leadAgg = await prisma.user.groupBy({
     by: ['leadSource'],
-    where: { storeId },
+    where: storeFilter,
     _count: { _all: true },
   })
   const leadSourceBreakdown = leadAgg
@@ -171,17 +194,37 @@ export async function buildStoreDashboard(storeId: string, opts: StoreDashboardO
   // ── リピート率（完了訪問が2回以上の顧客 / 完了訪問が1回以上の顧客） ──
   const completedByUser = await prisma.visitSchedule.groupBy({
     by: ['userId'],
-    where: { storeId, status: 'completed' },
+    where: { ...storeFilter, status: 'completed' },
     _count: { _all: true },
   })
   const customersWithPurchase = completedByUser.length
   const repeatCustomers = completedByUser.filter(g => g._count._all >= 2).length
   const repeatRate = customersWithPurchase > 0 ? repeatCustomers / customersWithPurchase : 0
 
+  // ── 複数選択時のみ: 店舗別の当月サマリ（比較セクション用） ──
+  const perStore = isMulti
+    ? storeIds.map(id => {
+        const visits = myVisits.filter(v => v.storeId === id && v.visitDate >= currentMonthStart)
+        return {
+          storeId: id,
+          name: scopeNameMap.get(id) ?? '',
+          currentMonthAmount: visits
+            .filter(v => v.status === 'completed')
+            .reduce((s, v) => s + (v.purchaseAmount ?? 0), 0),
+          currentMonthVisitCount: visits.length,
+          currentMonthCompletedCount: visits.filter(v => v.status === 'completed').length,
+          currentMonthDealCount: myDeals.filter(d => d.storeId === id && d.createdAt >= currentMonthStart).length,
+          rank: myStoreRanks?.find(r => r.storeId === id)?.rank ?? null,
+        }
+      })
+    : undefined
+
   return {
     myRank,
     totalStores,
     top10,
+    ...(myStoreRanks ? { myStoreRanks } : {}),
+    ...(perStore ? { perStore } : {}),
     currentMonthAmount,
     currentMonthVisitCount,
     currentMonthCompletedCount,

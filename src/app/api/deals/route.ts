@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
+import { resolveStoreScope } from '@/lib/store-scope'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -26,8 +27,11 @@ export async function GET(request: NextRequest) {
   const limit = Math.max(1, Math.min(maxLimit, parseInt(searchParams.get('limit') || '50', 10)))
 
   const where: any = {}
-  if (isStore) where.storeId = sessionUser.id
-  else if (storeId) where.storeId = storeId
+  if (isStore) {
+    // 運営者スコープ（?storeIds=）対応。同一運営者所属をサーバ側で検証（不正IDは除外）
+    const scope = await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
+    where.storeId = scope.isMulti ? { in: scope.storeIds } : sessionUser.id
+  } else if (storeId) where.storeId = storeId
   if (userId) where.userId = userId
 
   // 集計モード（成約率・ステータス別件数）。status フィルタは無視し全ステータスの内訳を返す。

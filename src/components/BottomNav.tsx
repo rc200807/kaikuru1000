@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { ORG_NAV_ITEM } from '@/components/NavigationRail'
 
 type LinkedStore = {
   id: string
@@ -209,6 +211,7 @@ export default function BottomNav() {
   const [switching, setSwitching] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [chatUnread, setChatUnread] = useState(0)
+  const scope = useStoreScope()
 
   // Fetch unread announcement count
   useEffect(() => {
@@ -315,11 +318,64 @@ export default function BottomNav() {
             <div className="w-10 h-1 rounded-full bg-[var(--md-sys-color-outline-variant)]" />
           </div>
 
+          {/* 表示する店舗（運営者配下の複数店舗スコープ。表示のみで操作店舗は変わらない） */}
+          {scope.availableStores.length >= 2 && (
+            <div className="px-4 pt-2 pb-3 border-b border-[rgba(0,0,0,0.08)]">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-semibold text-[var(--md-sys-color-on-surface-faint)] uppercase tracking-wider">
+                  表示する店舗{scope.isMulti && <span className="ml-1.5 normal-case text-[var(--store-primary)]">{scope.selectedIds.length}店舗</span>}
+                </p>
+                {scope.selectedIds.length < scope.availableStores.length ? (
+                  <button onClick={scope.selectAll} className="text-[11px] font-medium text-[var(--store-primary)]">すべて選択</button>
+                ) : (
+                  <button onClick={scope.resetToSelf} className="text-[11px] font-medium text-[var(--store-primary)]">自店舗のみ</button>
+                )}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {scope.availableStores.map(store => {
+                  const isSelf = store.id === user?.id
+                  const checked = scope.selectedIds.includes(store.id)
+                  return (
+                    <button
+                      key={store.id}
+                      onClick={() => scope.toggleStore(store.id)}
+                      disabled={isSelf}
+                      className={`
+                        flex items-center gap-2 px-3 py-2 rounded-lg shrink-0 transition-colors border
+                        ${checked
+                          ? 'border-[var(--store-primary)] bg-[var(--store-primary-container)]'
+                          : 'border-transparent bg-[var(--md-sys-color-surface-container)] active:bg-[var(--md-sys-color-surface-container-high)]'
+                        }
+                      `}
+                    >
+                      {store.avatar ? (
+                        <img src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
+                          <span className="text-white text-[10px] font-semibold">{store.name[0]}</span>
+                        </div>
+                      )}
+                      <div className="text-left min-w-0">
+                        <p className="text-xs font-medium text-[var(--md-sys-color-on-surface)] truncate max-w-[100px]">{store.name}</p>
+                        <p className="text-[9px] text-[var(--md-sys-color-on-surface-faint)]">{isSelf ? 'ログイン中' : checked ? '表示中' : '非表示'}</p>
+                      </div>
+                      {checked && (
+                        <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Store switcher section (only if linked stores exist) */}
           {hasLinkedStores && (
             <div className="px-4 pt-2 pb-3 border-b border-[rgba(0,0,0,0.08)]">
               <p className="text-[11px] font-semibold text-[var(--md-sys-color-on-surface-faint)] uppercase tracking-wider mb-2">
-                店舗を切り替え
+                操作する店舗を切り替え
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {linkedStores.map(store => {
@@ -379,7 +435,7 @@ export default function BottomNav() {
           {/* Navigation items */}
           <div className="flex-1 overflow-y-auto py-2 px-2">
             <div className="grid grid-cols-3 gap-1">
-              {menuNavItems.map(item => {
+              {[...menuNavItems, ...(scope.availableStores.length > 0 && scope.isOrgAdmin ? [ORG_NAV_ITEM] : [])].map(item => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/')
                 const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : 0
                 const showBadge = badgeCount > 0

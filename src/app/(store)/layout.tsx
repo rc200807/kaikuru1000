@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import NavigationRail from '@/components/NavigationRail'
 import BottomNav from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
+import { StoreScopeProvider } from '@/components/store/StoreScopeContext'
 
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -30,11 +31,13 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   return (
     <div data-portal="store" className="flex min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
       <ToastProvider>
-        <NavigationRail />
-        <main className={`flex-1 min-w-0 ${isChatPage ? '' : 'pb-20 md:pb-4'}`}>
-          {children}
-        </main>
-        <BottomNav />
+        <StoreScopeProvider>
+          <NavigationRail />
+          <main className={`flex-1 min-w-0 ${isChatPage ? '' : 'pb-20 md:pb-4'}`}>
+            {children}
+          </main>
+          <BottomNav />
+        </StoreScopeProvider>
       </ToastProvider>
     </div>
   )

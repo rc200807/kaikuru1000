@@ -12,6 +12,7 @@ import Link from 'next/link'
 import StorePage from '@/components/store/StorePage'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import VideoThumbnail from '@/components/VideoThumbnail'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatJstDate } from '@/lib/datetime'
 
@@ -35,6 +36,18 @@ type DashboardData = {
     occurredAt: string
     purchaseAmount: number | null
     billingAmount: number | null
+    storeName?: string | null
+  }[]
+  // 複数店舗スコープ時のみ
+  myStoreRanks?: { storeId: string; name: string; rank: number | null }[]
+  perStore?: {
+    storeId: string
+    name: string
+    currentMonthAmount: number
+    currentMonthVisitCount: number
+    currentMonthCompletedCount: number
+    currentMonthDealCount: number
+    rank: number | null
   }[]
   // 追加指標
   prevMonthAmount?: number
@@ -79,6 +92,7 @@ type HighlightVisit = {
   status: string
   statusLabel: string
   statusColor: string
+  storeName?: string | null
 }
 type Highlights = {
   videos: HighlightVideo[]
@@ -302,6 +316,9 @@ function HighlightsRow({ highlights }: { highlights: Highlights }) {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] truncate">{v.customerName} 様</span>
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: `${v.statusColor}20`, color: v.statusColor }}>{v.statusLabel}</span>
+                    {v.storeName && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{v.storeName}</span>
+                    )}
                   </div>
                   <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">
                     {formatJstDate(v.visitDate, { year: undefined, month: 'numeric', day: 'numeric', weekday: 'short' })}{v.startTime ? ` ${v.startTime}` : ''}
@@ -325,24 +342,28 @@ export default function StoreDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [highlights, setHighlights] = useState<Highlights | null>(null)
   const [loading, setLoading] = useState(true)
+  const scope = useStoreScope()
+  const scopeKey = scope.selectedIds.join(',')
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
 
   useEffect(() => {
-    if (status !== 'authenticated') return
+    if (status !== 'authenticated' || scope.loading) return
     const user = session.user as any
     if (user.role !== 'store') { router.push('/'); return }
+    const qs = scope.scopeQuery ? `?${scope.scopeQuery}` : ''
     Promise.all([
-      fetch('/api/store/dashboard').then(r => (r.ok ? r.json() : null)).catch(() => null),
-      fetch('/api/store/dashboard/highlights').then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/api/store/dashboard${qs}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`/api/store/dashboard/highlights${qs}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([d, h]) => {
       setData(d)
       setHighlights(h)
       setLoading(false)
     })
-  }, [status, session, router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session, router, scope.loading, scopeKey])
 
   if (loading || !data) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
 
@@ -420,17 +441,87 @@ export default function StoreDashboardPage() {
   return (
     <StorePage title="ダッシュボード" subtitle={storeName} width="full">
       <div className="max-w-[1400px] mx-auto space-y-6">
+      {/* ── 複数店舗表示中バナー ── */}
+      {scope.isMulti && (
+        <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 rounded-2xl bg-[var(--store-primary-container)]/40 border border-[var(--store-primary)]/20">
+          <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35" />
+          </svg>
+          <span className="text-xs font-semibold text-[var(--store-primary)]">{scope.selectedIds.length}店舗の合算を表示中:</span>
+          {scope.availableStores.filter(s => scope.selectedIds.includes(s.id)).map(s => (
+            <span key={s.id} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm">{s.name}</span>
+          ))}
+        </div>
+      )}
+
       {/* ── ランク + KPI ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="relative rounded-2xl p-4 overflow-hidden flex items-center justify-center bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-1)]">
-          <div className="text-center">
-            <p className="text-[10px] mb-2 text-[var(--md-sys-color-on-surface-variant)]">全店舗ランキング（当月）</p>
-            <RankBadge rank={myRank} />
-            <p className="text-[10px] mt-1 text-[var(--md-sys-color-on-surface-faint)]">/ {totalStores}店舗中</p>
-          </div>
+          {scope.isMulti && (data.myStoreRanks?.length ?? 0) > 0 ? (
+            <div className="w-full">
+              <p className="text-[10px] mb-2 text-center text-[var(--md-sys-color-on-surface-variant)]">店舗別ランキング（当月）</p>
+              <div className="space-y-1 max-h-20 overflow-y-auto thin-scrollbar">
+                {data.myStoreRanks!.map(r => (
+                  <div key={r.storeId} className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate">{r.name}</span>
+                    <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] shrink-0">{r.rank != null ? `${r.rank}位` : '—'}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] mt-1 text-center text-[var(--md-sys-color-on-surface-faint)]">/ {totalStores}店舗中</p>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-[10px] mb-2 text-[var(--md-sys-color-on-surface-variant)]">全店舗ランキング（当月）</p>
+              <RankBadge rank={myRank} />
+              <p className="text-[10px] mt-1 text-[var(--md-sys-color-on-surface-faint)]">/ {totalStores}店舗中</p>
+            </div>
+          )}
         </div>
         {kpiCards.map(card => <KpiCard key={card.label} {...card} />)}
       </div>
+
+      {/* ── 店舗別比較（複数店舗表示時のみ） ── */}
+      {scope.isMulti && (data.perStore?.length ?? 0) > 0 && (
+        <ChartCard>
+          <SectionHeading>店舗別比較（当月）</SectionHeading>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead>
+                <tr className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] border-b border-[var(--md-sys-color-outline-variant)]">
+                  <th className="py-2 text-left font-medium">店舗</th>
+                  <th className="py-2 text-right font-medium">買取金額</th>
+                  <th className="py-2 text-right font-medium">訪問</th>
+                  <th className="py-2 text-right font-medium">完了</th>
+                  <th className="py-2 text-right font-medium">新規案件</th>
+                  <th className="py-2 text-right font-medium">順位</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const rows = [...data.perStore!].sort((a, b) => b.currentMonthAmount - a.currentMonthAmount)
+                  const maxAmount = Math.max(...rows.map(r => r.currentMonthAmount), 1)
+                  return rows.map(r => (
+                    <tr key={r.storeId} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
+                      <td className="py-2.5 pr-3">
+                        <div className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">{r.name}</div>
+                        <div className="mt-1 h-1.5 rounded-full bg-[var(--md-sys-color-outline-variant)]/60 max-w-[160px]">
+                          <div className="h-1.5 rounded-full" style={{ width: `${Math.max((r.currentMonthAmount / maxAmount) * 100, 2)}%`, background: ACCENT }} />
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-right font-semibold text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{fmtYen(r.currentMonthAmount)}</td>
+                      <td className="py-2.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{r.currentMonthVisitCount}件</td>
+                      <td className="py-2.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{r.currentMonthCompletedCount}件</td>
+                      <td className="py-2.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{r.currentMonthDealCount}件</td>
+                      <td className="py-2.5 text-right font-semibold text-[var(--md-sys-color-on-surface)]">{r.rank != null ? `${r.rank}位` : '—'}</td>
+                    </tr>
+                  ))
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </ChartCard>
+      )}
 
       {/* ── 新着研修動画 / 新着のお知らせ / 直近の訪問 ── */}
       {highlights && <HighlightsRow highlights={highlights} />}
@@ -465,6 +556,11 @@ export default function StoreDashboardPage() {
                         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: badge.bg, color: badge.fg }}>
                           {DEAL_STATUS_LABEL[c.status as DealStatus] ?? c.status}
                         </span>
+                        {c.storeName && (
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                            {c.storeName}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs truncate mt-0.5 text-[var(--md-sys-color-on-surface-variant)]">{c.address}</p>
                       <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">発生日: {new Date(c.occurredAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' })}</p>

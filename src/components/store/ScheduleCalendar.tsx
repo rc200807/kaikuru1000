@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useBusinessHours } from '@/hooks/useBusinessHours'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 
 // 店舗スケジュールのカレンダービュー（月間 / 週間 / 日間）。
 // 週間・日間は時間目盛り付きのタイムライン表示（開始時刻で配置・所要時間で高さ）。
@@ -21,6 +22,7 @@ type RawSchedule = {
   revisitEnd: string | null
   revisitNote: string | null
   user?: { name: string; address?: string | null; phone?: string | null } | null
+  store?: { id: string; name: string } | null
   deal?: { id: string } | null
 }
 
@@ -35,6 +37,7 @@ type CalEvent = {
   status: string
   dealId: string | null
   kind: 'visit' | 'revisit'
+  storeName: string | null
 }
 
 type View = 'month' | 'week' | 'day'
@@ -68,6 +71,7 @@ function statusStyle(status: string): string {
 export default function ScheduleCalendar() {
   const router = useRouter()
   const biz = useBusinessHours()
+  const scope = useStoreScope()
   const [view, setView] = useState<View>('week')
   const [cursor, setCursor] = useState<Date>(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()) })
   const [schedules, setSchedules] = useState<RawSchedule[]>([])
@@ -86,11 +90,12 @@ export default function ScheduleCalendar() {
   const fetchRange = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/visit-schedules?from=${ymd(range.from)}T00:00:00&to=${ymd(range.to)}T23:59:59&limit=200`)
+      const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
+      const res = await fetch(`/api/visit-schedules?from=${ymd(range.from)}T00:00:00&to=${ymd(range.to)}T23:59:59&limit=200${scopeQs}`)
       if (res.ok) { const data = await res.json(); setSchedules(data.schedules ?? []) }
     } catch { /* ignore */ }
     setLoading(false)
-  }, [range.from, range.to])
+  }, [range.from, range.to, scope.scopeQuery])
 
   useEffect(() => { fetchRange() }, [fetchRange])
 
@@ -99,15 +104,16 @@ export default function ScheduleCalendar() {
     for (const s of schedules) {
       const name = s.user?.name ?? '予定'
       const address = s.user?.address ?? null
+      const storeName = scope.isMulti ? (s.store?.name ?? null) : null
       if (s.status !== 'cancelled') {
-        list.push({ id: s.id, dateKey: ymd(new Date(s.visitDate)), start: s.startTime, end: s.endTime, name, address, note: s.note, status: s.status, dealId: s.deal?.id ?? null, kind: 'visit' })
+        list.push({ id: s.id, dateKey: ymd(new Date(s.visitDate)), start: s.startTime, end: s.endTime, name, address, note: s.note, status: s.status, dealId: s.deal?.id ?? null, kind: 'visit', storeName })
       }
       if (s.revisitDate) {
-        list.push({ id: `${s.id}-rev`, dateKey: ymd(new Date(s.revisitDate)), start: s.revisitStart, end: s.revisitEnd, name, address, note: s.revisitNote, status: 'revisit', dealId: s.deal?.id ?? null, kind: 'revisit' })
+        list.push({ id: `${s.id}-rev`, dateKey: ymd(new Date(s.revisitDate)), start: s.revisitStart, end: s.revisitEnd, name, address, note: s.revisitNote, status: 'revisit', dealId: s.deal?.id ?? null, kind: 'revisit', storeName })
       }
     }
     return list
-  }, [schedules])
+  }, [schedules, scope.isMulti])
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, CalEvent[]> = {}
@@ -180,7 +186,12 @@ export default function ScheduleCalendar() {
               </span>
               <button type="button" onClick={() => setPopover(null)} className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] leading-none text-lg" aria-label="閉じる">×</button>
             </div>
-            <p className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{popover.event.name} 様</p>
+            <p className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">
+              {popover.event.name} 様
+              {popover.event.storeName && (
+                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] font-normal align-middle">{popover.event.storeName}</span>
+              )}
+            </p>
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
               {popover.event.start ? `${popover.event.start}${popover.event.end ? `〜${popover.event.end}` : ''}` : '時間未定'}
             </p>

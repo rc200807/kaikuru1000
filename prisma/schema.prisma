@@ -228,6 +228,7 @@ model StoreMember {
   email     String
   password  String
   avatar    String?  @db.Text  // プロフィール画像URL（Vercel Blob）
+  orgRole   String?  // 'admin' = 組織管理者（運営者配下の複数店舗を横断管理できる）。null = 権限なし
   // 行動帰属（メンバーが担当・作成したレコード）
   visitSchedules VisitSchedule[]
   deals          Deal[]

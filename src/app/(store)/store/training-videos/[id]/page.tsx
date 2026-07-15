@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -47,6 +47,8 @@ export default function StoreTrainingVideoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [viewRecorded, setViewRecorded] = useState(false)
+  const [started, setStarted] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   function handlePlay() {
     // 1回の表示につき1回だけ記録（巻き戻し再生で多重カウントを避ける）
@@ -66,6 +68,7 @@ export default function StoreTrainingVideoDetailPage() {
     if (status === 'authenticated' && videoId) {
       setLoading(true)
       setViewRecorded(false)
+      setStarted(false)
       fetch(`/api/store/training-videos/${videoId}`)
         .then(r => {
           if (!r.ok) { setNotFound(true); return null }
@@ -153,8 +156,9 @@ export default function StoreTrainingVideoDetailPage() {
         {/* メインカラム */}
         <div className="min-w-0">
           {/* 動画プレーヤー */}
-          <div className="aspect-video rounded-2xl overflow-hidden bg-black shadow-lg mb-4">
+          <div className="relative aspect-video rounded-2xl overflow-hidden bg-black shadow-lg mb-4">
             <video
+              ref={videoRef}
               src={video.videoUrl}
               controls
               className="w-full h-full"
@@ -163,8 +167,24 @@ export default function StoreTrainingVideoDetailPage() {
               controlsList="nodownload noremoteplayback"
               disablePictureInPicture
               onContextMenu={e => e.preventDefault()}
-              onPlay={handlePlay}
+              onPlay={() => { setStarted(true); handlePlay() }}
             />
+            {/* 再生前サムネイル（サムネ画像が無い動画はフレームを表示） */}
+            {!started && !video.thumbnailUrl && (
+              <button
+                type="button"
+                onClick={() => videoRef.current?.play()}
+                className="absolute inset-0 w-full h-full group/play"
+                aria-label="再生"
+              >
+                <VideoThumbnail thumbnailUrl={null} videoUrl={video.videoUrl} className="w-full h-full object-contain" />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/play:bg-black/30 transition-colors">
+                  <span className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover/play:scale-110 transition-transform">
+                    <svg className="w-8 h-8 text-[var(--store-primary)] ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  </span>
+                </span>
+              </button>
+            )}
           </div>
 
           {/* カテゴリ + タイトル */}

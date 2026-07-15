@@ -947,6 +947,7 @@ export default function AdminStoresPage() {
                         bankName={editForm.bankName || ''}
                         branchName={editForm.branchName || ''}
                         onChange={({ bankName, branchName }) => setEditForm({ ...editForm, bankName, branchName })}
+                        theme="dark"
                       />
                       <div>
                         <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">口座種別</label>

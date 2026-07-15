@@ -184,6 +184,7 @@ export default function OperatorForm({ value, onChange }: { value: OperatorFormS
             bankName={value.bankName}
             branchName={value.branchName}
             onChange={({ bankName, branchName }) => onChange({ ...value, bankName, branchName })}
+            theme="dark"
           />
           <Grid>
             <div>

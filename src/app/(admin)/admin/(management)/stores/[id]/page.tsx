@@ -555,6 +555,7 @@ export default function StoreDetailPage() {
                   bankName={editForm.bankName || ''}
                   branchName={editForm.branchName || ''}
                   onChange={({ bankName, branchName }) => setEditForm({ ...editForm, bankName, branchName })}
+                  theme="dark"
                 />
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                   <EditSelect

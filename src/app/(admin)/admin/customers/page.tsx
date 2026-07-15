@@ -2074,6 +2074,7 @@ export default function AdminCustomersPage() {
                         onChange={({ bankName, bankCode, branchName, branchCode }) => {
                           setBankForm(f => ({ ...f, bankName, branchName }))
                         }}
+                        theme="dark"
                       />
                       <div>
                         <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">口座種別</label>

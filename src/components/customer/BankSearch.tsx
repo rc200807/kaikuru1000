@@ -28,12 +28,14 @@ interface BankSearchProps {
     branchName: string
     branchCode: string
   }) => void
+  /** 'light'（既定・顧客ポータルの淡いガラス調） | 'dark'（管理ポータルのCSS変数に追従） */
+  theme?: 'light' | 'dark'
 }
 
 // In-memory cache for bank list
 let banksCache: BankItem[] | null = null
 
-export default function BankSearch({ bankName = '', branchName = '', onChange }: BankSearchProps) {
+export default function BankSearch({ bankName = '', branchName = '', onChange, theme = 'light' }: BankSearchProps) {
   const [bankQuery, setBankQuery] = useState(bankName)
   const [branchQuery, setBranchQuery] = useState(branchName)
 
@@ -223,21 +225,39 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const inputClass =
-    'w-full px-4 py-3.5 bg-white/50 backdrop-blur-lg rounded-2xl border border-gray-300/70 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-red-400/70 focus:ring-2 focus:ring-red-200/40 focus:bg-white/60 transition-all disabled:opacity-50'
+  const isDark = theme === 'dark'
 
-  const dropdownClass =
-    'absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-white/80 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg shadow-black/5'
+  const inputClass = isDark
+    ? 'w-full h-10 px-3 bg-[var(--md-sys-color-surface-container-highest)] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline)] text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-2 focus:border-[var(--portal-primary,#4f8ef7)] transition-all disabled:opacity-50'
+    : 'w-full px-4 py-3.5 bg-white/50 backdrop-blur-lg rounded-2xl border border-gray-300/70 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:border-red-400/70 focus:ring-2 focus:ring-red-200/40 focus:bg-white/60 transition-all disabled:opacity-50'
+
+  const dropdownClass = isDark
+    ? 'absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-[var(--md-sys-color-surface-container-highest)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] shadow-lg'
+    : 'absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-white/80 backdrop-blur-xl border border-white/60 rounded-2xl shadow-lg shadow-black/5'
+
+  const labelClass = isDark
+    ? 'block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1'
+    : 'block text-xs font-semibold text-gray-500 mb-1.5 ml-1'
+
+  const optionClass = isDark
+    ? 'w-full text-left px-4 py-2.5 text-sm text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors first:rounded-t-[var(--md-sys-shape-small)] last:rounded-b-[var(--md-sys-shape-small)]'
+    : 'w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50/60 transition-colors first:rounded-t-2xl last:rounded-b-2xl'
+
+  const emptyClass = isDark ? 'px-4 py-3 text-sm text-[var(--md-sys-color-on-surface-variant)]' : 'px-4 py-3 text-sm text-gray-400'
+  const codeClass = isDark ? 'ml-2 text-xs text-[var(--md-sys-color-on-surface-variant)]' : 'ml-2 text-xs text-gray-400'
+  const spinnerClass = isDark ? 'w-4 h-4 animate-spin text-[var(--md-sys-color-on-surface-variant)]' : 'w-4 h-4 animate-spin text-gray-400'
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* Bank search */}
       <div ref={bankRef} className="relative">
-        <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
+        <label className={labelClass}>
           銀行名
         </label>
         <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-red-300/40 to-rose-300/40 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity" />
+          {!isDark && (
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-red-300/40 to-rose-300/40 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity" />
+          )}
           <div className="relative">
             <input
               type="text"
@@ -251,7 +271,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
             />
             {loadingBanks && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                <svg className={spinnerClass} fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -262,19 +282,19 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
         {showBankDropdown && bankQuery.trim() && !selectedBank && (
           <div className={dropdownClass}>
             {loadingBanks ? (
-              <div className="px-4 py-3 text-sm text-gray-400">検索中...</div>
+              <div className={emptyClass}>検索中...</div>
             ) : filteredBanks.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-gray-400">該当なし</div>
+              <div className={emptyClass}>該当なし</div>
             ) : (
               filteredBanks.map(bank => (
                 <button
                   key={bank.code}
                   type="button"
                   onClick={() => selectBank(bank)}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50/60 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
+                  className={optionClass}
                 >
                   <span className="font-medium">{bank.normalize?.name || bank.name}</span>
-                  <span className="ml-2 text-xs text-gray-400">({bank.code})</span>
+                  <span className={codeClass}>({bank.code})</span>
                 </button>
               ))
             )}
@@ -284,11 +304,13 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
 
       {/* Branch search */}
       <div ref={branchRef} className="relative">
-        <label className="block text-xs font-semibold text-gray-500 mb-1.5 ml-1">
+        <label className={labelClass}>
           支店名
         </label>
         <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-red-300/40 to-rose-300/40 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity" />
+          {!isDark && (
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-red-300/40 to-rose-300/40 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity" />
+          )}
           <div className="relative">
             <input
               type="text"
@@ -308,7 +330,7 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
             />
             {loadingBranches && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                <svg className={spinnerClass} fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
@@ -319,19 +341,19 @@ export default function BankSearch({ bankName = '', branchName = '', onChange }:
         {showBranchDropdown && selectedBank && !selectedBranch && (
           <div className={dropdownClass}>
             {loadingBranches ? (
-              <div className="px-4 py-3 text-sm text-gray-400">検索中...</div>
+              <div className={emptyClass}>検索中...</div>
             ) : filteredBranches.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-gray-400">該当なし</div>
+              <div className={emptyClass}>該当なし</div>
             ) : (
               filteredBranches.map(branch => (
                 <button
                   key={branch.code}
                   type="button"
                   onClick={() => selectBranch(branch)}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50/60 transition-colors first:rounded-t-2xl last:rounded-b-2xl"
+                  className={optionClass}
                 >
                   <span className="font-medium">{branch.name}</span>
-                  <span className="ml-2 text-xs text-gray-400">({branch.code})</span>
+                  <span className={codeClass}>({branch.code})</span>
                 </button>
               ))
             )}

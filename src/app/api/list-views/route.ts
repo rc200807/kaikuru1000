@@ -8,6 +8,8 @@ const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 /** portal に対する権限チェック。OKならownerIdを返す */
 function resolveOwner(sessionUser: any, portal: string): string | null {
   if (portal === 'admin' && ADMIN_ROLES.includes(sessionUser.role)) return sessionUser.id
+  // 管理ポータルの店舗マスター一覧（顧客一覧の 'admin' とはビューを分離する）
+  if (portal === 'admin-stores' && ADMIN_ROLES.includes(sessionUser.role)) return sessionUser.id
   if (portal === 'store' && sessionUser.role === 'store') return sessionUser.id
   return null
 }

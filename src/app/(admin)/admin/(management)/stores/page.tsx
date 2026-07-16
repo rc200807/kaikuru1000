@@ -10,10 +10,21 @@ import TextField from '@/components/TextField'
 import Modal from '@/components/Modal'
 import MessageBanner from '@/components/MessageBanner'
 import DataTable, { type Column } from '@/components/DataTable'
-import SearchFilterBar from '@/components/SearchFilterBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import BankSearch from '@/components/customer/BankSearch'
 import StoreBulkEditModal from '@/components/admin/StoreBulkEditModal'
+import ViewTabs, { type ListView } from '@/components/list/ViewTabs'
+import FilterChipBar from '@/components/list/FilterChipBar'
+import AdvancedFilterPanel from '@/components/list/AdvancedFilterPanel'
+import ColumnPicker from '@/components/list/ColumnPicker'
+import BulkActionBar from '@/components/list/BulkActionBar'
+import {
+  storeListChips, storeListAdvFields, STORES_PRESET_VIEWS,
+  STORE_FILTER_PARAM_KEYS, parseStoreFilterString, applyStoreFilters,
+  storeMissingKeys, MISSING_LABEL,
+} from '@/components/list/store-list-filter-defs'
+import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
+import { downloadCsv, csvDateStamp } from '@/lib/client-csv'
 import { parseServiceAreas } from '@/lib/address-utils'
 
 type Store = {
@@ -42,10 +53,31 @@ type Store = {
   invoiceNumber: string | null
   antiquePermitNumber: string | null
   serviceAreas: string | null
+  operatorId: string | null
+  operator: { id: string; name: string } | null
+  createdAt: string | null
   hasLoggedIn?: boolean
   lastLoginAt?: string | null
   _count: { customers: number }
 }
+
+// 「列を編集」で切り替えられる列（店舗名・操作は常時表示）
+const STORE_COLUMN_OPTIONS = [
+  { key: 'code', label: 'コード' },
+  { key: 'prefecture', label: 'エリア' },
+  { key: 'serviceAreas', label: '対応エリア' },
+  { key: 'contact', label: '連絡先' },
+  { key: 'customers', label: '顧客数' },
+  { key: 'loginStatus', label: 'ログイン状態' },
+  { key: 'operator', label: '運営者' },
+  { key: 'openingDate', label: '開業日' },
+  { key: 'createdAt', label: '登録日' },
+  { key: 'missing', label: '情報不備' },
+]
+const STORE_COLUMN_KEYS = STORE_COLUMN_OPTIONS.map(c => c.key)
+// デフォルトは従来の5列（見た目の互換性維持）
+const STORE_DEFAULT_COLS = ['code', 'prefecture', 'serviceAreas', 'customers', 'loginStatus']
+const STORE_COLS_STORAGE_KEY = 'kk-admin-stores-cols'
 
 type SyncLog = {
   id: string
@@ -66,8 +98,24 @@ export default function AdminStoresPage() {
   // 新規店舗追加モーダル
   const [showCreateModal, setShowCreateModal] = useState(false)
 
-  // 一括編集モーダル
-  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  // 一括編集モーダル（null=閉、配列=その店舗群を編集対象に開く）
+  const [bulkEditTargets, setBulkEditTargets] = useState<Store[] | null>(null)
+
+  // フィルタ状態（URLと双方向同期）
+  const { params, setParams, replaceParams, ready } = useListQueryState(STORE_FILTER_PARAM_KEYS)
+  const filterQuery = serializeParams(params, STORE_FILTER_PARAM_KEYS)
+
+  // 保存ビュー・表示列・詳細フィルター
+  const [savedViews, setSavedViews] = useState<ListView[]>([])
+  const [visibleCols, setVisibleCols] = useState<string[]>(STORE_DEFAULT_COLS)
+  const [advOpen, setAdvOpen] = useState(false)
+
+  // 運営者一覧（詳細フィルター用）
+  const [operators, setOperators] = useState<{ id: string; name: string }[]>([])
+
+  // 行選択・一括操作
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [allMatching, setAllMatching] = useState(false)
   const [createForm, setCreateForm] = useState({
     code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '',
   })
@@ -151,11 +199,6 @@ export default function AdminStoresPage() {
   // スプレッドシート設定セクションの開閉
   const [sheetSectionOpen, setSheetSectionOpen] = useState(false)
 
-  // 検索
-  const [searchQ, setSearchQ] = useState('')
-
-  // ログイン状態フィルタ（'' = すべて / 'active' = ログイン済み / 'never' = 未ログイン）
-  const [loginFilter, setLoginFilter] = useState('')
 
   // 店舗詳細サイドバー
   const [detailStore, setDetailStore] = useState<Store | null>(null)
@@ -176,16 +219,49 @@ export default function AdminStoresPage() {
         fetch('/api/stores').then(r => r.json()),
         fetch('/api/sync-stores').then(r => r.json()),
         fetch('/api/admin/google-config').then(r => r.json()),
-      ]).then(([storesData, logsData, sheetConfig]) => {
+        fetch('/api/list-views?portal=admin-stores').then(r => r.ok ? r.json() : { views: [] }).catch(() => ({ views: [] })),
+        fetch('/api/admin/operators').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]).then(([storesData, logsData, sheetConfig, viewsData, operatorsData]) => {
         setStores(Array.isArray(storesData) ? storesData : [])
         setSyncLogs(Array.isArray(logsData) ? logsData : [])
         if (sheetConfig?.storeSpreadsheetId) setStoreSheetUrl(sheetConfig.storeSpreadsheetId)
         if (sheetConfig?.storeSheetName) setStoreSheetName(sheetConfig.storeSheetName)
         if (sheetConfig?.storeColumnMapping) setColMap({ ...defaultColMap, ...sheetConfig.storeColumnMapping })
+        const rawViews = Array.isArray(viewsData?.views) ? viewsData.views : []
+        setSavedViews(rawViews.map((v: any) => ({
+          id: v.id, name: v.name, filters: v.filters,
+          columns: v.columns ? (() => { try { return JSON.parse(v.columns) } catch { return null } })() : null,
+        })))
+        const ops = Array.isArray(operatorsData) ? operatorsData : (operatorsData?.operators ?? [])
+        setOperators(ops.map((o: any) => ({ id: o.id, name: o.name })))
         setLoading(false)
       }).catch(() => setLoading(false))
     }
   }, [status, session])
+
+  // 表示列をlocalStorageから復元
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORE_COLS_STORAGE_KEY)
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr) && arr.length > 0) {
+          setVisibleCols(arr.filter((k: string) => STORE_COLUMN_KEYS.includes(k)))
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  function updateVisibleCols(cols: string[]) {
+    setVisibleCols(cols)
+    try { localStorage.setItem(STORE_COLS_STORAGE_KEY, JSON.stringify(cols)) } catch { /* ignore */ }
+  }
+
+  // フィルタが変わったら行選択を解除
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setAllMatching(false)
+  }, [filterQuery])
 
   function refreshStores() {
     fetch('/api/stores').then(r => r.json()).then(d => setStores(Array.isArray(d) ? d : []))
@@ -405,32 +481,99 @@ export default function AdminStoresPage() {
     return <LoadingSpinner size="lg" fullPage />
   }
 
-  const q = searchQ.trim().toLowerCase()
-  const filtered = stores.filter(s => {
-    // ログイン状態フィルタ
-    if (loginFilter === 'active' && !s.hasLoggedIn) return false
-    if (loginFilter === 'never' && s.hasLoggedIn) return false
-    // テキスト検索
-    if (!q) return true
-    const areaText = parseServiceAreas(s.serviceAreas)
-      .flatMap(a => [a.prefecture, ...a.cities])
-      .join(' ')
-      .toLowerCase()
-    return (
-      s.name.toLowerCase().includes(q) ||
-      s.code.toLowerCase().includes(q) ||
-      (s.prefecture || '').toLowerCase().includes(q) ||
-      (s.email || '').toLowerCase().includes(q) ||
-      (s.phone || '').includes(q) ||
-      (s.address || '').toLowerCase().includes(q) ||
-      areaText.includes(q)
-    )
-  })
+  // 店舗は最大200件程度なのでメモ化不要（早期returnより後に置くためフックは使わない）
+  const filtered = applyStoreFilters(stores, params)
 
-  const storeColumns: Column<Store>[] = [
-    {
+  // ---- 保存ビュー ----
+  const views: ListView[] = [...STORES_PRESET_VIEWS, ...savedViews]
+  const activeViewId = views.find(
+    v => serializeParams(parseStoreFilterString(v.filters), STORE_FILTER_PARAM_KEYS) === filterQuery
+  )?.id ?? null
+
+  function handleSelectView(v: ListView) {
+    replaceParams(parseStoreFilterString(v.filters))
+    if (v.columns && v.columns.length > 0) {
+      updateVisibleCols(v.columns.filter(k => STORE_COLUMN_KEYS.includes(k)))
+    }
+  }
+
+  async function handleSaveView(name: string) {
+    const res = await fetch('/api/list-views', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal: 'admin-stores', name, filters: filterQuery, columns: visibleCols }),
+    })
+    if (res.ok) {
+      const v = await res.json()
+      setSavedViews(prev => [...prev, { id: v.id, name: v.name, filters: v.filters, columns: visibleCols }])
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setMessage({ type: 'error', text: data.error || 'ビューの保存に失敗しました' })
+    }
+  }
+
+  async function handleDeleteView(v: ListView) {
+    if (!confirm(`ビュー「${v.name}」を削除しますか？`)) return
+    const res = await fetch(`/api/list-views/${v.id}`, { method: 'DELETE' })
+    if (res.ok) setSavedViews(prev => prev.filter(x => x.id !== v.id))
+  }
+
+  // ---- CSVエクスポート（クライアント生成・表示列連動）----
+  function handleExportCsv(rows: Store[]) {
+    // 列キー → CSV列（複合列は複数列に展開）
+    const csvFields: Record<string, { header: string; value: (s: Store) => string }[]> = {
+      code: [{ header: '店舗コード', value: s => s.code }],
+      prefecture: [{ header: 'エリア', value: s => s.prefecture || '' }],
+      serviceAreas: [{
+        header: '対応エリア',
+        value: s => parseServiceAreas(s.serviceAreas)
+          .map(a => a.cities.length > 0 ? `${a.prefecture}(${a.cities.length})` : a.prefecture)
+          .join('; '),
+      }],
+      contact: [
+        { header: 'メールアドレス', value: s => s.email || '' },
+        { header: '電話番号', value: s => s.phone || '' },
+      ],
+      customers: [{ header: '顧客数', value: s => String(s._count.customers) }],
+      loginStatus: [
+        { header: 'ログイン状態', value: s => s.hasLoggedIn ? 'アクティブ' : '未ログイン' },
+        { header: '最終ログイン', value: s => s.lastLoginAt ? new Date(s.lastLoginAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '' },
+      ],
+      operator: [{ header: '運営者', value: s => s.operator?.name || '' }],
+      openingDate: [{ header: '開業日', value: s => s.openingDate ? s.openingDate.slice(0, 10) : '' }],
+      createdAt: [{ header: '登録日', value: s => s.createdAt ? s.createdAt.slice(0, 10) : '' }],
+      missing: [{ header: '情報不備', value: s => storeMissingKeys(s).map(k => MISSING_LABEL[k]).join('、') }],
+    }
+    // 店舗名は常に先頭。code は表示列に無くても含める（識別用）
+    const colKeys = ['code', ...visibleCols.filter(k => k !== 'code')]
+    const fields = [
+      { header: '店舗名', value: (s: Store) => s.name },
+      ...colKeys.flatMap(k => csvFields[k] ?? []),
+    ]
+    downloadCsv(
+      `stores_${csvDateStamp()}.csv`,
+      fields.map(f => f.header),
+      rows.map(s => fields.map(f => f.value(s)))
+    )
+  }
+
+  // ---- 一括操作 ----
+  const bulkSelectionRows = allMatching ? filtered : filtered.filter(s => selectedIds.has(s.id))
+
+  function handleBulkAction(key: string) {
+    if (key === 'bulkEdit') {
+      setBulkEditTargets(bulkSelectionRows)
+    } else if (key === 'export') {
+      handleExportCsv(bulkSelectionRows.length > 0 ? bulkSelectionRows : filtered)
+    }
+  }
+
+  // 列キー → 列定義（表示列は visibleCols で合成。店舗名は先頭・操作は末尾に固定）
+  const columnByKey: Record<string, Column<Store>> = {
+    code: {
       key: 'code',
       header: 'コード',
+      hideOnMobile: true,
       render: (store) => (
         <code className="text-xs bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded-[var(--md-sys-shape-extra-small)]">
           {store.code}
@@ -439,22 +582,17 @@ export default function AdminStoresPage() {
       sortable: true,
       sortValue: (store) => store.code,
     },
-    {
-      key: 'name',
-      header: '店舗名',
-      render: (store) => <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{store.name}</span>,
-      sortable: true,
-      sortValue: (store) => store.name,
-    },
-    {
+    prefecture: {
       key: 'prefecture',
       header: 'エリア',
       hideOnMobile: true,
-      render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.prefecture || '\u2014'}</span>,
+      render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.prefecture || '—'}</span>,
+      sortable: true,
+      sortValue: (store) => store.prefecture || '',
     },
-    {
+    serviceAreas: {
       key: 'serviceAreas',
-      header: '\u5bfe\u5fdc\u30a8\u30ea\u30a2',
+      header: '対応エリア',
       hideOnMobile: true,
       render: (store) => {
         const areas = parseServiceAreas(store.serviceAreas)
@@ -466,17 +604,28 @@ export default function AdminStoresPage() {
             {areas.map(a => (
               <span
                 key={a.prefecture}
-                title={a.cities.length > 0 ? `${a.prefecture}: ${a.cities.join('\u3001')}` : a.prefecture}
+                title={a.cities.length > 0 ? `${a.prefecture}: ${a.cities.join('、')}` : a.prefecture}
                 className="text-xs px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap"
               >
-                {a.prefecture}{a.cities.length > 0 ? `\uff08${a.cities.length}\uff09` : ''}
+                {a.prefecture}{a.cities.length > 0 ? `（${a.cities.length}）` : ''}
               </span>
             ))}
           </div>
         )
       },
     },
-    {
+    contact: {
+      key: 'contact',
+      header: '連絡先',
+      hideOnMobile: true,
+      render: (store) => (
+        <div className="text-sm min-w-0">
+          <p className="text-[var(--md-sys-color-on-surface)] truncate max-w-[220px]">{store.email || '—'}</p>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{store.phone || '—'}</p>
+        </div>
+      ),
+    },
+    customers: {
       key: 'customers',
       header: '顧客数',
       render: (store) => (
@@ -488,7 +637,7 @@ export default function AdminStoresPage() {
       sortable: true,
       sortValue: (store) => store._count.customers,
     },
-    {
+    loginStatus: {
       key: 'loginStatus',
       header: 'ログイン状態',
       render: (store) => {
@@ -510,6 +659,74 @@ export default function AdminStoresPage() {
       sortable: true,
       sortValue: (store) => (store.hasLoggedIn ? 1 : 0),
     },
+    operator: {
+      key: 'operator',
+      header: '運営者',
+      hideOnMobile: true,
+      render: (store) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{store.operator?.name || '—'}</span>,
+      sortable: true,
+      sortValue: (store) => store.operator?.name || '',
+    },
+    openingDate: {
+      key: 'openingDate',
+      header: '開業日',
+      hideOnMobile: true,
+      render: (store) => (
+        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+          {store.openingDate ? new Date(store.openingDate).toLocaleDateString('ja-JP') : '—'}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (store) => store.openingDate || '',
+    },
+    createdAt: {
+      key: 'createdAt',
+      header: '登録日',
+      hideOnMobile: true,
+      render: (store) => (
+        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+          {store.createdAt ? new Date(store.createdAt).toLocaleDateString('ja-JP') : '—'}
+        </span>
+      ),
+      sortable: true,
+      sortValue: (store) => store.createdAt || '',
+    },
+    missing: {
+      key: 'missing',
+      header: '情報不備',
+      hideOnMobile: true,
+      render: (store) => {
+        const missing = storeMissingKeys(store)
+        if (missing.length === 0) {
+          return <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">—</span>
+        }
+        return (
+          <div className="flex flex-wrap gap-1 max-w-[220px]">
+            {missing.map(k => (
+              <span
+                key={k}
+                className="text-xs px-2 py-0.5 rounded-full bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)] whitespace-nowrap"
+              >
+                {MISSING_LABEL[k]}
+              </span>
+            ))}
+          </div>
+        )
+      },
+      sortable: true,
+      sortValue: (store) => storeMissingKeys(store).length,
+    },
+  }
+
+  const storeColumns: Column<Store>[] = [
+    {
+      key: 'name',
+      header: '店舗名',
+      render: (store) => <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{store.name}</span>,
+      sortable: true,
+      sortValue: (store) => store.name,
+    },
+    ...visibleCols.map(k => columnByKey[k]).filter(Boolean),
     {
       key: 'actions',
       header: '',
@@ -604,7 +821,7 @@ export default function AdminStoresPage() {
             <Button
               size="sm"
               variant="outlined"
-              onClick={() => setShowBulkEdit(true)}
+              onClick={() => setBulkEditTargets(filtered)}
               icon={
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -787,8 +1004,8 @@ export default function AdminStoresPage() {
           )}
         </Card>
 
-        {/* 検索バー + 店舗数 */}
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        {/* 見出し + 店舗数 */}
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
           <h2 className="text-lg font-semibold text-[var(--md-sys-color-on-surface)]">
             店舗一覧
             <span className="ml-3 text-sm font-normal text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-high)] px-2.5 py-1 rounded-full">
@@ -797,27 +1014,76 @@ export default function AdminStoresPage() {
           </h2>
         </div>
 
-        <SearchFilterBar
-          filters={[
-            { key: 'search', label: '検索', type: 'text', placeholder: '店舗名・コード・都道府県・メールで検索' },
-            {
-              key: 'login',
-              label: 'ログイン状態',
-              type: 'select',
-              placeholder: 'すべて',
-              options: [
-                { value: 'active', label: 'アクティブ（ログイン済み）' },
-                { value: 'never', label: '未ログイン' },
-              ],
-            },
+        {/* 保存ビュータブ */}
+        <ViewTabs
+          views={views}
+          activeId={activeViewId}
+          dirty={false}
+          onSelect={handleSelectView}
+          onSaveCurrent={handleSaveView}
+          onDelete={handleDeleteView}
+        />
+
+        {/* 検索 + ツール */}
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--md-sys-color-outline)]">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+            <input
+              type="text"
+              value={params.search || ''}
+              onChange={e => setParams({ search: e.target.value })}
+              placeholder="店舗名・コード・住所・メール・対応エリアで検索..."
+              className="w-full h-10 pl-9 pr-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            />
+          </div>
+          <div className="flex gap-2 items-center flex-wrap">
+            <ColumnPicker options={STORE_COLUMN_OPTIONS} visible={visibleCols} onChange={updateVisibleCols} />
+            <Button variant="outlined" size="sm" onClick={() => handleExportCsv(filtered)}>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12L12 7.5m0 0l4.5 4.5M12 7.5V21" />
+                </svg>
+                CSVエクスポート
+              </span>
+            </Button>
+          </div>
+        </div>
+
+        {/* クイックフィルタチップ */}
+        <div className="mb-4">
+          <FilterChipBar
+            chips={storeListChips()}
+            values={params}
+            onChange={(patch) => setParams(patch)}
+            trailing={
+              <button
+                type="button"
+                onClick={() => setAdvOpen(true)}
+                className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium text-[var(--portal-primary,#374151)] hover:bg-[var(--md-sys-color-surface-container-high)]"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
+                  <path strokeLinecap="round" d="M4 6h16M7 12h10M10 18h4" />
+                </svg>
+                詳細フィルター
+              </button>
+            }
+          />
+        </div>
+
+        {/* 一括操作バー */}
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          totalCount={filtered.length}
+          allMatching={allMatching}
+          onSelectAllMatching={() => setAllMatching(true)}
+          onClearSelection={() => { setSelectedIds(new Set()); setAllMatching(false) }}
+          actions={[
+            { key: 'bulkEdit', label: '一括編集' },
+            { key: 'export', label: 'CSVエクスポート' },
           ]}
-          values={{ search: searchQ, login: loginFilter }}
-          onChange={(key, value) => {
-            if (key === 'search') setSearchQ(value)
-            if (key === 'login') setLoginFilter(value)
-          }}
-          onClear={() => { setSearchQ(''); setLoginFilter('') }}
-          className="mb-4"
+          onAction={handleBulkAction}
         />
 
         <div className="bg-[var(--md-sys-color-surface-container-lowest,#fff)] rounded-[var(--md-sys-shape-medium)] shadow-[var(--md-sys-elevation-1)] overflow-hidden mb-8">
@@ -825,10 +1091,13 @@ export default function AdminStoresPage() {
             columns={storeColumns}
             data={filtered}
             rowKey={(store) => store.id}
-            emptyTitle={searchQ ? `「${searchQ}」に一致する店舗がありません` : (loginFilter ? '条件に一致する店舗がありません' : '店舗データがありません')}
+            emptyTitle={filterQuery ? '条件に一致する店舗がありません' : '店舗データがありません'}
             onRowClick={(store) => setSelectedStore(store)}
+            selectable
+            selectedKeys={allMatching ? new Set(filtered.map(s => s.id)) : selectedIds}
+            onSelectionChange={(keys) => { setSelectedIds(keys); setAllMatching(false) }}
           />
-          {(searchQ || loginFilter) && filtered.length > 0 && filtered.length < stores.length && (
+          {filterQuery !== '' && filtered.length > 0 && filtered.length < stores.length && (
             <div className="px-4 py-2.5 bg-[var(--md-sys-color-surface-container-low)] border-t border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)]">
               {stores.length}店舗中 {filtered.length}件を表示
             </div>
@@ -852,9 +1121,20 @@ export default function AdminStoresPage() {
 
       {/* ─── 一括編集モーダル ─── */}
       <StoreBulkEditModal
-        open={showBulkEdit}
-        stores={stores}
-        onClose={() => { setShowBulkEdit(false); refreshStores() }}
+        open={!!bulkEditTargets}
+        stores={bulkEditTargets ?? []}
+        onClose={() => { setBulkEditTargets(null); refreshStores() }}
+      />
+
+      {/* ─── 詳細フィルター ─── */}
+      <AdvancedFilterPanel
+        open={advOpen}
+        onClose={() => setAdvOpen(false)}
+        fields={storeListAdvFields(operators)}
+        values={params}
+        onApply={(patch) => setParams(patch)}
+        description="すべての条件に一致する店舗を表示します（AND条件）。"
+        fetchCount={(draft) => Promise.resolve(applyStoreFilters(stores, { ...params, ...draft }).length)}
       />
 
       {/* ─── 新規店舗追加モーダル ─── */}

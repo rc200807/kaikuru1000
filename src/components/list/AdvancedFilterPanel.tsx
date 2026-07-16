@@ -20,6 +20,8 @@ type Props = {
   onApply: (patch: Record<string, string>) => void
   /** 件数プレビュー: draft値を受けて該当件数を返す */
   fetchCount?: (draft: Record<string, string>) => Promise<number>
+  /** パネル冒頭の説明文（対象名を差し替える用途） */
+  description?: string
 }
 
 /** フィールドが読み書きするクエリキー一覧 */
@@ -27,7 +29,7 @@ function fieldKeys(f: AdvField): string[] {
   return f.type === 'daterange' ? [`${f.key}From`, `${f.key}To`] : [f.key]
 }
 
-export default function AdvancedFilterPanel({ open, onClose, fields, values, onApply, fetchCount }: Props) {
+export default function AdvancedFilterPanel({ open, onClose, fields, values, onApply, fetchCount, description }: Props) {
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [count, setCount] = useState<number | null>(null)
   const [counting, setCounting] = useState(false)
@@ -85,7 +87,7 @@ export default function AdvancedFilterPanel({ open, onClose, fields, values, onA
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-            すべての条件に一致する顧客を表示します（AND条件）。
+            {description ?? 'すべての条件に一致する顧客を表示します（AND条件）。'}
           </p>
           {fields.map(f => (
             <div key={f.key}>

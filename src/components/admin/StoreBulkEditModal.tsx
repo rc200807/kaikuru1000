@@ -41,8 +41,8 @@ type ColumnDef = {
 }
 
 // 列定義。key は PATCH /api/admin/stores/[id] updateDetails のホワイトリストと一致させること
+// 店舗コードは編集不可のため表示しない。左固定は店舗名列のみ
 const COLUMNS: ColumnDef[] = [
-  { key: 'code', label: 'コード', editor: 'text', width: 96, readOnly: true },
   { key: 'name', label: '店舗名', editor: 'text', width: 180 },
   {
     key: 'storeStatus', label: 'ステータス', editor: 'select', width: 110,
@@ -142,13 +142,13 @@ const GridRow = memo(function GridRow({
             onRevert={onRevert}
           />
         )
-        if (col.key === 'code') {
+        if (col.key === 'name') {
           return (
             <td
               key={col.key}
               className="sticky left-0 z-10 bg-[var(--md-sys-color-surface-container-lowest,#fff)] px-1 py-1 border-r border-[var(--md-sys-color-outline-variant)]"
             >
-              <div className="font-mono text-xs">{cell}</div>
+              {cell}
             </td>
           )
         }
@@ -505,7 +505,7 @@ export default function StoreBulkEditModal({ open, stores, onClose }: Props) {
                   <th
                     key={col.key}
                     className={`sticky top-0 px-3 py-2.5 text-left text-xs font-medium whitespace-nowrap uppercase tracking-wider text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] border-b border-[var(--md-sys-color-outline-variant)] ${
-                      col.key === 'code' ? 'left-0 z-30 border-r' : 'z-20'
+                      col.key === 'name' ? 'left-0 z-30 border-r' : 'z-20'
                     }`}
                   >
                     {col.label}

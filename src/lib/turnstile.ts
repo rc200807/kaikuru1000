@@ -21,10 +21,15 @@ export async function verifyTurnstile(
 ): Promise<TurnstileResult> {
   const secret = process.env.TURNSTILE_SECRET_KEY
 
-  // 環境変数未設定 → 検証スキップ（開発環境）
+  // 環境変数未設定時の扱い
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
-      console.warn('[turnstile] TURNSTILE_SECRET_KEY is not set in production')
+      // サイトキーがありウィジェットが表示されているのにサーバーが検証できない誤設定は fail-closed
+      if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
+        console.error('[turnstile] TURNSTILE_SECRET_KEY missing while site key is set — rejecting')
+        return { success: false, errorCodes: ['missing-secret'] }
+      }
+      console.warn('[turnstile] Turnstile is not configured in production')
     }
     return { success: true }
   }

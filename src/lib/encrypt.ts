@@ -8,7 +8,14 @@
 import crypto from 'crypto'
 
 function getDerivedKey(): Buffer {
-  const raw = process.env.ENCRYPTION_KEY ?? 'kaikuru-default-enc-key-change-in-prod!!'
+  const raw = process.env.ENCRYPTION_KEY
+  if (!raw) {
+    // 本番でキー未設定のまま暗号化・復号を続けると、機密データが既知の鍵で保護される
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('[encrypt] ENCRYPTION_KEY is not set in production')
+    }
+    return crypto.createHash('sha256').update('kaikuru-default-enc-key-change-in-prod!!').digest()
+  }
   // SHA-256 で 32バイトのキーを導出
   return crypto.createHash('sha256').update(raw).digest()
 }
@@ -59,7 +66,11 @@ export function decrypt(ciphertext: string): string {
       decipher.final('utf8')
     )
   } catch {
-    // 復号失敗: 平文として返す（フォールバック）
+    // 暗号化形式なのに復号失敗（鍵不一致・改ざん）は握り潰さない
+    if (isEncrypted(ciphertext)) {
+      throw new Error('[encrypt] failed to decrypt: key mismatch or tampered data')
+    }
+    // 暗号化形式でない値（コロンを含む平文など）は既存データ互換でそのまま返す
     return ciphertext
   }
 }

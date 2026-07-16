@@ -44,19 +44,21 @@ export async function POST(
   // パスワード再発行 → 該当メンバーの全デバイス長期セッションを失効
   await revokeAllDeviceSessions('admin', id)
 
-  // メール送信（失敗しても password は返却）
+  // メール送信（失敗しても password は返却）。メール未設定（ID+パスワード方式）は送信スキップ
   const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
   let emailSent = false
-  try {
-    emailSent = await sendWelcomeWithPasswordEmail({
-      to: member.email,
-      name: member.name,
-      email: member.email,
-      password: newPassword,
-      loginUrl: `${baseUrl}/admin/login`,
-    })
-  } catch (e) {
-    console.error('[admin/members reset-password] email send failed:', e)
+  if (member.email) {
+    try {
+      emailSent = await sendWelcomeWithPasswordEmail({
+        to: member.email,
+        name: member.name,
+        email: member.email,
+        password: newPassword,
+        loginUrl: `${baseUrl}/admin/login`,
+      })
+    } catch (e) {
+      console.error('[admin/members reset-password] email send failed:', e)
+    }
   }
 
   return NextResponse.json({

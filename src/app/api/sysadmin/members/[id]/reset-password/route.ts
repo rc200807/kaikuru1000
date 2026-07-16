@@ -30,16 +30,18 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   await revokeAllDeviceSessions('admin', id)
 
   let emailSent = false
-  try {
-    emailSent = await sendWelcomeWithPasswordEmail({
-      to: target.email,
-      name: target.name,
-      email: target.email,
-      password: rawPassword,
-      loginUrl: `${baseUrl()}/sysadmin/login`,
-    })
-  } catch (e) {
-    console.error('[sysadmin/members] reset-password email failed:', e)
+  if (target.email) {
+    try {
+      emailSent = await sendWelcomeWithPasswordEmail({
+        to: target.email,
+        name: target.name,
+        email: target.email,
+        password: rawPassword,
+        loginUrl: `${baseUrl()}/sysadmin/login`,
+      })
+    } catch (e) {
+      console.error('[sysadmin/members] reset-password email failed:', e)
+    }
   }
 
   await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: user.name, action: `パスワード再発行「${target.name}」`, req: _req })

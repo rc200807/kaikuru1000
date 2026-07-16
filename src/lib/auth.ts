@@ -184,7 +184,9 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
 
-        const key = `admin:${credentials.email}`
+        // credentials.email は「メールアドレス または ログインID」を受け付ける
+        const identifier = credentials.email
+        const key = `admin:${identifier}`
         const { blocked, remainingMs } = await isLoginBlocked(key)
         if (blocked) {
           const mins = Math.ceil((remainingMs ?? 0) / 60000)
@@ -193,14 +195,22 @@ export const authOptions: NextAuthOptions = {
 
         // 同一メールが複数 Admin 行に存在しうる（管理ポータル用とシステム管理者用）。
         // 管理ポータルからは sysadmin 以外の行のみ対象にする。
+        // メール または ログインID の両方で照合対象を集める。
         const admins = await prisma.admin.findMany({
-          where: { email: credentials.email },
+          where: { OR: [{ email: identifier }, { loginId: identifier }] },
         })
         const candidates = admins.filter(a => a.role !== 'sysadmin')
 
         for (const admin of candidates) {
           const isValid = await bcrypt.compare(credentials.password, admin.password)
           if (isValid) {
+            // ID+パスワード方式のパスキー必須制御:
+            // パスキー登録前（pending_passkey）のみパスワードログインを許可し、
+            // 登録後（pending_approval / active）はパスワードでのログインを拒否する。
+            if (admin.authMethod === 'idpass' && admin.status !== 'pending_passkey') {
+              await resetLoginFailures(key)
+              throw new Error('このアカウントはパスキーでログインしてください')
+            }
             await resetLoginFailures(key)
             const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
             await recordAccessLog({ userType: adminRole, userId: admin.id, userName: admin.name, action: 'login', req })
@@ -210,6 +220,8 @@ export const authOptions: NextAuthOptions = {
               name: admin.name,
               avatar: admin.avatar || null,
               role: adminRole,
+              adminStatus: admin.status,
+              authMethod: admin.authMethod,
             }
           }
         }
@@ -380,6 +392,13 @@ export const authOptions: NextAuthOptions = {
           const role = admin.role === 'sysadmin'
             ? 'sysadmin'
             : (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
+          // idpass方式でパスキー登録直後（pending_passkey）にパスキーログインしてきた場合は
+          // 承認待ちへ前進（DBも更新して superadmin が承認できる状態にする。passkey-complete 未通過の保険）
+          let adminStatus = admin.status
+          if (admin.authMethod === 'idpass' && admin.status === 'pending_passkey') {
+            adminStatus = 'pending_approval'
+            await prisma.admin.update({ where: { id: admin.id }, data: { status: 'pending_approval' } })
+          }
           const deviceSessionId = await createDeviceSession({
             userType: 'admin', userId: admin.id,
             credentialId: loginToken.credentialId, loginMethod: 'passkey', ip, userAgent,
@@ -391,6 +410,8 @@ export const authOptions: NextAuthOptions = {
             name: admin.name,
             avatar: admin.avatar || null,
             role,
+            adminStatus,
+            authMethod: admin.authMethod,
             loginMethod: 'passkey',
             deviceSessionId,
           }
@@ -455,6 +476,9 @@ export const authOptions: NextAuthOptions = {
         // 店舗メンバーとしてのログイン時のみ設定される（店舗アカウント直ログインでは null）
         token.memberId = (user as any).memberId ?? null
         token.memberName = (user as any).memberName ?? null
+        // 管理者アカウントの状態（idpass方式のパスキー必須・承認フロー用）
+        token.adminStatus = (user as any).adminStatus ?? 'active'
+        token.authMethod = (user as any).authMethod ?? 'email'
         // ログイン方法別の絶対有効期限（パスキー=30日 / それ以外=8時間）
         const loginMethod = (user as any).loginMethod === 'passkey' ? 'passkey' : 'password'
         token.loginMethod = loginMethod
@@ -523,6 +547,8 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).customerTypes = token.customerTypes ?? null
         ;(session.user as any).memberId = token.memberId ?? null
         ;(session.user as any).memberName = token.memberName ?? null
+        ;(session.user as any).adminStatus = token.adminStatus ?? 'active'
+        ;(session.user as any).authMethod = token.authMethod ?? 'email'
         if (token.name) session.user.name = token.name as string
         if (token.email) session.user.email = token.email as string
       }

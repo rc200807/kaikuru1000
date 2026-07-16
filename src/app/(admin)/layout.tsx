@@ -5,9 +5,11 @@ import NavigationDrawer from '@/components/NavigationDrawer'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isLoginPage = pathname === '/admin/login'
+  // ログイン・オンボーディング（パスキー登録/承認待ち）はナビ無しの単独レイアウト
+  const barePaths = ['/admin/login', '/admin/onboarding/passkey', '/admin/pending-approval']
+  const isBare = barePaths.includes(pathname)
 
-  if (isLoginPage) {
+  if (isBare) {
     return <div data-portal="admin" style={{ color: 'var(--md-sys-color-on-surface)' }}>{children}</div>
   }
 

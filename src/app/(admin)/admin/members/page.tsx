@@ -15,13 +15,24 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 
 type AdminRole = 'admin' | 'superadmin' | 'hr'
+type AdminStatus = 'active' | 'pending_passkey' | 'pending_approval'
 
 type AdminMember = {
   id: string
   name: string
-  email: string
+  email: string | null
+  loginId?: string | null
   role: AdminRole
+  authMethod?: 'email' | 'idpass'
+  status?: AdminStatus
+  approvedAt?: string | null
   createdAt: string
+}
+
+const STATUS_META: Record<AdminStatus, { label: string; cls: string }> = {
+  active: { label: '有効', cls: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' },
+  pending_passkey: { label: 'パスキー登録待ち', cls: 'bg-sky-500/15 text-sky-300 border border-sky-500/30' },
+  pending_approval: { label: '承認待ち', cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
 }
 
 const ROLE_LABEL: Record<AdminRole, string> = {
@@ -43,9 +54,20 @@ export default function AdminMembersPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', email: '' })
+  // 招待方式: 'email'（メール招待） | 'idpass'（ID+パスワード発行・パスキー必須・承認必須）
+  const [inviteMethod, setInviteMethod] = useState<'email' | 'idpass'>('email')
+  const [loginId, setLoginId] = useState('')
+  const [idpassRole, setIdpassRole] = useState<'admin' | 'hr'>('admin')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // ID+パスワード発行の結果（一度だけ表示）
+  const [idpassResult, setIdpassResult] = useState<{ name: string; loginId: string; password: string } | null>(null)
+  const [idCopied, setIdCopied] = useState(false)
+  const [idPwCopied, setIdPwCopied] = useState(false)
+  // 承認処理中のID
+  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   // 削除確認モーダル
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
@@ -80,30 +102,62 @@ export default function AdminMembersPage() {
     }
   }, [status])
 
+  function resetForm() {
+    setForm({ name: '', email: '' })
+    setLoginId('')
+    setIdpassRole('admin')
+    setInviteMethod('email')
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setMessage(null)
 
+    const payload = inviteMethod === 'idpass'
+      ? { authMethod: 'idpass', name: form.name, loginId, role: idpassRole }
+      : form
+
     const res = await fetch('/api/admin/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     })
 
     setSaving(false)
     if (res.ok) {
       const created = await res.json()
       setMembers(prev => [...prev, created])
-      const emailMsg = created.emailSent
-        ? `招待メールを ${form.email} に送信しました`
-        : '（メール送信に失敗しました。メール設定を確認してください）'
-      setMessage({ type: 'success', text: `${form.name} さんのアカウントを作成しました。${emailMsg}` })
+      if (inviteMethod === 'idpass') {
+        // ID＋初期パスワードを一度だけ表示（メール送信なし）
+        setIdpassResult({ name: created.name, loginId: created.loginId, password: created.initialPassword })
+        setMessage({ type: 'success', text: `${created.name} さんのアカウントを発行しました。ID・初期パスワードを本人にお伝えください。` })
+      } else {
+        const emailMsg = created.emailSent
+          ? `招待メールを ${form.email} に送信しました`
+          : '（メール送信に失敗しました。メール設定を確認してください）'
+        setMessage({ type: 'success', text: `${form.name} さんのアカウントを作成しました。${emailMsg}` })
+      }
       setShowForm(false)
-      setForm({ name: '', email: '' })
+      resetForm()
     } else {
       const d = await res.json()
       setMessage({ type: 'error', text: d.error || 'アカウントの作成に失敗しました' })
+    }
+  }
+
+  async function handleApprove(id: string, name: string) {
+    setApprovingId(id)
+    setMessage(null)
+    const res = await fetch(`/api/admin/members/${id}/approve`, { method: 'POST' })
+    setApprovingId(null)
+    if (res.ok) {
+      const updated = await res.json()
+      setMembers(prev => prev.map(m => (m.id === id ? { ...m, ...updated } : m)))
+      setMessage({ type: 'success', text: `${name} さんのアカウントを承認しました` })
+    } else {
+      const d = await res.json().catch(() => ({}))
+      setMessage({ type: 'error', text: d.error || '承認に失敗しました' })
     }
   }
 
@@ -263,12 +317,22 @@ export default function AdminMembersPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{member.name}</p>
-                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{member.email}</p>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                    {member.authMethod === 'idpass'
+                      ? <>ID: <span className="font-mono">{member.loginId}</span></>
+                      : member.email}
+                  </p>
                 </div>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 hidden sm:block">
                   {format(new Date(member.createdAt), 'yyyy/M/d 追加', { locale: ja })}
                 </p>
-                {canManageRoles ? (
+                {/* ID+パスワード方式のステータスバッジ */}
+                {member.authMethod === 'idpass' && member.status && (
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_META[member.status].cls}`}>
+                    {STATUS_META[member.status].label}
+                  </span>
+                )}
+                {canManageRoles && member.authMethod !== 'idpass' ? (
                   <select
                     value={member.role}
                     disabled={roleUpdatingId === member.id}
@@ -284,15 +348,29 @@ export default function AdminMembersPage() {
                     {ROLE_LABEL[member.role]}
                   </span>
                 )}
-                <Button
-                  variant="text"
-                  size="sm"
-                  disabled={resettingId === member.id || deletingId === member.id}
-                  loading={resettingId === member.id}
-                  onClick={() => setResetTarget({ id: member.id, name: member.name, email: member.email })}
-                >
-                  PW再発行
-                </Button>
+                {/* 承認ボタン（superadminのみ・承認待ちのみ） */}
+                {sessionRole === 'superadmin' && member.authMethod === 'idpass' && member.status === 'pending_approval' && (
+                  <Button
+                    variant="filled"
+                    size="sm"
+                    disabled={approvingId === member.id}
+                    loading={approvingId === member.id}
+                    onClick={() => handleApprove(member.id, member.name)}
+                  >
+                    承認
+                  </Button>
+                )}
+                {member.authMethod !== 'idpass' && (
+                  <Button
+                    variant="text"
+                    size="sm"
+                    disabled={resettingId === member.id || deletingId === member.id}
+                    loading={resettingId === member.id}
+                    onClick={() => setResetTarget({ id: member.id, name: member.name, email: member.email || '' })}
+                  >
+                    PW再発行
+                  </Button>
+                )}
                 {canManageRoles && (
                   <Button
                     variant="text"
@@ -319,14 +397,14 @@ export default function AdminMembersPage() {
       {/* メンバー追加モーダル */}
       <Modal
         open={showForm}
-        onClose={() => { setShowForm(false); setForm({ name: '', email: '' }) }}
+        onClose={() => { setShowForm(false); resetForm() }}
         title="メンバー追加"
         size="sm"
         footer={
           <>
             <Button
               variant="text"
-              onClick={() => { setShowForm(false); setForm({ name: '', email: '' }) }}
+              onClick={() => { setShowForm(false); resetForm() }}
             >
               キャンセル
             </Button>
@@ -339,12 +417,36 @@ export default function AdminMembersPage() {
                 handleAdd(fakeEvent)
               }}
             >
-              招待メールを送信
+              {inviteMethod === 'idpass' ? 'ID・パスワードを発行' : '招待メールを送信'}
             </Button>
           </>
         }
       >
         <form onSubmit={handleAdd} className="space-y-4">
+          {/* 招待方式トグル */}
+          <div>
+            <span className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">招待方法</span>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: 'email', label: 'メールで招待' },
+                { v: 'idpass', label: 'ID・パスワードを発行' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setInviteMethod(opt.v)}
+                  className={`text-sm font-medium px-3 py-2 rounded-lg border transition-colors ${
+                    inviteMethod === opt.v
+                      ? 'border-[var(--portal-primary,#374151)] bg-[color-mix(in_srgb,var(--portal-primary,#374151)_12%,transparent)] text-[var(--md-sys-color-on-surface)]'
+                      : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-low)]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <TextField
             label="氏名"
             value={form.name}
@@ -352,23 +454,99 @@ export default function AdminMembersPage() {
             required
             placeholder="例：田中 次郎"
           />
-          <TextField
-            label="メールアドレス"
-            value={form.email}
-            onChange={(v) => setForm({ ...form, email: v })}
-            type="email"
-            required
-            placeholder="例：tanaka@kaikuru.jp"
-          />
-          <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3 flex gap-3 items-start">
-            <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-            </svg>
-            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-              パスワードは自動生成され、入力されたメールアドレスにログイン情報が送信されます。
+
+          {inviteMethod === 'email' ? (
+            <>
+              <TextField
+                label="メールアドレス"
+                value={form.email}
+                onChange={(v) => setForm({ ...form, email: v })}
+                type="email"
+                required
+                placeholder="例：tanaka@kaikuru.jp"
+              />
+              <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3 flex gap-3 items-start">
+                <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                  パスワードは自動生成され、入力されたメールアドレスにログイン情報が送信されます。
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <TextField
+                label="ログインID"
+                value={loginId}
+                onChange={setLoginId}
+                required
+                placeholder="例：tanaka_jiro（半角英数字と . _ -）"
+              />
+              <div>
+                <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">ロール</label>
+                <select
+                  value={idpassRole}
+                  onChange={e => setIdpassRole(e.target.value as 'admin' | 'hr')}
+                  className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+                >
+                  <option value="admin">管理者</option>
+                  <option value="hr">HR（人事）</option>
+                </select>
+              </div>
+              <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3 flex gap-3 items-start">
+                <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                  メール不要。初期パスワードを発行して本人へ手渡します。本人は初回ログイン後に<strong>パスキー登録が必須</strong>で、その後<strong>superadminの承認</strong>を経て利用開始できます。
+                </p>
+              </div>
+            </>
+          )}
+        </form>
+      </Modal>
+
+      {/* ID・パスワード発行 結果モーダル（一度だけ表示） */}
+      <Modal
+        open={!!idpassResult}
+        onClose={() => { setIdpassResult(null); setIdCopied(false); setIdPwCopied(false) }}
+        title="ログイン情報を発行しました"
+        size="sm"
+        footer={
+          <Button variant="filled" onClick={() => { setIdpassResult(null); setIdCopied(false); setIdPwCopied(false) }}>
+            閉じる
+          </Button>
+        }
+      >
+        {idpassResult && (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+              <span className="font-semibold">{idpassResult.name}</span> さんのログイン情報です。本人にお伝えください。
+            </p>
+            <div className="bg-[var(--md-sys-color-surface-container-high)] rounded-lg p-3">
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">ログインID</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 font-mono text-base font-semibold text-[var(--md-sys-color-on-surface)] break-all">{idpassResult.loginId}</code>
+                <Button variant="outlined" size="sm" onClick={() => { navigator.clipboard.writeText(idpassResult.loginId); setIdCopied(true); setTimeout(() => setIdCopied(false), 2000) }}>
+                  {idCopied ? 'コピー済' : 'コピー'}
+                </Button>
+              </div>
+            </div>
+            <div className="bg-[var(--md-sys-color-surface-container-high)] rounded-lg p-3">
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">初期パスワード</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 font-mono text-base font-semibold text-[var(--md-sys-color-on-surface)] break-all">{idpassResult.password}</code>
+                <Button variant="outlined" size="sm" onClick={() => { navigator.clipboard.writeText(idpassResult.password); setIdPwCopied(true); setTimeout(() => setIdPwCopied(false), 2000) }}>
+                  {idPwCopied ? 'コピー済' : 'コピー'}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-[var(--md-sys-color-error)]">
+              ⚠ この初期パスワードは一度しか表示されません。初回ログイン後のパスキー登録用です（登録後はパスキー必須）。
             </p>
           </div>
-        </form>
+        )}
       </Modal>
 
       {/* 削除確認モーダル */}

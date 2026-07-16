@@ -372,9 +372,14 @@ model WorkItem {
 model Admin {
   id            String         @id @default(cuid())
   name          String
-  email         String                            // 一意制約なし：同一メールで管理ポータルとシステム管理者を別々に持てる
+  email         String?                           // 一意制約なし：同一メールで管理ポータルとシステム管理者を別々に持てる。idpass方式はnull
+  loginId       String?        @unique             // ID+パスワード方式のログインID（メールなし管理者用）
   password      String
   role          String         @default("admin") // admin, superadmin, hr, sysadmin
+  authMethod    String         @default("email")  // "email"（従来のメール招待）| "idpass"（ID+パスワード方式）
+  status        String         @default("active")  // "active" | "pending_passkey" | "pending_approval"（idpassのみpending_*を使う）
+  approvedById  String?                            // 承認したsuperadminのAdmin.id
+  approvedAt    DateTime?                          // 承認日時
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
   announcements  Announcement[]
   releaseNotes   ReleaseNote[]  @relation("ReleaseNoteAuthor")

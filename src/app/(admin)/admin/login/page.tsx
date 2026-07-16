@@ -63,8 +63,8 @@ export default function AdminLoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <TextField
-              label="メールアドレス"
-              type="email"
+              label="メールアドレス または ログインID"
+              type="text"
               value={email}
               onChange={setEmail}
               required

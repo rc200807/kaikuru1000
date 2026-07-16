@@ -14,6 +14,15 @@ const createMemberSchema = z.object({
   role:  z.enum(['admin', 'superadmin', 'hr']).optional(),
 })
 
+// ID+パスワード方式（メールなし・パスキー必須・superadmin承認必須）
+const createIdpassMemberSchema = z.object({
+  authMethod: z.literal('idpass'),
+  name:    z.string().min(1, '氏名は必須です').max(100),
+  loginId: z.string().min(4, 'ログインIDは4文字以上で入力してください').max(50)
+    .regex(/^[a-zA-Z0-9._-]+$/, 'ログインIDは半角英数字と . _ - のみ使用できます'),
+  role:    z.enum(['admin', 'hr']).optional(),
+})
+
 async function requireAnyAdmin() {
   const session = await getServerSession(authOptions)
   const user = session?.user as any
@@ -27,7 +36,11 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const members = await prisma.admin.findMany({
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
+    where: { role: { not: 'sysadmin' } },
+    select: {
+      id: true, name: true, email: true, loginId: true, role: true,
+      authMethod: true, status: true, approvedAt: true, createdAt: true,
+    },
     orderBy: { createdAt: 'asc' },
   })
 
@@ -43,6 +56,42 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
+
+  // ── ID+パスワード方式（メールなし・パスキー必須・superadmin承認必須）──
+  if (body?.authMethod === 'idpass') {
+    const p = createIdpassMemberSchema.safeParse(body)
+    if (!p.success) {
+      return NextResponse.json({ error: p.error.issues[0]?.message ?? 'バリデーションエラー' }, { status: 400 })
+    }
+    const { name, loginId, role } = p.data
+
+    const dup = await prisma.admin.findUnique({ where: { loginId } })
+    if (dup) {
+      return NextResponse.json({ error: 'このログインIDはすでに使用されています' }, { status: 409 })
+    }
+
+    const rawPassword = generateSecurePassword()
+    const hashed = await bcrypt.hash(rawPassword, 10)
+    const member = await prisma.admin.create({
+      data: {
+        name,
+        email: null,
+        loginId,
+        password: hashed,
+        role: role ?? 'admin',
+        authMethod: 'idpass',
+        status: 'pending_passkey',
+      },
+      select: {
+        id: true, name: true, email: true, loginId: true, role: true,
+        authMethod: true, status: true, approvedAt: true, createdAt: true,
+      },
+    })
+
+    // メールは送らず、ID＋初期パスワードを一度だけ返す（管理者が本人へ手渡す）
+    return NextResponse.json({ ...member, initialPassword: rawPassword }, { status: 201 })
+  }
+
   const parsed = createMemberSchema.safeParse(body)
   if (!parsed.success) {
     const error = parsed.error.issues[0]?.message ?? 'バリデーションエラー'

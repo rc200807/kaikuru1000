@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 
 type DealUser = { id: string; name: string; email: string | null; phone: string | null; customerType: string } | null
 type DealStore = { id: string; name: string; code: string } | null
@@ -13,6 +14,7 @@ type Deal = {
   id: string
   detail: string | null
   status: string
+  category: string | null
   createdAt: string
   user: DealUser
   store: DealStore
@@ -203,8 +205,13 @@ export default function AdminDealsPage() {
                       <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>
                         {d.user?.name ?? '—'}
                       </div>
-                      <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: c.bg, color: c.fg, flexShrink: 0 }}>
-                        {DEAL_STATUS_LABEL[d.status as DealStatus] ?? d.status}
+                      <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: (DEAL_CATEGORY_BADGE[d.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).bg, color: (DEAL_CATEGORY_BADGE[d.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).fg }}>
+                          {DEAL_CATEGORY_LABEL[d.category ?? 'purchase'] ?? d.category}
+                        </span>
+                        <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: c.bg, color: c.fg }}>
+                          {DEAL_STATUS_LABEL[d.status as DealStatus] ?? d.status}
+                        </span>
                       </span>
                     </div>
                     {d.detail && (

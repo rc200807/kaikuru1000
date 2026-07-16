@@ -23,6 +23,7 @@ import EmptyState from '@/components/EmptyState'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
+import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { isSelectableVisitStatus } from '@/lib/visit-status'
 
 type Customer = {
@@ -187,6 +188,7 @@ type DealItem = {
   id: string
   detail: string | null
   status: string
+  category: string | null
   createdAt: string
   inquiry: { id: string; inquiryType: string } | null
   _count?: { visitSchedules: number }
@@ -388,6 +390,7 @@ export default function StoreCustomerDetailPage() {
   const [dealsLoaded, setDealsLoaded] = useState(false)
   const [newDealOpen, setNewDealOpen] = useState(false)
   const [newDealDetail, setNewDealDetail] = useState('')
+  const [newDealCategory, setNewDealCategory] = useState<string>('purchase')
   const [creatingDeal, setCreatingDeal] = useState(false)
   const [dealDetailEdits, setDealDetailEdits] = useState<Record<string, string>>({})
   const [savingDeal, setSavingDeal] = useState<string | null>(null)
@@ -523,7 +526,7 @@ export default function StoreCustomerDetailPage() {
     const res = await fetch('/api/deals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: customer.id, storeId, detail: newDealDetail }),
+      body: JSON.stringify({ userId: customer.id, storeId, detail: newDealDetail, category: newDealCategory }),
     })
     setCreatingDeal(false)
     if (res.ok) {
@@ -1356,7 +1359,7 @@ export default function StoreCustomerDetailPage() {
         {activeTab === 'deals' && (
           <div>
             <div className="flex justify-end mb-4">
-              <Button size="sm" onClick={() => { setNewDealDetail(''); setNewDealOpen(true) }}>
+              <Button size="sm" onClick={() => { setNewDealDetail(''); setNewDealCategory(dealCategoryFromCustomerType(customer?.customerType)); setNewDealOpen(true) }}>
                 + 案件を追加
               </Button>
             </div>
@@ -1379,12 +1382,18 @@ export default function StoreCustomerDetailPage() {
                   return (
                     <Card key={deal.id} className="p-4">
                       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className="text-xs font-semibold px-2 py-0.5 rounded-full"
                             style={{ background: badge.bg, color: badge.fg }}
                           >
                             {DEAL_STATUS_LABEL[deal.status as keyof typeof DEAL_STATUS_LABEL] ?? deal.status}
+                          </span>
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: (DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).bg, color: (DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).fg }}
+                          >
+                            {DEAL_CATEGORY_LABEL[deal.category ?? 'purchase'] ?? deal.category}
                           </span>
                           {deal.inquiry && (
                             <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">問い合わせ由来</span>
@@ -1470,6 +1479,28 @@ export default function StoreCustomerDetailPage() {
             {/* 案件追加モーダル */}
             <BottomSheet open={newDealOpen} onClose={() => setNewDealOpen(false)} title="案件を追加">
               <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">カテゴリー</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DEAL_CATEGORIES.map(cat => {
+                      const active = newDealCategory === cat
+                      const c = DEAL_CATEGORY_BADGE[cat]
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setNewDealCategory(cat)}
+                          className="text-xs px-3 py-1.5 rounded-full border transition-all"
+                          style={active
+                            ? { background: c.bg, color: c.fg, borderColor: c.fg }
+                            : { background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', borderColor: 'var(--md-sys-color-outline-variant)' }}
+                        >
+                          {DEAL_CATEGORY_LABEL[cat]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
                 <TextField
                   label="案件内容（買取内容など）"
                   value={newDealDetail}

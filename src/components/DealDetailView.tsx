@@ -15,6 +15,7 @@ import TimeSelect from '@/components/TimeSelect'
 import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 import { formatYen } from '@/lib/currency'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 
@@ -43,6 +44,7 @@ type Deal = {
   id: string
   detail: string | null
   status: string
+  category: string | null
   occurredAt: string | null
   createdByType: string | null
   createdByName: string | null
@@ -128,6 +130,7 @@ export default function DealDetailView({
   const [detailEdit, setDetailEdit] = useState('')
   const [savingDetail, setSavingDetail] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [savingCategory, setSavingCategory] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -370,6 +373,20 @@ export default function DealDetailView({
     else setMsg({ type: 'error', text: 'ステータスの変更に失敗しました' })
   }
 
+  async function changeCategory(category: string) {
+    if (!deal || category === deal.category) return
+    setSavingCategory(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category }),
+    })
+    setSavingCategory(false)
+    if (res.ok) setDeal(prev => prev ? { ...prev, category } : prev)
+    else setMsg({ type: 'error', text: 'カテゴリーの変更に失敗しました' })
+  }
+
   async function saveDetail() {
     if (!deal) return
     setSavingDetail(true)
@@ -408,6 +425,7 @@ export default function DealDetailView({
   }
 
   const badge = DEAL_STATUS_BADGE[deal.status as DealStatus] ?? DEAL_STATUS_BADGE.inquiry
+  const catBadge = DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase
   // 案件直下の品目（再ペアレント後の正）
   const purchaseItems = deal.purchaseItems ?? []
   const workItems = deal.workItems ?? []
@@ -447,9 +465,14 @@ export default function DealDetailView({
         {/* 案件サマリー */}
         <Card variant="outlined" padding="md">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{ background: badge.bg, color: badge.fg }}>
-              {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{ background: badge.bg, color: badge.fg }}>
+                {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
+              </span>
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{ background: catBadge.bg, color: catBadge.fg }}>
+                {DEAL_CATEGORY_LABEL[deal.category ?? 'purchase'] ?? deal.category}
+              </span>
+            </div>
             <Button size="sm" variant="outlined" onClick={() => setShowPreview(true)}>契約プレビュー</Button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -497,6 +520,29 @@ export default function DealDetailView({
         {/* ステータス変更 ＋ 案件内容 */}
         <Card variant="outlined" padding="md">
           <SectionTitle>ステータス・案件内容</SectionTitle>
+          {/* カテゴリー */}
+          <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">カテゴリー</label>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {DEAL_CATEGORIES.map(cat => {
+              const active = (deal.category ?? 'purchase') === cat
+              const c = DEAL_CATEGORY_BADGE[cat]
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  disabled={savingCategory}
+                  onClick={() => changeCategory(cat)}
+                  className="text-xs px-3 py-1.5 rounded-full border transition-all disabled:opacity-50"
+                  style={active
+                    ? { background: c.bg, color: c.fg, borderColor: c.fg }
+                    : { background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', borderColor: 'var(--md-sys-color-outline-variant)' }}
+                >
+                  {DEAL_CATEGORY_LABEL[cat]}
+                </button>
+              )
+            })}
+          </div>
+          <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">ステータス</label>
           <div className="flex flex-wrap gap-1.5 mb-4">
             {DEAL_STATUS_ORDER.map(s => {
               const active = deal.status === s

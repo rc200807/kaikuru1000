@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
+import { isDealCategory } from '@/lib/deal-categories'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
@@ -168,10 +169,13 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent } = body
+  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category } = body
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
+  }
+  if (category !== undefined && !isDealCategory(category)) {
+    return NextResponse.json({ error: '無効なカテゴリーです' }, { status: 400 })
   }
   if (purchaseUpliftPercent !== undefined && ![0, 10, 15].includes(Number(purchaseUpliftPercent))) {
     return NextResponse.json({ error: '無効な上乗せ率です' }, { status: 400 })
@@ -186,6 +190,7 @@ export async function PATCH(
   const updateData: any = {}
   if (detail !== undefined) updateData.detail = detail || null
   if (status !== undefined) updateData.status = status
+  if (category !== undefined) updateData.category = category
   // 担当店舗の変更は管理者のみ
   if (storeId !== undefined && isAdmin) updateData.storeId = storeId || null
   // 案件発生日（管理・店舗とも編集可）。不正値は無視。

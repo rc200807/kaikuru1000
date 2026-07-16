@@ -31,6 +31,7 @@ import BankSearch from '@/components/customer/BankSearch'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type User = {
@@ -111,6 +112,7 @@ type DealItem = {
   id: string
   detail: string | null
   status: string
+  category: string | null
   createdAt: string
   inquiry: { id: string; inquiryType: string } | null
   _count?: { visitSchedules: number }
@@ -244,6 +246,7 @@ export default function AdminCustomersPage() {
   const [savingDeal, setSavingDeal] = useState<string | null>(null)
   const [showNewDeal, setShowNewDeal] = useState(false)
   const [newDealDetail, setNewDealDetail] = useState('')
+  const [newDealCategory, setNewDealCategory] = useState<string>('purchase')
   const [creatingDeal, setCreatingDeal] = useState(false)
   const [detailSchedules, setDetailSchedules] = useState<VisitSchedule[]>([])
   const [detailSchedulesLoading, setDetailSchedulesLoading] = useState(false)
@@ -573,7 +576,7 @@ export default function AdminCustomersPage() {
     const res = await fetch('/api/deals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: detailUser.id, detail: newDealDetail }),
+      body: JSON.stringify({ userId: detailUser.id, detail: newDealDetail, category: newDealCategory }),
     })
     setCreatingDeal(false)
     if (res.ok) {
@@ -2297,12 +2300,34 @@ export default function AdminCustomersPage() {
             {detailTab === 'deals' && (
               <div className="space-y-3">
                 <div className="flex justify-end">
-                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); setShowNewDeal(v => !v) }}>
+                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); setNewDealCategory(dealCategoryFromCustomerType(detailUser?.customerType)); setShowNewDeal(v => !v) }}>
                     {showNewDeal ? 'キャンセル' : '+ 案件を追加'}
                   </Button>
                 </div>
                 {showNewDeal && (
                   <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">カテゴリー</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {DEAL_CATEGORIES.map(cat => {
+                          const active = newDealCategory === cat
+                          const c = DEAL_CATEGORY_BADGE[cat]
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setNewDealCategory(cat)}
+                              className="text-xs px-3 py-1.5 rounded-full border transition-all"
+                              style={active
+                                ? { background: c.bg, color: c.fg, borderColor: c.fg }
+                                : { background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', borderColor: 'var(--md-sys-color-outline-variant)' }}
+                            >
+                              {DEAL_CATEGORY_LABEL[cat]}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                     <TextField
                       label="案件内容（買取内容など）"
                       value={newDealDetail}
@@ -2329,12 +2354,18 @@ export default function AdminCustomersPage() {
                         className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3"
                       >
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span
                               className="text-xs font-semibold px-2 py-0.5 rounded-full"
                               style={{ background: badge.bg, color: badge.fg }}
                             >
                               {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
+                            </span>
+                            <span
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                              style={{ background: (DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).bg, color: (DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).fg }}
+                            >
+                              {DEAL_CATEGORY_LABEL[deal.category ?? 'purchase'] ?? deal.category}
                             </span>
                             {deal.inquiry && (
                               <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">問い合わせ由来</span>

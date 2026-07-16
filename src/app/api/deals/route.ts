@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
+import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { resolveStoreScope } from '@/lib/store-scope'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
   const storeId = searchParams.get('storeId')
   const userId = searchParams.get('userId')
   const status = searchParams.get('status')
+  const category = searchParams.get('category')
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const maxLimit = isAdmin ? 2000 : 200
   const limit = Math.max(1, Math.min(maxLimit, parseInt(searchParams.get('limit') || '50', 10)))
@@ -52,6 +54,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (status && status !== 'all') where.status = status
+  if (category && category !== 'all' && isDealCategory(category)) where.category = category
 
   const [deals, total] = await Promise.all([
     prisma.deal.findMany({
@@ -83,13 +86,16 @@ export async function POST(request: NextRequest) {
   if (!isStore && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json()
-  const { userId, detail, status, occurredAt } = body
+  const { userId, detail, status, occurredAt, category } = body
 
   if (!userId) {
     return NextResponse.json({ error: '顧客が指定されていません' }, { status: 400 })
   }
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
+  }
+  if (category !== undefined && category !== null && !isDealCategory(category)) {
+    return NextResponse.json({ error: '無効なカテゴリーです' }, { status: 400 })
   }
   // 案件発生日（指定なければ now）。不正値は now にフォールバック。
   let occurredAtDate: Date | undefined
@@ -101,7 +107,7 @@ export async function POST(request: NextRequest) {
   // 対象顧客の存在と（店舗の場合は）所有権を確認
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, storeId: true },
+    select: { id: true, storeId: true, customerType: true },
   })
   if (!targetUser) {
     return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
@@ -118,12 +124,18 @@ export async function POST(request: NextRequest) {
     finalStoreId = (body.storeId ?? targetUser.storeId) ?? null
   }
 
+  // カテゴリー: 指定があればそれを、なければ顧客種別から既定値を導出
+  const finalCategory = isDealCategory(category)
+    ? category
+    : dealCategoryFromCustomerType(targetUser.customerType)
+
   const deal = await prisma.deal.create({
     data: {
       userId,
       storeId: finalStoreId,
       detail: detail || null,
       status: isDealStatus(status) ? status : 'inquiry',
+      category: finalCategory,
       ...(occurredAtDate ? { occurredAt: occurredAtDate } : {}),
       createdByType: sessionUser.role ?? null,
       createdById: sessionUser.id ?? null,

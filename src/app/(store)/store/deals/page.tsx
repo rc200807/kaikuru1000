@@ -9,11 +9,13 @@ import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
 import { DEAL_STATUSES, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 
 type Deal = {
   id: string
   detail: string | null
   status: string
+  category: string | null
   createdAt: string
   user: { id: string; name: string; phone: string; customerType: string } | null
   store: { id: string; name: string; code: string } | null
@@ -177,6 +179,12 @@ export default function StoreDealsPage() {
                         style={{ background: badge.bg, color: badge.fg }}
                       >
                         {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
+                      </span>
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: (DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).bg, color: (DEAL_CATEGORY_BADGE[deal.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase).fg }}
+                      >
+                        {DEAL_CATEGORY_LABEL[deal.category ?? 'purchase'] ?? deal.category}
                       </span>
                       {scope.isMulti && deal.store && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">

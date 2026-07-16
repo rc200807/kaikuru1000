@@ -13,6 +13,7 @@ import StorePage from '@/components/store/StorePage'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import VideoThumbnail from '@/components/VideoThumbnail'
 import StoreReleaseNotesCard from '@/components/store/ReleaseNotesCard'
+import { AnnouncementCategoryIcon } from '@/components/announcement/categoryIcons'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatJstDate } from '@/lib/datetime'
@@ -281,8 +282,8 @@ function HighlightsRow({ highlights }: { highlights: Highlights }) {
                     {a.priority === 'urgent' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">緊急</span>}
                     {a.priority === 'high' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">重要</span>}
                     {a.announcementCategory && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${a.announcementCategory.color}20`, color: a.announcementCategory.color }}>
-                        {a.announcementCategory.icon} {a.announcementCategory.name}
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${a.announcementCategory.color}20`, color: a.announcementCategory.color }}>
+                        <AnnouncementCategoryIcon iconKey={a.announcementCategory.icon} className="w-3 h-3" /> {a.announcementCategory.name}
                       </span>
                     )}
                   </div>

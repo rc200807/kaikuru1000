@@ -825,7 +825,7 @@ model AnnouncementCategory {
   id            String         @id @default(cuid())
   name          String         @unique
   color         String         @default("#6B7280")
-  icon          String         @default("📢")
+  icon          String         @default("megaphone") // フラットアイコンのキー（src/components/announcement/categoryIcons.tsx）
   sortOrder     Int            @default(0)
   announcements Announcement[]
   createdAt     DateTime       @default(now())

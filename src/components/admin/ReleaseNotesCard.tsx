@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatJstDate } from '@/lib/datetime'
+import { getReleaseCategory, NoticeIcon } from '@/components/release-notes/categories'
 
 type ReleaseNote = {
   id: string
@@ -11,13 +12,6 @@ type ReleaseNote = {
   category: string
   publishedAt: string | null
   isRead: boolean
-}
-
-const CATEGORY: Record<string, { label: string; icon: string; color: string }> = {
-  feature: { label: '新機能', icon: '🚀', color: '#3B82F6' },
-  improvement: { label: '改善', icon: '✨', color: '#10B981' },
-  fix: { label: '修正', icon: '🛠️', color: '#F59E0B' },
-  notice: { label: 'お知らせ', icon: '📣', color: '#8B5CF6' },
 }
 
 const MAX_VISIBLE = 6
@@ -54,7 +48,9 @@ export default function AdminReleaseNotesCard() {
   return (
     <section className="rounded-2xl p-5" style={{ background: '#171717', border: '1px solid #262626' }}>
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-sm" style={{ color: '#ffffff', fontWeight: 600 }}>📣 アップデート情報</h2>
+        <h2 className="inline-flex items-center gap-1.5 text-sm" style={{ color: '#ffffff', fontWeight: 600 }}>
+          <NoticeIcon className="w-4 h-4" /> アップデート情報
+        </h2>
         {unreadCount > 0 && (
           <span className="min-w-[18px] h-[18px] px-1.5 rounded-full text-white text-[10px] font-bold flex items-center justify-center" style={{ background: '#dc2626' }}>
             {unreadCount}
@@ -64,7 +60,7 @@ export default function AdminReleaseNotesCard() {
 
       <div className="divide-y" style={{ borderColor: '#262626' }}>
         {visible.map(n => {
-          const cat = CATEGORY[n.category] ?? CATEGORY.feature
+          const cat = getReleaseCategory(n.category)
           const open = openId === n.id
           return (
             <div key={n.id} className="py-2.5 first:pt-0 last:pb-0" style={{ borderColor: '#262626' }}>
@@ -77,7 +73,7 @@ export default function AdminReleaseNotesCard() {
                     className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full text-white shrink-0"
                     style={{ backgroundColor: cat.color }}
                   >
-                    {cat.icon} {cat.label}
+                    <cat.Icon className="w-3 h-3" /> {cat.label}
                   </span>
                   {n.version && (
                     <span className="text-[11px] font-mono shrink-0" style={{ color: '#a3a3a3' }}>{n.version}</span>

@@ -11,7 +11,8 @@ import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
-import { CHIEBUKURO_CATEGORIES, categoryIcon } from '@/lib/chiebukuro'
+import { CHIEBUKURO_CATEGORIES } from '@/lib/chiebukuro'
+import ChiebukuroCategoryIcon from '@/components/chiebukuro/CategoryIcon'
 
 type Question = {
   id: string
@@ -112,9 +113,9 @@ export default function ChiebukuroPage() {
               key={c.key}
               type="button"
               onClick={() => setCategory(c.key)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${category === c.key ? 'bg-[var(--store-primary)] text-white border-[var(--store-primary)]' : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]'}`}
+              className={`shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${category === c.key ? 'bg-[var(--store-primary)] text-white border-[var(--store-primary)]' : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]'}`}
             >
-              {c.icon} {c.key}
+              <ChiebukuroCategoryIcon category={c.key} className="w-4 h-4" /> {c.key}
             </button>
           ))}
         </div>
@@ -133,8 +134,8 @@ export default function ChiebukuroPage() {
                 className="w-full text-left rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-4 hover:border-[var(--store-primary)] transition-colors"
               >
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
-                    {categoryIcon(q.category)} {q.category}
+                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                    <ChiebukuroCategoryIcon category={q.category} className="w-3.5 h-3.5" /> {q.category}
                   </span>
                   {q.isResolved && (
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">解決済み</span>
@@ -178,9 +179,9 @@ export default function ChiebukuroPage() {
                   key={c.key}
                   type="button"
                   onClick={() => setForm({ ...form, category: c.key })}
-                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${form.category === c.key ? 'bg-[var(--store-primary)] text-white border-[var(--store-primary)]' : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)]'}`}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors ${form.category === c.key ? 'bg-[var(--store-primary)] text-white border-[var(--store-primary)]' : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)]'}`}
                 >
-                  {c.icon} {c.key}
+                  <ChiebukuroCategoryIcon category={c.key} className="w-4 h-4" /> {c.key}
                 </button>
               ))}
             </div>

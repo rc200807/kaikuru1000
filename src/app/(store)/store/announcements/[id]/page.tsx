@@ -10,6 +10,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import ReactionBar from '@/components/store/ReactionBar'
 import CommentSection, { type Comment } from '@/components/store/CommentSection'
 import { ANNOUNCEMENT_EMOJIS } from '@/lib/chiebukuro'
+import { AnnouncementCategoryIcon } from '@/components/announcement/categoryIcons'
 
 type AnnouncementCategory = {
   id: string
@@ -132,7 +133,7 @@ export default function StoreAnnouncementDetailPage() {
           {/* Category badge */}
           {announcement.announcementCategory ? (
             <span
-              className="text-xs font-medium px-2.5 py-1 rounded-full"
+              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full"
               style={{
                 backgroundColor: announcement.announcementCategory.color
                   ? `${announcement.announcementCategory.color}20`
@@ -140,7 +141,7 @@ export default function StoreAnnouncementDetailPage() {
                 color: announcement.announcementCategory.color || undefined,
               }}
             >
-              {announcement.announcementCategory.icon} {announcement.announcementCategory.name}
+              <AnnouncementCategoryIcon iconKey={announcement.announcementCategory.icon} className="w-3.5 h-3.5" /> {announcement.announcementCategory.name}
             </span>
           ) : (
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${cat.color}`}>

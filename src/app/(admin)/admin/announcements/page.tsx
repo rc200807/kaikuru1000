@@ -12,6 +12,7 @@ import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
+import { AnnouncementCategoryIcon, ANNOUNCEMENT_ICON_KEYS, DEFAULT_ANNOUNCEMENT_ICON } from '@/components/announcement/categoryIcons'
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false })
 
@@ -52,8 +53,6 @@ const DEFAULT_COLORS = [
   '#EC4899', '#06B6D4', '#6B7280',
 ]
 
-const DEFAULT_ICONS = ['📢', '📣', '🔔', '⚡', '🎉', '🛠️', '📋', '💡', '🚀', '⚠️']
-
 function getPriorityInfo(priority: string) {
   return PRIORITY_OPTIONS.find(p => p.value === priority) || PRIORITY_OPTIONS[0]
 }
@@ -81,7 +80,7 @@ function AdminAnnouncementsContent() {
   const [categories, setCategories] = useState<AnnouncementCategory[]>([])
   const [showCatForm, setShowCatForm] = useState(false)
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
-  const [catForm, setCatForm] = useState({ name: '', color: '#3B82F6', icon: '📢' })
+  const [catForm, setCatForm] = useState({ name: '', color: '#3B82F6', icon: DEFAULT_ANNOUNCEMENT_ICON })
   const [catSubmitting, setCatSubmitting] = useState(false)
 
   useEffect(() => {
@@ -208,7 +207,7 @@ function AdminAnnouncementsContent() {
         setMessage({ type: 'success', text: editingCatId ? 'カテゴリを更新しました' : 'カテゴリを作成しました' })
         setShowCatForm(false)
         setEditingCatId(null)
-        setCatForm({ name: '', color: '#3B82F6', icon: '📢' })
+        setCatForm({ name: '', color: '#3B82F6', icon: DEFAULT_ANNOUNCEMENT_ICON })
         fetchCategories()
       } else {
         const data = await res.json()
@@ -323,7 +322,7 @@ function AdminAnnouncementsContent() {
         <div className="space-y-4">
           <div className="flex justify-end">
             {!showCatForm && (
-              <Button size="sm" onClick={() => { setShowCatForm(true); setCatForm({ name: '', color: '#3B82F6', icon: '📢' }); setEditingCatId(null) }}>
+              <Button size="sm" onClick={() => { setShowCatForm(true); setCatForm({ name: '', color: '#3B82F6', icon: DEFAULT_ANNOUNCEMENT_ICON }); setEditingCatId(null) }}>
                 + カテゴリ追加
               </Button>
             )}
@@ -349,18 +348,18 @@ function AdminAnnouncementsContent() {
                     アイコン
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {DEFAULT_ICONS.map(icon => (
+                    {ANNOUNCEMENT_ICON_KEYS.map(icon => (
                       <button
                         key={icon}
                         type="button"
                         onClick={() => setCatForm({ ...catForm, icon })}
-                        className={`w-9 h-9 flex items-center justify-center rounded-lg text-lg transition-all ${
+                        className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all ${
                           catForm.icon === icon
-                            ? 'bg-[var(--admin-primary-container)] ring-2 ring-[var(--admin-primary)]'
-                            : 'bg-[var(--md-sys-color-surface-container)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                            ? 'bg-[var(--admin-primary-container)] text-[var(--md-sys-color-on-surface)] ring-2 ring-[var(--admin-primary)]'
+                            : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
                         }`}
                       >
-                        {icon}
+                        <AnnouncementCategoryIcon iconKey={icon} className="w-5 h-5" />
                       </button>
                     ))}
                   </div>
@@ -395,7 +394,7 @@ function AdminAnnouncementsContent() {
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white"
                     style={{ backgroundColor: catForm.color }}
                   >
-                    {catForm.icon} {catForm.name || 'カテゴリ名'}
+                    <AnnouncementCategoryIcon iconKey={catForm.icon} className="w-3.5 h-3.5" /> {catForm.name || 'カテゴリ名'}
                   </span>
                 </div>
 
@@ -433,7 +432,7 @@ function AdminAnnouncementsContent() {
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white"
                       style={{ backgroundColor: cat.color }}
                     >
-                      {cat.icon} {cat.name}
+                      <AnnouncementCategoryIcon iconKey={cat.icon} className="w-3.5 h-3.5" /> {cat.name}
                     </span>
                     <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
                       {cat._count.announcements}件のお知らせ
@@ -512,7 +511,7 @@ function AdminAnnouncementsContent() {
                           }`}
                           style={form.categoryId === cat.id ? { backgroundColor: cat.color } : undefined}
                         >
-                          {cat.icon} {cat.name}
+                          <AnnouncementCategoryIcon iconKey={cat.icon} className="w-3.5 h-3.5" /> {cat.name}
                         </button>
                       ))}
                     </div>
@@ -540,7 +539,6 @@ function AdminAnnouncementsContent() {
                             : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
                         }`}
                       >
-                        {opt.value === 'urgent' && '🔴 '}
                         {opt.label}
                       </button>
                     ))}
@@ -592,12 +590,12 @@ function AdminAnnouncementsContent() {
                         className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-white"
                         style={{ backgroundColor: detailAnnouncement.announcementCategory.color }}
                       >
-                        {detailAnnouncement.announcementCategory.icon} {detailAnnouncement.announcementCategory.name}
+                        <AnnouncementCategoryIcon iconKey={detailAnnouncement.announcementCategory.icon} className="w-3.5 h-3.5" /> {detailAnnouncement.announcementCategory.name}
                       </span>
                     )}
                     {detailAnnouncement.priority === 'urgent' && (
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
-                        🔴 緊急
+                        緊急
                       </span>
                     )}
                     {detailAnnouncement.priority === 'high' && (
@@ -676,7 +674,7 @@ function AdminAnnouncementsContent() {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       {a.priority === 'urgent' && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">
-                          🔴 緊急
+                          緊急
                         </span>
                       )}
                       {a.priority === 'high' && (
@@ -689,7 +687,7 @@ function AdminAnnouncementsContent() {
                           className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-white"
                           style={{ backgroundColor: catDisplay.color }}
                         >
-                          {catDisplay.icon} {catDisplay.name}
+                          <AnnouncementCategoryIcon iconKey={catDisplay.icon} className="w-3.5 h-3.5" /> {catDisplay.name}
                         </span>
                       )}
                       {a.isPublished ? (

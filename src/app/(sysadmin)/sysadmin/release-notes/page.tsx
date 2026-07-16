@@ -10,6 +10,12 @@ import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import { formatJstDateTime } from '@/lib/datetime'
+import {
+  RELEASE_CATEGORIES,
+  getReleaseCategory,
+  StoreTargetIcon,
+  AdminTargetIcon,
+} from '@/components/release-notes/categories'
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false })
 
@@ -27,17 +33,6 @@ type ReleaseNote = {
   readCount: number
   createdAt: string
   updatedAt: string
-}
-
-const CATEGORY_OPTIONS = [
-  { value: 'feature', label: '新機能', icon: '🚀', color: '#3B82F6' },
-  { value: 'improvement', label: '改善', icon: '✨', color: '#10B981' },
-  { value: 'fix', label: '修正', icon: '🛠️', color: '#F59E0B' },
-  { value: 'notice', label: 'お知らせ', icon: '📣', color: '#8B5CF6' },
-] as const
-
-function getCategory(value: string) {
-  return CATEGORY_OPTIONS.find(c => c.value === value) ?? CATEGORY_OPTIONS[0]
 }
 
 const EMPTY_FORM = {
@@ -231,19 +226,19 @@ export default function SysAdminReleaseNotesPage() {
                 カテゴリ
               </label>
               <div className="flex flex-wrap gap-2">
-                {CATEGORY_OPTIONS.map(cat => (
+                {RELEASE_CATEGORIES.map(cat => (
                   <button
                     key={cat.value}
                     type="button"
                     onClick={() => setForm({ ...form, category: cat.value })}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1 ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
                       form.category === cat.value
                         ? 'text-white ring-2 ring-offset-1 ring-current'
                         : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
                     }`}
                     style={form.category === cat.value ? { backgroundColor: cat.color } : undefined}
                   >
-                    {cat.icon} {cat.label}
+                    <cat.Icon /> {cat.label}
                   </button>
                 ))}
               </div>
@@ -256,12 +251,14 @@ export default function SysAdminReleaseNotesPage() {
               </label>
               <div className="flex flex-wrap gap-2">
                 <TargetToggle
-                  label="🏬 店舗ポータル"
+                  icon={<StoreTargetIcon className="w-4 h-4" />}
+                  label="店舗ポータル"
                   active={form.targetStore}
                   onClick={() => setForm({ ...form, targetStore: !form.targetStore })}
                 />
                 <TargetToggle
-                  label="🛡️ 管理ポータル"
+                  icon={<AdminTargetIcon className="w-4 h-4" />}
+                  label="管理ポータル"
                   active={form.targetAdmin}
                   onClick={() => setForm({ ...form, targetAdmin: !form.targetAdmin })}
                 />
@@ -403,7 +400,7 @@ export default function SysAdminReleaseNotesPage() {
   )
 }
 
-function TargetToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function TargetToggle({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -419,19 +416,20 @@ function TargetToggle({ label, active, onClick }: { label: string; active: boole
           <svg className="w-2.5 h-2.5 text-[var(--md-sys-color-surface)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>
         )}
       </span>
+      {icon}
       {label}
     </button>
   )
 }
 
 function CategoryChip({ category }: { category: string }) {
-  const c = getCategory(category)
+  const c = getReleaseCategory(category)
   return (
     <span
       className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full text-white"
       style={{ backgroundColor: c.color }}
     >
-      {c.icon} {c.label}
+      <c.Icon className="w-3 h-3" /> {c.label}
     </span>
   )
 }
@@ -440,10 +438,10 @@ function TargetBadges({ targetStore, targetAdmin }: { targetStore: boolean; targ
   return (
     <span className="inline-flex items-center gap-1">
       {targetStore && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">🏬 店舗</span>
+        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"><StoreTargetIcon className="w-3 h-3" /> 店舗</span>
       )}
       {targetAdmin && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">🛡️ 管理</span>
+        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"><AdminTargetIcon className="w-3 h-3" /> 管理</span>
       )}
     </span>
   )

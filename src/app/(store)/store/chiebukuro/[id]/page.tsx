@@ -8,7 +8,8 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import ReactionBar from '@/components/store/ReactionBar'
-import { categoryIcon, QUESTION_EMOJIS, ANSWER_EMOJIS } from '@/lib/chiebukuro'
+import { QUESTION_EMOJIS, ANSWER_EMOJIS } from '@/lib/chiebukuro'
+import ChiebukuroCategoryIcon from '@/components/chiebukuro/CategoryIcon'
 
 type Reaction = { emoji: string; count: number; reacted: boolean }
 type Answer = { id: string; body: string; authorName: string; isBest: boolean; mine: boolean; createdAt: string; reactions: Reaction[] }
@@ -88,7 +89,7 @@ export default function ChiebukuroDetailPage() {
       {/* 質問 */}
       <div className="rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-5">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{categoryIcon(q.category)} {q.category}</span>
+          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"><ChiebukuroCategoryIcon category={q.category} className="w-3.5 h-3.5" /> {q.category}</span>
           {q.isResolved && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">解決済み</span>}
         </div>
         <h1 className="text-lg font-bold text-[var(--md-sys-color-on-surface)] mb-2">{q.title}</h1>

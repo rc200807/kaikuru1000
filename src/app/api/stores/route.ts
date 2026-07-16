@@ -21,9 +21,10 @@ export async function GET(request: NextRequest) {
     where: { isActive: true },
     select: {
       id: true, name: true, code: true,
-      prefecture: true, address: true, phone: true, email: true,
+      prefecture: true, postalCode: true, address: true, phone: true, email: true,
       storeStatus: true, openingDate: true, closingDate: true,
-      googleBusinessUrl: true, oikuraPageUrl: true, bankInfo: true,
+      googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
+      contractNotifyEmail: true, calendarInviteEmail: true,
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
       operatorId: true, serviceAreas: true,

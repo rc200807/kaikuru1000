@@ -13,6 +13,7 @@ import DataTable, { type Column } from '@/components/DataTable'
 import SearchFilterBar from '@/components/SearchFilterBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import BankSearch from '@/components/customer/BankSearch'
+import StoreBulkEditModal from '@/components/admin/StoreBulkEditModal'
 import { parseServiceAreas } from '@/lib/address-utils'
 
 type Store = {
@@ -29,6 +30,9 @@ type Store = {
   closingDate: string | null
   googleBusinessUrl: string | null
   oikuraPageUrl: string | null
+  lineAddFriendUrl: string | null
+  contractNotifyEmail: string | null
+  calendarInviteEmail: string | null
   bankInfo: string | null
   bankName: string | null
   branchName: string | null
@@ -61,6 +65,9 @@ export default function AdminStoresPage() {
 
   // 新規店舗追加モーダル
   const [showCreateModal, setShowCreateModal] = useState(false)
+
+  // 一括編集モーダル
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
   const [createForm, setCreateForm] = useState({
     code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '',
   })
@@ -594,6 +601,18 @@ export default function AdminStoresPage() {
             >
               新規店舗追加
             </Button>
+            <Button
+              size="sm"
+              variant="outlined"
+              onClick={() => setShowBulkEdit(true)}
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              }
+            >
+              一括編集
+            </Button>
             <a href="/api/admin/stores/inquiry-urls/export" download>
               <Button
                 size="sm"
@@ -830,6 +849,13 @@ export default function AdminStoresPage() {
           </div>
         )}
       </div>
+
+      {/* ─── 一括編集モーダル ─── */}
+      <StoreBulkEditModal
+        open={showBulkEdit}
+        stores={stores}
+        onClose={() => { setShowBulkEdit(false); refreshStores() }}
+      />
 
       {/* ─── 新規店舗追加モーダル ─── */}
       <Modal

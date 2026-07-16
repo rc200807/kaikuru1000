@@ -603,6 +603,18 @@ model DeviceSession {
   @@index([userType, userId])
 }
 
+// 店舗一括編集のプレゼンス（誰がどの店舗を編集中かの表示用。ロックはしない）
+model StoreEditPresence {
+  id         String   @id @default(cuid())
+  adminId    String   // Admin.id
+  adminName  String
+  storeId    String?  // null = 一括編集モーダルを開いている（特定店舗はまだ編集していない）
+  lastSeenAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([lastSeenAt])
+}
+
 // 店舗お問い合わせ
 model Inquiry {
   id              String   @id @default(cuid())

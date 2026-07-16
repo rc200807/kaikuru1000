@@ -38,6 +38,8 @@ type Store = {
   invoiceNumber: string | null
   antiquePermitNumber: string | null
   serviceAreas: string | null
+  hasLoggedIn?: boolean
+  lastLoginAt?: string | null
   _count: { customers: number }
 }
 
@@ -144,6 +146,9 @@ export default function AdminStoresPage() {
 
   // 検索
   const [searchQ, setSearchQ] = useState('')
+
+  // ログイン状態フィルタ（'' = すべて / 'active' = ログイン済み / 'never' = 未ログイン）
+  const [loginFilter, setLoginFilter] = useState('')
 
   // 店舗詳細サイドバー
   const [detailStore, setDetailStore] = useState<Store | null>(null)
@@ -394,23 +399,26 @@ export default function AdminStoresPage() {
   }
 
   const q = searchQ.trim().toLowerCase()
-  const filtered = q
-    ? stores.filter(s => {
-        const areaText = parseServiceAreas(s.serviceAreas)
-          .flatMap(a => [a.prefecture, ...a.cities])
-          .join(' ')
-          .toLowerCase()
-        return (
-          s.name.toLowerCase().includes(q) ||
-          s.code.toLowerCase().includes(q) ||
-          (s.prefecture || '').toLowerCase().includes(q) ||
-          (s.email || '').toLowerCase().includes(q) ||
-          (s.phone || '').includes(q) ||
-          (s.address || '').toLowerCase().includes(q) ||
-          areaText.includes(q)
-        )
-      })
-    : stores
+  const filtered = stores.filter(s => {
+    // ログイン状態フィルタ
+    if (loginFilter === 'active' && !s.hasLoggedIn) return false
+    if (loginFilter === 'never' && s.hasLoggedIn) return false
+    // テキスト検索
+    if (!q) return true
+    const areaText = parseServiceAreas(s.serviceAreas)
+      .flatMap(a => [a.prefecture, ...a.cities])
+      .join(' ')
+      .toLowerCase()
+    return (
+      s.name.toLowerCase().includes(q) ||
+      s.code.toLowerCase().includes(q) ||
+      (s.prefecture || '').toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q) ||
+      (s.phone || '').includes(q) ||
+      (s.address || '').toLowerCase().includes(q) ||
+      areaText.includes(q)
+    )
+  })
 
   const storeColumns: Column<Store>[] = [
     {
@@ -444,7 +452,7 @@ export default function AdminStoresPage() {
       render: (store) => {
         const areas = parseServiceAreas(store.serviceAreas)
         if (areas.length === 0) {
-          return <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">\u672a\u767b\u9332</span>
+          return <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">未登録</span>
         }
         return (
           <div className="flex flex-wrap gap-1 max-w-[220px]">
@@ -472,6 +480,28 @@ export default function AdminStoresPage() {
       ),
       sortable: true,
       sortValue: (store) => store._count.customers,
+    },
+    {
+      key: 'loginStatus',
+      header: 'ログイン状態',
+      render: (store) => {
+        const active = !!store.hasLoggedIn
+        return (
+          <span
+            title={active && store.lastLoginAt ? `最終ログイン: ${new Date(store.lastLoginAt).toLocaleString('ja-JP')}` : undefined}
+            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${
+              active
+                ? 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]'
+                : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-[var(--status-completed-text)]' : 'bg-[var(--md-sys-color-outline)]'}`} />
+            {active ? 'アクティブ' : '未ログイン'}
+          </span>
+        )
+      },
+      sortable: true,
+      sortValue: (store) => (store.hasLoggedIn ? 1 : 0),
     },
     {
       key: 'actions',
@@ -751,10 +781,23 @@ export default function AdminStoresPage() {
         <SearchFilterBar
           filters={[
             { key: 'search', label: '検索', type: 'text', placeholder: '店舗名・コード・都道府県・メールで検索' },
+            {
+              key: 'login',
+              label: 'ログイン状態',
+              type: 'select',
+              placeholder: 'すべて',
+              options: [
+                { value: 'active', label: 'アクティブ（ログイン済み）' },
+                { value: 'never', label: '未ログイン' },
+              ],
+            },
           ]}
-          values={{ search: searchQ }}
-          onChange={(key, value) => { if (key === 'search') setSearchQ(value) }}
-          onClear={() => setSearchQ('')}
+          values={{ search: searchQ, login: loginFilter }}
+          onChange={(key, value) => {
+            if (key === 'search') setSearchQ(value)
+            if (key === 'login') setLoginFilter(value)
+          }}
+          onClear={() => { setSearchQ(''); setLoginFilter('') }}
           className="mb-4"
         />
 
@@ -763,10 +806,10 @@ export default function AdminStoresPage() {
             columns={storeColumns}
             data={filtered}
             rowKey={(store) => store.id}
-            emptyTitle={searchQ ? `「${searchQ}」に一致する店舗がありません` : '店舗データがありません'}
+            emptyTitle={searchQ ? `「${searchQ}」に一致する店舗がありません` : (loginFilter ? '条件に一致する店舗がありません' : '店舗データがありません')}
             onRowClick={(store) => setSelectedStore(store)}
           />
-          {searchQ && filtered.length > 0 && filtered.length < stores.length && (
+          {(searchQ || loginFilter) && filtered.length > 0 && filtered.length < stores.length && (
             <div className="px-4 py-2.5 bg-[var(--md-sys-color-surface-container-low)] border-t border-[var(--md-sys-color-outline-variant)] text-xs text-[var(--md-sys-color-on-surface-variant)]">
               {stores.length}店舗中 {filtered.length}件を表示
             </div>

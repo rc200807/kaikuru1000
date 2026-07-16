@@ -32,12 +32,27 @@ export async function GET(request: NextRequest) {
     orderBy: { code: 'asc' },
   })
 
+  // 初回ログイン実績（AccessLog に store の login レコードがあれば「ログイン済み」）
+  const ids = stores.map(s => s.id)
+  const loginLogs = ids.length
+    ? await prisma.accessLog.groupBy({
+        by: ['userId'],
+        where: { userType: 'store', action: 'login', userId: { in: ids } },
+        _max: { createdAt: true },
+      })
+    : []
+  const loginMap = new Map(
+    loginLogs.map(l => [l.userId as string, l._max.createdAt] as const),
+  )
+
   // DB に残っている無効値をクリーンアップして返す
   const cleaned = stores.map(s => ({
     ...s,
     prefecture: cleanVal(s.prefecture),
     address: cleanVal(s.address),
     phone: cleanVal(s.phone),
+    hasLoggedIn: loginMap.has(s.id),
+    lastLoginAt: loginMap.get(s.id) ?? null,
   }))
 
   return NextResponse.json(cleaned)

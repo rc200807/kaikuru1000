@@ -62,12 +62,33 @@ export async function POST(request: NextRequest) {
     },
   })
 
+  // 期限切れ WebAuthn チャレンジ・パスキーログイントークン
+  const challengesDeleted = await prisma.webAuthnChallenge.deleteMany({
+    where: { expiresAt: { lt: now } },
+  })
+  const passkeyTokensDeleted = await prisma.passkeyLoginToken.deleteMany({
+    where: { expiresAt: { lt: now } },
+  })
+
+  // 期限切れ・失効済みデバイスセッション（監査のため失効後30日は保持）
+  const deviceSessionsDeleted = await prisma.deviceSession.deleteMany({
+    where: {
+      OR: [
+        { expiresAt: { lt: thirtyDaysAgo } },
+        { revokedAt: { lt: thirtyDaysAgo } },
+      ],
+    },
+  })
+
   const result = {
     passwordResetTokens: tokensDeleted.count,
     magicLinks: magicLinksDeleted.count,
     rateLimits: rateLimitsDeleted.count,
     loginAttempts: loginAttemptsDeleted.count,
     sentEmails: emailQueueDeleted.count,
+    webAuthnChallenges: challengesDeleted.count,
+    passkeyLoginTokens: passkeyTokensDeleted.count,
+    deviceSessions: deviceSessionsDeleted.count,
   }
 
   console.log('[cleanup-tokens] Deleted:', result)

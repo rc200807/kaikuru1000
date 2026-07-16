@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { validateAvatarFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { recordAccessLog } from '@/lib/access-log'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -77,6 +78,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     data: updateData,
     select: { id: true, name: true, email: true, avatar: true, createdAt: true },
   })
+
+  // パスワード変更時は該当メンバーの全デバイス長期セッションを失効
+  if (updateData.password) await revokeAllDeviceSessions('storeMember', id)
 
   await recordAccessLog({
     userType: sessionUser.role,

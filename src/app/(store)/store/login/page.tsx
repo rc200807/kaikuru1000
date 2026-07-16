@@ -8,6 +8,7 @@ import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import PasskeyLoginButton from '@/components/PasskeyLoginButton'
 
 export default function StoreLoginPage() {
   const router = useRouter()
@@ -143,6 +144,9 @@ export default function StoreLoginPage() {
                   {loading ? 'ログイン中...' : 'ログイン'}
                 </Button>
               </form>
+              <div className="mt-4">
+                <PasskeyLoginButton portal="store" callbackUrl="/store/dashboard" onError={setError} />
+              </div>
               <div className="text-center mt-4">
                 <button
                   type="button"

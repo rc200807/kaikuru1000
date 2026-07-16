@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { validateAvatarFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -67,6 +68,9 @@ export async function PATCH(request: NextRequest) {
   }
 
   const updated = await prisma.admin.update({ where: { id: admin.id }, data: updateData })
+
+  // パスワード変更時は全デバイスの長期セッションを失効
+  if (updateData.password) await revokeAllDeviceSessions('admin', admin.id)
 
   return NextResponse.json({
     name: updated.name,

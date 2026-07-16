@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import PasskeyManager from '@/components/PasskeyManager'
+import DeviceSessionList from '@/components/DeviceSessionList'
 
 export default function SysAdminProfilePage() {
   const { data: session, status, update } = useSession()
@@ -115,6 +117,19 @@ export default function SysAdminProfilePage() {
           </button>
         </div>
       </form>
+
+      {/* パスキー・デバイス管理 */}
+      <div
+        className="space-y-6"
+        style={{
+          marginTop: 24, padding: 20, borderRadius: 12,
+          border: '1px solid var(--md-sys-color-outline-variant)',
+          background: 'var(--md-sys-color-surface)',
+        }}
+      >
+        <PasskeyManager />
+        <DeviceSessionList />
+      </div>
     </div>
   )
 }

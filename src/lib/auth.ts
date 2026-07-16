@@ -4,11 +4,20 @@ import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
 import { isLoginBlocked, recordLoginFailure, resetLoginFailures } from './rate-limit'
 import { recordAccessLog } from './access-log'
+import { hashLoginToken } from './webauthn'
+import {
+  createDeviceSession,
+  validateDeviceSession,
+  PASSKEY_SESSION_MS,
+  PASSWORD_SESSION_MS,
+} from './device-session'
 
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
-    maxAge: 8 * 60 * 60, // 8時間でセッション失効
+    // Cookie自体の上限は30日。実際の有効期限はログイン方法別に
+    // jwt callback の sessionExpiresAt で制御する（パスワード=8時間 / パスキー=30日）
+    maxAge: 30 * 24 * 60 * 60,
   },
   pages: {
     signIn: '/login',
@@ -332,6 +341,108 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // パスキー（WebAuthn）ログイン
+    // /api/auth/webauthn/login/verify で検証済みのワンタイムトークンを受け取り、セッションを発行する
+    CredentialsProvider({
+      id: 'webauthn',
+      name: 'パスキー',
+      credentials: {
+        token: { label: 'Token', type: 'text' },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.token) return null
+
+        // ワンタイム消費（アトミック）: 使用済み・期限切れは弾く
+        const tokenHash = hashLoginToken(credentials.token)
+        const consumed = await prisma.passkeyLoginToken.updateMany({
+          where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
+          data: { usedAt: new Date() },
+        })
+        if (consumed.count === 0) return null
+        const loginToken = await prisma.passkeyLoginToken.findUnique({
+          where: { tokenHash },
+        })
+        if (!loginToken) return null
+
+        const headers = (req as any)?.headers
+        const fwd = typeof headers?.get === 'function'
+          ? headers.get('x-forwarded-for')
+          : headers?.['x-forwarded-for']
+        const ip = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim() || null
+        const userAgent = typeof headers?.get === 'function'
+          ? headers.get('user-agent')
+          : headers?.['user-agent'] ?? null
+
+        // 管理者（admin/superadmin/hr/sysadmin）
+        if (loginToken.userType === 'admin') {
+          const admin = await prisma.admin.findUnique({ where: { id: loginToken.userId } })
+          if (!admin) return null
+          const role = admin.role === 'sysadmin'
+            ? 'sysadmin'
+            : (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
+          const deviceSessionId = await createDeviceSession({
+            userType: 'admin', userId: admin.id,
+            credentialId: loginToken.credentialId, loginMethod: 'passkey', ip, userAgent,
+          })
+          await recordAccessLog({ userType: role, userId: admin.id, userName: admin.name, action: 'login-passkey', req })
+          return {
+            id: admin.id,
+            email: admin.email,
+            name: admin.name,
+            avatar: admin.avatar || null,
+            role,
+            loginMethod: 'passkey',
+            deviceSessionId,
+          }
+        }
+
+        // 店舗アカウント
+        if (loginToken.userType === 'store') {
+          const store = await prisma.store.findUnique({ where: { id: loginToken.userId } })
+          if (!store) return null
+          const deviceSessionId = await createDeviceSession({
+            userType: 'store', userId: store.id,
+            credentialId: loginToken.credentialId, loginMethod: 'passkey', ip, userAgent,
+          })
+          await recordAccessLog({ userType: 'store', userId: store.id, userName: store.name, action: 'login-passkey', req })
+          return {
+            id: store.id,
+            email: store.email || '',
+            name: store.name,
+            avatar: store.avatar || null,
+            role: 'store' as const,
+            loginMethod: 'passkey',
+            deviceSessionId,
+          }
+        }
+
+        // 店舗メンバー
+        if (loginToken.userType === 'storeMember') {
+          const member = await prisma.storeMember.findUnique({
+            where: { id: loginToken.userId },
+          })
+          if (!member) return null
+          const deviceSessionId = await createDeviceSession({
+            userType: 'storeMember', userId: member.id, memberId: member.id,
+            credentialId: loginToken.credentialId, loginMethod: 'passkey', ip, userAgent,
+          })
+          await recordAccessLog({ userType: 'store', userId: member.storeId, userName: member.name, memberId: member.id, action: 'login-passkey', req })
+          return {
+            id: member.storeId,
+            email: member.email,
+            name: member.name,
+            avatar: member.avatar || null,
+            role: 'store' as const,
+            memberId: member.id,
+            memberName: member.name,
+            loginMethod: 'passkey',
+            deviceSessionId,
+          }
+        }
+
+        return null
+      },
+    }),
   ],
   callbacks: {
     async jwt({ token, user, trigger, session: updatedSession }) {
@@ -344,6 +455,21 @@ export const authOptions: NextAuthOptions = {
         // 店舗メンバーとしてのログイン時のみ設定される（店舗アカウント直ログインでは null）
         token.memberId = (user as any).memberId ?? null
         token.memberName = (user as any).memberName ?? null
+        // ログイン方法別の絶対有効期限（パスキー=30日 / それ以外=8時間）
+        const loginMethod = (user as any).loginMethod === 'passkey' ? 'passkey' : 'password'
+        token.loginMethod = loginMethod
+        token.deviceSessionId = (user as any).deviceSessionId ?? null
+        token.sessionExpiresAt =
+          Date.now() + (loginMethod === 'passkey' ? PASSKEY_SESSION_MS : PASSWORD_SESSION_MS)
+      }
+
+      // 絶対有効期限の検証。sessionExpiresAt を持たない旧トークンは iat+8時間（従来挙動）
+      const absoluteExpiry =
+        (token.sessionExpiresAt as number | undefined) ??
+        ((token.iat as number | undefined ?? 0) * 1000 + PASSWORD_SESSION_MS)
+      if (Date.now() > absoluteExpiry) {
+        // role/id を落として無効化（middleware・API の認可チェックが全て弾く）
+        return { ...token, role: undefined, id: undefined, expired: true }
       }
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
@@ -370,6 +496,25 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
+      // 絶対有効期限切れ → 空セッションを返す（クライアントは未認証扱いになる）
+      if ((token as any).expired || !token.role || !token.id) {
+        return {
+          ...session,
+          user: {},
+          expires: new Date(0).toISOString(),
+        } as any
+      }
+      // パスキー長期セッションのみデバイス失効をDB照合（失効済みなら即無効化）
+      if (token.loginMethod === 'passkey' && token.deviceSessionId) {
+        const valid = await validateDeviceSession(token.deviceSessionId as string)
+        if (!valid) {
+          return {
+            ...session,
+            user: {},
+            expires: new Date(0).toISOString(),
+          } as any
+        }
+      }
       if (session.user) {
         (session.user as any).role = token.role
         ;(session.user as any).id = token.id

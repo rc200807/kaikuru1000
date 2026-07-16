@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { generateSecurePassword } from '@/lib/password-utils'
 import { sendWelcomeWithPasswordEmail } from '@/lib/mailer'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 /**
  * 管理者メンバーのパスワードを再発行
@@ -39,6 +40,9 @@ export async function POST(
     where: { id },
     data: { password: hashed },
   })
+
+  // パスワード再発行 → 該当メンバーの全デバイス長期セッションを失効
+  await revokeAllDeviceSessions('admin', id)
 
   // メール送信（失敗しても password は返却）
   const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'

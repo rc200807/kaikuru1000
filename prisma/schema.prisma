@@ -542,6 +542,66 @@ model MagicLink {
   createdAt  DateTime  @default(now())
 }
 
+// パスキー（WebAuthn）認証情報
+model PasskeyCredential {
+  id           String    @id @default(cuid())
+  credentialId String    @unique // base64url形式のクレデンシャルID
+  publicKey    Bytes     // COSE公開鍵
+  counter      BigInt    @default(0) // クローン検知用署名カウンタ
+  transports   String?   // JSON配列文字列 例: ["internal","hybrid"]
+  deviceType   String?   // "singleDevice" | "multiDevice"
+  backedUp     Boolean   @default(false) // クラウド同期されているか
+  deviceName   String?   // ユーザーが付ける表示名（例: 事務所のPC）
+  userType     String    // "admin" | "store" | "storeMember"
+  userId       String    // 対象テーブルのID（多態参照）
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userType, userId])
+}
+
+// WebAuthn チャレンジ（ワンタイム・リプレイ防止）
+model WebAuthnChallenge {
+  id        String    @id @default(cuid())
+  challenge String    @unique // base64url
+  type      String    // "registration" | "authentication"
+  userType  String?   // 登録時のみ設定
+  userId    String?   // 登録時のみ設定
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// パスキー検証済みワンタイムログイントークン（NextAuthセッション発行の橋渡し）
+model PasskeyLoginToken {
+  id           String    @id @default(cuid())
+  tokenHash    String    @unique // sha256(token) のみ保存
+  userType     String    // "admin" | "store" | "storeMember"
+  userId       String
+  credentialId String    // 使用された PasskeyCredential.credentialId
+  expiresAt    DateTime  // 発行から60秒
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+// デバイスセッション（長期セッションの失効管理）
+model DeviceSession {
+  id           String    @id @default(cuid())
+  userType     String    // "admin" | "store" | "storeMember"
+  userId       String
+  memberId     String?   // storeMember の場合の StoreMember.id
+  credentialId String?   // パスキーログイン時の PasskeyCredential.credentialId
+  loginMethod  String    // "password" | "passkey"
+  ip           String?
+  userAgent    String?
+  lastSeenAt   DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userType, userId])
+}
+
 // 店舗お問い合わせ
 model Inquiry {
   id              String   @id @default(cuid())

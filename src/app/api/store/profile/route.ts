@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { validateAvatarFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -79,6 +80,8 @@ export async function PATCH(request: NextRequest) {
       updateData.avatar = avatarUrl
     }
     const updated = await prisma.store.update({ where: { id: store.id }, data: updateData })
+    // パスワード変更時は全デバイスの長期セッションを失効
+    if (updateData.password) await revokeAllDeviceSessions('store', store.id)
     return NextResponse.json({
       name: updated.name,
       email: updated.email,
@@ -99,6 +102,8 @@ export async function PATCH(request: NextRequest) {
       updateData.avatar = avatarUrl
     }
     const updated = await prisma.storeMember.update({ where: { id: member.id }, data: updateData })
+    // パスワード変更時は全デバイスの長期セッションを失効
+    if (updateData.password) await revokeAllDeviceSessions('storeMember', member.id)
     return NextResponse.json({
       name: updated.name,
       email: updated.email,

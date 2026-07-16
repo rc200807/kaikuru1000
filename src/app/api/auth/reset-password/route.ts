@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 export async function POST(req: Request) {
   try {
@@ -62,17 +63,27 @@ export async function POST(req: Request) {
         where: { id: admin.id },
         data: { password: hashedPassword },
       })
+      // パスワード変更 → 全デバイスの長期セッションを失効
+      await revokeAllDeviceSessions('admin', admin.id)
     } else if (resetToken.userType === 'store') {
       // 同一メールの全店舗のパスワードを更新
-      const result = await prisma.store.updateMany({
+      const stores = await prisma.store.findMany({
         where: { email: resetToken.email, isActive: true },
-        data: { password: hashedPassword },
+        select: { id: true },
       })
-      if (result.count === 0) {
+      if (stores.length === 0) {
         return NextResponse.json(
           { error: 'アカウントが見つかりません' },
           { status: 400 }
         )
+      }
+      await prisma.store.updateMany({
+        where: { email: resetToken.email, isActive: true },
+        data: { password: hashedPassword },
+      })
+      // パスワード変更 → 全デバイスの長期セッションを失効
+      for (const store of stores) {
+        await revokeAllDeviceSessions('store', store.id)
       }
     } else {
       const user = await prisma.user.findFirst({

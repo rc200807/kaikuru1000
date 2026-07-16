@@ -5,6 +5,7 @@ import { requireSysAdmin } from '@/lib/sysadmin-auth'
 import { generateSecurePassword } from '@/lib/password-utils'
 import { sendWelcomeWithPasswordEmail } from '@/lib/mailer'
 import { recordAccessLog } from '@/lib/access-log'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 function baseUrl() {
   return process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
@@ -24,6 +25,9 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
   const rawPassword = generateSecurePassword()
   const hashed = await bcrypt.hash(rawPassword, 10)
   await prisma.admin.update({ where: { id }, data: { password: hashed } })
+
+  // パスワード再発行 → 該当メンバーの全デバイス長期セッションを失効
+  await revokeAllDeviceSessions('admin', id)
 
   let emailSent = false
   try {

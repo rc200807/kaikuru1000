@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { browserSupportsWebAuthn } from '@simplewebauthn/browser'
+import { loginWithPasskey } from '@/components/PasskeyLoginButton'
 
 export default function SysAdminLoginPage() {
   const router = useRouter()
@@ -10,6 +12,24 @@ export default function SysAdminLoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [passkeySupported, setPasskeySupported] = useState(false)
+  const [passkeyLoading, setPasskeyLoading] = useState(false)
+
+  useEffect(() => {
+    setPasskeySupported(browserSupportsWebAuthn())
+  }, [])
+
+  async function handlePasskeyLogin() {
+    setError('')
+    setPasskeyLoading(true)
+    const result = await loginWithPasskey('sysadmin')
+    setPasskeyLoading(false)
+    if (result.ok) {
+      router.push('/sysadmin/dashboard')
+    } else if (!result.cancelled) {
+      setError(result.error || 'パスキーログインに失敗しました')
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -81,6 +101,18 @@ export default function SysAdminLoginPage() {
               {loading ? 'ログイン中...' : 'ログイン'}
             </button>
           </form>
+
+          {passkeySupported && (
+            <button
+              type="button"
+              disabled={passkeyLoading}
+              onClick={handlePasskeyLogin}
+              className="w-full rounded-lg py-2.5 text-sm font-semibold mt-3 transition-opacity disabled:opacity-60 text-[#ededed]"
+              style={{ background: '#0a0a0a', boxShadow: '0 0 0 1px rgba(255,255,255,0.15)' }}
+            >
+              {passkeyLoading ? '認証中...' : 'パスキーでログイン（30日間有効）'}
+            </button>
+          )}
         </div>
       </div>
     </div>

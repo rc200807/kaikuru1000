@@ -9,6 +9,8 @@ import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import PasskeyManager from '@/components/PasskeyManager'
+import DeviceSessionList from '@/components/DeviceSessionList'
 
 export default function AdminProfilePage() {
   const { data: session, status, update } = useSession()
@@ -210,6 +212,12 @@ export default function AdminProfilePage() {
             変更を保存
           </Button>
         </form>
+
+        {/* パスキー・デバイス管理 */}
+        <Card variant="elevated" padding="md" className="mt-6 space-y-6">
+          <PasskeyManager />
+          <DeviceSessionList />
+        </Card>
       </div>
     </>
   )

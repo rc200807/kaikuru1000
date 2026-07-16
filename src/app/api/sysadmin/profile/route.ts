@@ -4,6 +4,7 @@ import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
 import { recordAccessLog } from '@/lib/access-log'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -47,6 +48,8 @@ export async function PATCH(req: NextRequest) {
     data,
     select: { id: true, name: true, email: true },
   })
+  // パスワード変更時は全デバイスの長期セッションを失効
+  if (data.password) await revokeAllDeviceSessions('admin', user.id)
   await recordAccessLog({ userType: 'sysadmin', userId: user.id, userName: updated.name, action: 'プロフィール更新', req })
   return NextResponse.json(updated)
 }

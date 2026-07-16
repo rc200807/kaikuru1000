@@ -8,6 +8,7 @@ import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
+import PasskeyLoginButton from '@/components/PasskeyLoginButton'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -86,6 +87,10 @@ export default function AdminLoginPage() {
               {loading ? 'ログイン中...' : 'ログイン'}
             </Button>
           </form>
+
+          <div className="mt-4">
+            <PasskeyLoginButton portal="admin" callbackUrl="/admin/dashboard" onError={setError} />
+          </div>
 
           <div className="text-center mt-4 pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
             <Link

@@ -12,6 +12,7 @@ import Link from 'next/link'
 import StorePage from '@/components/store/StorePage'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import VideoThumbnail from '@/components/VideoThumbnail'
+import StoreReleaseNotesCard from '@/components/store/ReleaseNotesCard'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatJstDate } from '@/lib/datetime'
@@ -522,6 +523,9 @@ export default function StoreDashboardPage() {
           </div>
         </ChartCard>
       )}
+
+      {/* ── アップデート情報（リリースノート） ── */}
+      <StoreReleaseNotesCard />
 
       {/* ── 新着研修動画 / 新着のお知らせ / 直近の訪問 ── */}
       {highlights && <HighlightsRow highlights={highlights} />}

@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import AdminReleaseNotesCard from '@/components/admin/ReleaseNotesCard'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 
 const ADMIN_LEAD_COLORS = ['#ffffff', '#60a5fa', '#22c55e', '#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#737373']
@@ -282,6 +283,9 @@ export default function AdminDashboardPage() {
             </svg>
           </div>
         )}
+
+        {/* アップデート情報（リリースノート） */}
+        <AdminReleaseNotesCard />
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

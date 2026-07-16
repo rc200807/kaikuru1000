@@ -181,6 +181,7 @@ export default function NavigationDrawer() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [chatUnread, setChatUnread] = useState(0)
+  const [releaseUnread, setReleaseUnread] = useState(0)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const user = session?.user as any
 
@@ -205,6 +206,28 @@ export default function NavigationDrawer() {
       clearInterval(timer)
       window.removeEventListener('focus', load)
       window.removeEventListener('chat:activity', load)
+    }
+  }, [user?.role, pathname])
+
+  // 未読リリースノート数（ダッシュボード閲覧で既読化されるとイベントで更新）
+  useEffect(() => {
+    if (!user?.role) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/admin/release-notes/unread-count')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setReleaseUnread(data.count ?? 0)
+      } catch { /* noop */ }
+    }
+    load()
+    window.addEventListener('focus', load)
+    window.addEventListener('releasenotes:read', load)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', load)
+      window.removeEventListener('releasenotes:read', load)
     }
   }, [user?.role, pathname])
 
@@ -258,6 +281,11 @@ export default function NavigationDrawer() {
               {item.href === '/admin/chat' && chatUnread > 0 && (
                 <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-[#dc2626] text-white text-[10px] font-bold flex items-center justify-center">
                   {chatUnread > 99 ? '99+' : chatUnread}
+                </span>
+              )}
+              {item.href === '/admin/dashboard' && releaseUnread > 0 && (
+                <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-[#dc2626] text-white text-[10px] font-bold flex items-center justify-center">
+                  {releaseUnread > 99 ? '99+' : releaseUnread}
                 </span>
               )}
             </Link>

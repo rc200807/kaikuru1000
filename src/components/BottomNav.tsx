@@ -211,6 +211,7 @@ export default function BottomNav() {
   const [switching, setSwitching] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [chatUnread, setChatUnread] = useState(0)
+  const [releaseUnread, setReleaseUnread] = useState(0)
   const scope = useStoreScope()
 
   // Fetch unread announcement count
@@ -226,6 +227,24 @@ export default function BottomNav() {
       const onFocus = () => fetchUnread()
       window.addEventListener('focus', onFocus)
       return () => window.removeEventListener('focus', onFocus)
+    }
+  }, [user?.id, pathname])
+
+  // Fetch unread release-note count（ダッシュボード閲覧で既読化されるとイベントで更新）
+  useEffect(() => {
+    if (!user?.id) return
+    const fetchReleaseUnread = () => {
+      fetch('/api/store/release-notes/unread-count')
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(data => setReleaseUnread(data.count || 0))
+        .catch(() => {})
+    }
+    fetchReleaseUnread()
+    window.addEventListener('focus', fetchReleaseUnread)
+    window.addEventListener('releasenotes:read', fetchReleaseUnread)
+    return () => {
+      window.removeEventListener('focus', fetchReleaseUnread)
+      window.removeEventListener('releasenotes:read', fetchReleaseUnread)
     }
   }, [user?.id, pathname])
 
@@ -437,7 +456,7 @@ export default function BottomNav() {
             <div className="grid grid-cols-3 gap-1">
               {[...menuNavItems, ...(scope.availableStores.length > 0 && scope.isOrgAdmin ? [ORG_NAV_ITEM] : [])].map(item => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/')
-                const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : 0
+                const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : item.href === '/store/dashboard' ? releaseUnread : 0
                 const showBadge = badgeCount > 0
                 return (
                   <Link
@@ -507,10 +526,13 @@ export default function BottomNav() {
                 `}
               >
                 <div className={`
-                  px-4 py-1 rounded-full transition-colors
+                  relative px-4 py-1 rounded-full transition-colors
                   ${active ? 'bg-[var(--store-primary-container)]' : ''}
                 `}>
                   {item.icon}
+                  {item.href === '/store/dashboard' && releaseUnread > 0 && (
+                    <span className="absolute top-0.5 right-2.5 w-2 h-2 rounded-full bg-[var(--store-primary)]" />
+                  )}
                 </div>
                 {item.label}
               </Link>

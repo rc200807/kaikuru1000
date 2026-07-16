@@ -82,11 +82,30 @@ export default function AdminStoresPage() {
   // パスワード表示モーダル
   const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string; storeId: string; storeEmail: string | null } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copiedEmail, setCopiedEmail] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSentDone, setEmailSentDone] = useState(false)
 
   // パスワード再発行中の店舗ID
   const [resettingId, setResettingId] = useState<string | null>(null)
+
+  // 行アクションメニュー（3点リーダー）— テーブルの overflow クリップを避けるため fixed 配置
+  const [rowMenu, setRowMenu] = useState<{ store: Store; x: number; y: number } | null>(null)
+
+  // メニューを ESC / スクロール / リサイズで閉じる
+  useEffect(() => {
+    if (!rowMenu) return
+    const close = () => setRowMenu(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setRowMenu(null) }
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [rowMenu])
 
   // 店舗情報サイドバー
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
@@ -223,6 +242,30 @@ export default function AdminStoresPage() {
     }
   }
 
+  // 3点リーダー「初期ログイン情報を取得」— パスワードは復元不可のため取得のたびに再発行する
+  async function handleFetchLoginInfo(store: Store) {
+    setRowMenu(null)
+    if (!confirm(
+      `「${store.name}」の初期ログイン情報を取得します。\n\n` +
+      `新しいパスワードが発行され、現在のパスワードは無効になります。\n` +
+      `すでにログイン中の店舗がある場合はご注意ください。よろしいですか？`
+    )) return
+    setResettingId(store.id)
+    const res = await fetch(`/api/admin/stores/${store.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetPassword: true }),
+    })
+    const data = await res.json()
+    setResettingId(null)
+
+    if (res.ok) {
+      setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null })
+    } else {
+      setMessage({ type: 'error', text: data.error || '初期ログイン情報の取得に失敗しました' })
+    }
+  }
+
   async function handleFetchHeaders() {
     if (!storeSheetUrl.trim()) return
     setFetchingHeaders(true)
@@ -265,6 +308,13 @@ export default function AdminStoresPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  function handleCopyEmail() {
+    if (!passwordModal?.storeEmail) return
+    navigator.clipboard.writeText(passwordModal.storeEmail)
+    setCopiedEmail(true)
+    setTimeout(() => setCopiedEmail(false), 2000)
+  }
+
   async function handleSendPasswordEmail() {
     if (!passwordModal) return
     setSendingEmail(true)
@@ -285,6 +335,7 @@ export default function AdminStoresPage() {
   function handleClosePasswordModal() {
     setPasswordModal(null)
     setCopied(false)
+    setCopiedEmail(false)
     setSendingEmail(false)
     setEmailSentDone(false)
   }
@@ -426,7 +477,7 @@ export default function AdminStoresPage() {
       key: 'actions',
       header: '',
       render: (store) => (
-        <span onClick={(e) => e.stopPropagation()} className="inline-block">
+        <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-0.5 justify-end w-full">
           <Button
             size="sm"
             variant="text"
@@ -434,6 +485,33 @@ export default function AdminStoresPage() {
           >
             詳細
           </Button>
+          <button
+            type="button"
+            aria-label="操作メニュー"
+            title="操作"
+            disabled={resettingId === store.id}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect()
+              setRowMenu(prev =>
+                prev?.store.id === store.id
+                  ? null
+                  : { store, x: rect.right, y: rect.bottom + 4 }
+              )
+            }}
+            className="p-1.5 rounded-full text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-on-surface)] transition-colors flex-shrink-0 disabled:opacity-50"
+          >
+            {resettingId === store.id ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="1.6" />
+                <circle cx="12" cy="12" r="1.6" />
+                <circle cx="12" cy="19" r="1.6" />
+              </svg>
+            )}
+          </button>
         </span>
       ),
     },
@@ -795,13 +873,45 @@ export default function AdminStoresPage() {
       <Modal
         open={!!passwordModal}
         onClose={handleClosePasswordModal}
-        title="パスワードを発行しました"
+        title="初期ログイン情報"
         size="sm"
       >
         {passwordModal && (
           <>
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-4">{passwordModal.storeName}</p>
 
+            {/* メールアドレス */}
+            <div className="bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] p-4 mb-3">
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">ログインメールアドレス</p>
+              {passwordModal.storeEmail ? (
+                <div className="flex items-center gap-3">
+                  <code className="text-base font-medium text-[var(--md-sys-color-on-surface)] flex-1 break-all">
+                    {passwordModal.storeEmail}
+                  </code>
+                  <button
+                    onClick={handleCopyEmail}
+                    className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors p-1 flex-shrink-0"
+                    title="コピー"
+                  >
+                    {copiedEmail ? (
+                      <svg className="w-5 h-5 text-[var(--status-completed-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--md-sys-color-error)]">
+                  メールアドレスが未設定です。店舗詳細から登録してください。
+                </p>
+              )}
+            </div>
+
+            {/* パスワード */}
             <div className="bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] p-4 mb-4">
               <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">ログインパスワード</p>
               <div className="flex items-center gap-3">
@@ -858,6 +968,34 @@ export default function AdminStoresPage() {
           </>
         )}
       </Modal>
+
+      {/* ─── 行アクションメニュー（3点リーダー）─── */}
+      {rowMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[60]"
+            onClick={() => setRowMenu(null)}
+            aria-hidden="true"
+          />
+          <div
+            className="fixed z-[61] min-w-[224px] bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] shadow-[var(--md-sys-elevation-2)] py-1"
+            style={{ top: rowMenu.y, left: rowMenu.x, transform: 'translateX(-100%)' }}
+            role="menu"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => handleFetchLoginInfo(rowMenu.store)}
+              className="w-full text-left px-4 py-2.5 text-sm text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors flex items-center gap-2.5"
+            >
+              <svg className="w-4 h-4 flex-shrink-0 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              初期ログイン情報を取得
+            </button>
+          </div>
+        </>
+      )}
 
       {/* ─── 店舗詳細サイドバー ─── */}
       {/* オーバーレイ */}

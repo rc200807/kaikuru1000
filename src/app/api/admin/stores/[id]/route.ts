@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { sendStorePasswordResetNotification } from '@/lib/mailer'
+import { operatorInheritedValues } from '@/lib/operator-store-sync'
 
 function generatePassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -86,6 +87,32 @@ export async function PATCH(
         }
       }
     }
+
+    // 運営者の割り当て（operatorId）。空文字は未割り当て(null)扱い
+    let effectiveOperatorId: string | null = store.operatorId
+    if ('operatorId' in body) {
+      const opId = (typeof body.operatorId === 'string' && body.operatorId.trim()) ? body.operatorId.trim() : null
+      if (opId) {
+        const exists = await prisma.operator.findUnique({ where: { id: opId }, select: { id: true } })
+        if (!exists) return NextResponse.json({ error: '指定された運営者が見つかりません' }, { status: 400 })
+      }
+      data.operatorId = opId
+      effectiveOperatorId = opId
+    }
+
+    // 運営者が割り当てられている場合、継承項目（銀行口座/古物許可番号/インボイス番号）は運営者を「正」とする。
+    // クライアントから当該項目が送られてきても運営者の値で上書き（防御的措置。UI 上も読み取り専用）。
+    if (effectiveOperatorId) {
+      const op = await prisma.operator.findUnique({
+        where: { id: effectiveOperatorId },
+        select: {
+          bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
+          antiquePermitNumber: true, invoiceNumber: true,
+        },
+      })
+      if (op) Object.assign(data, operatorInheritedValues(op))
+    }
+
     const updated = await prisma.store.update({
       where: { id },
       data,
@@ -96,7 +123,8 @@ export async function PATCH(
         googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
         bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
         invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
-        serviceAreas: true,
+        serviceAreas: true, operatorId: true,
+        operator: { select: { id: true, name: true } },
         _count: { select: { customers: true } },
       },
     })

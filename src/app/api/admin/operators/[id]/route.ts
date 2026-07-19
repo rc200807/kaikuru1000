@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { deleteFile } from '@/lib/storage'
 import { ENTITY_TYPES, CORPORATE_PREFIXES, OPERATOR_SUPPORTED_SERVICE_KEYS, parseSupportedServices } from '@/lib/operator-utils'
+import { syncStoresForOperator } from '@/lib/operator-store-sync'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -78,6 +79,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const updated = await prisma.operator.update({ where: { id }, data })
+  // 継承項目（銀行口座/古物許可番号/インボイス番号）を紐づく全店舗へ反映
+  await syncStoresForOperator(prisma, id)
   return NextResponse.json({ ...updated, supportedServices: parseSupportedServices(updated.supportedServices) })
 }
 

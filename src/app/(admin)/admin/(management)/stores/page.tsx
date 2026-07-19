@@ -1123,6 +1123,7 @@ export default function AdminStoresPage() {
       <StoreBulkEditModal
         open={!!bulkEditTargets}
         stores={bulkEditTargets ?? []}
+        operators={operators}
         onClose={() => { setBulkEditTargets(null); refreshStores() }}
       />
 

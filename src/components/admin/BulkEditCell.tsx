@@ -14,6 +14,8 @@ type Props = {
   dirty: boolean
   editing: boolean
   readOnly?: boolean
+  /** 運営者から継承された読み取り専用セルに鍵アイコンを表示する */
+  lockHint?: boolean
   onStartEdit: (storeId: string, field: string) => void
   onEndEdit: () => void
   /** 変更確定。postal は複数フィールドを一度に積むことがある */
@@ -23,7 +25,7 @@ type Props = {
 }
 
 export default function BulkEditCell({
-  storeId, field, editor, options, value, dirty, editing, readOnly,
+  storeId, field, editor, options, value, dirty, editing, readOnly, lockHint,
   onStartEdit, onEndEdit, onCommit, onRevert,
 }: Props) {
   // 編集中の下書き値はセル内ローカル state（タイプごとにグリッド全体を再レンダリングさせない）
@@ -173,6 +175,11 @@ export default function BulkEditCell({
           : readOnly ? '' : 'hover:bg-[var(--md-sys-color-surface-container-low)]'
       }`}
     >
+      {readOnly && lockHint && (
+        <svg className="w-3 h-3 mr-1 flex-shrink-0 text-[var(--md-sys-color-outline)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      )}
       <span className="truncate flex-1">
         {displayLabel || <span className="text-[var(--md-sys-color-outline)]">—</span>}
       </span>

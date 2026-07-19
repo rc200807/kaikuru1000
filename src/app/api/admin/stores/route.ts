@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { z } from 'zod'
+import { operatorInheritedValues } from '@/lib/operator-store-sync'
 
 function generatePassword(): string {
   // 読みやすい文字のみ（0/O/l/I 等を除く）
@@ -32,7 +33,37 @@ const createSchema = z.object({
   prefecture: z.string().max(10).optional(),
   postalCode: z.string().max(10).optional(),
   address:    z.string().max(200).optional(),
+  // 一括編集グリッドの「行追加」で全カラムを保存できるよう、詳細フィールドも受け付ける
+  storeStatus:         z.string().optional(),
+  openingDate:         z.string().optional().or(z.literal('')),
+  closingDate:         z.string().optional().or(z.literal('')),
+  googleBusinessUrl:   z.string().optional(),
+  oikuraPageUrl:       z.string().optional(),
+  lineAddFriendUrl:    z.string().optional(),
+  bankName:            z.string().optional(),
+  branchName:          z.string().optional(),
+  accountType:         z.string().optional(),
+  accountNumber:       z.string().optional(),
+  accountHolder:       z.string().optional(),
+  invoiceNumber:       z.string().optional(),
+  antiquePermitNumber: z.string().optional(),
+  contractNotifyEmail: z.string().optional(),
+  calendarInviteEmail: z.string().optional(),
+  operatorId:          z.string().optional().or(z.literal('')),
 })
+
+// フルの店舗オブジェクトを返すための select（一括編集グリッドの BulkStore 形に一致）
+const STORE_DETAIL_SELECT = {
+  id: true, code: true, name: true,
+  email: true, phone: true, prefecture: true, postalCode: true, address: true,
+  storeStatus: true, openingDate: true, closingDate: true,
+  googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
+  bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
+  invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
+  serviceAreas: true, operatorId: true,
+  operator: { select: { id: true, name: true } },
+  _count: { select: { customers: true } },
+} as const
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -46,7 +77,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '入力内容が正しくありません' }, { status: 400 })
   }
 
-  const { name, email, phone, prefecture, postalCode, address } = parsed.data
+  const {
+    name, email, phone, prefecture, postalCode, address,
+    storeStatus, openingDate, closingDate,
+    googleBusinessUrl, oikuraPageUrl, lineAddFriendUrl,
+    bankName, branchName, accountType, accountNumber, accountHolder,
+    invoiceNumber, antiquePermitNumber, contractNotifyEmail, calendarInviteEmail,
+    operatorId,
+  } = parsed.data
+
+  // 運営者の割り当て。指定時は継承項目（銀行口座/古物許可番号/インボイス番号）を運営者の値で埋める
+  const opId = operatorId?.trim() || null
+  let inherited: Record<string, string | null> | null = null
+  if (opId) {
+    const op = await prisma.operator.findUnique({
+      where: { id: opId },
+      select: {
+        bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
+        antiquePermitNumber: true, invoiceNumber: true,
+      },
+    })
+    if (!op) {
+      return NextResponse.json({ error: '指定された運営者が見つかりません' }, { status: 400 })
+    }
+    inherited = operatorInheritedValues(op)
+  }
 
   // 店舗コード：手入力があればそれを使用（重複チェック）、無ければ自動生成
   let code = parsed.data.code?.trim()
@@ -72,12 +127,26 @@ export async function POST(request: NextRequest) {
       postalCode: postalCode || null,
       address:    address    || null,
       password:   hashedPassword,
+      storeStatus:         storeStatus         || null,
+      openingDate:         openingDate  ? new Date(openingDate)  : null,
+      closingDate:         closingDate  ? new Date(closingDate)  : null,
+      googleBusinessUrl:   googleBusinessUrl   || null,
+      oikuraPageUrl:       oikuraPageUrl       || null,
+      lineAddFriendUrl:    lineAddFriendUrl    || null,
+      bankName:            bankName            || null,
+      branchName:          branchName          || null,
+      accountType:         accountType         || null,
+      accountNumber:       accountNumber       || null,
+      accountHolder:       accountHolder       || null,
+      invoiceNumber:       invoiceNumber       || null,
+      antiquePermitNumber: antiquePermitNumber || null,
+      contractNotifyEmail: contractNotifyEmail || null,
+      calendarInviteEmail: calendarInviteEmail || null,
+      operatorId:          opId,
+      // 運営者が割り当てられている場合は継承項目を運営者の値で上書き（運営者が「正」）
+      ...(inherited ?? {}),
     },
-    select: {
-      id: true, code: true, name: true,
-      email: true, phone: true, prefecture: true,
-      _count: { select: { customers: true } },
-    },
+    select: STORE_DETAIL_SELECT,
   })
 
   return NextResponse.json({ store, password: plainPassword }, { status: 201 })

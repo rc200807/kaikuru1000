@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { syncStoresForOperator } from '@/lib/operator-store-sync'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -52,6 +53,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         })]
       : []),
   ])
+
+  // 新たに紐づいた店舗へ運営者の継承項目（銀行口座/古物許可番号/インボイス番号）を反映
+  await syncStoresForOperator(prisma, id)
 
   const stores = await prisma.store.findMany({
     where: { operatorId: id },

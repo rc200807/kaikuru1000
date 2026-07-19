@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { ENTITY_TYPE_LABEL, formalName, type EntityType } from '@/lib/operator-utils'
+import OperatorBulkEditModal, { toBulkOperator } from '@/components/admin/OperatorBulkEditModal'
 
 type ImportResult = {
   created: number
@@ -39,6 +40,7 @@ export default function OperatorListPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string>('')
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
 
   function refresh() {
     fetch('/api/admin/operators')
@@ -148,6 +150,13 @@ export default function OperatorListPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setBulkEditOpen(true)}
+            disabled={operators.length === 0}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: operators.length === 0 ? 'not-allowed' : 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, opacity: operators.length === 0 ? 0.5 : 1 }}
+          >
+            一括編集
+          </button>
           <button
             onClick={() => { setImportResult(null); setImportError(''); setImportOpen(true) }}
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600 }}
@@ -418,6 +427,13 @@ export default function OperatorListPage() {
           </div>
         )}
       </div>
+
+      {/* ─── 一括編集モーダル ─── */}
+      <OperatorBulkEditModal
+        open={bulkEditOpen}
+        operators={operators.map(o => toBulkOperator(o as any))}
+        onClose={() => { setBulkEditOpen(false); refresh() }}
+      />
     </div>
   )
 }

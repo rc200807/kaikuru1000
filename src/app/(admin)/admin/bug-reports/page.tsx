@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 
 type Comment = {
   id: string
@@ -186,13 +187,7 @@ export default function AdminBugReportsPage() {
               style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 999, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
             />
             <div style={{ display: 'flex', gap: 6 }}>
-              <select
-                value={storeFilter} onChange={e => setStoreFilter(e.target.value)}
-                style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 12 }}
-              >
-                <option value="">すべての店舗</option>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <StoreFilterSelect value={storeFilter} onChange={setStoreFilter} stores={stores} style={{ flex: 1 }} />
               <select
                 value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
                 style={{ flex: '0 0 100px', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 12 }}

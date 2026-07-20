@@ -33,6 +33,7 @@ export default function AdvancedFilterPanel({ open, onClose, fields, values, onA
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [count, setCount] = useState<number | null>(null)
   const [counting, setCounting] = useState(false)
+  const [optQ, setOptQ] = useState<Record<string, string>>({}) // 選択肢が多いフィールドの絞り込み検索語
   const countSeq = useRef(0)
 
   // 開いたときに現在値をドラフトへコピー
@@ -42,6 +43,7 @@ export default function AdvancedFilterPanel({ open, onClose, fields, values, onA
     for (const f of fields) for (const k of fieldKeys(f)) d[k] = values[k] || ''
     setDraft(d)
     setCount(null)
+    setOptQ({})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -127,32 +129,51 @@ export default function AdvancedFilterPanel({ open, onClose, fields, values, onA
                   <option value="">指定なし</option>
                   {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {f.options.map(o => {
-                    const selected = (draft[f.key] || '').split(',').filter(Boolean)
-                    const checked = selected.includes(o.value)
-                    return (
-                      <button
-                        key={o.value}
-                        type="button"
-                        aria-pressed={checked}
-                        onClick={() => {
-                          const next = checked ? selected.filter(v => v !== o.value) : [...selected, o.value]
-                          patch({ [f.key]: next.join(',') })
-                        }}
-                        className={`h-8 px-3 rounded-full text-xs font-medium border transition-colors ${
-                          checked
-                            ? 'border-[var(--portal-primary,#374151)] bg-[color-mix(in_srgb,var(--portal-primary,#374151)_10%,transparent)] text-[var(--md-sys-color-on-surface)]'
-                            : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary,#374151)]'
-                        }`}
-                      >
-                        {o.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+              ) : (() => {
+                const showSearch = f.options.length > 8
+                const kw = (optQ[f.key] || '').trim().toLowerCase()
+                const opts = kw ? f.options.filter(o => o.label.toLowerCase().includes(kw)) : f.options
+                return (
+                  <div className="space-y-1.5">
+                    {showSearch && (
+                      <input
+                        type="text"
+                        value={optQ[f.key] || ''}
+                        onChange={e => setOptQ(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={`${f.label}を検索...`}
+                        className={inputCls}
+                      />
+                    )}
+                    <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto">
+                      {opts.map(o => {
+                        const selected = (draft[f.key] || '').split(',').filter(Boolean)
+                        const checked = selected.includes(o.value)
+                        return (
+                          <button
+                            key={o.value}
+                            type="button"
+                            aria-pressed={checked}
+                            onClick={() => {
+                              const next = checked ? selected.filter(v => v !== o.value) : [...selected, o.value]
+                              patch({ [f.key]: next.join(',') })
+                            }}
+                            className={`h-8 px-3 rounded-full text-xs font-medium border transition-colors ${
+                              checked
+                                ? 'border-[var(--portal-primary,#374151)] bg-[color-mix(in_srgb,var(--portal-primary,#374151)_10%,transparent)] text-[var(--md-sys-color-on-surface)]'
+                                : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--portal-primary,#374151)]'
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        )
+                      })}
+                      {opts.length === 0 && (
+                        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] py-1">該当なし</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           ))}
         </div>

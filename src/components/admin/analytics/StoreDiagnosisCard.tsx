@@ -3,6 +3,7 @@
 // ④ 店舗AI診断カード（StoresTab末尾）: 店舗を選んで全店舗平均と比較した診断カルテを生成
 import { useState, useEffect } from 'react'
 import type { DiagnosisResult, AnalyticsFilterOptions } from '@/lib/analytics/types'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import { useAiPost, AiItemList, AiResultFooter, AiLoadingSkeleton, AiErrorNote, SparkleIcon, queryToParams } from './aiShared'
 
 export default function StoreDiagnosisCard({ query }: { query: string }) {
@@ -33,14 +34,7 @@ export default function StoreDiagnosisCard({ query }: { query: string }) {
         <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">店舗AI診断</h3>
         <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">全店舗ベンチマーク比較の診断カルテ</span>
         <div className="flex items-center gap-2 ml-auto">
-          <select
-            value={storeId}
-            onChange={e => setStoreId(e.target.value)}
-            className="text-xs rounded-lg px-2 py-1.5 border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)] max-w-[180px]"
-          >
-            <option value="">店舗を選択…</option>
-            {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <StoreFilterSelect value={storeId} onChange={setStoreId} stores={stores} allLabel="店舗を選択…" style={{ minWidth: 150, maxWidth: 200 }} />
           <button
             onClick={() => run()}
             disabled={!storeId || ai.loading}

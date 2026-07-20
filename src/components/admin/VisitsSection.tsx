@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Card from '@/components/Card'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import SummaryCard from '@/components/SummaryCard'
 import DataTable, { type Column } from '@/components/DataTable'
 import Button from '@/components/Button'
@@ -280,13 +281,7 @@ export default function VisitsSection({ customerTypes }: { customerTypes?: strin
 
             <div>
               <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">店舗</label>
-              <select
-                value={storeId} onChange={e => setStoreId(e.target.value)}
-                className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-              >
-                <option value="">すべての店舗</option>
-                {stores.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}
-              </select>
+              <StoreFilterSelect value={storeId} onChange={setStoreId} stores={stores} />
             </div>
 
             <div>

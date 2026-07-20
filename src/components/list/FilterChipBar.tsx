@@ -40,9 +40,16 @@ function fmtShort(ymd: string): string {
   return m ? `${parseInt(m[1], 10)}/${parseInt(m[2], 10)}` : ymd
 }
 
+// 選択肢がこの数を超えるチップは、ポップオーバー内に検索ボックスを表示する
+const OPTION_SEARCH_THRESHOLD = 8
+
 export default function FilterChipBar({ chips, values, onChange, trailing }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(null)
+  const [optQuery, setOptQuery] = useState('')
   const barRef = useRef<HTMLDivElement>(null)
+
+  // 開いているチップが変わったら選択肢検索をリセット
+  useEffect(() => { setOptQuery('') }, [openKey])
 
   // 外側クリックで閉じる
   useEffect(() => {
@@ -161,29 +168,50 @@ export default function FilterChipBar({ chips, values, onChange, trailing }: Pro
                       </label>
                     </div>
                   </div>
-                ) : (
-                  chip.options.map(opt => {
-                    const selected = (values[chip.key] || '').split(',').filter(Boolean)
-                    const checked = selected.includes(opt.value)
-                    return (
-                      <label
-                        key={opt.value}
-                        className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm cursor-pointer hover:bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]"
-                      >
-                        <input
-                          type={chip.type === 'multi' ? 'checkbox' : 'radio'}
-                          checked={checked}
-                          onChange={() => {
-                            if (chip.type === 'multi') toggleMulti(chip, opt.value)
-                            else { onChange({ [chip.key]: checked ? '' : opt.value }); setOpenKey(null) }
-                          }}
-                          className="w-4 h-4 accent-[var(--portal-primary,#374151)]"
-                        />
-                        {opt.label}
-                      </label>
-                    )
-                  })
-                )}
+                ) : (() => {
+                  const showSearch = chip.options.length > OPTION_SEARCH_THRESHOLD
+                  const kw = optQuery.trim().toLowerCase()
+                  const opts = kw ? chip.options.filter(o => o.label.toLowerCase().includes(kw)) : chip.options
+                  return (
+                    <>
+                      {showSearch && (
+                        <div className="sticky top-0 z-10 p-1 bg-[var(--md-sys-color-surface-container-lowest,#fff)]">
+                          <input
+                            autoFocus
+                            value={optQuery}
+                            onChange={e => setOptQuery(e.target.value)}
+                            placeholder="検索..."
+                            className="w-full h-8 px-2.5 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)]"
+                          />
+                        </div>
+                      )}
+                      {opts.map(opt => {
+                        const selected = (values[chip.key] || '').split(',').filter(Boolean)
+                        const checked = selected.includes(opt.value)
+                        return (
+                          <label
+                            key={opt.value}
+                            className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm cursor-pointer hover:bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]"
+                          >
+                            <input
+                              type={chip.type === 'multi' ? 'checkbox' : 'radio'}
+                              checked={checked}
+                              onChange={() => {
+                                if (chip.type === 'multi') toggleMulti(chip, opt.value)
+                                else { onChange({ [chip.key]: checked ? '' : opt.value }); setOpenKey(null) }
+                              }}
+                              className="w-4 h-4 accent-[var(--portal-primary,#374151)]"
+                            />
+                            {opt.label}
+                          </label>
+                        )
+                      })}
+                      {opts.length === 0 && (
+                        <div className="px-2.5 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)] text-center">該当なし</div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             )}
           </div>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 
 type Store = { id: string; name: string; code: string; prefecture?: string | null }
 type Member = {
@@ -99,13 +100,7 @@ export default function AdminStoreMembersPage() {
         </div>
         <div>
           <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 2 }}>店舗</label>
-          <select
-            value={storeId} onChange={e => setStoreId(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
-          >
-            <option value="">すべての店舗</option>
-            {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          <StoreFilterSelect value={storeId} onChange={setStoreId} stores={stores} />
         </div>
         {(storeId || q) && (
           <button

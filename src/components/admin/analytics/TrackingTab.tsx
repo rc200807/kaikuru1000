@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import ChartCard from '@/components/charts/ChartCard'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import KpiCard from '@/components/charts/KpiCard'
 import TimeSeriesChart from '@/components/charts/TimeSeriesChart'
 import DonutChart from '@/components/charts/DonutChart'
@@ -240,10 +241,7 @@ function PathsSection({ query }: { query: string }) {
           <option value="referral">参照サイト</option>
           <option value="direct">直接</option>
         </select>
-        <select value={storeId} onChange={e => setStoreId(e.target.value)} className="text-xs rounded-lg px-2 py-1.5 border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)] max-w-[180px]">
-          <option value="">全店舗（問い合わせ先）</option>
-          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <StoreFilterSelect value={storeId} onChange={setStoreId} stores={stores} allLabel="全店舗（問い合わせ先）" style={{ minWidth: 150, maxWidth: 200 }} />
       </div>
       {loading ? (
         <p className="text-xs py-10 text-center text-[var(--md-sys-color-on-surface-variant)]">経路を集計中…</p>

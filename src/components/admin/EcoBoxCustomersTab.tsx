@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, type CustomerType } from '@/lib/customer-types'
 
 type Store = { id: string; name: string; code: string }
@@ -91,13 +92,7 @@ export default function EcoBoxCustomersTab({ customerType }: { customerType: Cus
           placeholder="氏名・メール・電話で検索"
           style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
         />
-        <select
-          value={filterStore} onChange={e => setFilterStore(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
-        >
-          <option value="">すべての店舗</option>
-          {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <StoreFilterSelect value={filterStore} onChange={setFilterStore} stores={stores} style={{ minWidth: 180 }} />
       </div>
 
       {/* リスト */}

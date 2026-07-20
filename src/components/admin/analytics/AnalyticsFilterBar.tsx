@@ -2,6 +2,7 @@
 
 // GA風の期間・比較・粒度・絞り込みバー
 import { PRESETS, PRESET_LABEL, PresetKey, CompareMode, Granularity, GRANULARITY_LABEL } from '@/lib/analytics/period'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL } from '@/lib/deal-categories'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL } from '@/lib/customer-types'
 import type { AnalyticsFilterOptions, AnalyticsQueryState } from '@/lib/analytics/types'
@@ -86,10 +87,13 @@ export default function AnalyticsFilterBar({ state, options, onChange }: Props) 
 
         <span className="w-px h-5 bg-[var(--md-sys-color-outline-variant)] hidden sm:block" />
 
-        <select value={state.storeId ?? ''} onChange={e => onChange({ storeId: e.target.value || null })} className={selectClass}>
-          <option value="">全店舗</option>
-          {(options?.stores ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <StoreFilterSelect
+          value={state.storeId ?? ''}
+          onChange={(id) => onChange({ storeId: id || null })}
+          stores={options?.stores ?? []}
+          allLabel="全店舗"
+          style={{ minWidth: 160 }}
+        />
 
         <select value={state.dealCategory ?? ''} onChange={e => onChange({ dealCategory: e.target.value || null })} className={selectClass}>
           <option value="">全カテゴリー</option>

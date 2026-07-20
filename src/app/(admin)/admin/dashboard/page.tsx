@@ -12,6 +12,7 @@ import {
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import AdminReleaseNotesCard from '@/components/admin/ReleaseNotesCard'
+import RecentDealsSidebar from '@/components/admin/RecentDealsSidebar'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 
 const ADMIN_LEAD_COLORS = ['#ffffff', '#60a5fa', '#22c55e', '#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#737373']
@@ -261,7 +262,8 @@ export default function AdminDashboardPage() {
     <>
       <AppBar title="ダッシュボード" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 flex gap-6 items-start">
+        <div className="flex-1 min-w-0 space-y-6">
 
         {/* 発送通知バナー */}
         {shippedCount > 0 && (
@@ -541,6 +543,12 @@ export default function AdminDashboardPage() {
         {/* ─── LINE 統計 ─────────────────────────── */}
         {data.line && <LineSection line={data.line} />}
 
+        </div>
+
+        {/* 右追従サイドバー: 新着案件（リアルタイム） */}
+        <aside className="hidden xl:block w-[340px] shrink-0 sticky" style={{ top: 80 }}>
+          <RecentDealsSidebar />
+        </aside>
       </div>
     </>
   )

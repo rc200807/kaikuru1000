@@ -18,6 +18,7 @@ import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatu
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 import { formatYen } from '@/lib/currency'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { upload } from '@vercel/blob/client'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
@@ -38,6 +39,23 @@ type VisitSchedule = {
   workItems: WorkItem[]
   salesContract: ContractInfo | null
   estimate: EstimateInfo | null
+}
+
+type RecordingSummary = { overview: string; requests: string[]; important: string[]; nextActions: string[] }
+type DealRecording = {
+  id: string
+  fileName: string | null
+  mimeType: string | null
+  fileSize: number | null
+  durationSec: number | null
+  status: 'pending' | 'processing' | 'done' | 'error'
+  transcript: string | null
+  summary: RecordingSummary | null
+  error: string | null
+  uploadedByName: string | null
+  createdAt: string
+  processedAt: string | null
+  audioUrl: string
 }
 
 type Deal = {
@@ -166,6 +184,13 @@ export default function DealDetailView({
   const [showConsentModal, setShowConsentModal] = useState(false)
   const [consentDraft, setConsentDraft] = useState<string | null>(null)
 
+  // 会話録音（AI文字起こし・要約）
+  const [recordings, setRecordings] = useState<DealRecording[]>([])
+  const [recUploading, setRecUploading] = useState(false)
+  const [recProgress, setRecProgress] = useState(0)
+  const [recError, setRecError] = useState<string | null>(null)
+  const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -201,6 +226,67 @@ export default function DealDetailView({
       .then(d => setCategories(Array.isArray(d) ? d : []))
       .catch(() => {})
   }, [])
+
+  // 会話録音の一覧取得
+  const loadRecordings = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/deals/${dealId}/recordings`)
+      if (r.ok) { const d = await r.json(); setRecordings(d.recordings ?? []) }
+    } catch { /* ignore */ }
+  }, [dealId])
+
+  useEffect(() => { loadRecordings() }, [loadRecordings])
+
+  // 解析中の録音があれば8秒ごとにポーリングして更新
+  useEffect(() => {
+    const busy = recordings.some(r => r.status === 'pending' || r.status === 'processing')
+    if (!busy) return
+    const t = setInterval(loadRecordings, 8000)
+    return () => clearInterval(t)
+  }, [recordings, loadRecordings])
+
+  async function handleUploadRecording(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 200 * 1024 * 1024) { setRecError('音声ファイルは200MB以下にしてください'); return }
+    setRecError(null)
+    setRecUploading(true)
+    setRecProgress(0)
+    try {
+      const extMatch = (file.name.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? '').toLowerCase()
+      const pathname = `deal-recordings/${dealId}/${Date.now()}${extMatch || '.m4a'}`
+      const blob = await upload(pathname, file, {
+        access: 'public',
+        handleUploadUrl: `/api/deals/${dealId}/recordings/upload`,
+        contentType: file.type || undefined,
+        onUploadProgress: (p) => setRecProgress(Math.round(p.percentage)),
+      })
+      const res = await fetch(`/api/deals/${dealId}/recordings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioUrl: blob.url, fileName: file.name, mimeType: file.type, fileSize: file.size }),
+      })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || '登録に失敗しました') }
+      await loadRecordings()
+    } catch (err) {
+      setRecError(err instanceof Error ? err.message : 'アップロードに失敗しました')
+    } finally {
+      setRecUploading(false)
+      setRecProgress(0)
+    }
+  }
+
+  async function handleDeleteRecording(recId: string) {
+    if (!confirm('この録音を削除しますか？（文字起こし・要約も削除されます）')) return
+    const res = await fetch(`/api/deals/${dealId}/recordings/${recId}`, { method: 'DELETE' })
+    if (res.ok) setRecordings(prev => prev.filter(r => r.id !== recId))
+  }
+
+  async function handleRetryRecording(recId: string) {
+    const res = await fetch(`/api/deals/${dealId}/recordings/${recId}`, { method: 'POST' })
+    if (res.ok) loadRecordings()
+  }
 
 
   async function addWorkItem() {
@@ -888,6 +974,102 @@ export default function DealDetailView({
           )}
         </Card>
 
+        {/* 会話の録音・AI文字起こし／要約（店舗・管理の両ポータル） */}
+        <Card variant="outlined" padding="md">
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <SectionTitle>会話の録音・AI解析</SectionTitle>
+            <label className={`text-xs px-3 py-1.5 rounded-full border border-[var(--md-sys-color-outline-variant)] text-[var(--portal-primary)] hover:bg-[var(--md-sys-color-surface-container-high)] whitespace-nowrap ${recUploading ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}>
+              {recUploading ? `アップロード中... ${recProgress}%` : '＋ 録音をアップロード'}
+              <input type="file" accept="audio/*" className="hidden" onChange={handleUploadRecording} disabled={recUploading} />
+            </label>
+          </div>
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+            顧客との会話を録音した音声をアップロードすると、AIが自動で文字起こしと要約（顧客の要望・重要事項・次アクション）を作成します。解析には数分かかる場合があります。
+          </p>
+          {recError && <p className="text-sm text-[var(--md-sys-color-error)] mb-2">{recError}</p>}
+          {recordings.length === 0 ? (
+            <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">まだ録音はありません。</p>
+          ) : (
+            <div className="space-y-3">
+              {recordings.map(rec => {
+                const meta = rec.status === 'done' ? { label: '完了', bg: 'rgba(74,222,128,0.15)', fg: '#16a34a' }
+                  : rec.status === 'processing' ? { label: 'AI解析中', bg: 'rgba(251,191,36,0.18)', fg: '#b45309' }
+                  : rec.status === 'error' ? { label: '失敗', bg: 'rgba(248,113,113,0.18)', fg: '#dc2626' }
+                  : { label: '解析待ち', bg: 'var(--md-sys-color-surface-container-high)', fg: 'var(--md-sys-color-on-surface-variant)' }
+                const sizeMb = rec.fileSize ? `${(rec.fileSize / 1024 / 1024).toFixed(1)}MB` : ''
+                return (
+                  <div key={rec.id} className="rounded-lg border border-[var(--md-sys-color-outline-variant)] p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-[var(--md-sys-color-on-surface)] truncate">{rec.fileName || '録音音声'}</div>
+                        <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                          {new Date(rec.createdAt).toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}
+                          {sizeMb && <span className="ml-2">{sizeMb}</span>}
+                          {rec.uploadedByName && <span className="ml-2">{rec.uploadedByName}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: meta.bg, color: meta.fg }}>{meta.label}</span>
+                        <button type="button" onClick={() => handleDeleteRecording(rec.id)} className="text-xs text-[var(--md-sys-color-error)] hover:underline">削除</button>
+                      </div>
+                    </div>
+
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    <audio controls preload="none" src={rec.audioUrl} className="w-full h-9 mb-2" />
+
+                    {(rec.status === 'pending' || rec.status === 'processing') && (
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex items-center gap-1.5">
+                        <span className="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        AIが文字起こし・要約を作成しています…
+                      </p>
+                    )}
+
+                    {rec.status === 'error' && (
+                      <div className="text-xs text-[var(--md-sys-color-error)]">
+                        解析に失敗しました{rec.error ? `：${rec.error}` : ''}
+                        <button type="button" onClick={() => handleRetryRecording(rec.id)} className="ml-2 underline text-[var(--portal-primary)]">再試行</button>
+                      </div>
+                    )}
+
+                    {rec.status === 'done' && (
+                      <div className="space-y-3">
+                        {rec.summary && (
+                          <div className="rounded-md bg-[var(--md-sys-color-surface-container)] p-3 space-y-2">
+                            {rec.summary.overview && <p className="text-sm text-[var(--md-sys-color-on-surface)] leading-relaxed">{rec.summary.overview}</p>}
+                            {rec.summary.requests.length > 0 && (
+                              <RecList title="顧客の要望" items={rec.summary.requests} />
+                            )}
+                            {rec.summary.important.length > 0 && (
+                              <RecList title="重要事項" items={rec.summary.important} />
+                            )}
+                            {rec.summary.nextActions.length > 0 && (
+                              <RecList title="次のアクション" items={rec.summary.nextActions} />
+                            )}
+                          </div>
+                        )}
+                        {rec.transcript && (
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => setOpenTranscriptId(openTranscriptId === rec.id ? null : rec.id)}
+                              className="text-xs text-[var(--portal-primary)] hover:underline"
+                            >
+                              {openTranscriptId === rec.id ? '▾ 文字起こしを隠す' : '▸ 文字起こしを表示'}
+                            </button>
+                            {openTranscriptId === rec.id && (
+                              <pre className="mt-2 text-xs whitespace-pre-wrap leading-relaxed text-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-surface-container)] rounded-md p-3 max-h-80 overflow-y-auto font-sans">{rec.transcript}</pre>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+
         {/* 書類を作成（店舗ポータル） */}
         {editable && (
           <Card variant="outlined" padding="md">
@@ -1133,6 +1315,20 @@ export default function DealDetailView({
           </div>
         </div>
       </Modal>
+    </div>
+  )
+}
+
+// 録音要約の箇条書きブロック
+function RecList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-0.5">{title}</p>
+      <ul className="list-disc pl-4 space-y-0.5">
+        {items.map((it, i) => (
+          <li key={i} className="text-xs text-[var(--md-sys-color-on-surface)] leading-relaxed">{it}</li>
+        ))}
+      </ul>
     </div>
   )
 }

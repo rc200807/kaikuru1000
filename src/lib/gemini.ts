@@ -15,6 +15,10 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleAIFileManager, FileState } from '@google/generative-ai/server'
+import { writeFile, unlink } from 'fs/promises'
+import os from 'os'
+import path from 'path'
 
 const MODEL_ID = 'gemini-2.5-flash'
 
@@ -362,5 +366,91 @@ export async function compareFaces(
     match:      Boolean(parsed.match),
     confidence,
     reason:     typeof parsed.reason === 'string' ? parsed.reason : '判定理由を取得できませんでした',
+  }
+}
+
+/* ─── 会話音声の文字起こし＋要約（Files API 経由・大容量対応） ─── */
+
+export type AudioAnalysis = {
+  transcript: string
+  summary: { overview: string; requests: string[]; important: string[]; nextActions: string[] }
+}
+
+function extForAudio(mimeType: string): string {
+  if (mimeType.includes('mpeg') || mimeType.includes('mp3')) return 'mp3'
+  if (mimeType.includes('wav')) return 'wav'
+  if (mimeType.includes('webm')) return 'webm'
+  if (mimeType.includes('ogg')) return 'ogg'
+  if (mimeType.includes('aac')) return 'aac'
+  return 'm4a'
+}
+
+/**
+ * 買取店の会話音声（スタッフ×顧客）を文字起こし＋要約する。
+ * 大容量音声に対応するため Gemini Files API を使用（/tmp に書き出して送信→処理後に削除）。
+ */
+export async function transcribeAndSummarizeAudio(buffer: Buffer, mimeType: string, displayName = 'recording'): Promise<AudioAnalysis> {
+  const apiKey = getApiKey()
+  const fm = new GoogleAIFileManager(apiKey)
+  const tmpPath = path.join(os.tmpdir(), `deal-rec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extForAudio(mimeType)}`)
+  let uploadedName: string | undefined
+  try {
+    await writeFile(tmpPath, buffer)
+    const uploaded = await fm.uploadFile(tmpPath, { mimeType, displayName })
+    uploadedName = uploaded.file.name
+
+    // ACTIVE になるまでポーリング（最大 ~45秒）
+    let file = uploaded.file
+    for (let i = 0; i < 30 && file.state === FileState.PROCESSING; i++) {
+      await new Promise(r => setTimeout(r, 1500))
+      file = await fm.getFile(uploaded.file.name)
+    }
+    if (file.state !== FileState.ACTIVE) {
+      throw new GeminiError('api-error', `音声ファイルの前処理に失敗しました (state=${file.state})`)
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: MODEL_ID, generationConfig: { responseMimeType: 'application/json' } })
+    const prompt = `あなたは買取店の会話音声を分析するアシスタントです。この音声は店舗スタッフと顧客の会話です。以下のJSONだけを返してください（前置きやMarkdownは不要）:
+{
+  "transcript": "話者を「スタッフ:」「顧客:」で区別した日本語の逐語文字起こし。発話ごとに改行する。聞き取れない箇所は（聞き取り不明）と記す。",
+  "summary": {
+    "overview": "会話全体の要約を2〜4文で",
+    "requests": ["顧客の要望・希望（無ければ空配列）"],
+    "important": ["重要事項・合意事項・金額や品目など（無ければ空配列）"],
+    "nextActions": ["次にとるべきアクション（無ければ空配列）"]
+  }
+}
+すべて日本語で出力すること。`
+
+    const result = await model.generateContent([
+      { fileData: { fileUri: file.uri, mimeType } },
+      prompt,
+    ])
+    const raw = result.response.text().trim()
+    const jsonStr = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    const parsed: any = JSON.parse(jsonStr)
+    const s = parsed?.summary ?? {}
+    const arr = (v: any): string[] => (Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : [])
+    return {
+      transcript: String(parsed?.transcript ?? ''),
+      summary: {
+        overview: String(s.overview ?? ''),
+        requests: arr(s.requests),
+        important: arr(s.important),
+        nextActions: arr(s.nextActions),
+      },
+    }
+  } catch (err: any) {
+    if (err instanceof GeminiError) throw err
+    if (err instanceof SyntaxError) {
+      throw new GeminiError('parse-error', `音声解析レスポンスのJSONパースに失敗: ${err.message}`)
+    }
+    const detail = err?.message ?? String(err)
+    console.error('[gemini] 音声解析失敗:', detail)
+    throw new GeminiError('api-error', `音声解析エラー: ${detail}`, detail)
+  } finally {
+    if (uploadedName) { try { await fm.deleteFile(uploadedName) } catch { /* ignore */ } }
+    try { await unlink(tmpPath) } catch { /* ignore */ }
   }
 }

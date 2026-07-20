@@ -675,6 +675,7 @@ model Deal {
   workItems      WorkItem[]                // 案件配下の請求項目
   salesContract  SalesContract?            // 案件の売買契約書（1:1）
   estimate       Estimate?                 // 案件の見積（1:1）
+  recordings     DealRecording[]           // 会話の録音音声（AI文字起こし・要約）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -683,6 +684,32 @@ model Deal {
   @@index([status])
   @@index([category])
   @@index([memberId])
+}
+
+// 案件に紐づく会話録音（音声）。AIで文字起こし＋要約を非同期生成する。
+model DealRecording {
+  id            String    @id @default(cuid())
+  dealId        String
+  deal          Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  audioUrl      String    @db.Text          // Vercel Blob の音声URL
+  fileName      String?
+  mimeType      String?
+  fileSize      Int?                        // バイト
+  durationSec   Int?
+  status        String    @default("pending") // pending | processing | done | error
+  transcript    String?   @db.Text          // 話者ラベル付き文字起こし
+  summary       String?   @db.Text          // JSON文字列 { overview, requests[], important[], nextActions[] }
+  error         String?   @db.Text
+  attempts      Int       @default(0)
+  uploadedByType String?
+  uploadedById   String?
+  uploadedByName String?
+  createdAt     DateTime  @default(now())
+  processedAt   DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@index([dealId])
+  @@index([status])
 }
 
 // 在庫（店舗の販売商品。買取品目から変換可。将来のマーケット自動出品を見据えた設計）

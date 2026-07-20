@@ -13,6 +13,10 @@
       "schedule": "*/2 * * * *"
     },
     {
+      "path": "/api/cron/process-transcriptions",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/apply-recurring-costs",
       "schedule": "0 5 1 * *"
     }

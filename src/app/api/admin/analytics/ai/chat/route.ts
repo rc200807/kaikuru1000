@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
 - stores: **店舗ごとの実績比較はここ**（店舗別の案件数/成約率/買取額の一覧表・スタッフ別実績・運営者別）
 - inventory: 買取品目・在庫・売却・粗利
 - engagement: 流入経路のCVR表・フォーム・LINE・アクセス・お知らせ既読
+- tracking: **外部集客サイトのアクセス解析はここ**（訪問者数/セッション/PV/直帰率/チャネル別/デバイス/地域/ランディングページ/問い合わせCV数・CVR）
 期間preset: today(今日) 7d(過去7日) 30d(過去30日) this_month(当月) last_month(前月) this_year(今年) all(全期間) custom(from/to指定)
 絞り込み: storeId(店舗) dealCategory(purchase|akikuru|ecotoku) customerType(visit|delivery|regular|akikuru) leadSource(流入経路名)
 店舗名→storeId対応表: ${JSON.stringify(stores.map(s => ({ id: s.id, name: s.name })))}

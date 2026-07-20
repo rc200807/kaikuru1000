@@ -167,6 +167,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     },
   })
 
+  // アクセス計測とのCV紐付け（失敗しても送信本体は成功させる）
+  if (body.trackingVisitorKey) {
+    const { linkConversion } = await import('@/lib/tracking')
+    await linkConversion({
+      visitorKey: String(body.trackingVisitorKey),
+      type: 'form_submit',
+      formSubmissionId: submission.id,
+      storeId: form.customerStoreId ?? null,
+      userId: createdUserId,
+    })
+  }
+
   const formatted = formatAnswersForDisplay(schema, parsed.data as Record<string, unknown>)
 
   // メール通知（失敗は握り潰し）

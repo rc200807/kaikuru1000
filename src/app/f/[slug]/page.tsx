@@ -40,6 +40,19 @@ export default function PublicFormPage() {
   }, [slug])
 
   useEffect(() => {
+    // アクセス計測のクロスドメインリンカー（?_rctv=訪問者ID）を受け取り保持。URLからは除去する
+    try {
+      const url = new URL(window.location.href)
+      const vk = url.searchParams.get('_rctv')
+      if (vk) {
+        sessionStorage.setItem('_rct_vid_sys', vk)
+        url.searchParams.delete('_rctv')
+        window.history.replaceState(null, '', url.toString())
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
     // reCAPTCHA v3 スクリプト読み込み
     if (!form?.recaptchaEnabled || !RECAPTCHA_SITE_KEY) return
     const id = 'recaptcha-v3-script'
@@ -89,7 +102,11 @@ export default function PublicFormPage() {
       const res = await fetch(`/api/forms/public/${slug}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: values, recaptchaToken }),
+        body: JSON.stringify({
+          data: values,
+          recaptchaToken,
+          trackingVisitorKey: (() => { try { return sessionStorage.getItem('_rct_vid_sys') || undefined } catch { return undefined } })(),
+        }),
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))

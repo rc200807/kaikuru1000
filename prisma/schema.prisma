@@ -89,6 +89,7 @@ model User {
   formSubmissions   FormSubmission[]
   partnerNotes      SalesPartnerCustomerNote[]
   deals             Deal[]
+  trackingVisitors  TrackingVisitor[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -1659,4 +1660,132 @@ model AnalyticsAiInsight {
 
   @@index([kind, cacheKey, createdAt])
   @@index([createdAt])
+}
+
+// ─── 外部サイト向けアクセス計測（クロスドメイントラッキング） ───
+
+// 計測対象サイト（スクリプトタグ発行単位）
+model TrackingSite {
+  id        String   @id @default(cuid())
+  siteKey   String   @unique          // スクリプトの data-site に入る公開キー
+  name      String                    // 表示名（例: OPS銀座LP）
+  domains   String   @default("[]")   // 許可ドメインJSON配列（空=全許可）。Originヘッダで照合
+  isActive  Boolean  @default(true)
+  buttons   TrackingButton[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// コンバージョンボタン（発行ID。電話/LINE等のクリックをCV判定）
+model TrackingButton {
+  id           String   @id @default(cuid())
+  siteId       String
+  site         TrackingSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  buttonKey    String   @unique       // "btn_" + 英数8桁。data-track-id に設定
+  name         String                 // 例: 電話発信ボタン（ヘッダー）
+  kind         String   @default("other") // tel | line | mail | other（表示用）
+  isConversion Boolean  @default(true) // CVとして数えるか（false=クリック計測のみ）
+  createdAt    DateTime @default(now())
+
+  @@index([siteId])
+}
+
+// 訪問者（ブラウザ単位の匿名ID。CV時に顧客Userへ紐付け）
+model TrackingVisitor {
+  id            String   @id @default(cuid())
+  visitorKey    String   @unique      // クライアント生成UUID（localStorage保持）
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+  firstUrl      String?  @db.Text     // 初回ランディングURL
+  firstReferrer String?  @db.Text
+  userId        String?               // 問い合わせ成立時に紐付く顧客
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions      TrackingSession[]
+  events        TrackingEvent[]
+
+  @@index([userId])
+  @@index([lastSeenAt])
+}
+
+// セッション（30分無操作で切替。サーバー側で解決）
+model TrackingSession {
+  id             String   @id @default(cuid())
+  visitorId      String
+  visitor        TrackingVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  siteId         String?
+  startedAt      DateTime @default(now())
+  lastActivityAt DateTime @default(now())
+  entryUrl       String   @db.Text
+  entryTitle     String?
+  referrer       String?  @db.Text
+  entryParams    String   @default("{}") @db.Text // ランディングURLの全クエリパラメータJSON（自動検出）
+  userAgent      String?  @db.Text
+  ipAddress      String?               // 接続元IP（x-forwarded-for先頭。AccessLogと同方式）
+  channel        String?               // search|social|ad|referral|direct（referrer+パラメータから自動分類）
+  deviceType     String?               // mobile|tablet|desktop（UAから判定）
+  browser        String?               // Chrome|Safari|Edge|Firefox等（UAから判定）
+  os             String?               // iOS|Android|Windows|macOS等（UAから判定）
+  screenSize     String?               // 画面サイズ（例: "390x844"。t.jsが送信）
+  language       String?               // ブラウザ言語（navigator.language）
+  country        String?               // IP由来の国（x-vercel-ip-country）
+  region         String?               // IP由来の都道府県（x-vercel-ip-country-region→県名変換）
+  city           String?               // IP由来の市区町村（x-vercel-ip-city）
+  isFirstSession Boolean  @default(true) // 新規 vs 再訪の集計用
+  hasConversion  Boolean  @default(false) // 集計高速化用の非正規化フラグ
+  pageViews      TrackingPageView[]
+  events         TrackingEvent[]
+
+  @@index([visitorId, startedAt])
+  @@index([startedAt])
+  @@index([lastActivityAt])
+}
+
+// ページビュー
+model TrackingPageView {
+  id          String   @id @default(cuid())
+  pvKey       String?  @unique        // クライアント生成ID（離脱ビーコンで滞在時間を後追い更新）
+  sessionId   String
+  session     TrackingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  url         String   @db.Text
+  path        String                  // ホスト+パス（クエリ除去。フロー図のノードキー）
+  title       String?                 // document.title（フロー図の表示名）
+  queryParams String   @default("{}") @db.Text // このPVのクエリパラメータJSON
+  durationSec Int?                    // 滞在秒数（離脱ビーコンで更新）
+  scrollDepth Int?                    // 最大スクロール到達率 0-100（離脱ビーコンで更新）
+  occurredAt  DateTime @default(now())
+
+  @@index([sessionId, occurredAt])
+  @@index([occurredAt])
+}
+
+// イベント（ボタンクリックCV・フォーム/問い合わせ送信CV）
+model TrackingEvent {
+  id               String   @id @default(cuid())
+  visitorId        String
+  visitor          TrackingVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  sessionId        String?
+  session          TrackingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  type             String            // button_click | inquiry_submit | form_submit
+  buttonId         String?           // TrackingButton.id（button_click時）
+  inquiryId        String?           // Inquiry.id（inquiry_submit時）
+  formSubmissionId String?           // FormSubmission.id（form_submit時）
+  storeId          String?           // 問い合わせ先店舗（店舗別集計用の非正規化）
+  url              String?  @db.Text // 発生ページ
+  isConversion     Boolean  @default(true)
+  occurredAt       DateTime @default(now())
+
+  @@index([visitorId, occurredAt])
+  @@index([sessionId])
+  @@index([type, occurredAt])
+  @@index([storeId, occurredAt])
+}
+
+// キャンペーンURLビルダー（パラメータ付きURLの発行・成果の自動追跡）
+model TrackingCampaign {
+  id        String   @id @default(cuid())
+  name      String                    // 例: 7月Instagram広告
+  baseUrl   String   @db.Text
+  params    String   @db.Text         // 付与パラメータJSON
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

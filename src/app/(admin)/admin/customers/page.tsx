@@ -33,6 +33,7 @@ import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
+import CustomerJourneyCard from '@/components/admin/CustomerJourneyCard'
 
 type User = {
   id: string
@@ -1813,6 +1814,9 @@ export default function AdminCustomersPage() {
                     )}
                   </dl>
                 )}
+
+                {/* 流入経路（アクセス計測。計測データがある顧客のみ表示） */}
+                <CustomerJourneyCard userId={detailUser.id} />
 
                 {/* 身分証明書セクション */}
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">

@@ -100,6 +100,19 @@ export default function InquiryPage() {
     if (storeCode) fetchStore()
   }, [storeCode])
 
+  // アクセス計測のクロスドメインリンカー（?_rctv=訪問者ID）を受け取り保持。URLからは除去する
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      const vk = url.searchParams.get('_rctv')
+      if (vk) {
+        sessionStorage.setItem('_rct_vid_sys', vk)
+        url.searchParams.delete('_rctv')
+        window.history.replaceState(null, '', url.toString())
+      }
+    } catch { /* ignore */ }
+  }, [])
+
   // Clear items when switching away from item-supporting types
   useEffect(() => {
     if (!showItemSection) {
@@ -218,6 +231,7 @@ export default function InquiryPage() {
           details: details || undefined,
           items: uploadedItems.length > 0 ? uploadedItems : undefined,
           turnstileToken: turnstileToken || undefined,
+          trackingVisitorKey: (() => { try { return sessionStorage.getItem('_rct_vid_sys') || undefined } catch { return undefined } })(),
         }),
       })
 

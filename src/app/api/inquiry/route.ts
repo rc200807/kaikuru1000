@@ -219,6 +219,18 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // --- アクセス計測とのCV紐付け（失敗しても問い合わせ本体は成功させる） ---
+    if (body.trackingVisitorKey) {
+      const { linkConversion } = await import('@/lib/tracking')
+      await linkConversion({
+        visitorKey: String(body.trackingVisitorKey),
+        type: 'inquiry_submit',
+        inquiryId: inquiry.id,
+        storeId: store.id,
+        userId,
+      })
+    }
+
     // --- 買取トライ（PurchaseMemo）作成 ---
     let itemCount = 0
     if (userId && Array.isArray(items) && items.length > 0) {

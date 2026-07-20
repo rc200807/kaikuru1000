@@ -1,7 +1,7 @@
 // 分析画面のAPIレスポンス型・フィルタ状態型（クライアント/サーバー共用）
 import type { CompareMode, Granularity, PresetKey } from '@/lib/analytics/period'
 
-export const ANALYTICS_TABS = ['overview', 'sales', 'deals', 'customers', 'stores', 'inventory', 'engagement', 'ailab'] as const
+export const ANALYTICS_TABS = ['overview', 'sales', 'deals', 'customers', 'stores', 'inventory', 'engagement', 'tracking', 'ailab'] as const
 export type AnalyticsTab = typeof ANALYTICS_TABS[number]
 
 export const ANALYTICS_TAB_LABEL: Record<AnalyticsTab, string> = {
@@ -12,11 +12,12 @@ export const ANALYTICS_TAB_LABEL: Record<AnalyticsTab, string> = {
   stores: '店舗・スタッフ',
   inventory: '商品・在庫',
   engagement: '流入・接点',
+  tracking: 'アクセス解析',
   ailab: 'AI分析',
 }
 
 /** AIがデータ集計に使えるタブ（ailab自身は除く） */
-export const AI_QUERYABLE_TABS = ['overview', 'sales', 'deals', 'customers', 'stores', 'inventory', 'engagement'] as const
+export const AI_QUERYABLE_TABS = ['overview', 'sales', 'deals', 'customers', 'stores', 'inventory', 'engagement', 'tracking'] as const
 
 /** URL・API共通のフィルタ状態 */
 export type AnalyticsQueryState = {

@@ -16,6 +16,7 @@ import StoresTab from '@/components/admin/analytics/StoresTab'
 import InventoryTab from '@/components/admin/analytics/InventoryTab'
 import EngagementTab from '@/components/admin/analytics/EngagementTab'
 import AiLabTab from '@/components/admin/analytics/AiLabTab'
+import TrackingTab from '@/components/admin/analytics/TrackingTab'
 import { PRESETS, PresetKey } from '@/lib/analytics/period'
 import { ANALYTICS_TABS, ANALYTICS_TAB_LABEL, AnalyticsTab, AnalyticsFilterOptions } from '@/lib/analytics/types'
 
@@ -27,6 +28,7 @@ const TAB_COMPONENTS: Record<AnalyticsTab, React.ComponentType<{ query: string }
   stores: StoresTab,
   inventory: InventoryTab,
   engagement: EngagementTab,
+  tracking: TrackingTab,
   ailab: AiLabTab,
 }
 

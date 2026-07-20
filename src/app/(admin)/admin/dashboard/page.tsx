@@ -266,6 +266,9 @@ export default function AdminDashboardPage() {
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 flex gap-6 items-start">
         <div className="flex-1 min-w-0 space-y-6">
 
+        {/* システム概要（全体の動き）— 最上部 */}
+        <DashboardOverviewSection dashboard={data} />
+
         {/* 発送通知バナー */}
         {shippedCount > 0 && (
           <div
@@ -289,9 +292,6 @@ export default function AdminDashboardPage() {
 
         {/* アップデート情報（リリースノート） */}
         <AdminReleaseNotesCard />
-
-        {/* システム概要（全体の動き） */}
-        <DashboardOverviewSection dashboard={data} />
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

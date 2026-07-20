@@ -146,7 +146,7 @@ function AnalyticsPageInner() {
     <div className="min-h-screen bg-[var(--md-sys-color-surface)]">
       <AppBar title="分析" subtitle="店舗全体のデータを多角的に可視化" />
 
-      <div className="max-w-6xl mx-auto px-4 py-5 space-y-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-5 space-y-4">
         <AnalyticsFilterBar state={filter} options={options} onChange={patch => update(tab, patch)} />
 
         {/* タブ */}

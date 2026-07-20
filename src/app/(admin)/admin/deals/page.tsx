@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import AppBar from '@/components/AppBar'
 import DataTable from '@/components/DataTable'
 import Button from '@/components/Button'
@@ -81,7 +81,6 @@ function Badge({ label, bg, fg }: { label: string; bg: string; fg: string }) {
 export default function AdminDealsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const searchParams = useSearchParams()
 
   const [deals, setDeals] = useState<Deal[]>([])
   const [total, setTotal] = useState(0)
@@ -110,9 +109,10 @@ export default function AdminDealsPage() {
 
   // ?id= ディープリンク（RecentDealsSidebar等）→ 詳細ページへ
   useEffect(() => {
-    const id = searchParams.get('id')
+    if (typeof window === 'undefined') return
+    const id = new URLSearchParams(window.location.search).get('id')
     if (id) router.replace(`/admin/deals/${id}`)
-  }, [searchParams, router])
+  }, [router])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/admin/login')

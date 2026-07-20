@@ -31,7 +31,7 @@ function fmtTime(iso: string): string {
   }
 }
 
-export default function CustomerJourneyCard({ userId }: { userId: string }) {
+export default function CustomerJourneyCard({ userId, leadSource }: { userId: string; leadSource?: string | null }) {
   const [data, setData] = useState<CustomerJourneyResult | null>(null)
 
   useEffect(() => {
@@ -42,13 +42,32 @@ export default function CustomerJourneyCard({ userId }: { userId: string }) {
       .catch(() => setData({ visitors: [] }))
   }, [userId])
 
-  // 計測データがない顧客には何も出さない
-  if (data === null || data.visitors.length === 0) return null
+  const isLoading = data === null
+  const isEmpty = !isLoading && data.visitors.length === 0
 
   return (
     <div className="rounded-xl p-3.5 border border-[var(--md-sys-color-outline-variant)]">
       <p className="text-[10px] font-semibold mb-3 text-[var(--md-sys-color-on-surface-variant)]">🛬 問い合わせ経路（アクセス計測）</p>
 
+      {isLoading && (
+        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">読み込み中...</p>
+      )}
+
+      {isEmpty && (
+        <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[var(--md-sys-color-on-surface-variant)]">流入経路</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high,#f0f0f0)] text-[var(--md-sys-color-on-surface)]">
+              {leadSource || '不明'}
+            </span>
+          </div>
+          <p className="text-[10px] leading-relaxed">
+            アクセス計測データがありません。計測タグ（t.js）を設置したサイト経由で問い合わせがあると、着地ページからCVまでの経路がここに表示されます。
+          </p>
+        </div>
+      )}
+
+      {!isLoading && !isEmpty && data && (
       <div className="space-y-4">
         {data.visitors.map(v => (
           <div key={v.id}>
@@ -140,6 +159,7 @@ export default function CustomerJourneyCard({ userId }: { userId: string }) {
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }

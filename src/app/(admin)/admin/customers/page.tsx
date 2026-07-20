@@ -1815,8 +1815,8 @@ export default function AdminCustomersPage() {
                   </dl>
                 )}
 
-                {/* 問い合わせ経路（アクセス計測。計測データがある顧客のみ表示） */}
-                <CustomerJourneyCard userId={detailUser.id} />
+                {/* 問い合わせ経路（アクセス計測。計測データが無くても枠と流入経路を表示） */}
+                <CustomerJourneyCard userId={detailUser.id} leadSource={detailUser.leadSource} />
 
                 {/* 身分証明書セクション */}
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">

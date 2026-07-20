@@ -1815,7 +1815,7 @@ export default function AdminCustomersPage() {
                   </dl>
                 )}
 
-                {/* 流入経路（アクセス計測。計測データがある顧客のみ表示） */}
+                {/* 問い合わせ経路（アクセス計測。計測データがある顧客のみ表示） */}
                 <CustomerJourneyCard userId={detailUser.id} />
 
                 {/* 身分証明書セクション */}

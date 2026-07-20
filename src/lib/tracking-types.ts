@@ -149,6 +149,33 @@ export type DealResultsData = {
   totalAmount: number
 }
 
+/** 顧客詳細の「問い合わせ経路」表示用 */
+export type JourneyStep = {
+  kind: 'landing' | 'page' | 'button' | 'conversion'
+  label: string
+  sub?: string | null   // 補足（滞在秒・パスなど）
+  occurredAt: string
+}
+export type ConversionJourney = {
+  sessionId: string
+  startedAt: string
+  channel: string | null
+  referrer: string | null
+  entryParams: Record<string, string>
+  conversionType: string   // 問い合わせ / フォーム / 電話ボタン等
+  storeName: string | null
+  steps: JourneyStep[]
+}
+export type CustomerJourneyVisitor = {
+  id: string
+  channel: string | null
+  firstReferrer: string | null
+  sessionCount: number
+  conversionCount: number
+  journeys: ConversionJourney[]   // CV到達セッションの経路（新しい順）
+}
+export type CustomerJourneyResult = { visitors: CustomerJourneyVisitor[] }
+
 export type RealtimeData = {
   activeVisitors: number
   activePages: { path: string; title: string | null; count: number }[]

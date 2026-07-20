@@ -118,8 +118,27 @@ export async function linkConversion(args: {
   try {
     const visitorKey = (args.visitorKey ?? '').trim()
     if (!visitorKey || visitorKey.length > 64) return
-    const visitor = await prisma.trackingVisitor.findUnique({ where: { visitorKey } })
-    if (!visitor) return
+
+    // 冪等性: 同一CV（同じ問い合わせ/フォーム送信）が既に記録済みなら二重登録しない。
+    // 送信API側とthanks/完了画面ビーコンの両方から呼ばれても1件だけになる。
+    if (args.inquiryId || args.formSubmissionId) {
+      const existing = await prisma.trackingEvent.findFirst({
+        where: {
+          type: args.type,
+          ...(args.inquiryId ? { inquiryId: args.inquiryId } : {}),
+          ...(args.formSubmissionId ? { formSubmissionId: args.formSubmissionId } : {}),
+        },
+        select: { id: true },
+      })
+      if (existing) return
+    }
+
+    // 訪問者を取得。無ければ作成する（LP未経由の直接流入でもCVを取りこぼさない）。
+    const visitor = await prisma.trackingVisitor.upsert({
+      where: { visitorKey },
+      create: { visitorKey },
+      update: { lastSeenAt: new Date() },
+    })
 
     // 直近のアクティブセッション（2時間以内）に紐付ける
     const session = await prisma.trackingSession.findFirst({
@@ -140,9 +159,10 @@ export async function linkConversion(args: {
       },
     })
 
-    const visitorUpdate: Record<string, unknown> = { lastSeenAt: new Date() }
-    if (args.userId && !visitor.userId) visitorUpdate.userId = args.userId
-    await prisma.trackingVisitor.update({ where: { id: visitor.id }, data: visitorUpdate })
+    // CV成立時に顧客を紐付ける（未設定の訪問者のみ）
+    if (args.userId && !visitor.userId) {
+      await prisma.trackingVisitor.update({ where: { id: visitor.id }, data: { userId: args.userId } })
+    }
 
     if (session && !session.hasConversion) {
       await prisma.trackingSession.update({ where: { id: session.id }, data: { hasConversion: true } })

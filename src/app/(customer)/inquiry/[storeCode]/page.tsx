@@ -8,6 +8,7 @@ import GlassButton from '@/components/customer/GlassButton'
 import MessageBanner from '@/components/MessageBanner'
 import TurnstileWidget from '@/components/TurnstileWidget'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import ConversionBeacon from '@/components/tracking/ConversionBeacon'
 
 const INQUIRY_TYPES = [
   { value: '査定申し込み', label: '査定申し込み' },
@@ -57,6 +58,7 @@ export default function InquiryPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [submittedInquiryId, setSubmittedInquiryId] = useState<string | undefined>(undefined)
   const [hadEmail, setHadEmail] = useState(false)
   const [registeredItemCount, setRegisteredItemCount] = useState(0)
   const [postalLoading, setPostalLoading] = useState(false)
@@ -235,14 +237,15 @@ export default function InquiryPage() {
         }),
       })
 
+      const data = await res.json().catch(() => ({} as { error?: string; inquiryId?: string }))
       if (!res.ok) {
-        const data = await res.json()
         setError(data.error || '送信に失敗しました。もう一度お試しください')
         return
       }
 
       setHadEmail(!!email)
       setRegisteredItemCount(uploadedItems.length)
+      setSubmittedInquiryId(data.inquiryId)
       setSubmitted(true)
     } catch {
       setError('サーバーエラーが発生しました。もう一度お試しください')
@@ -254,6 +257,8 @@ export default function InquiryPage() {
   if (submitted) {
     return (
       <GlassBackground maxWidth="max-w-lg">
+        {/* 受付完了画面の表示＝CV。アクセス計測に問い合わせCVを記録する */}
+        <ConversionBeacon inquiryId={submittedInquiryId} />
         <div className="text-center space-y-6">
           {/* Success icon */}
           <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-green-500/25">

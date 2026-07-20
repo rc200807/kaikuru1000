@@ -112,7 +112,9 @@ export default function PublicFormPage() {
         const j = await res.json().catch(() => ({}))
         throw new Error(j.error ?? '送信に失敗しました')
       }
-      router.push(`/f/${slug}/thanks`)
+      const j = await res.json().catch(() => ({} as { submissionId?: string }))
+      // thanksページで送信IDをCVとして計測する
+      router.push(`/f/${slug}/thanks${j?.submissionId ? `?fsid=${encodeURIComponent(j.submissionId)}` : ''}`)
     } finally {
       setSubmitting(false)
     }

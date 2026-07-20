@@ -509,14 +509,13 @@ function ImportModal({
         {mode === 'store' && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>登録先の店舗</label>
-            <select
+            <StoreFilterSelect
               value={storeId}
-              onChange={e => setStoreId(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 13 }}
-            >
-              <option value="">— 店舗を選択 —</option>
-              {stores.map(s => <option key={s.id} value={s.id}>[{s.code}] {s.name}</option>)}
-            </select>
+              onChange={setStoreId}
+              stores={stores}
+              allLabel="— 店舗を選択 —"
+              style={{ width: '100%' }}
+            />
           </div>
         )}
 

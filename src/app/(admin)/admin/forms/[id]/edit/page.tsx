@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import MessageBanner from '@/components/MessageBanner'
 import FormBuilderCanvas from '@/components/forms/FormBuilderCanvas'
 import FieldEditor from '@/components/forms/FieldEditor'
@@ -424,17 +425,13 @@ export default function FormEditPage() {
             {/* 紐付け店舗 */}
             <div>
               <Label>紐付け店舗（任意）</Label>
-              <select
+              <StoreFilterSelect
                 value={data.customerStoreId ?? ''}
-                onChange={(e) => setField('customerStoreId', e.target.value || null)}
-                className={inputCls}
-                style={{ boxShadow: inputBoxShadow }}
-                onFocus={(e) => { e.currentTarget.style.boxShadow = inputFocusBoxShadow }}
-                onBlur={(e) => { e.currentTarget.style.boxShadow = inputBoxShadow }}
-              >
-                <option value="">— 紐付けなし（本部管理）—</option>
-                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+                onChange={(id) => setField('customerStoreId', id || null)}
+                stores={stores}
+                allLabel="— 紐付けなし（本部管理）—"
+                style={{ width: '100%' }}
+              />
             </div>
           </div>
         )}

@@ -28,6 +28,7 @@ import Tabs from '@/components/Tabs'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import BankSearch from '@/components/customer/BankSearch'
+import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
@@ -2974,18 +2975,13 @@ export default function AdminCustomersPage() {
                   <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
                 </div>
               )}
-              <select
+              <StoreFilterSelect
                 value={recommendedStoreIds.includes(selectedStore) ? '' : selectedStore}
-                onChange={e => setSelectedStore(e.target.value)}
-                className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-              >
-                <option value="">{recommended.length > 0 ? 'その他の店舗から選択...' : '店舗を選択...'}</option>
-                {others.map(s => (
-                  <option key={s.id} value={s.id}>
-                    [{s.code}] {s.name} {s.prefecture ? `（${s.prefecture}）` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedStore}
+                stores={others}
+                allLabel={recommended.length > 0 ? 'その他の店舗から選択...' : '店舗を選択...'}
+                style={{ width: '100%' }}
+              />
             </>
           )
         })()}

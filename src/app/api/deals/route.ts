@@ -6,10 +6,11 @@ import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { buildDealFilterConditions, parseDealSort } from '@/lib/deal-list-query'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
-// 案件一覧（店舗＝自店舗のみ／管理者＝全件）
+// 案件一覧（店舗＝自店舗のみ／管理者＝全件）。あらゆる条件でサーバー側検索・絞り込み・並び替え。
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -20,52 +21,59 @@ export async function GET(request: NextRequest) {
   if (!isStore && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const storeId = searchParams.get('storeId')
-  const userId = searchParams.get('userId')
-  const status = searchParams.get('status')
-  const category = searchParams.get('category')
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const maxLimit = isAdmin ? 2000 : 200
   const limit = Math.max(1, Math.min(maxLimit, parseInt(searchParams.get('limit') || '50', 10)))
 
-  const where: any = {}
+  // ベース条件（店舗スコープ）。管理者は店舗指定をフィルタ条件側で処理する。
+  const baseWhere: any = {}
   if (isStore) {
-    // 運営者スコープ（?storeIds=）対応。同一運営者所属をサーバ側で検証（不正IDは除外）
     const scope = await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
-    where.storeId = scope.isMulti ? { in: scope.storeIds } : sessionUser.id
-  } else if (storeId) where.storeId = storeId
-  if (userId) where.userId = userId
-
-  // 集計モード（成約率・ステータス別件数）。status フィルタは無視し全ステータスの内訳を返す。
-  // ページング上限に依存せず正確な件数を出すため groupBy で集計する。
-  if (searchParams.get('stats') === '1') {
-    const grouped = await prisma.deal.groupBy({
-      by: ['status'],
-      where,
-      _count: { _all: true },
-    })
-    const counts: Record<string, number> = {}
-    let statsTotal = 0
-    for (const g of grouped) {
-      counts[g.status] = g._count._all
-      statsTotal += g._count._all
-    }
-    return NextResponse.json({ stats: { counts, total: statsTotal } })
+    baseWhere.storeId = scope.isMulti ? { in: scope.storeIds } : sessionUser.id
   }
 
-  if (status && status !== 'all') where.status = status
-  if (category && category !== 'all' && isDealCategory(category)) where.category = category
+  const conditions = buildDealFilterConditions(searchParams, { admin: isAdmin })
+  const where: any = { ...baseWhere }
+  if (conditions.length > 0) where.AND = conditions
+
+  // 集計モード（フィルタ連動サマリー）。
+  // countsByStatus はステータス絞り以外の条件を反映（チップ件数・成約率用）、
+  // filtered は全条件を反映（件数・買取合計・平均）。
+  if (searchParams.get('stats') === '1') {
+    const spNoStatus = new URLSearchParams(searchParams.toString())
+    spNoStatus.delete('statuses')
+    spNoStatus.delete('status')
+    const condNoStatus = buildDealFilterConditions(spNoStatus, { admin: isAdmin })
+    const whereNoStatus: any = { ...baseWhere }
+    if (condNoStatus.length > 0) whereNoStatus.AND = condNoStatus
+
+    const [grouped, agg] = await Promise.all([
+      prisma.deal.groupBy({ by: ['status'], where: whereNoStatus, _count: { _all: true } }),
+      prisma.deal.aggregate({ where, _count: { _all: true }, _sum: { purchaseAmount: true } }),
+    ])
+    const counts: Record<string, number> = {}
+    let statsTotal = 0
+    for (const g of grouped) { counts[g.status] = g._count._all; statsTotal += g._count._all }
+    const won = (counts['contract'] || 0) + (counts['completed'] || 0)
+    const winRate = statsTotal > 0 ? Math.round((won / statsTotal) * 1000) / 10 : 0
+    const count = agg._count._all
+    const purchaseSum = agg._sum.purchaseAmount || 0
+    const purchaseAvg = count > 0 ? Math.round(purchaseSum / count) : 0
+    return NextResponse.json({ stats: { counts, total: statsTotal, won, winRate, filtered: { count, purchaseSum, purchaseAvg } } })
+  }
 
   const [deals, total] = await Promise.all([
     prisma.deal.findMany({
       where,
       include: {
-        user: { select: { id: true, name: true, email: true, phone: true, customerType: true } },
+        user: { select: { id: true, name: true, email: true, phone: true, customerType: true, leadSource: true } },
         store: { select: { id: true, name: true, code: true } },
         inquiry: { select: { id: true, inquiryType: true } },
+        member: { select: { id: true, name: true } },
+        salesContract: { select: { id: true } },
         _count: { select: { visitSchedules: true } },
       },
-      orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+      orderBy: parseDealSort(searchParams),
       skip: (page - 1) * limit,
       take: limit,
     }),

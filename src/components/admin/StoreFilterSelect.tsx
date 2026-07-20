@@ -33,6 +33,30 @@ export default function StoreFilterSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  // 開いたとき、モーダル等のスクロール領域内でコントロールを上部へ寄せ、
+  // 下に開く候補リストが見切れないようにする。
+  useEffect(() => {
+    if (!open) return
+    const el = ref.current
+    if (!el) return
+    const t = setTimeout(() => {
+      // 直近のスクロール可能な祖先を探す
+      let p: HTMLElement | null = el.parentElement
+      while (p) {
+        const s = getComputedStyle(p)
+        if (/(auto|scroll)/.test(s.overflowY) && p.scrollHeight > p.clientHeight + 4) break
+        p = p.parentElement
+      }
+      if (!p) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return }
+      const pr = p.getBoundingClientRect()
+      const er = el.getBoundingClientRect()
+      // コントロールをスクロール領域上端の少し下へ移動（下に候補表示スペースを確保）
+      const delta = (er.top - pr.top) - 12
+      if (delta > 0) p.scrollBy({ top: delta, behavior: 'smooth' })
+    }, 0)
+    return () => clearTimeout(t)
+  }, [open])
+
   const selected = stores.find(s => s.id === value)
   const filtered = useMemo(() => {
     const kw = q.trim().toLowerCase()

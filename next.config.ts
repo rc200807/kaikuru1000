@@ -17,16 +17,16 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://maps.googleapis.com https://maps.gstatic.com", // Next.js HMR 用 + Google Maps
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://maps.googleapis.com https://maps.gstatic.com https://js.stripe.com", // Next.js HMR 用 + Google Maps + Stripe.js
       "style-src 'self' 'unsafe-inline'",
       // Vercel Blob の公開 URL + YouTube サムネイル + LINE プロフィール画像 + 地図タイル（OSM/Google）を img-src に追加
       "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://img.youtube.com https://profile.line-scdn.net https://*.line-scdn.net https://*.tile.openstreetmap.org https://maps.googleapis.com https://maps.gstatic.com https://*.googleapis.com https://*.gstatic.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "connect-src 'self' https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com https://maps.googleapis.com https://maps.gstatic.com",
+      "connect-src 'self' https://*.public.blob.vercel-storage.com https://*.blob.vercel-storage.com https://vercel.com https://maps.googleapis.com https://maps.gstatic.com https://api.stripe.com",
       // Vercel Blob の動画再生を許可
       "media-src 'self' https://*.public.blob.vercel-storage.com",
-      // YouTube 埋め込み（研修動画）+ Vercel Blob の PDF プレビュー（チャット添付モーダル）を許可
-      "frame-src 'self' https://www.youtube.com https://youtube.com https://*.public.blob.vercel-storage.com",
+      // YouTube 埋め込み（研修動画）+ Vercel Blob の PDF プレビュー（チャット添付モーダル）+ Stripe（カード入力iframe）を許可
+      "frame-src 'self' https://www.youtube.com https://youtube.com https://*.public.blob.vercel-storage.com https://js.stripe.com https://hooks.stripe.com",
       "frame-ancestors 'none'",
       "form-action 'self'",
     ].join('; '),

@@ -97,7 +97,7 @@ export default function AdminVisitDetailPage() {
         title="訪問詳細"
         subtitle={`${visit.user.name} 様 — ${format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}`}
       />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-5">
         {/* 戻るボタン */}
         <Button variant="text" size="sm" onClick={() => router.push('/admin/visits')}>
           ← 訪問一覧に戻る

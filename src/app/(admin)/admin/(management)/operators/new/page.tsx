@@ -68,7 +68,7 @@ export default function OperatorNewPage() {
   }
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 880, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
+    <div style={{ padding: '24px 32px', width: '100%', color: 'var(--md-sys-color-on-surface)' }}>
       <div style={{ marginBottom: 16, fontSize: 13 }}>
         <Link href="/admin/operators" style={{ color: '#4f8ef7', textDecoration: 'none' }}>← 運営者一覧</Link>
       </div>

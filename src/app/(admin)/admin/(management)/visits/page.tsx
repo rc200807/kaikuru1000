@@ -26,7 +26,7 @@ export default function AdminVisitsPage() {
         subtitle="全店舗の訪問履歴を検索・閲覧できます"
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
         <VisitsSection />
       </div>
     </>

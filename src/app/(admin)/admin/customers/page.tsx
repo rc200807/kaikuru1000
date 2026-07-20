@@ -1297,7 +1297,7 @@ export default function AdminCustomersPage() {
     <>
       <AppBar title="顧客管理" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
         {/* 統計 */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <KpiCard

@@ -861,7 +861,7 @@ export default function AdminStoresPage() {
         }
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
 
         {message && (
           <MessageBanner severity={message.type} className="mb-6" dismissible onDismiss={() => setMessage(null)}>

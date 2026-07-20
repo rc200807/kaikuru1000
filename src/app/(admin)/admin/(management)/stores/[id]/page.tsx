@@ -454,7 +454,7 @@ export default function StoreDetailPage() {
   const inquiryUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/inquiry/${store.code}`
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 1200, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
+    <div style={{ padding: '24px 32px', width: '100%', color: 'var(--md-sys-color-on-surface)' }}>
       {/* パンくず */}
       <div style={{ marginBottom: 16, fontSize: 13 }}>
         <Link href="/admin/stores" style={{ color: '#4f8ef7', textDecoration: 'none' }}>← 店舗管理</Link>

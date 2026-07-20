@@ -141,7 +141,7 @@ export default function OperatorListPage() {
   }
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 1280, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
+    <div style={{ padding: '24px 32px', width: '100%', color: 'var(--md-sys-color-on-surface)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 700 }}>運営者情報</h1>

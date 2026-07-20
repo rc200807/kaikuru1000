@@ -258,7 +258,7 @@ function SettingsSection() {
         {buttons === null ? (
           <p className="text-xs py-4 text-center text-[var(--md-sys-color-on-surface-variant)]">読み込み中…</p>
         ) : buttons.length === 0 ? (
-          <p className="text-xs py-4 text-center text-[var(--md-sys-color-on-surface-variant)]">ボタンIDを発行し、計測したいボタンに data-track-id 属性を付けてください</p>
+          <p className="text-xs py-4 text-center text-[var(--md-sys-color-on-surface-variant)]">ボタンIDを発行し、計測したいボタンに id 属性を付けてください</p>
         ) : (
           <div className="space-y-3">
             {buttons.map(b => (
@@ -271,7 +271,7 @@ function SettingsSection() {
                     クリック {b.clickCount.toLocaleString()}回
                   </span>
                   <div className="ml-auto flex gap-1.5">
-                    <CopyButton text={`data-track-id="${b.buttonKey}"`} label="属性をコピー" />
+                    <CopyButton text={`id="${b.buttonKey}"`} label="IDをコピー" />
                     <button
                       onClick={async () => { if (confirm(`「${b.name}」を削除しますか？計測履歴は残ります。`)) { await fetch(`/api/admin/tracking/buttons/${b.id}`, { method: 'DELETE' }); load() } }}
                       className="text-[10px] px-2 py-1 rounded-md text-[var(--md-sys-color-error,#dc2626)] hover:bg-[var(--md-sys-color-surface-container-high,#f0f0f0)]"
@@ -280,7 +280,7 @@ function SettingsSection() {
                     </button>
                   </div>
                 </div>
-                <CodeBlock code={`<a href="tel:0312345678" data-track-id="${b.buttonKey}">電話で問い合わせ</a>`} />
+                <CodeBlock code={`<a href="tel:0312345678" id="${b.buttonKey}">電話で問い合わせ</a>`} />
               </div>
             ))}
           </div>

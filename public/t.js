@@ -147,10 +147,10 @@
   // ─── クリック計測（data-track-id 委譲）+ クロスドメインリンカー ───
   document.addEventListener('click', function (ev) {
     var el = ev.target;
-    // data-track-id（祖先も探索）
-    var node = el && el.closest ? el.closest('[data-track-id]') : null;
+    // data-track-id、または id="btn_..." を検出（祖先も探索）。id だけでも計測できる
+    var node = el && el.closest ? el.closest('[data-track-id],[id^="btn_"]') : null;
     if (node) {
-      var key = node.getAttribute('data-track-id');
+      var key = node.getAttribute('data-track-id') || node.id;
       if (key) {
         send({
           type: 'click',

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { PREFECTURES } from '@/lib/prefectures'
 import BulkEditCell, { type CellEditorType } from './BulkEditCell'
+import ServiceAreaEditor from './ServiceAreaEditor'
 
 // グリッドで扱う店舗の形（親ページの Store 型のサブセット。構造的型付けでそのまま渡せる）
 export type BulkStore = {
@@ -30,6 +31,7 @@ export type BulkStore = {
   contractNotifyEmail: string | null
   calendarInviteEmail: string | null
   operatorId: string | null
+  serviceAreas: string | null
 }
 
 // 運営者から継承される項目（運営者が「正」。運営者割り当て済み店舗では読み取り専用）
@@ -69,6 +71,8 @@ const COLUMNS: ColumnDef[] = [
     ],
   },
   { key: 'address', label: '住所', editor: 'text', width: 260 },
+  // 対応エリアは専用エディタ（都道府県＋市区町村）で編集するため GridRow で特別扱いする
+  { key: 'serviceAreas', label: '対応エリア', editor: 'text', width: 200 },
   { key: 'phone', label: '電話番号', editor: 'text', width: 130 },
   { key: 'email', label: 'メールアドレス', editor: 'text', width: 200 },
   { key: 'openingDate', label: '開業日', editor: 'date', width: 140 },
@@ -116,7 +120,7 @@ function makeDraftRow(id: string): BulkStore {
     googleBusinessUrl: null, oikuraPageUrl: null, lineAddFriendUrl: null,
     bankName: null, branchName: null, accountType: null, accountNumber: null, accountHolder: null,
     invoiceNumber: null, antiquePermitNumber: null, contractNotifyEmail: null, calendarInviteEmail: null,
-    operatorId: null,
+    operatorId: null, serviceAreas: null,
   }
 }
 
@@ -137,6 +141,20 @@ function toBulkStore(s: Record<string, any>): BulkStore {
     contractNotifyEmail: s.contractNotifyEmail ?? null,
     calendarInviteEmail: s.calendarInviteEmail ?? null,
     operatorId: s.operatorId ?? null,
+    serviceAreas: s.serviceAreas ?? null,
+  }
+}
+
+// 対応エリアJSONの要約（例: 「3県・12市区町村」）
+function serviceAreaSummary(json: string | null | undefined): string {
+  try {
+    const arr = JSON.parse(json || '[]')
+    if (!Array.isArray(arr) || arr.length === 0) return ''
+    const prefs = arr.filter((a: any) => a && typeof a.prefecture === 'string')
+    const cityCount = prefs.reduce((n: number, a: any) => n + (Array.isArray(a.cities) ? a.cities.length : 0), 0)
+    return `${prefs.length}県・${cityCount}市区町村`
+  } catch {
+    return ''
   }
 }
 
@@ -165,11 +183,12 @@ type GridRowProps = {
   onCreateRow: (storeId: string) => void
   onDiscardDraft: (storeId: string) => void
   onFetchLoginInfo: (storeId: string) => void
+  onEditServiceArea: (storeId: string) => void
 }
 
 const GridRow = memo(function GridRow({
   store, draft, operators, rowDirty, editingField, presenceNames, saving, loginBusy, flash,
-  onStartEdit, onEndEdit, onCommit, onRevert, onSaveRow, onCreateRow, onDiscardDraft, onFetchLoginInfo,
+  onStartEdit, onEndEdit, onCommit, onRevert, onSaveRow, onCreateRow, onDiscardDraft, onFetchLoginInfo, onEditServiceArea,
 }: GridRowProps) {
   const dirtyCount = rowDirty ? Object.keys(rowDirty).length : 0
   const nameValue = (rowDirty?.name ?? normalize('name', store.name)).trim()
@@ -184,6 +203,27 @@ const GridRow = memo(function GridRow({
       {COLUMNS.map(col => {
         const original = normalize(col.key, store[col.key])
         const value = rowDirty?.[col.key] ?? original
+        // 対応エリアは専用エディタで編集（サマリー表示＋ボタン）
+        if (col.key === 'serviceAreas') {
+          const summary = serviceAreaSummary(value)
+          const isDirty = rowDirty ? 'serviceAreas' in rowDirty : false
+          return (
+            <td key={col.key} className="px-1 py-1">
+              <button
+                type="button"
+                onClick={() => onEditServiceArea(store.id)}
+                className={`w-full text-left text-xs px-2 h-8 rounded-md border truncate transition-colors ${
+                  isDirty
+                    ? 'border-[var(--md-sys-color-tertiary,#b45309)] bg-[var(--md-sys-color-tertiary-container,#fef3c7)]/40'
+                    : 'border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                } text-[var(--md-sys-color-on-surface)]`}
+                title="対応エリアを編集"
+              >
+                {summary || <span className="text-[var(--md-sys-color-on-surface-variant)]">対応エリアを設定</span>}
+              </button>
+            </td>
+          )
+        }
         const inheritedLocked = hasOperator && OPERATOR_INHERITED_KEYS.has(col.key)
         const options = col.key === 'operatorId'
           ? [{ value: '', label: '（未割り当て）' }, ...operators.map(o => ({ value: o.id, label: o.name }))]
@@ -376,6 +416,10 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
   const [copiedEmail, setCopiedEmail] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+
+  // 対応エリア編集の対象店舗ID（サブモーダル）
+  const [areaEditId, setAreaEditId] = useState<string | null>(null)
+  const handleEditServiceArea = useCallback((storeId: string) => setAreaEditId(storeId), [])
 
   const rowsRef = useRef<BulkStore[]>([])
   rowsRef.current = rows
@@ -861,6 +905,7 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
                   onCreateRow={handleCreateRow}
                   onDiscardDraft={handleDiscardDraft}
                   onFetchLoginInfo={handleFetchLoginInfo}
+                  onEditServiceArea={handleEditServiceArea}
                 />
               ))}
               {/* 行を追加（スプレッドシート風） */}
@@ -916,6 +961,46 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
             </button>
           </div>
         </div>
+
+        {/* ─── 対応エリア編集オーバーレイ ─── */}
+        {areaEditId && (() => {
+          const areaRow = rows.find(r => r.id === areaEditId)
+          if (!areaRow) return null
+          const areaValue = dirty[areaEditId]?.serviceAreas ?? areaRow.serviceAreas ?? '[]'
+          const prefFocus = dirty[areaEditId]?.prefecture ?? areaRow.prefecture ?? ''
+          return (
+            <div
+              className="absolute inset-0 z-[70] flex items-center justify-center bg-[var(--md-sys-color-scrim)]/50 p-4"
+              onClick={() => setAreaEditId(null)}
+            >
+              <div
+                className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-[var(--md-sys-color-surface-container-lowest,#fff)] shadow-xl border border-[var(--md-sys-color-outline-variant)] p-5"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">
+                    対応エリア <span className="text-sm font-normal text-[var(--md-sys-color-on-surface-variant)]">— {areaRow.name || '新規店舗'}</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setAreaEditId(null)}
+                    className="inline-flex items-center gap-1 text-xs font-medium px-3 h-8 rounded-full bg-[var(--portal-primary,#374151)] text-[var(--portal-on-primary,#fff)] hover:opacity-90"
+                  >
+                    完了
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
+                  変更は自動で反映されます。「完了」で閉じたあと、行の「変更を保存」で確定してください。
+                </p>
+                <ServiceAreaEditor
+                  value={areaValue}
+                  focusPrefecture={prefFocus}
+                  onChange={(json) => handleCommit(areaEditId, { serviceAreas: json })}
+                />
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ─── 初期ログイン情報オーバーレイ ─── */}
         {loginInfo && (

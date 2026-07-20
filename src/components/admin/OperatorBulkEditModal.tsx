@@ -28,6 +28,7 @@ export type BulkOperator = {
   accountNumber: string | null
   accountHolder: string | null
   storeCount: number
+  storeIds: string[]
 }
 
 type ColumnDef = {
@@ -68,6 +69,8 @@ const COLUMNS: ColumnDef[] = [
   { key: 'accountType', label: '口座種別', editor: 'select', width: 100, options: ACCOUNT_TYPE_OPTIONS },
   { key: 'accountNumber', label: '口座番号', editor: 'text', width: 110 },
   { key: 'accountHolder', label: '口座名義', editor: 'text', width: 150 },
+  // 運営店舗は専用の店舗選択モーダルで編集するため GridRow で特別扱いする
+  { key: 'storeIds', label: '運営店舗', editor: 'text', width: 180 },
 ]
 
 // 運営者が「正」となり店舗へ継承される項目（フッターの案内に使用）
@@ -88,7 +91,7 @@ function makeDraftRow(id: string): BulkOperator {
     corporateNumber: null, invoiceRegistered: 'false', invoiceNumber: null,
     antiquePermitNumber: null, antiqueOfficeAddress: null, antiqueLicenseHolder: null, publicSafetyCommission: null,
     bankName: null, branchName: null, accountType: null, accountNumber: null, accountHolder: null,
-    storeCount: 0,
+    storeCount: 0, storeIds: [],
   }
 }
 
@@ -117,6 +120,9 @@ export function toBulkOperator(o: Record<string, any>): BulkOperator {
     accountNumber: o.accountNumber ?? null,
     accountHolder: o.accountHolder ?? null,
     storeCount: typeof o._count?.stores === 'number' ? o._count.stores : (o.storeCount ?? 0),
+    storeIds: Array.isArray(o.stores)
+      ? o.stores.map((s: any) => s.id).filter((v: unknown): v is string => typeof v === 'string')
+      : (Array.isArray(o.storeIds) ? o.storeIds : []),
   }
 }
 
@@ -165,11 +171,12 @@ type GridRowProps = {
   onSaveRow: (id: string) => void
   onCreateRow: (id: string) => void
   onDiscardDraft: (id: string) => void
+  onEditStores: (id: string) => void
 }
 
 const GridRow = memo(function GridRow({
   operator, draft, rowDirty, editingField, saving, flash,
-  onStartEdit, onEndEdit, onCommit, onRevert, onSaveRow, onCreateRow, onDiscardDraft,
+  onStartEdit, onEndEdit, onCommit, onRevert, onSaveRow, onCreateRow, onDiscardDraft, onEditStores,
 }: GridRowProps) {
   const dirtyCount = rowDirty ? Object.keys(rowDirty).length : 0
   const nameValue = (rowDirty?.name ?? normalize(operator.name)).trim()
@@ -182,6 +189,38 @@ const GridRow = memo(function GridRow({
   return (
     <tr className={`border-b border-[var(--md-sys-color-outline-variant)] ${draft ? 'bg-[var(--md-sys-color-primary-container,#e0e7ff)]/30' : ''}`}>
       {COLUMNS.map(col => {
+        // 運営店舗は専用モーダルで編集（選択数を表示＋ボタン）
+        if (col.key === 'storeIds') {
+          if (draft) {
+            return (
+              <td key={col.key} className="px-1 py-1">
+                <span className="block text-xs px-2 h-8 leading-8 text-[var(--md-sys-color-on-surface-variant)] truncate" title="運営者を作成した後に選択できます">
+                  作成後に選択
+                </span>
+              </td>
+            )
+          }
+          const isDirty = rowDirty ? 'storeIds' in rowDirty : false
+          const count = isDirty
+            ? (JSON.parse(rowDirty!.storeIds || '[]') as string[]).length
+            : operator.storeIds.length
+          return (
+            <td key={col.key} className="px-1 py-1">
+              <button
+                type="button"
+                onClick={() => onEditStores(operator.id)}
+                className={`w-full text-left text-xs px-2 h-8 rounded-md border truncate transition-colors ${
+                  isDirty
+                    ? 'border-[var(--md-sys-color-tertiary,#b45309)] bg-[var(--md-sys-color-tertiary-container,#fef3c7)]/40'
+                    : 'border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                } text-[var(--md-sys-color-on-surface)]`}
+                title="運営店舗を選択"
+              >
+                {count > 0 ? `${count}店舗` : <span className="text-[var(--md-sys-color-on-surface-variant)]">店舗を選択</span>}
+              </button>
+            </td>
+          )
+        }
         const original = normalize(operator[col.key])
         const value = rowDirty?.[col.key] ?? original
         const prefixLocked = col.key === 'corporatePrefix' && isSoleProprietor
@@ -317,6 +356,11 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
   const [rowFlash, setRowFlash] = useState<Record<string, RowFlash>>({})
   const [banner, setBanner] = useState<string | null>(null)
 
+  // 運営店舗の選択用（全店舗リスト＋選択モーダル）
+  const [allStores, setAllStores] = useState<{ id: string; name: string; code: string; prefecture: string | null; operatorId: string | null; operatorName: string | null }[]>([])
+  const [storeEditId, setStoreEditId] = useState<string | null>(null)
+  const [storeSearch, setStoreSearch] = useState('')
+
   const rowsRef = useRef<BulkOperator[]>([])
   rowsRef.current = rows
   const dirtyRef = useRef<DirtyMap>({})
@@ -331,9 +375,31 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
       setSavingIds(new Set())
       setRowFlash({})
       setBanner(null)
+      setStoreEditId(null)
+      setStoreSearch('')
       draftCounter.current = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // 全店舗リストを取得（運営店舗の選択用）
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    fetch('/api/stores')
+      .then(r => (r.ok ? r.json() : []))
+      .then((d: any[]) => {
+        if (cancelled) return
+        const list = Array.isArray(d)
+          ? d.map(s => ({
+              id: s.id, name: s.name, code: s.code, prefecture: s.prefecture ?? null,
+              operatorId: s.operatorId ?? null, operatorName: s.operator?.name ?? null,
+            }))
+          : []
+        setAllStores(list)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
   }, [open])
 
   useEffect(() => {
@@ -395,12 +461,34 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
     })
   }, [])
 
+  const handleEditStores = useCallback((id: string) => { setStoreSearch(''); setStoreEditId(id) }, [])
+
+  // 運営店舗の選択変更（元と同じなら dirty 解除）
+  const handleCommitStores = useCallback((id: string, storeIds: string[]) => {
+    const row = rowsRef.current.find(r => r.id === id)
+    if (!row) return
+    const originalJson = JSON.stringify([...row.storeIds].sort())
+    const newJson = JSON.stringify([...storeIds].sort())
+    setDirty(prev => {
+      const rowDirty = { ...(prev[id] ?? {}) }
+      if (newJson === originalJson) delete rowDirty.storeIds
+      else rowDirty.storeIds = JSON.stringify(storeIds)
+      const next = { ...prev }
+      if (Object.keys(rowDirty).length === 0) delete next[id]
+      else next[id] = rowDirty
+      return next
+    })
+  }, [])
+
   const handleSaveRow = useCallback(async (id: string) => {
     const changes = dirtyRef.current[id]
     if (!changes || Object.keys(changes).length === 0) return
     const row = rowsRef.current.find(r => r.id === id)
     if (!row) return
-    const { payload, error } = buildPayload(row, changes)
+    // 運営店舗の変更は専用API（PUT stores）で処理するため、PATCH対象から分離する
+    const { storeIds: storeIdsRaw, ...fieldChanges } = changes
+    const storeIdsChanged = typeof storeIdsRaw === 'string'
+    const { payload, error } = buildPayload(row, fieldChanges)
     if (error) {
       setBanner(error)
       setRowFlash(prev => ({ ...prev, [id]: 'error' }))
@@ -409,14 +497,31 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
     setSavingIds(prev => new Set(prev).add(id))
     setBanner(null)
     try {
-      const res = await fetch(`/api/admin/operators/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || '保存に失敗しました')
-      const merged = toBulkOperator({ ...row, ...data, _count: { stores: row.storeCount } })
+      let merged = row
+      // 1) 運営者フィールドの更新（変更があれば）
+      if (Object.keys(payload).length > 0) {
+        const res = await fetch(`/api/admin/operators/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || '保存に失敗しました')
+        merged = toBulkOperator({ ...row, ...data, _count: { stores: row.storeCount }, storeIds: row.storeIds })
+      }
+      // 2) 運営店舗の紐付け更新（変更があれば）
+      if (storeIdsChanged) {
+        const storeIds = JSON.parse(storeIdsRaw as string) as string[]
+        const res = await fetch(`/api/admin/operators/${id}/stores`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storeIds }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || '運営店舗の保存に失敗しました')
+        const savedStores = Array.isArray(data.stores) ? data.stores : []
+        merged = { ...merged, storeIds: savedStores.map((s: any) => s.id), storeCount: savedStores.length }
+      }
       setRows(prev => prev.map(r => (r.id === id ? merged : r)))
       setDirty(prev => { const next = { ...prev }; delete next[id]; return next })
       setRowFlash(prev => ({ ...prev, [id]: 'saved' }))
@@ -455,6 +560,7 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
     // ドラフトの現在値（初期値 + 差分）を全カラム集約
     const merged: Record<string, string> = {}
     for (const col of COLUMNS) {
+      if (col.key === 'storeIds') continue // 運営店舗は作成後に紐付ける
       merged[col.key] = changes[col.key] ?? normalize(base[col.key])
     }
     const { payload, error } = buildPayload(base, merged)
@@ -600,6 +706,7 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
                   onSaveRow={handleSaveRow}
                   onCreateRow={handleCreateRow}
                   onDiscardDraft={handleDiscardDraft}
+                  onEditStores={handleEditStores}
                 />
               ))}
               <tr>
@@ -654,6 +761,85 @@ export default function OperatorBulkEditModal({ open, operators, onClose }: Prop
             </button>
           </div>
         </div>
+
+        {/* ─── 運営店舗の選択オーバーレイ ─── */}
+        {storeEditId && (() => {
+          const opRow = rows.find(r => r.id === storeEditId)
+          if (!opRow) return null
+          const selected: string[] = dirty[storeEditId]?.storeIds ? JSON.parse(dirty[storeEditId].storeIds) : opRow.storeIds
+          const selectedSet = new Set(selected)
+          const q = storeSearch.trim()
+          const filtered = q
+            ? allStores.filter(s => `${s.name}${s.code}${s.prefecture ?? ''}`.includes(q))
+            : allStores
+          const toggle = (sid: string) => {
+            const next = selectedSet.has(sid) ? selected.filter(x => x !== sid) : [...selected, sid]
+            handleCommitStores(storeEditId, next)
+          }
+          return (
+            <div
+              className="absolute inset-0 z-[70] flex items-center justify-center bg-[var(--md-sys-color-scrim)]/50 p-4"
+              onClick={() => setStoreEditId(null)}
+            >
+              <div
+                className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-[var(--md-sys-color-surface-container-lowest,#fff)] shadow-xl border border-[var(--md-sys-color-outline-variant)]"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--md-sys-color-outline-variant)]">
+                  <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)] truncate">
+                    運営店舗 <span className="text-sm font-normal text-[var(--md-sys-color-on-surface-variant)]">— {opRow.name}</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setStoreEditId(null)}
+                    className="inline-flex items-center gap-1 text-xs font-medium px-3 h-8 rounded-full bg-[var(--portal-primary,#374151)] text-[var(--portal-on-primary,#fff)] hover:opacity-90"
+                  >
+                    完了（{selected.length}店舗）
+                  </button>
+                </div>
+                <div className="px-5 py-2 border-b border-[var(--md-sys-color-outline-variant)]">
+                  <input
+                    type="text"
+                    value={storeSearch}
+                    onChange={e => setStoreSearch(e.target.value)}
+                    placeholder="店舗名・コード・都道府県で検索"
+                    className="w-full text-sm px-3 h-9 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] text-[var(--md-sys-color-on-surface)] outline-none focus:border-[var(--md-sys-color-primary)]"
+                  />
+                  <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                    変更は自動反映。「変更を保存」で確定してください。他運営者に紐づく店舗を選ぶと付け替えになります。
+                  </p>
+                </div>
+                <div className="flex-1 overflow-y-auto px-2 py-2">
+                  {filtered.length === 0 ? (
+                    <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-8">該当する店舗がありません</p>
+                  ) : (
+                    filtered.map(s => {
+                      const checked = selectedSet.has(s.id)
+                      const otherOwner = s.operatorId && s.operatorId !== opRow.id ? s.operatorName : null
+                      return (
+                        <label
+                          key={s.id}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer hover:bg-[var(--md-sys-color-surface-container-high)]"
+                        >
+                          <input type="checkbox" checked={checked} onChange={() => toggle(s.id)} className="w-4 h-4 accent-[var(--portal-primary,#374151)]" />
+                          <span className="flex-1 min-w-0 text-sm text-[var(--md-sys-color-on-surface)] truncate">
+                            {s.name}
+                            {s.prefecture && <span className="text-[var(--md-sys-color-on-surface-variant)] ml-1.5 text-xs">{s.prefecture}</span>}
+                          </span>
+                          {otherOwner && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                              現: {otherOwner}
+                            </span>
+                          )}
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </dialog>
   )

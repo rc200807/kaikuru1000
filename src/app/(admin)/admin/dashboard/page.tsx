@@ -13,6 +13,7 @@ import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import AdminReleaseNotesCard from '@/components/admin/ReleaseNotesCard'
 import RecentDealsSidebar from '@/components/admin/RecentDealsSidebar'
+import DashboardOverviewSection from '@/components/admin/DashboardOverviewSection'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 
 const ADMIN_LEAD_COLORS = ['#ffffff', '#60a5fa', '#22c55e', '#fbbf24', '#a78bfa', '#2dd4bf', '#f472b6', '#737373']
@@ -288,6 +289,9 @@ export default function AdminDashboardPage() {
 
         {/* アップデート情報（リリースノート） */}
         <AdminReleaseNotesCard />
+
+        {/* システム概要（全体の動き） */}
+        <DashboardOverviewSection dashboard={data} />
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

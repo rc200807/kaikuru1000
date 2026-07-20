@@ -8,15 +8,20 @@ import StatTable from '@/components/charts/StatTable'
 import { CHART_PRIMARY, CHART_COMPARE, CHART_SECONDARY } from '@/components/charts/chartColors'
 import { useAnalyticsData } from './useAnalyticsData'
 import { AnalyticsKpi, TabLoading, TabError, MetaCaption } from './shared'
+import AiInsightCard from './AiInsightCard'
+import { useExplainPoint } from './ExplainPointModal'
 
 export default function InventoryTab({ query }: { query: string }) {
   const { data, loading, error } = useAnalyticsData('inventory', query)
+  const explain = useExplainPoint('inventory', query, data?.meta)
   if (loading) return <TabLoading />
   if (error || !data) return <TabError message={error ?? 'no data'} />
 
   return (
     <div className="space-y-4">
       <MetaCaption meta={data.meta} />
+
+      <AiInsightCard tab="inventory" query={query} data={data} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <AnalyticsKpi label="買取品目数" kpi={data.kpis.itemCount} format="count" unit="点" />
@@ -34,7 +39,7 @@ export default function InventoryTab({ query }: { query: string }) {
         <ChartCard title="在庫ステータス構成" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">現在のスナップショット</span>}>
           <DonutChart items={(data.breakdowns.inventoryStatus ?? []).map(b => ({ name: b.name, value: b.count ?? 0 }))} />
         </ChartCard>
-        <ChartCard title="売却額 vs 仕入れ原価の推移">
+        <ChartCard title="売却額 vs 仕入れ原価の推移" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">クリックでAI解説</span>}>
           <TimeSeriesChart
             data={data.series.salesTrend ?? []}
             valueFormat="yen"
@@ -42,6 +47,7 @@ export default function InventoryTab({ query }: { query: string }) {
               { key: 'sold', name: '売却額', color: CHART_PRIMARY },
               { key: 'cost', name: '仕入れ原価', color: CHART_COMPARE, type: 'line' },
             ]}
+            onPointClick={explain.handlerFor('売却額 vs 仕入れ原価の推移')}
           />
         </ChartCard>
         <div className="space-y-4">
@@ -82,6 +88,8 @@ export default function InventoryTab({ query }: { query: string }) {
           defaultSortKey="daysListed"
         />
       </ChartCard>
+
+      {explain.modal}
     </div>
   )
 }

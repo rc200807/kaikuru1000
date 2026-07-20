@@ -166,6 +166,17 @@ export function buildBuckets(range: DateRange, granularity: Granularity): Bucket
   return buckets
 }
 
+/** バケットキーからそのバケットの日付範囲（両端含む "yyyy-MM-dd"）を返す */
+export function bucketDateRange(key: string, granularity: Granularity): { from: string; to: string } {
+  if (granularity === 'month') {
+    const [y, m] = key.split('-').map(Number)
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate()
+    return { from: `${key}-01`, to: `${key}-${String(lastDay).padStart(2, '0')}` }
+  }
+  if (granularity === 'week') return { from: key, to: addDaysStr(key, 6) }
+  return { from: key, to: key }
+}
+
 /**
  * 行データをバケット列へ集計する汎用ヘルパー。
  * valueOf を省略すると件数カウント、指定すると合計値になる。

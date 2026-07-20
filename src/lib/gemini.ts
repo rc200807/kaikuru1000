@@ -40,7 +40,7 @@ function getApiKey(): string {
 }
 
 /** Gemini に投げて JSON テキストとしてパースして返す共通ヘルパー */
-async function callGeminiJson(parts: (string | { inlineData: { mimeType: string; data: string } })[]): Promise<unknown> {
+export async function callGeminiJson(parts: (string | { inlineData: { mimeType: string; data: string } })[]): Promise<unknown> {
   const apiKey = getApiKey()
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({

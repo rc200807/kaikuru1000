@@ -8,15 +8,20 @@ import StatTable from '@/components/charts/StatTable'
 import { CHART_PRIMARY, CHART_SECONDARY } from '@/components/charts/chartColors'
 import { useAnalyticsData } from './useAnalyticsData'
 import { AnalyticsKpi, TabLoading, TabError, MetaCaption } from './shared'
+import AiInsightCard from './AiInsightCard'
+import { useExplainPoint } from './ExplainPointModal'
 
 export default function CustomersTab({ query }: { query: string }) {
   const { data, loading, error } = useAnalyticsData('customers', query)
+  const explain = useExplainPoint('customers', query, data?.meta)
   if (loading) return <TabLoading />
   if (error || !data) return <TabError message={error ?? 'no data'} />
 
   return (
     <div className="space-y-4">
       <MetaCaption meta={data.meta} />
+
+      <AiInsightCard tab="customers" query={query} data={data} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <AnalyticsKpi label="新規顧客" kpi={data.kpis.newCustomers} format="count" unit="人" />
@@ -26,13 +31,14 @@ export default function CustomersTab({ query }: { query: string }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="新規顧客の推移（+累計）">
+        <ChartCard title="新規顧客の推移（+累計）" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">クリックでAI解説</span>}>
           <TimeSeriesChart
             data={data.series.newCustomers ?? []}
             series={[
               { key: 'count', name: '新規顧客', color: CHART_PRIMARY, type: 'bar' },
               { key: 'cumulative', name: '累計', color: CHART_SECONDARY, type: 'line' },
             ]}
+            onPointClick={explain.handlerFor('新規顧客の推移')}
           />
         </ChartCard>
         <ChartCard title="顧客種別構成">
@@ -66,6 +72,8 @@ export default function CustomersTab({ query }: { query: string }) {
           defaultSortKey="amount"
         />
       </ChartCard>
+
+      {explain.modal}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import AnalyticsFilterBar, { FilterState } from '@/components/admin/analytics/AnalyticsFilterBar'
+import AiChatPanel from '@/components/admin/analytics/AiChatPanel'
 import OverviewTab from '@/components/admin/analytics/OverviewTab'
 import SalesTab from '@/components/admin/analytics/SalesTab'
 import DealsTab from '@/components/admin/analytics/DealsTab'
@@ -14,6 +15,7 @@ import CustomersTab from '@/components/admin/analytics/CustomersTab'
 import StoresTab from '@/components/admin/analytics/StoresTab'
 import InventoryTab from '@/components/admin/analytics/InventoryTab'
 import EngagementTab from '@/components/admin/analytics/EngagementTab'
+import AiLabTab from '@/components/admin/analytics/AiLabTab'
 import { PRESETS, PresetKey } from '@/lib/analytics/period'
 import { ANALYTICS_TABS, ANALYTICS_TAB_LABEL, AnalyticsTab, AnalyticsFilterOptions } from '@/lib/analytics/types'
 
@@ -25,6 +27,7 @@ const TAB_COMPONENTS: Record<AnalyticsTab, React.ComponentType<{ query: string }
   stores: StoresTab,
   inventory: InventoryTab,
   engagement: EngagementTab,
+  ailab: AiLabTab,
 }
 
 function parseState(sp: URLSearchParams): { tab: AnalyticsTab; filter: FilterState } {
@@ -114,6 +117,24 @@ function AnalyticsPageInner() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [filter, pathname, router])
 
+  // AIチャットの「フィルタ適用」アクション（自然言語フィルタ操作）
+  const applyAiFilters = useCallback((f: Record<string, string>) => {
+    const nextTab: AnalyticsTab = (ANALYTICS_TABS as readonly string[]).includes(f.tab ?? '') ? (f.tab as AnalyticsTab) : tab
+    const patch: Partial<FilterState> = {}
+    if (f.preset && (PRESETS as readonly string[]).includes(f.preset)) {
+      patch.preset = f.preset as PresetKey
+      if (f.preset === 'custom') { patch.from = f.from ?? null; patch.to = f.to ?? null }
+    }
+    if (f.compare === 'prev' || f.compare === 'year' || f.compare === 'none') patch.compare = f.compare
+    if (f.granularity === 'day' || f.granularity === 'week' || f.granularity === 'month') patch.granularity = f.granularity
+    // 絞り込みはAI指示に合わせて置き換え（指示にないキーは解除）
+    patch.storeId = f.storeId ?? null
+    patch.dealCategory = f.dealCategory ?? null
+    patch.customerType = f.customerType ?? null
+    patch.leadSource = f.leadSource ?? null
+    update(nextTab, patch)
+  }, [tab, update])
+
   if (status === 'loading') return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
 
   const apiQuery = buildApiQuery(filter)
@@ -145,6 +166,8 @@ function AnalyticsPageInner() {
 
         <ActiveTab query={apiQuery} />
       </div>
+
+      <AiChatPanel currentQuery={apiQuery} onApplyFilters={applyAiFilters} />
     </div>
   )
 }

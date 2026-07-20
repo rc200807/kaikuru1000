@@ -1,18 +1,31 @@
 'use client'
 
+import { useState } from 'react'
 import ChartCard from '@/components/charts/ChartCard'
-import TimeSeriesChart from '@/components/charts/TimeSeriesChart'
+import TimeSeriesChart, { ChartAnnotation } from '@/components/charts/TimeSeriesChart'
 import DonutChart from '@/components/charts/DonutChart'
 import HBarRanking from '@/components/charts/HBarRanking'
 import StatTable from '@/components/charts/StatTable'
 import { CHART_PRIMARY, CHART_SECONDARY, CHART_COMPARE } from '@/components/charts/chartColors'
+import type { AnomaliesResult } from '@/lib/analytics/types'
 import { useAnalyticsData } from './useAnalyticsData'
 import { AnalyticsKpi, TabLoading, TabError, MetaCaption, kpiText } from './shared'
+import AiInsightCard from './AiInsightCard'
+import AiForecastCard from './AiForecastCard'
+import AiAnomaliesCard from './AiAnomaliesCard'
+import { useExplainPoint } from './ExplainPointModal'
 
 export default function OverviewTab({ query }: { query: string }) {
   const { data, loading, error } = useAnalyticsData('overview', query)
+  const [anomalies, setAnomalies] = useState<AnomaliesResult | null>(null)
+  const explain = useExplainPoint('overview', query, data?.meta)
   if (loading) return <TabLoading />
   if (error || !data) return <TabError message={error ?? 'no data'} />
+
+  const annotationsFor = (keys: string[]): ChartAnnotation[] =>
+    (anomalies?.annotations ?? [])
+      .filter(a => keys.includes(a.seriesKey))
+      .map(a => ({ label: a.label, value: a.value, direction: a.direction }))
 
   const hasCompare = data.meta.compareRange !== null
   const kpiDefs = [
@@ -30,6 +43,8 @@ export default function OverviewTab({ query }: { query: string }) {
     <div className="space-y-4">
       <MetaCaption meta={data.meta} />
 
+      <AiInsightCard tab="overview" query={query} data={data} />
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {kpiDefs.map(def => (
           <AnalyticsKpi key={def.key} label={def.label} kpi={data.kpis[def.key]} format={def.format} unit={def.unit} />
@@ -37,7 +52,12 @@ export default function OverviewTab({ query }: { query: string }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="買取・請求金額の推移">
+        <AiForecastCard query={query} />
+        <AiAnomaliesCard tab="overview" query={query} data={data} onAnnotations={setAnomalies} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="買取・請求金額の推移" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">クリックでAI解説</span>}>
           <TimeSeriesChart
             data={data.series.amounts ?? []}
             valueFormat="yen"
@@ -46,9 +66,11 @@ export default function OverviewTab({ query }: { query: string }) {
               { key: 'billing', name: '請求金額', color: CHART_SECONDARY },
               ...(hasCompare ? [{ key: 'prevPurchase', name: '買取金額（比較期間）', color: CHART_COMPARE, dashed: true }] : []),
             ]}
+            annotations={annotationsFor(['purchase', 'billing'])}
+            onPointClick={explain.handlerFor('買取・請求金額の推移')}
           />
         </ChartCard>
-        <ChartCard title="案件・新規顧客数の推移">
+        <ChartCard title="案件・新規顧客数の推移" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">クリックでAI解説</span>}>
           <TimeSeriesChart
             data={data.series.counts ?? []}
             series={[
@@ -56,6 +78,8 @@ export default function OverviewTab({ query }: { query: string }) {
               { key: 'customers', name: '新規顧客', color: CHART_SECONDARY, type: 'line' },
               ...(hasCompare ? [{ key: 'prevDeals', name: '案件数（比較期間）', color: CHART_COMPARE, dashed: true }] : []),
             ]}
+            annotations={annotationsFor(['deals', 'customers'])}
+            onPointClick={explain.handlerFor('案件・新規顧客数の推移')}
           />
         </ChartCard>
         <ChartCard title="案件カテゴリー構成（件数）">
@@ -93,6 +117,8 @@ export default function OverviewTab({ query }: { query: string }) {
           />
         </ChartCard>
       )}
+
+      {explain.modal}
     </div>
   )
 }

@@ -7,6 +7,8 @@ import StatTable from '@/components/charts/StatTable'
 import { CHART_SECONDARY } from '@/components/charts/chartColors'
 import { useAnalyticsData } from './useAnalyticsData'
 import { AnalyticsKpi, TabLoading, TabError, MetaCaption } from './shared'
+import AiInsightCard from './AiInsightCard'
+import StoreDiagnosisCard from './StoreDiagnosisCard'
 
 export default function StoresTab({ query }: { query: string }) {
   const { data, loading, error } = useAnalyticsData('stores', query)
@@ -16,6 +18,8 @@ export default function StoresTab({ query }: { query: string }) {
   return (
     <div className="space-y-4">
       <MetaCaption meta={data.meta} />
+
+      <AiInsightCard tab="stores" query={query} data={data} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <AnalyticsKpi label="稼働店舗数" kpi={data.kpis.activeStores} format="count" unit="店舗" />
@@ -76,6 +80,8 @@ export default function StoresTab({ query }: { query: string }) {
           maxRows={50}
         />
       </ChartCard>
+
+      <StoreDiagnosisCard query={query} />
     </div>
   )
 }

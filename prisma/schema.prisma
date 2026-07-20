@@ -1644,3 +1644,19 @@ model AnswerReaction {
   @@unique([answerId, storeId, emoji])
   @@index([answerId])
 }
+
+// 分析画面のAI生成結果キャッシュ・ログ（インサイト/チャット/レポート/店舗診断ほか）
+model AnalyticsAiInsight {
+  id          String   @id @default(cuid())
+  kind        String   // tab_summary|chat|report|store_diagnosis|forecast|anomalies|explain_point|weekly_digest|store_alerts|text_mining|rfm|whatif
+  cacheKey    String   // sha256(kind + 正規化パラメータ)
+  tab         String?  // tab_summary のタブ名
+  paramsJson  String   @db.Text  // フィルタ条件スナップショット(JSON)
+  content     String   @db.Text  // 生成結果(JSON文字列)
+  model       String   // 使用モデル名
+  createdById String?  // 生成した Admin.id
+  createdAt   DateTime @default(now())
+
+  @@index([kind, cacheKey, createdAt])
+  @@index([createdAt])
+}

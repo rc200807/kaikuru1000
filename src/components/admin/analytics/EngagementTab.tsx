@@ -8,12 +8,15 @@ import StatTable from '@/components/charts/StatTable'
 import { CHART_COLORS, CHART_PRIMARY, CHART_SECONDARY } from '@/components/charts/chartColors'
 import { useAnalyticsData } from './useAnalyticsData'
 import { AnalyticsKpi, TabLoading, TabError, MetaCaption } from './shared'
+import AiInsightCard from './AiInsightCard'
+import { useExplainPoint } from './ExplainPointModal'
 
 const INQUIRY_TYPES = ['査定', '買取', '遺品整理', 'その他']
 const USER_TYPES = ['顧客', '店舗', '管理', 'システム', 'パートナー']
 
 export default function EngagementTab({ query }: { query: string }) {
   const { data, loading, error } = useAnalyticsData('engagement', query)
+  const explain = useExplainPoint('engagement', query, data?.meta)
   if (loading) return <TabLoading />
   if (error || !data) return <TabError message={error ?? 'no data'} />
 
@@ -26,6 +29,8 @@ export default function EngagementTab({ query }: { query: string }) {
   return (
     <div className="space-y-4">
       <MetaCaption meta={data.meta} />
+
+      <AiInsightCard tab="engagement" query={query} data={data} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <AnalyticsKpi label="問い合わせ" kpi={data.kpis.inquiries} format="count" unit="件" />
@@ -54,10 +59,11 @@ export default function EngagementTab({ query }: { query: string }) {
       </ChartCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="問い合わせ種別の推移（積み上げ）">
+        <ChartCard title="問い合わせ種別の推移（積み上げ）" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">クリックでAI解説</span>}>
           <TimeSeriesChart
             data={data.series.inquirySeries ?? []}
             series={INQUIRY_TYPES.map((t, i) => ({ key: t, name: t, color: CHART_COLORS[i], type: 'bar', stackId: 'inq' }))}
+            onPointClick={explain.handlerFor('問い合わせ種別の推移')}
           />
         </ChartCard>
         <ChartCard title="フォーム別回答数 TOP10">
@@ -93,6 +99,8 @@ export default function EngagementTab({ query }: { query: string }) {
           </ChartCard>
         </div>
       </div>
+
+      {explain.modal}
     </div>
   )
 }

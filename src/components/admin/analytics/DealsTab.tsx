@@ -10,9 +10,12 @@ import { CHART_COLORS, CHART_SECONDARY } from '@/components/charts/chartColors'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, DEAL_STATUS_ORDER } from '@/lib/deal-status'
 import { useAnalyticsData } from './useAnalyticsData'
 import { AnalyticsKpi, TabLoading, TabError, MetaCaption } from './shared'
+import AiInsightCard from './AiInsightCard'
+import { useExplainPoint } from './ExplainPointModal'
 
 export default function DealsTab({ query }: { query: string }) {
   const { data, loading, error } = useAnalyticsData('deals', query)
+  const explain = useExplainPoint('deals', query, data?.meta)
   if (loading) return <TabLoading />
   if (error || !data) return <TabError message={error ?? 'no data'} />
 
@@ -24,6 +27,8 @@ export default function DealsTab({ query }: { query: string }) {
   return (
     <div className="space-y-4">
       <MetaCaption meta={data.meta} />
+
+      <AiInsightCard tab="deals" query={query} data={data} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <AnalyticsKpi label="新規案件" kpi={data.kpis.dealCount} format="count" unit="件" />
@@ -46,12 +51,13 @@ export default function DealsTab({ query }: { query: string }) {
             </div>
           )}
         </ChartCard>
-        <ChartCard title="ステータス別案件数の推移（積み上げ）">
+        <ChartCard title="ステータス別案件数の推移（積み上げ）" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">クリックでAI解説</span>}>
           <TimeSeriesChart
             data={data.series.statusSeries ?? []}
             series={statusSeriesKeys.map(({ status, label }, i) => ({
               key: label, name: label, color: DEAL_STATUS_BADGE[status]?.fg ?? CHART_COLORS[i % CHART_COLORS.length], type: 'bar', stackId: 's',
             }))}
+            onPointClick={explain.handlerFor('ステータス別案件数の推移')}
           />
         </ChartCard>
         <ChartCard title="流入経路別案件数">
@@ -95,6 +101,8 @@ export default function DealsTab({ query }: { query: string }) {
           rows={data.tables.lostDeals ?? []}
         />
       </ChartCard>
+
+      {explain.modal}
     </div>
   )
 }

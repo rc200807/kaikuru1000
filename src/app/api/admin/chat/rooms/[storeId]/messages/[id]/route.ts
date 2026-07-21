@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAdminContext, getOrCreateRoom } from '@/lib/chat'
+import { sanitizeChatHtml } from '@/lib/chat-sanitize'
 
 /** 自分の発言か検証して返す */
 async function findOwnMessage(storeId: string, adminId: string, messageId: string) {
@@ -22,7 +23,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
   if (found.message.deletedAt) return NextResponse.json({ error: '削除済みのメッセージです' }, { status: 400 })
 
   const body = await request.json().catch(() => null)
-  const text = typeof body?.body === 'string' ? body.body.trim() : ''
+  const text = sanitizeChatHtml(typeof body?.body === 'string' ? body.body : '')
   if (!text) return NextResponse.json({ error: '本文を入力してください' }, { status: 400 })
 
   await prisma.chatMessage.update({ where: { id }, data: { body: text, editedAt: new Date() } })

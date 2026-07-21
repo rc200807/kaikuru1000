@@ -11,6 +11,7 @@ import {
   parseAttachments,
   type ChatAttachment,
 } from '@/lib/chat'
+import { sanitizeChatHtml } from '@/lib/chat-sanitize'
 
 /** 指定店舗ルームのメッセージ一覧 */
 export async function GET(_request: NextRequest, context: { params: Promise<{ storeId: string }> }) {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ st
   if (!store) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => null)
-  const text = typeof body?.body === 'string' ? body.body.trim() : ''
+  const text = sanitizeChatHtml(typeof body?.body === 'string' ? body.body : '')
   const attachments: ChatAttachment[] = parseAttachments(
     Array.isArray(body?.attachments) ? JSON.stringify(body.attachments) : undefined,
   )

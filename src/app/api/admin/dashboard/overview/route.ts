@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { chatHtmlToText } from '@/lib/chat-sanitize'
 
 export const dynamic = 'force-dynamic'
 
@@ -123,7 +124,7 @@ export async function GET() {
     },
     chat: {
       recent: chatMessages.map(m => {
-        const body = (m.body ?? '').trim()
+        const body = chatHtmlToText(m.body ?? '')
         return {
           storeId: m.room?.store?.id ?? null,
           storeName: m.room?.store?.name ?? null,

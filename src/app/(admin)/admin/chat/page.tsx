@@ -73,6 +73,7 @@ export default function AdminChatPage() {
       reactions: (id) => `/api/admin/chat/rooms/${selectedStoreId}/messages/${id}/reactions`,
       read: `/api/admin/chat/rooms/${selectedStoreId}/read`,
       attachments: `/api/admin/chat/attachments`,
+      participants: `/api/admin/chat/rooms/${selectedStoreId}/participants`,
     }
   }, [selectedStoreId])
 

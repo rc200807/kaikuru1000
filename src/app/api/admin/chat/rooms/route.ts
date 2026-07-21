@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAdminContext, unreadCountForRoom } from '@/lib/chat'
+import { chatHtmlToText } from '@/lib/chat-sanitize'
 
 export type ChatRoomListItem = {
   storeId: string
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
       let preview: string | null = null
       if (lastMessage) {
         const hasAttachment = lastMessage.attachments && lastMessage.attachments !== '[]'
-        preview = lastMessage.body?.trim() || (hasAttachment ? '📎 添付ファイル' : '')
+        preview = chatHtmlToText(lastMessage.body) || (hasAttachment ? '📎 添付ファイル' : '')
       }
       return {
         storeId: s.id,

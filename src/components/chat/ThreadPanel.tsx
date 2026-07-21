@@ -2,12 +2,13 @@
 
 import MessageItem from './MessageItem'
 import Composer from './Composer'
-import type { ChatAttachment, ChatMessage } from './types'
+import type { ChatAttachment, ChatMessage, Participant } from './types'
 
 export default function ThreadPanel({
   parent,
   accent,
   attachmentsEndpoint,
+  participants = [],
   onClose,
   onReact,
   onEdit,
@@ -17,6 +18,7 @@ export default function ThreadPanel({
   parent: ChatMessage
   accent: string
   attachmentsEndpoint: string
+  participants?: Participant[]
   onClose: () => void
   onReact: (id: string, emoji: string) => void
   onEdit: (id: string, body: string) => void
@@ -64,6 +66,7 @@ export default function ThreadPanel({
         <MessageItem
           message={parent}
           accent={accent}
+          participants={participants}
           onReact={onReact}
           onEdit={onEdit}
           onDelete={onDelete}
@@ -87,6 +90,7 @@ export default function ThreadPanel({
             key={r.id}
             message={r}
             accent={accent}
+            participants={participants}
             onReact={onReact}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -99,6 +103,7 @@ export default function ThreadPanel({
         accent={accent}
         attachmentsEndpoint={attachmentsEndpoint}
         placeholder="スレッドに返信…"
+        participants={participants}
         onSend={(body, attachments) => onSendReply(parent.id, body, attachments)}
       />
     </div>

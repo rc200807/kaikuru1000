@@ -32,6 +32,14 @@ export type ChatMessage = {
   replies?: ChatMessage[]
 }
 
+/** メンション候補（本部管理者 or 店舗メンバー） */
+export type Participant = {
+  type: 'admin' | 'store'
+  id: string
+  name: string
+  avatar: string | null
+}
+
 /** チャットAPIのエンドポイント群（店舗/本部で差し替え） */
 export type ChatEndpoints = {
   /** GET 一覧 / POST 送信 */
@@ -44,6 +52,8 @@ export type ChatEndpoints = {
   read: string
   /** POST 添付アップロード */
   attachments: string
+  /** GET メンション候補（{ admins, members }） */
+  participants: string
 }
 
 export const QUICK_EMOJIS = ['👍', '✅', '🙏', '🎉', '❤️', '😄', '👀']

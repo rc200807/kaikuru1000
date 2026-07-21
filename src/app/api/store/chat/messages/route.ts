@@ -11,6 +11,7 @@ import {
   parseAttachments,
   type ChatAttachment,
 } from '@/lib/chat'
+import { sanitizeChatHtml } from '@/lib/chat-sanitize'
 
 /** 自店舗ルームのメッセージ一覧 */
 export async function GET() {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json().catch(() => null)
-  const text = typeof body?.body === 'string' ? body.body.trim() : ''
+  const text = sanitizeChatHtml(typeof body?.body === 'string' ? body.body : '')
   const attachments: ChatAttachment[] = parseAttachments(
     Array.isArray(body?.attachments) ? JSON.stringify(body.attachments) : undefined,
   )

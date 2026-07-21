@@ -4,10 +4,17 @@ import { useState } from 'react'
 import { formatJstDateTime } from '@/lib/datetime'
 import ChatAvatar from './ChatAvatar'
 import AttachmentView from './AttachmentView'
-import { QUICK_EMOJIS, type ChatMessage } from './types'
+import ChatRichInput from './ChatRichInput'
+import { sanitizeChatHtml, isEmptyChatHtml } from '@/lib/chat-sanitize'
+import { QUICK_EMOJIS, type ChatMessage, type Participant } from './types'
 
 function formatTime(iso: string) {
   return formatJstDateTime(iso, { year: undefined, month: undefined, day: undefined, hour: '2-digit', minute: '2-digit' })
+}
+
+// TipTap 由来のHTML（ブロックタグ始まり）か。レガシーの平文メッセージと区別する。
+function isHtmlBody(body: string) {
+  return /^\s*<(p|ul|ol|blockquote|pre|h[1-6]|div)[\s>]/i.test(body)
 }
 
 const AVATAR = 34
@@ -45,6 +52,7 @@ export default function MessageItem({
   onDelete,
   onOpenThread,
   showThreadButton = true,
+  participants = [],
 }: {
   message: ChatMessage
   accent: string
@@ -54,6 +62,7 @@ export default function MessageItem({
   onDelete: (id: string) => void
   onOpenThread?: (message: ChatMessage) => void
   showThreadButton?: boolean
+  participants?: Participant[]
 }) {
   const [hover, setHover] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -62,8 +71,7 @@ export default function MessageItem({
 
   const mine = message.mine
   const submitEdit = () => {
-    const trimmed = draft.trim()
-    if (trimmed && trimmed !== message.body) onEdit(message.id, trimmed)
+    if (!isEmptyChatHtml(draft) && draft !== message.body) onEdit(message.id, draft)
     setEditing(false)
   }
 
@@ -121,22 +129,23 @@ export default function MessageItem({
             このメッセージは削除されました
           </div>
         ) : editing ? (
-          <div style={{ width: 'min(420px, 70vw)' }}>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={2}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitEdit()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              style={{
-                width: '100%', resize: 'vertical', borderRadius: 12,
-                border: `1px solid ${accent}`, background: 'var(--md-sys-color-surface-container-lowest)',
-                color: 'var(--md-sys-color-on-surface)', padding: '8px 12px', fontSize: 14,
-              }}
-            />
+          <div style={{ width: 'min(460px, 76vw)' }}>
+            <div style={{
+              borderRadius: 12,
+              border: `1px solid ${accent}`,
+              background: 'var(--md-sys-color-surface-container-lowest)',
+              overflow: 'hidden',
+            }}>
+              <ChatRichInput
+                value={draft}
+                onChange={setDraft}
+                onSubmit={submitEdit}
+                participants={participants}
+                accent={accent}
+                autoFocus
+                placeholder="メッセージを編集…"
+              />
+            </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 5, justifyContent: 'flex-end' }}>
               <button type="button" onClick={() => setEditing(false)} style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>キャンセル</button>
               <button type="button" onClick={submitEdit} style={{ fontSize: 12, color: accent, fontWeight: 700 }}>保存</button>
@@ -156,12 +165,21 @@ export default function MessageItem({
             }}
           >
             {message.body && (
-              <div style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {message.body}
-                {message.isEdited && (
-                  <span style={{ fontSize: 10.5, color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 6 }}>（編集済み）</span>
-                )}
-              </div>
+              isHtmlBody(message.body) ? (
+                <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                  <div className="chat-html" dangerouslySetInnerHTML={{ __html: sanitizeChatHtml(message.body) }} />
+                  {message.isEdited && (
+                    <span style={{ fontSize: 10.5, color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 2 }}>（編集済み）</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {message.body}
+                  {message.isEdited && (
+                    <span style={{ fontSize: 10.5, color: 'var(--md-sys-color-on-surface-variant)', marginLeft: 6 }}>（編集済み）</span>
+                  )}
+                </div>
+              )
             )}
             <AttachmentView attachments={message.attachments} />
           </div>

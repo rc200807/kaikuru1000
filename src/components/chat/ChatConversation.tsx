@@ -5,7 +5,7 @@ import { formatJstDate } from '@/lib/datetime'
 import MessageItem from './MessageItem'
 import Composer from './Composer'
 import ThreadPanel from './ThreadPanel'
-import type { ChatAttachment, ChatEndpoints, ChatMessage } from './types'
+import type { ChatAttachment, ChatEndpoints, ChatMessage, Participant } from './types'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 function dayKey(iso: string) {
@@ -41,6 +41,7 @@ export default function ChatConversation({
   const [otherReadAt, setOtherReadAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [threadId, setThreadId] = useState<string | null>(null)
+  const [participants, setParticipants] = useState<Participant[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const atBottomRef = useRef(true)
   const hasLoadedRef = useRef(false)
@@ -52,6 +53,22 @@ export default function ChatConversation({
 
   const messagesUrl = endpoints.messages
   const readUrl = endpoints.read
+  const participantsUrl = endpoints.participants
+
+  // メンション候補（本部管理者＋店舗メンバー）を取得
+  useEffect(() => {
+    let cancelled = false
+    fetch(participantsUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        const admins: Participant[] = (d.admins ?? []).map((a: { id: string; name: string; avatar?: string | null }) => ({ type: 'admin' as const, id: a.id, name: a.name, avatar: a.avatar ?? null }))
+        const members: Participant[] = (d.members ?? []).map((m: { id: string; name: string; avatar?: string | null }) => ({ type: 'store' as const, id: m.id, name: m.name, avatar: m.avatar ?? null }))
+        setParticipants([...admins, ...members])
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [participantsUrl])
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -184,6 +201,7 @@ export default function ChatConversation({
                 message={it.message}
                 accent={accent}
                 grouped={it.grouped}
+                participants={participants}
                 onReact={toggleReaction}
                 onEdit={editMessage}
                 onDelete={deleteMessage}
@@ -197,13 +215,14 @@ export default function ChatConversation({
         )}
       </div>
 
-      <Composer accent={accent} attachmentsEndpoint={endpoints.attachments} onSend={(b, a) => sendMessage(b, a)} />
+      <Composer accent={accent} attachmentsEndpoint={endpoints.attachments} participants={participants} onSend={(b, a) => sendMessage(b, a)} />
 
       {threadParent && (
         <ThreadPanel
           parent={threadParent}
           accent={accent}
           attachmentsEndpoint={endpoints.attachments}
+          participants={participants}
           onClose={() => setThreadId(null)}
           onReact={toggleReaction}
           onEdit={editMessage}

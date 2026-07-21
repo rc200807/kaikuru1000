@@ -15,6 +15,7 @@ export default function StoreChatPage() {
       reactions: (id) => `/api/store/chat/messages/${id}/reactions`,
       read: '/api/store/chat/read',
       attachments: '/api/store/chat/attachments',
+      participants: '/api/store/chat/participants',
     }),
     [],
   )

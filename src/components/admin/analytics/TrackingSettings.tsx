@@ -177,6 +177,11 @@ function SettingsSection() {
   const [btnKind, setBtnKind] = useState('tel')
   const [busy, setBusy] = useState(false)
 
+  // サイトのインライン編集
+  const [editSiteId, setEditSiteId] = useState<string | null>(null)
+  const [editSiteName, setEditSiteName] = useState('')
+  const [editSiteDomains, setEditSiteDomains] = useState('')
+
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://system.rcinc.jp'
 
   const load = useCallback(() => {
@@ -211,6 +216,33 @@ function SettingsSection() {
     } finally { setBusy(false) }
   }
 
+  const startEditSite = (site: TrackingSiteItem) => {
+    setEditSiteId(site.id)
+    setEditSiteName(site.name)
+    setEditSiteDomains(site.domains.join(', '))
+  }
+
+  const saveEditSite = async () => {
+    if (!editSiteId || !editSiteName.trim()) return
+    setBusy(true)
+    try {
+      await fetch(`/api/admin/tracking/sites/${editSiteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editSiteName, domains: editSiteDomains.split(',').map(s => s.trim()).filter(Boolean) }),
+      })
+      setEditSiteId(null)
+      load()
+    } finally { setBusy(false) }
+  }
+
+  const deleteSite = async (site: TrackingSiteItem) => {
+    if (!confirm(`計測サイト「${site.name}」を削除しますか？\n発行済みのタグ・ボタンIDは無効になります。`)) return
+    await fetch(`/api/admin/tracking/sites/${site.id}`, { method: 'DELETE' })
+    if (editSiteId === site.id) setEditSiteId(null)
+    load()
+  }
+
   return (
     <div className="space-y-4">
       <ChartCard title="計測サイト（スクリプトタグ発行）">
@@ -230,22 +262,43 @@ function SettingsSection() {
               const tag = `<script src="${origin}/t.js" data-site="${site.siteKey}" async></script>`
               return (
                 <div key={site.id} className="rounded-xl p-3.5 border border-[var(--md-sys-color-outline-variant)]">
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <span className="text-xs font-bold text-[var(--md-sys-color-on-surface)]">{site.name}</span>
-                    {!site.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(239,68,68,0.12)] text-[#ef4444]">停止中</span>}
-                    <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {site.domains.length > 0 ? site.domains.join(', ') : '全ドメイン許可'} ・ ボタン {site.buttonCount}個
-                    </span>
-                    <div className="ml-auto flex gap-1.5">
-                      <CopyButton text={tag} label="タグをコピー" />
-                      <button
-                        onClick={async () => { await fetch(`/api/admin/tracking/sites/${site.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !site.isActive }) }); load() }}
-                        className="text-[10px] px-2 py-1 rounded-md border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)]"
-                      >
-                        {site.isActive ? '停止' : '再開'}
-                      </button>
+                  {editSiteId === site.id ? (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <input value={editSiteName} onChange={e => setEditSiteName(e.target.value)} placeholder="サイト名" className={`${inputClass} w-56`} />
+                      <input value={editSiteDomains} onChange={e => setEditSiteDomains(e.target.value)} placeholder="許可ドメイン（カンマ区切り・空欄で全許可）" className={`${inputClass} flex-1 min-w-[240px]`} />
+                      <button onClick={saveEditSite} disabled={busy || !editSiteName.trim()} className={primaryBtn}>保存</button>
+                      <button onClick={() => setEditSiteId(null)} className="text-[10px] px-2 py-1 rounded-md border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)]">キャンセル</button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="text-xs font-bold text-[var(--md-sys-color-on-surface)]">{site.name}</span>
+                      {!site.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(239,68,68,0.12)] text-[#ef4444]">停止中</span>}
+                      <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                        {site.domains.length > 0 ? site.domains.join(', ') : '全ドメイン許可'} ・ ボタン {site.buttonCount}個
+                      </span>
+                      <div className="ml-auto flex gap-1.5">
+                        <CopyButton text={tag} label="タグをコピー" />
+                        <button
+                          onClick={() => startEditSite(site)}
+                          className="text-[10px] px-2 py-1 rounded-md border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)]"
+                        >
+                          編集
+                        </button>
+                        <button
+                          onClick={async () => { await fetch(`/api/admin/tracking/sites/${site.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !site.isActive }) }); load() }}
+                          className="text-[10px] px-2 py-1 rounded-md border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)]"
+                        >
+                          {site.isActive ? '停止' : '再開'}
+                        </button>
+                        <button
+                          onClick={() => deleteSite(site)}
+                          className="text-[10px] px-2 py-1 rounded-md text-[var(--md-sys-color-error,#dc2626)] hover:bg-[var(--md-sys-color-surface-container-high,#f0f0f0)]"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[10px] mb-1 text-[var(--md-sys-color-on-surface-variant)]">このタグを計測したいサイトの &lt;head&gt; に貼り付けてください:</p>
                   <CodeBlock code={tag} />
                 </div>

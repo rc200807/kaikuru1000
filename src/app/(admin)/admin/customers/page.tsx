@@ -35,6 +35,7 @@ import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatu
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 import CustomerJourneyCard from '@/components/admin/CustomerJourneyCard'
+import { CHANNEL_LABEL } from '@/lib/tracking-labels'
 
 type User = {
   id: string
@@ -56,7 +57,8 @@ type User = {
   customerType: string  // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
   customerTypes?: string  // JSON配列（複数可）
   visitFrequencyMonths: number
-  leadSource?: string | null  // 流入経路
+  leadSource?: string | null  // 流入経路（手入力）
+  trackedChannel?: string | null  // 計測流入元（アクセス解析の初回セッションchannel。紐付けなしはnull）
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -152,6 +154,7 @@ const ADMIN_COLUMN_OPTIONS = [
   { key: 'contact', label: '連絡先' },
   { key: 'store', label: '担当店舗' },
   { key: 'customerType', label: 'タイプ' },
+  { key: 'trackedChannel', label: '計測流入元' },
   { key: 'createdAt', label: '登録日' },
 ]
 const ADMIN_DEFAULT_COLS = ADMIN_COLUMN_OPTIONS.map(c => c.key)
@@ -1254,6 +1257,18 @@ export default function AdminCustomersPage() {
           </div>
         )
       },
+    },
+    {
+      key: 'trackedChannel',
+      header: '計測流入元',
+      hideOnMobile: true,
+      render: (user) => user.trackedChannel ? (
+        <span className="text-xs font-medium text-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded-full whitespace-nowrap">
+          {CHANNEL_LABEL[user.trackedChannel] ?? user.trackedChannel}
+        </span>
+      ) : (
+        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">計測データなし</span>
+      ),
     },
     {
       key: 'createdAt',

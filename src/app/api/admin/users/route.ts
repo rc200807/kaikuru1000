@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminUsersWhere, parseCustomerSort } from '@/lib/customer-list-query'
+import { getTrackedChannels } from '@/lib/customer-tracking'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -37,8 +38,10 @@ export async function GET(request: NextRequest) {
     prisma.user.count({ where }),
   ])
 
+  const trackedChannels = await getTrackedChannels(users.map(u => u.id))
+
   return NextResponse.json({
-    users: users.map(({ password: _, ...u }) => u),
+    users: users.map(({ password: _, ...u }) => ({ ...u, trackedChannel: trackedChannels[u.id] ?? null })),
     total,
     page,
     limit,

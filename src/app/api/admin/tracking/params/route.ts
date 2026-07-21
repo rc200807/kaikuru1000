@@ -70,7 +70,6 @@ export async function GET(request: NextRequest) {
       }
     })
     .sort((a, b) => b.sessions - a.sessions)
-    .slice(0, 100)
 
   return NextResponse.json({ params: rows })
 }

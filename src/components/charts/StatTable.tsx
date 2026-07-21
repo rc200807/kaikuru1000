@@ -1,7 +1,7 @@
 'use client'
 
 // ソート可能な集計テーブル
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { fmtYenFull, fmtNum, fmtPct } from '@/lib/analytics/format'
 
 export type StatColumn = {
@@ -18,6 +18,8 @@ type Props = {
   /** 初期ソートキー（降順） */
   defaultSortKey?: string
   maxRows?: number
+  /** 指定するとページネーション（1ページあたり pageSize 件）を表示。maxRows より優先 */
+  pageSize?: number
   emptyText?: string
 }
 
@@ -35,9 +37,10 @@ function formatCell(value: unknown, format?: StatColumn['format']): string {
   }
 }
 
-export default function StatTable({ columns, rows, defaultSortKey, maxRows, emptyText = 'データがありません' }: Props) {
+export default function StatTable({ columns, rows, defaultSortKey, maxRows, pageSize, emptyText = 'データがありません' }: Props) {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null)
   const [sortDesc, setSortDesc] = useState(true)
+  const [page, setPage] = useState(1)
 
   const sorted = useMemo(() => {
     if (!sortKey) return rows
@@ -49,7 +52,13 @@ export default function StatTable({ columns, rows, defaultSortKey, maxRows, empt
     })
   }, [rows, sortKey, sortDesc])
 
-  const visible = maxRows ? sorted.slice(0, maxRows) : sorted
+  // 行数・並び替えが変わったら1ページ目へ戻す
+  const pageCount = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1
+  useEffect(() => { setPage(1) }, [rows, sortKey, sortDesc])
+
+  const visible = pageSize
+    ? sorted.slice((page - 1) * pageSize, page * pageSize)
+    : (maxRows ? sorted.slice(0, maxRows) : sorted)
 
   if (rows.length === 0) {
     return <p className="text-sm text-center py-8 text-[var(--md-sys-color-on-surface-variant)]">{emptyText}</p>
@@ -93,7 +102,26 @@ export default function StatTable({ columns, rows, defaultSortKey, maxRows, empt
           ))}
         </tbody>
       </table>
-      {maxRows && rows.length > maxRows && (
+      {pageSize && sorted.length > pageSize && (
+        <div className="flex items-center justify-center gap-3 pt-3">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="text-xs px-3 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)] disabled:opacity-40 text-[var(--md-sys-color-on-surface)]"
+          >前へ</button>
+          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] tabular-nums">
+            {page} / {pageCount}（全{sorted.length.toLocaleString()}件）
+          </span>
+          <button
+            type="button"
+            disabled={page >= pageCount}
+            onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+            className="text-xs px-3 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)] disabled:opacity-40 text-[var(--md-sys-color-on-surface)]"
+          >次の{pageSize}件</button>
+        </div>
+      )}
+      {!pageSize && maxRows && rows.length > maxRows && (
         <p className="text-[10px] text-center pt-2 text-[var(--md-sys-color-on-surface-variant)]">上位{maxRows}件を表示（全{rows.length}件）</p>
       )}
     </div>

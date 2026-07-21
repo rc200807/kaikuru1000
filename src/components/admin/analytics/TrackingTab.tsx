@@ -259,6 +259,9 @@ function PathsSection({ query }: { query: string }) {
 
 function PagesSection({ query }: { query: string }) {
   const [rows, setRows] = useState<PageStatRow[] | null>(null)
+  const [q, setQ] = useState('')
+  const [minPv, setMinPv] = useState('')
+  const [cvOnly, setCvOnly] = useState(false)
   useEffect(() => {
     setRows(null)
     fetch(`/api/admin/tracking/pages?${query}`)
@@ -268,8 +271,23 @@ function PagesSection({ query }: { query: string }) {
   }, [query])
 
   if (rows === null) return <TabLoading />
+
+  const kw = q.trim().toLowerCase()
+  const minPvNum = parseInt(minPv, 10)
+  const filtered = rows.filter(r => {
+    if (kw && !(`${r.title ?? ''} ${r.path}`.toLowerCase().includes(kw))) return false
+    if (!isNaN(minPvNum) && r.pv < minPvNum) return false
+    if (cvOnly && !(r.cvContribution > 0)) return false
+    return true
+  })
+
   return (
     <ChartCard title="ページ別パフォーマンス" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">CV寄与率 = そのページを経由したセッションのCVR</span>}>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="ページ名・パスで検索…" className="text-xs px-3 py-1.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)] w-56" />
+        <input value={minPv} onChange={e => setMinPv(e.target.value)} inputMode="numeric" placeholder="最低PV" className="text-xs px-3 py-1.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)] w-24" />
+        <button onClick={() => setCvOnly(v => !v)} className={`text-xs px-2.5 py-1.5 rounded-full ${cvOnly ? 'bg-[var(--md-sys-color-primary,#374151)] text-[var(--md-sys-color-on-primary,#fff)] font-semibold' : 'bg-[var(--md-sys-color-surface-container-high,#f0f0f0)] text-[var(--md-sys-color-on-surface-variant)]'}`}>CV寄与ありのみ</button>
+      </div>
       <StatTable
         columns={[
           { key: 'page', label: 'ページ', format: 'text' },
@@ -280,7 +298,7 @@ function PagesSection({ query }: { query: string }) {
           { key: 'exitRate', label: '離脱率', format: 'pct', align: 'right' },
           { key: 'cvContribution', label: 'CV寄与率', format: 'pct', align: 'right' },
         ]}
-        rows={rows.map(r => ({
+        rows={filtered.map(r => ({
           page: r.title || r.path,
           pv: r.pv,
           sessions: r.sessions,
@@ -290,7 +308,7 @@ function PagesSection({ query }: { query: string }) {
           cvContribution: r.cvContribution,
         }))}
         defaultSortKey="pv"
-        maxRows={50}
+        pageSize={100}
       />
     </ChartCard>
   )
@@ -302,19 +320,28 @@ function VisitorsSection({ query }: { query: string }) {
   const router = useRouter()
   const [rows, setRows] = useState<TrackingVisitorRow[] | null>(null)
   const [total, setTotal] = useState(0)
+  const [pageSize, setPageSize] = useState(500)
   const [page, setPage] = useState(1)
   const [cvOnly, setCvOnly] = useState(false)
+  const [hasCustomer, setHasCustomer] = useState(false)
+  const [channel, setChannel] = useState('')
+  const [device, setDevice] = useState('')
+  const [region, setRegion] = useState('')
   const [q, setQ] = useState('')
 
   useEffect(() => {
     const qs = new URLSearchParams({ page: String(page) })
     if (cvOnly) qs.set('cvOnly', '1')
+    if (hasCustomer) qs.set('hasCustomer', '1')
+    if (channel) qs.set('channel', channel)
+    if (device) qs.set('device', device)
+    if (region) qs.set('region', region)
     if (q) qs.set('q', q)
     fetch(`/api/admin/tracking/visitors?${qs.toString()}`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) { setRows(d.visitors); setTotal(d.total) } })
+      .then(d => { if (d) { setRows(d.visitors); setTotal(d.total); if (d.pageSize) setPageSize(d.pageSize) } })
       .catch(() => setRows([]))
-  }, [page, cvOnly, q, query])
+  }, [page, cvOnly, hasCustomer, channel, device, region, q, query])
 
   const fmtDate = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -327,11 +354,45 @@ function VisitorsSection({ query }: { query: string }) {
           placeholder="顧客名・URLで検索…"
           className="text-xs px-3 py-1.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)] w-56"
         />
+        <select
+          value={channel}
+          onChange={e => { setChannel(e.target.value); setPage(1) }}
+          className="text-xs px-2 py-1.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)]"
+        >
+          <option value="">全チャネル</option>
+          <option value="search">検索</option>
+          <option value="social">SNS</option>
+          <option value="ad">広告</option>
+          <option value="referral">参照サイト</option>
+          <option value="direct">直接</option>
+        </select>
+        <select
+          value={device}
+          onChange={e => { setDevice(e.target.value); setPage(1) }}
+          className="text-xs px-2 py-1.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)]"
+        >
+          <option value="">全デバイス</option>
+          <option value="mobile">モバイル</option>
+          <option value="tablet">タブレット</option>
+          <option value="desktop">PC</option>
+        </select>
+        <input
+          value={region}
+          onChange={e => { setRegion(e.target.value); setPage(1) }}
+          placeholder="地域（都道府県）"
+          className="text-xs px-3 py-1.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-transparent text-[var(--md-sys-color-on-surface)] w-36"
+        />
         <button
           onClick={() => { setCvOnly(v => !v); setPage(1) }}
           className={`text-xs px-2.5 py-1.5 rounded-full ${cvOnly ? 'bg-[var(--md-sys-color-primary,#374151)] text-[var(--md-sys-color-on-primary,#fff)] font-semibold' : 'bg-[var(--md-sys-color-surface-container-high,#f0f0f0)] text-[var(--md-sys-color-on-surface-variant)]'}`}
         >
           CVありのみ
+        </button>
+        <button
+          onClick={() => { setHasCustomer(v => !v); setPage(1) }}
+          className={`text-xs px-2.5 py-1.5 rounded-full ${hasCustomer ? 'bg-[var(--md-sys-color-primary,#374151)] text-[var(--md-sys-color-on-primary,#fff)] font-semibold' : 'bg-[var(--md-sys-color-surface-container-high,#f0f0f0)] text-[var(--md-sys-color-on-surface-variant)]'}`}
+        >
+          顧客紐付けあり
         </button>
       </div>
       {rows === null ? (
@@ -378,11 +439,11 @@ function VisitorsSection({ query }: { query: string }) {
           </table>
         </div>
       )}
-      {total > 50 && (
+      {total > pageSize && (
         <div className="flex items-center justify-center gap-3 mt-3">
           <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="text-xs px-3 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)] disabled:opacity-40 text-[var(--md-sys-color-on-surface)]">前へ</button>
-          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{page} / {Math.ceil(total / 50)}</span>
-          <button disabled={page >= Math.ceil(total / 50)} onClick={() => setPage(p => p + 1)} className="text-xs px-3 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)] disabled:opacity-40 text-[var(--md-sys-color-on-surface)]">次へ</button>
+          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] tabular-nums">{page} / {Math.ceil(total / pageSize)}</span>
+          <button disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage(p => p + 1)} className="text-xs px-3 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)] disabled:opacity-40 text-[var(--md-sys-color-on-surface)]">次の{pageSize}件</button>
         </div>
       )}
     </ChartCard>

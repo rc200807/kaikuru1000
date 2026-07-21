@@ -12,14 +12,27 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams
   const page = Math.max(1, Number(sp.get('page')) || 1)
-  const pageSize = 50
+  const pageSize = 500
   const cvOnly = sp.get('cvOnly') === '1'
   const q = (sp.get('q') ?? '').trim()
+  const channel = (sp.get('channel') ?? '').trim()
+  const device = (sp.get('device') ?? '').trim()
+  const region = (sp.get('region') ?? '').trim()
+  const hasCustomer = sp.get('hasCustomer') === '1'
 
   const where: Record<string, unknown> = {}
   const userId = sp.get('userId')
   if (userId) where.userId = userId
+  else if (hasCustomer) where.userId = { not: null }
   if (cvOnly) where.events = { some: { isConversion: true } }
+
+  // チャネル・デバイス・地域は「いずれかのセッションが該当」で絞り込む
+  const sessionSome: Record<string, unknown> = {}
+  if (channel) sessionSome.channel = channel
+  if (device) sessionSome.deviceType = device
+  if (region) sessionSome.region = { contains: region }
+  if (Object.keys(sessionSome).length > 0) where.sessions = { some: sessionSome }
+
   if (q) {
     where.OR = [
       { visitorKey: { contains: q } },

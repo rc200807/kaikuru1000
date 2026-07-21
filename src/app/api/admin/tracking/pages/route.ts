@@ -72,7 +72,6 @@ export async function GET(request: NextRequest) {
       cvContribution: agg.sessions.size > 0 ? agg.cvSessions.size / agg.sessions.size : 0,
     }))
     .sort((a, b) => b.pv - a.pv)
-    .slice(0, 100)
 
   return NextResponse.json({ pages })
 }

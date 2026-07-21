@@ -33,6 +33,8 @@ function CodeBlock({ code }: { code: string }) {
 
 function ParamsCampaignsSection({ query }: { query: string }) {
   const [params, setParams] = useState<ParamStatRow[] | null>(null)
+  const [paramQ, setParamQ] = useState('')
+  const [cvOnly, setCvOnly] = useState(false)
   const [campaigns, setCampaigns] = useState<TrackingCampaignItem[] | null>(null)
   const [name, setName] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
@@ -77,29 +79,43 @@ function ParamsCampaignsSection({ query }: { query: string }) {
       <ChartCard title="URLパラメータ分析" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">自動検出された全パラメータ。ラストタッチCV = そのパラメータで流入したセッションのCV / ファーストタッチCV = CVした人の初回流入</span>}>
         {params === null ? (
           <p className="text-xs py-8 text-center text-[var(--md-sys-color-on-surface-variant)]">読み込み中…</p>
-        ) : (
-          <StatTable
-            columns={[
-              { key: 'param', label: 'パラメータ', format: 'text' },
-              { key: 'sessions', label: 'セッション', format: 'count', align: 'right' },
-              { key: 'cvSessions', label: 'CV(ラスト)', format: 'count', align: 'right' },
-              { key: 'cvr', label: 'CVR', format: 'pct', align: 'right' },
-              { key: 'firstTouchCv', label: 'CV(ファースト)', format: 'count', align: 'right' },
-              { key: 'topLanding', label: '主要LP', format: 'text' },
-            ]}
-            rows={params.map(p => ({
-              param: `${p.key}=${p.value}`,
-              sessions: p.sessions,
-              cvSessions: p.cvSessions,
-              cvr: p.cvr,
-              firstTouchCv: p.firstTouchCv,
-              topLanding: p.topLanding ?? '—',
-            }))}
-            defaultSortKey="sessions"
-            maxRows={30}
-            emptyText="パラメータ付きのアクセスがまだありません"
-          />
-        )}
+        ) : (() => {
+          const kw = paramQ.trim().toLowerCase()
+          const filtered = params.filter(p => {
+            if (cvOnly && p.cvSessions <= 0) return false
+            if (kw && !(`${p.key}=${p.value} ${p.topLanding ?? ''}`.toLowerCase().includes(kw))) return false
+            return true
+          })
+          return (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <input value={paramQ} onChange={e => setParamQ(e.target.value)} placeholder="パラメータ・LPで検索…" className={`${inputClass} w-64`} />
+                <button onClick={() => setCvOnly(v => !v)} className={`text-xs px-2.5 py-1.5 rounded-full ${cvOnly ? 'bg-[var(--md-sys-color-primary,#374151)] text-[var(--md-sys-color-on-primary,#fff)] font-semibold' : 'bg-[var(--md-sys-color-surface-container-high,#f0f0f0)] text-[var(--md-sys-color-on-surface-variant)]'}`}>CVありのみ</button>
+              </div>
+              <StatTable
+                columns={[
+                  { key: 'param', label: 'パラメータ', format: 'text' },
+                  { key: 'sessions', label: 'セッション', format: 'count', align: 'right' },
+                  { key: 'cvSessions', label: 'CV(ラスト)', format: 'count', align: 'right' },
+                  { key: 'cvr', label: 'CVR', format: 'pct', align: 'right' },
+                  { key: 'firstTouchCv', label: 'CV(ファースト)', format: 'count', align: 'right' },
+                  { key: 'topLanding', label: '主要LP', format: 'text' },
+                ]}
+                rows={filtered.map(p => ({
+                  param: `${p.key}=${p.value}`,
+                  sessions: p.sessions,
+                  cvSessions: p.cvSessions,
+                  cvr: p.cvr,
+                  firstTouchCv: p.firstTouchCv,
+                  topLanding: p.topLanding ?? '—',
+                }))}
+                defaultSortKey="sessions"
+                pageSize={100}
+                emptyText="パラメータ付きのアクセスがまだありません"
+              />
+            </>
+          )
+        })()}
       </ChartCard>
 
       <ChartCard title="キャンペーンURLビルダー" aside={<span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">計測用URLを発行し、成果を自動突合</span>}>

@@ -1466,6 +1466,8 @@ export default function AdminCustomersPage() {
             onSelectionChange={(keys) => { setSelectedIds(keys); setAllMatching(false) }}
             serverSort={serverSort}
             onSortChange={handleSortChange}
+            nowrap
+            stickyLastColumn
           />
         </div>
 

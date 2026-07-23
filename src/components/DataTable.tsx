@@ -28,6 +28,10 @@ type DataTableProps<T> = {
   /** サーバーサイドソート。指定するとクライアント側ソートは無効になる */
   serverSort?: { key: string; dir: 'asc' | 'desc' } | null
   onSortChange?: (key: string) => void
+  /** セルを改行させない（横スクロールで全カラムを表示） */
+  nowrap?: boolean
+  /** 最終列を右端に固定表示（横スクロールしても常に見える。操作ボタン列向け） */
+  stickyLastColumn?: boolean
 }
 
 export default function DataTable<T>({
@@ -43,6 +47,8 @@ export default function DataTable<T>({
   onSelectionChange,
   serverSort,
   onSortChange,
+  nowrap = false,
+  stickyLastColumn = false,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -167,7 +173,9 @@ export default function DataTable<T>({
                   />
                 </th>
               )}
-              {columns.map(col => (
+              {columns.map((col, i) => {
+                const isStickyLast = stickyLastColumn && i === columns.length - 1
+                return (
                 <th
                   key={col.key}
                   onClick={() => handleSort(col)}
@@ -177,6 +185,7 @@ export default function DataTable<T>({
                     text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider
                     ${col.sortable ? 'cursor-pointer select-none hover:text-[var(--md-sys-color-on-surface)]' : ''}
                     ${col.hideOnMobile ? 'hidden md:table-cell' : ''}
+                    ${isStickyLast ? 'sticky right-0 z-20 bg-[var(--md-sys-color-surface-container-lowest,#fff)] border-l border-[var(--md-sys-color-outline-variant)]' : ''}
                   `}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -188,19 +197,26 @@ export default function DataTable<T>({
                     )}
                   </span>
                 </th>
-              ))}
+                )
+              })}
             </tr>
           </thead>
           <tbody>
             {sortedData.map(row => {
               const key = rowKey(row)
               const isSelected = selectable && selected.has(key)
+              // 固定列(sticky)は横スクロール中に背景が透けないよう不透明色にする。
+              // 行の状態(選択/ホバー)に合わせて surface-container-lowest を土台にした不透明色を使う。
+              const stickyCellBg = isSelected
+                ? 'bg-[color-mix(in_srgb,var(--portal-primary,#374151)_6%,var(--md-sys-color-surface-container-lowest,#fff))]'
+                : 'bg-[var(--md-sys-color-surface-container-lowest,#fff)]'
+              const stickyCellHover = onRowClick ? 'group-hover:bg-[var(--md-sys-color-surface-container-low)]' : ''
               return (
               <tr
                 key={key}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={`
-                  border-b border-[var(--md-sys-color-surface-container-high)]
+                  group border-b border-[var(--md-sys-color-surface-container-high)]
                   ${isSelected ? 'bg-[color-mix(in_srgb,var(--portal-primary,#374151)_6%,transparent)]' : ''}
                   ${onRowClick
                     ? 'cursor-pointer hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors'
@@ -219,17 +235,22 @@ export default function DataTable<T>({
                     />
                   </td>
                 )}
-                {columns.map(col => (
+                {columns.map((col, i) => {
+                  const isStickyLast = stickyLastColumn && i === columns.length - 1
+                  return (
                   <td
                     key={col.key}
                     className={`
                       px-3 py-3 text-[var(--md-sys-color-on-surface)]
+                      ${nowrap ? 'whitespace-nowrap' : ''}
                       ${col.hideOnMobile ? 'hidden md:table-cell' : ''}
+                      ${isStickyLast ? `sticky right-0 z-10 border-l border-[var(--md-sys-color-outline-variant)] ${stickyCellBg} ${stickyCellHover}` : ''}
                     `}
                   >
                     {col.render(row)}
                   </td>
-                ))}
+                  )
+                })}
               </tr>
               )
             })}

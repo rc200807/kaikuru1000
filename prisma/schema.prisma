@@ -1835,6 +1835,8 @@ model LinkPartner {
   forms            LinkPartnerForm[]
   invitations      LinkPartnerInvitation[]
   activityLogs     LinkPartnerActivityLog[]
+  statuses         LinkPartnerStatus[]
+  recordStatuses   LinkPartnerRecordStatus[]
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
 }
@@ -1900,9 +1902,10 @@ model LinkPartnerActivityLog {
   linkPartner   LinkPartner @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
   memberId      String?                                        // 実行メンバー（監査用スカラー）
   memberName    String?                                        // 表示用スナップショット
-  action        String                                         // login|invite_member|accept_invite|view_customer|view_inquiry|export_customers|export_inquiries
+  action        String                                         // login|invite_member|accept_invite|view_customer|view_inquiry|export_customers|export_inquiries|set_status
   targetType    String?                                        // customer|inquiry|member|form
   targetId      String?
+  detail        String?     @db.Text                           // 人間可読の詳細（例: 「未対応 → 対応中」）
   ip            String?
   userAgent     String?     @db.Text
   createdAt     DateTime    @default(now())
@@ -1910,4 +1913,40 @@ model LinkPartnerActivityLog {
   @@index([linkPartnerId, createdAt])
   @@index([memberId])
   @@index([action])
+}
+
+// 連携パートナーの対応ステータス定義（パートナーごと・問い合わせ用/顧客用で別セット）
+model LinkPartnerStatus {
+  id            String      @id @default(cuid())
+  linkPartnerId String
+  linkPartner   LinkPartner @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
+  targetType    String                                         // "inquiry" | "customer"
+  label         String                                         // 表示名（例: 未対応 / 対応中 / 完了）
+  color         String?                                        // バッジ色（任意・HEX等）
+  sortOrder     Int         @default(0)
+  isActive      Boolean     @default(true)
+  assignments   LinkPartnerRecordStatus[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([linkPartnerId, targetType])
+}
+
+// レコード（問い合わせ/顧客）への対応ステータス付与（パートナー×対象で一意）
+model LinkPartnerRecordStatus {
+  id               String             @id @default(cuid())
+  linkPartnerId    String
+  linkPartner      LinkPartner        @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
+  targetType       String                                       // "inquiry"(FormSubmission) | "customer"(User)
+  targetId         String                                       // submissionId または userId
+  statusId         String?                                      // 定義削除時は SetNull（未設定扱い）
+  status           LinkPartnerStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  updatedByMemberId String?                                     // 最終更新メンバー（監査用スカラー）
+  updatedByName    String?                                      // 表示用スナップショット
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([linkPartnerId, targetType, targetId])
+  @@index([linkPartnerId, targetType])
+  @@index([statusId])
 }

@@ -31,6 +31,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         action: true,
         targetType: true,
         targetId: true,
+        detail: true,
         ip: true,
         createdAt: true,
       },

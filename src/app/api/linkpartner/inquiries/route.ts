@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireLinkPartner } from '@/lib/link-partner-auth'
 import { resolveAssignedFormIds, LINKPARTNER_SAFE_SUBMISSION_SELECT } from '@/lib/link-partner-query'
+import { listLinkPartnerStatuses, getRecordStatusMap } from '@/lib/link-partner-status'
 
 const PAGE_SIZE = 50
 
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const formIds = await resolveAssignedFormIds(user.linkPartnerId)
   if (formIds.length === 0) {
-    return NextResponse.json({ submissions: [], total: 0, page: 1, pageSize: PAGE_SIZE, forms: [] })
+    return NextResponse.json({ submissions: [], total: 0, page: 1, pageSize: PAGE_SIZE, forms: [], statuses: [] })
   }
 
   const url = new URL(req.url)
@@ -38,11 +39,17 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
+  const [statuses, statusMap] = await Promise.all([
+    listLinkPartnerStatuses(user.linkPartnerId, 'inquiry'),
+    getRecordStatusMap(user.linkPartnerId, 'inquiry', submissions.map((s) => s.id)),
+  ])
+
   return NextResponse.json({
-    submissions,
+    submissions: submissions.map((s) => ({ ...s, status: statusMap[s.id] ?? null })),
     total,
     page,
     pageSize: PAGE_SIZE,
     forms: assignedForms.map((f) => f.form),
+    statuses,
   })
 }

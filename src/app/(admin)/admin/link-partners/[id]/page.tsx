@@ -220,7 +220,14 @@ export default function AdminLinkPartnerDetailPage() {
           )}
         </div>
 
-        {/* 利用状況（活動ログ） */}
+        {/* 対応ステータス定義の管理（本部も編集可） */}
+        <AdminStatusSection partnerId={id} />
+
+        {/* 共有中の問い合わせ・顧客（ステータス付き） */}
+        <SharedRecordsSection partnerId={id} type="inquiry" title="共有中の問い合わせ" />
+        <SharedRecordsSection partnerId={id} type="customer" title="共有中の顧客" />
+
+        {/* 利用状況（活動ログ・ステータス変更履歴を含む） */}
         <ActivitySection partnerId={id} />
 
         {/* 危険な操作 */}
@@ -246,6 +253,144 @@ export default function AdminLinkPartnerDetailPage() {
   )
 }
 
+const STATUS_COLORS = ['#6b7280', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
+
+type StatusDef = { id: string; targetType: string; label: string; color: string | null; sortOrder: number; isActive: boolean }
+
+function AdminStatusSection({ partnerId }: { partnerId: string }) {
+  const [statuses, setStatuses] = useState<StatusDef[]>([])
+  const [loading, setLoading] = useState(true)
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch(`/api/admin/link-partners/${partnerId}/statuses`)
+      .then((r) => (r.ok ? r.json() : { statuses: [] }))
+      .then((d) => setStatuses(d.statuses || []))
+      .finally(() => setLoading(false))
+  }, [partnerId])
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div style={cardStyle}>
+      <SectionTitle>対応ステータス設定</SectionTitle>
+      <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>
+        問い合わせ・顧客の一覧でパートナーが設定できる選択肢です。本部・パートナー管理者のどちらからでも編集できます。
+      </p>
+      {loading ? (
+        <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>読み込み中…</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+          <StatusGroup partnerId={partnerId} targetType="inquiry" title="問い合わせ用" statuses={statuses.filter((s) => s.targetType === 'inquiry')} onChange={load} />
+          <StatusGroup partnerId={partnerId} targetType="customer" title="顧客用" statuses={statuses.filter((s) => s.targetType === 'customer')} onChange={load} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatusGroup({ partnerId, targetType, title, statuses, onChange }: { partnerId: string; targetType: 'inquiry' | 'customer'; title: string; statuses: StatusDef[]; onChange: () => void }) {
+  const [label, setLabel] = useState('')
+  const [color, setColor] = useState(STATUS_COLORS[0])
+  const inputStyle: React.CSSProperties = { flex: 1, minWidth: 100, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 12 }
+  const add = async () => {
+    if (!label) return
+    const res = await fetch(`/api/admin/link-partners/${partnerId}/statuses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetType, label, color }) })
+    if (res.ok) { setLabel(''); onChange() }
+  }
+  const del = async (sid: string) => {
+    if (!confirm('このステータスを削除しますか？（設定済みのレコードは未設定に戻ります）')) return
+    const res = await fetch(`/api/admin/link-partners/${partnerId}/statuses/${sid}`, { method: 'DELETE' })
+    if (res.ok) onChange()
+  }
+  const patch = async (sid: string, body: Record<string, unknown>) => {
+    const res = await fetch(`/api/admin/link-partners/${partnerId}/statuses/${sid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (res.ok) onChange()
+  }
+  return (
+    <div style={{ border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 8, padding: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+        {statuses.length === 0 && <span style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>選択肢なし</span>}
+        {statuses.map((s) => <StatusGroupRow key={s.id} status={s} onSave={(b) => patch(s.id, b)} onDelete={() => del(s.id)} />)}
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="例: 対応中" maxLength={40} style={inputStyle} />
+        <div style={{ display: 'flex', gap: 3 }}>
+          {STATUS_COLORS.map((c) => <button key={c} type="button" onClick={() => setColor(c)} style={{ width: 20, height: 20, borderRadius: '50%', background: c, border: color === c ? '2px solid var(--md-sys-color-on-surface)' : '2px solid transparent', cursor: 'pointer' }} />)}
+        </div>
+        <button onClick={add} disabled={!label} style={{ ...miniBtn, padding: '6px 12px', opacity: label ? 1 : 0.5 }}>追加</button>
+      </div>
+    </div>
+  )
+}
+
+function StatusGroupRow({ status, onSave, onDelete }: { status: StatusDef; onSave: (body: Record<string, unknown>) => void; onDelete: () => void }) {
+  const [label, setLabel] = useState(status.label)
+  const [color, setColor] = useState(status.color ?? STATUS_COLORS[0])
+  useEffect(() => { setLabel(status.label); setColor(status.color ?? STATUS_COLORS[0]) }, [status.label, status.color])
+  const dirty = label !== status.label || color !== (status.color ?? STATUS_COLORS[0])
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, flexWrap: 'wrap' }}>
+      <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={40} style={{ flex: 1, minWidth: 90, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface)', fontSize: 12 }} />
+      <div style={{ display: 'flex', gap: 2 }}>
+        {STATUS_COLORS.map((c) => <button key={c} type="button" onClick={() => setColor(c)} style={{ width: 16, height: 16, borderRadius: '50%', background: c, border: color === c ? '2px solid var(--md-sys-color-on-surface)' : '2px solid transparent', cursor: 'pointer' }} />)}
+      </div>
+      {dirty && <button onClick={() => onSave({ label, color })} style={miniBtn}>保存</button>}
+      <button onClick={onDelete} style={{ ...miniBtn, color: 'var(--md-sys-color-error)' }}>削除</button>
+    </div>
+  )
+}
+
+type SharedRecord = { id: string; createdAt: string; title: string; subtitle: string | null; status: { statusId: string | null; label: string | null; color: string | null; updatedByName: string | null; updatedAt: string | null } | null }
+
+function StatusBadge({ status }: { status: SharedRecord['status'] }) {
+  if (!status || !status.label) return <span style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>未設定</span>
+  return <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: status.color ?? 'var(--md-sys-color-surface-container-highest)', color: '#fff' }}>{status.label}</span>
+}
+
+function SharedRecordsSection({ partnerId, type, title }: { partnerId: string; type: 'inquiry' | 'customer'; title: string }) {
+  const [records, setRecords] = useState<SharedRecord[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(30)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/admin/link-partners/${partnerId}/shared-records?type=${type}&page=${page}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) { setRecords(d.records); setTotal(d.total); setPageSize(d.pageSize) } })
+      .finally(() => setLoading(false))
+  }, [partnerId, type, page])
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  return (
+    <div style={cardStyle}>
+      <SectionTitle>{title}（{total}）</SectionTitle>
+      {loading ? (
+        <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>読み込み中…</p>
+      ) : records.length === 0 ? (
+        <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>共有中のレコードはありません。</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {records.map((r) => (
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 6, background: 'var(--md-sys-color-surface-container-highest)', fontSize: 12, flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--md-sys-color-on-surface-variant)', width: 150, flexShrink: 0 }}>{new Date(r.createdAt).toLocaleString('ja-JP')}</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}{r.subtitle ? ` ・ ${r.subtitle}` : ''}</span>
+              <StatusBadge status={r.status} />
+            </div>
+          ))}
+        </div>
+      )}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 12, alignItems: 'center' }}>
+          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} style={{ ...miniBtn, opacity: page <= 1 ? 0.5 : 1 }}>前へ</button>
+          <span style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>{page} / {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} style={{ ...miniBtn, opacity: page >= totalPages ? 0.5 : 1 }}>次へ</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const ACTION_LABEL: Record<string, string> = {
   login: 'ログイン',
   invite_member: 'メンバー招待',
@@ -254,6 +399,7 @@ const ACTION_LABEL: Record<string, string> = {
   view_inquiry: '問い合わせ閲覧',
   export_customers: '顧客エクスポート',
   export_inquiries: '問い合わせエクスポート',
+  set_status: '対応ステータス変更',
 }
 
 type ActivityLog = {
@@ -263,6 +409,7 @@ type ActivityLog = {
   action: string
   targetType: string | null
   targetId: string | null
+  detail: string | null
   ip: string | null
   createdAt: string
 }
@@ -324,7 +471,7 @@ function ActivitySection({ partnerId }: { partnerId: string }) {
               <span style={{ color: 'var(--md-sys-color-on-surface-variant)', width: 150, flexShrink: 0 }}>{new Date(l.createdAt).toLocaleString('ja-JP')}</span>
               <span style={{ fontWeight: 600, width: 130, flexShrink: 0 }}>{ACTION_LABEL[l.action] ?? l.action}</span>
               <span style={{ minWidth: 0, flex: 1, color: 'var(--md-sys-color-on-surface-variant)' }}>
-                {l.memberName ?? '—'}{l.targetType ? ` ・ ${l.targetType}` : ''}
+                {l.memberName ?? '—'}{l.detail ? ` ・ ${l.detail}` : (l.targetType ? ` ・ ${l.targetType}` : '')}
               </span>
             </div>
           ))}

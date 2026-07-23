@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireLinkPartner } from '@/lib/link-partner-auth'
 import { resolveAssignedFormIds, linkPartnerCustomerWhere, LINKPARTNER_SAFE_USER_SELECT } from '@/lib/link-partner-query'
+import { listLinkPartnerStatuses, getRecordStatusMap } from '@/lib/link-partner-status'
 
 // 連携パートナーに割り当てられたフォーム由来の顧客一覧（安全フィールドのみ）
 export async function GET(req: NextRequest) {
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const formIds = await resolveAssignedFormIds(user.linkPartnerId)
-  if (formIds.length === 0) return NextResponse.json({ customers: [] })
+  if (formIds.length === 0) return NextResponse.json({ customers: [], statuses: [] })
 
   const q = new URL(req.url).searchParams.get('q')?.trim()
   const base = linkPartnerCustomerWhere(formIds)
@@ -31,5 +32,14 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     take: 500,
   })
-  return NextResponse.json({ customers })
+
+  const [statuses, statusMap] = await Promise.all([
+    listLinkPartnerStatuses(user.linkPartnerId, 'customer'),
+    getRecordStatusMap(user.linkPartnerId, 'customer', customers.map((c) => c.id)),
+  ])
+
+  return NextResponse.json({
+    customers: customers.map((c) => ({ ...c, status: statusMap[c.id] ?? null })),
+    statuses,
+  })
 }

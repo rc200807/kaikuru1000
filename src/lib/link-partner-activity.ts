@@ -9,6 +9,7 @@ export type LinkPartnerAction =
   | 'view_inquiry'
   | 'export_customers'
   | 'export_inquiries'
+  | 'set_status'
 
 type LinkPartnerActivityInput = {
   linkPartnerId: string
@@ -17,6 +18,7 @@ type LinkPartnerActivityInput = {
   action: LinkPartnerAction | string
   targetType?: string | null // customer | inquiry | member | form
   targetId?: string | null
+  detail?: string | null // 人間可読の詳細（例: 「未対応 → 対応中」）
   req?: any // NextRequest（headers は Headers）または NextAuth authorize の req（headers は plain object）
 }
 
@@ -47,6 +49,7 @@ export async function recordLinkPartnerActivity(input: LinkPartnerActivityInput)
         action: input.action,
         targetType: input.targetType ?? null,
         targetId: input.targetId ?? null,
+        detail: input.detail ?? null,
         ip: ip || null,
         userAgent: ua || null,
       },

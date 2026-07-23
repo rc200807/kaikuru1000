@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { StatusSelect, type StatusDef, type RecordStatus } from '@/components/linkpartner/StatusSelect'
 
 type Customer = {
   id: string
@@ -13,11 +14,13 @@ type Customer = {
   customerType: string
   leadSource: string | null
   createdAt: string
+  status: RecordStatus
 }
 
 export default function LinkPartnerCustomersPage() {
   const router = useRouter()
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [statuses, setStatuses] = useState<StatusDef[]>([])
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -26,8 +29,8 @@ export default function LinkPartnerCustomersPage() {
     const p = new URLSearchParams()
     if (query.trim()) p.set('q', query.trim())
     fetch(`/api/linkpartner/customers?${p.toString()}`)
-      .then((r) => (r.ok ? r.json() : { customers: [] }))
-      .then((d) => setCustomers(d.customers || []))
+      .then((r) => (r.ok ? r.json() : { customers: [], statuses: [] }))
+      .then((d) => { setCustomers(d.customers || []); setStatuses(d.statuses || []) })
       .finally(() => setLoading(false))
   }, [])
 
@@ -35,6 +38,10 @@ export default function LinkPartnerCustomersPage() {
     const t = setTimeout(() => load(q), 250)
     return () => clearTimeout(t)
   }, [q, load])
+
+  const onStatusChange = (customerId: string, next: RecordStatus) => {
+    setCustomers((prev) => prev.map((c) => (c.id === customerId ? { ...c, status: next } : c)))
+  }
 
   return (
     <div className="p-6 lg:p-8">
@@ -64,19 +71,20 @@ export default function LinkPartnerCustomersPage() {
         <p className="text-sm text-[#999] py-12 text-center">該当する顧客がいません。</p>
       ) : (
         <div className="rounded-xl border border-[rgba(255,255,255,0.08)] overflow-x-auto">
-          <div className="min-w-[640px]">
-            <div className="grid grid-cols-[1.4fr_1.2fr_1.2fr_1fr_1fr] gap-3 px-4 py-2.5 text-[11px] text-[#999] bg-[#141414] border-b border-[rgba(255,255,255,0.06)]">
+          <div className="min-w-[820px]">
+            <div className="grid grid-cols-[1.4fr_1.1fr_1.1fr_0.9fr_0.9fr_1.3fr] gap-3 px-4 py-2.5 text-[11px] text-[#999] bg-[#141414] border-b border-[rgba(255,255,255,0.06)]">
               <span>氏名</span>
               <span>電話</span>
               <span>メール</span>
               <span>流入元</span>
               <span>登録日</span>
+              <span>対応ステータス</span>
             </div>
             {customers.map((c) => (
               <div
                 key={c.id}
                 onClick={() => router.push(`/linkpartner/customers/${c.id}`)}
-                className="grid grid-cols-[1.4fr_1.2fr_1.2fr_1fr_1fr] gap-3 px-4 py-3 text-sm border-b border-[rgba(255,255,255,0.04)] last:border-0 hover:bg-[#141414] cursor-pointer"
+                className="grid grid-cols-[1.4fr_1.1fr_1.1fr_0.9fr_0.9fr_1.3fr] gap-3 px-4 py-3 text-sm border-b border-[rgba(255,255,255,0.04)] last:border-0 hover:bg-[#141414] cursor-pointer items-center"
               >
                 <div className="min-w-0">
                   <div className="font-semibold truncate">{c.name}</div>
@@ -86,6 +94,14 @@ export default function LinkPartnerCustomersPage() {
                 <span className="text-[#a3a3a3] truncate">{c.email ?? '—'}</span>
                 <span className="text-[#a3a3a3] truncate">{c.leadSource ?? '—'}</span>
                 <span className="text-[#a3a3a3]">{new Date(c.createdAt).toLocaleDateString('ja-JP')}</span>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <StatusSelect
+                    endpoint={`/api/linkpartner/customers/${c.id}/status`}
+                    statuses={statuses}
+                    current={c.status}
+                    onChange={(next) => onStatusChange(c.id, next)}
+                  />
+                </div>
               </div>
             ))}
           </div>

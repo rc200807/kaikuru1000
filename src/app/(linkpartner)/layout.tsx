@@ -18,6 +18,7 @@ export default function LinkPartnerLayout({ children }: { children: React.ReactN
     { href: '/linkpartner/inquiries', label: '問い合わせ' },
     { href: '/linkpartner/customers', label: '顧客情報' },
     ...(isAdmin ? [{ href: '/linkpartner/members', label: 'メンバー管理' }] : []),
+    ...(isAdmin ? [{ href: '/linkpartner/statuses', label: '対応ステータス設定' }] : []),
   ]
 
   useEffect(() => {

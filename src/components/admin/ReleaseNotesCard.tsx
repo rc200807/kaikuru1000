@@ -29,7 +29,6 @@ export default function AdminReleaseNotesCard() {
         if (cancelled) return
         setNotes(data)
         setLoaded(true)
-        if (data.length > 0) setOpenId(data[0].id)
         if (data.some(n => !n.isRead)) {
           fetch('/api/admin/release-notes/read', { method: 'POST' })
             .then(() => window.dispatchEvent(new Event('releasenotes:read')))

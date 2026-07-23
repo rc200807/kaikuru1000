@@ -31,6 +31,7 @@ export default function SupplyOrdersTab() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'pending' | 'ordered'>('all')
   const [updating, setUpdating] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   function load() {
     return fetch('/api/sysadmin/supply-orders')
@@ -61,6 +62,22 @@ export default function SupplyOrdersTab() {
       }
     } finally {
       setUpdating(null)
+    }
+  }
+
+  async function handleDelete(o: SupplyOrder) {
+    if (!confirm(`発注 ${o.orderNumber} を削除しますか？（元に戻せません）`)) return
+    setDeleting(o.id)
+    try {
+      const res = await fetch(`/api/sysadmin/supply-orders/${o.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setOrders(prev => prev.filter(x => x.id !== o.id))
+      } else {
+        const j = await res.json().catch(() => ({}))
+        alert(j.error ?? '削除に失敗しました')
+      }
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -122,25 +139,34 @@ export default function SupplyOrdersTab() {
                   ))}
                 </div>
                 {o.note && <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 8px' }}>備考: {o.note}</p>}
-                <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontWeight: 700 }}>合計 {yen(o.totalAmount)}</span>
-                  {o.status === 'pending' ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <button
-                      onClick={() => updateStatus(o, 'ordered')}
-                      disabled={updating === o.id}
-                      style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updating === o.id ? 0.6 : 1 }}
+                      onClick={() => handleDelete(o)}
+                      disabled={deleting === o.id || updating === o.id}
+                      style={{ padding: '8px 16px', borderRadius: 8, background: 'transparent', color: '#ef5350', border: '1px solid rgba(239,83,80,0.4)', fontSize: 13, cursor: 'pointer', opacity: deleting === o.id ? 0.6 : 1 }}
                     >
-                      {updating === o.id ? '更新中…' : '発注済みにする'}
+                      {deleting === o.id ? '削除中…' : '削除'}
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => updateStatus(o, 'pending')}
-                      disabled={updating === o.id}
-                      style={{ padding: '8px 16px', borderRadius: 8, background: 'transparent', color: 'var(--md-sys-color-on-surface)', border: '1px solid var(--md-sys-color-outline)', fontSize: 13, cursor: 'pointer', opacity: updating === o.id ? 0.6 : 1 }}
-                    >
-                      未対応に戻す
-                    </button>
-                  )}
+                    {o.status === 'pending' ? (
+                      <button
+                        onClick={() => updateStatus(o, 'ordered')}
+                        disabled={updating === o.id || deleting === o.id}
+                        style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: updating === o.id ? 0.6 : 1 }}
+                      >
+                        {updating === o.id ? '更新中…' : '発注済みにする'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => updateStatus(o, 'pending')}
+                        disabled={updating === o.id || deleting === o.id}
+                        style={{ padding: '8px 16px', borderRadius: 8, background: 'transparent', color: 'var(--md-sys-color-on-surface)', border: '1px solid var(--md-sys-color-outline)', fontSize: 13, cursor: 'pointer', opacity: updating === o.id ? 0.6 : 1 }}
+                      >
+                        未対応に戻す
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )

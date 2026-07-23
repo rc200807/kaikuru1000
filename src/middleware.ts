@@ -36,6 +36,12 @@ const PORTALS: { prefix: string; roles: string[]; loginPath: string; publicPaths
     loginPath: '/partner/login',
     publicPaths: ['/partner/login', '/partner/invite'],
   },
+  {
+    prefix: '/linkpartner',
+    roles: ['linkpartner'],
+    loginPath: '/linkpartner/login',
+    publicPaths: ['/linkpartner/login', '/linkpartner/invite'],
+  },
 ]
 
 export async function middleware(request: NextRequest) {
@@ -91,9 +97,20 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // 連携パートナー: 初回ログイン（管理者が発行した初期パスワード）は強制変更ページへ誘導
+  // （招待メンバーは自分でパスワードを設定するため mustChangePassword=false）
+  if (portal.prefix === '/linkpartner') {
+    const PW_PATH = '/linkpartner/onboarding/password'
+    if (token.mustChangePassword === true) {
+      if (pathname !== PW_PATH) return NextResponse.redirect(new URL(PW_PATH, request.url))
+    } else if (pathname === PW_PATH) {
+      return NextResponse.redirect(new URL('/linkpartner/dashboard', request.url))
+    }
+  }
+
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/sysadmin/:path*', '/store/:path*', '/partner/:path*'],
+  matcher: ['/admin/:path*', '/sysadmin/:path*', '/store/:path*', '/partner/:path*', '/linkpartner/:path*'],
 }

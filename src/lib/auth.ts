@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from './prisma'
 import { isLoginBlocked, recordLoginFailure, resetLoginFailures } from './rate-limit'
 import { recordAccessLog } from './access-log'
+import { recordLinkPartnerActivity } from './link-partner-activity'
 import { hashLoginToken } from './webauthn'
 import {
   createDeviceSession,
@@ -317,6 +318,72 @@ export const authOptions: NextAuthOptions = {
         }
       },
     }),
+    // 連携パートナー ログイン（外部連携パートナーのメンバー。パスワード方式・8時間セッション）
+    CredentialsProvider({
+      id: 'linkpartner',
+      name: '連携パートナー',
+      credentials: {
+        email: { label: 'メールアドレス', type: 'email' },
+        password: { label: 'パスワード', type: 'password' },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.email || !credentials?.password) return null
+
+        const key = `linkpartner:${credentials.email}`
+        const { blocked, remainingMs } = await isLoginBlocked(key)
+        if (blocked) {
+          const mins = Math.ceil((remainingMs ?? 0) / 60000)
+          throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
+        }
+
+        const member = await prisma.linkPartnerMember.findUnique({
+          where: { email: credentials.email },
+          include: { linkPartner: true },
+        })
+
+        // メンバー自身・所属組織の双方が有効でパスワード設定済みのときのみ許可
+        // （組織を無効化すると全メンバーのログインが遮断される）
+        if (
+          !member ||
+          !member.password ||
+          !member.isActive ||
+          !member.linkPartner ||
+          !member.linkPartner.isActive
+        ) {
+          await recordLoginFailure(key)
+          return null
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, member.password)
+        if (!isValid) {
+          await recordLoginFailure(key)
+          return null
+        }
+
+        await resetLoginFailures(key)
+        await prisma.linkPartnerMember.update({
+          where: { id: member.id },
+          data: { lastLoginAt: new Date() },
+        })
+        await recordLinkPartnerActivity({
+          linkPartnerId: member.linkPartnerId,
+          memberId: member.id,
+          memberName: member.name,
+          action: 'login',
+          req,
+        })
+        return {
+          id: member.id,
+          email: member.email,
+          name: member.name,
+          avatar: null,
+          role: 'linkpartner' as const,
+          linkPartnerId: member.linkPartnerId,
+          partnerRole: member.role,
+          mustChangePassword: member.mustChangePassword,
+        }
+      },
+    }),
     // マジックリンクログイン（顧客用）
     CredentialsProvider({
       id: 'magic-link',
@@ -479,6 +546,10 @@ export const authOptions: NextAuthOptions = {
         // 管理者アカウントの状態（idpass方式のパスキー必須・承認フロー用）
         token.adminStatus = (user as any).adminStatus ?? 'active'
         token.authMethod = (user as any).authMethod ?? 'email'
+        // 連携パートナー用（linkpartner ロールのみ設定される）
+        token.linkPartnerId = (user as any).linkPartnerId ?? null
+        token.partnerRole = (user as any).partnerRole ?? null
+        token.mustChangePassword = (user as any).mustChangePassword ?? false
         // ログイン方法別の絶対有効期限（パスキー=30日 / それ以外=8時間）
         const loginMethod = (user as any).loginMethod === 'passkey' ? 'passkey' : 'password'
         token.loginMethod = loginMethod
@@ -516,6 +587,8 @@ export const authOptions: NextAuthOptions = {
         if (updatedSession.avatar !== undefined) token.avatar = updatedSession.avatar
         if (updatedSession.customerType !== undefined) token.customerType = updatedSession.customerType
         if (updatedSession.customerTypes !== undefined) token.customerTypes = updatedSession.customerTypes
+        // 連携パートナー: 初回パスワード変更後にゲート解除を即時反映
+        if (updatedSession.mustChangePassword !== undefined) token.mustChangePassword = updatedSession.mustChangePassword
       }
       return token
     },
@@ -539,6 +612,25 @@ export const authOptions: NextAuthOptions = {
           } as any
         }
       }
+      // 連携パートナー: パスワードセッション（DeviceSessionなし）のため、メンバー/組織の無効化を
+      // 即時反映するよう毎回 isActive を DB 照合する（indexed findUnique 1回/req）。
+      if (token.role === 'linkpartner') {
+        const member = token.id
+          ? await prisma.linkPartnerMember.findUnique({
+              where: { id: token.id as string },
+              select: { isActive: true, role: true, linkPartner: { select: { isActive: true } } },
+            })
+          : null
+        if (!member || !member.isActive || !member.linkPartner?.isActive) {
+          return {
+            ...session,
+            user: {},
+            expires: new Date(0).toISOString(),
+          } as any
+        }
+        // 権限（partner_admin/member）の変更を即時反映
+        ;(token as any).partnerRole = member.role
+      }
       if (session.user) {
         (session.user as any).role = token.role
         ;(session.user as any).id = token.id
@@ -549,6 +641,9 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).memberName = token.memberName ?? null
         ;(session.user as any).adminStatus = token.adminStatus ?? 'active'
         ;(session.user as any).authMethod = token.authMethod ?? 'email'
+        ;(session.user as any).linkPartnerId = token.linkPartnerId ?? null
+        ;(session.user as any).partnerRole = token.partnerRole ?? null
+        ;(session.user as any).mustChangePassword = token.mustChangePassword ?? false
         if (token.name) session.user.name = token.name as string
         if (token.email) session.user.email = token.email as string
       }

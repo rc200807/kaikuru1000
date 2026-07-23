@@ -388,6 +388,7 @@ model Admin {
   forms          Form[]
   invitedPartners SalesPartner[]           @relation("SalesPartnerInvitedBy")
   partnerInvitationsCreated SalesPartnerInvitation[] @relation("SalesPartnerInvCreatedBy")
+  linkPartnersCreated LinkPartner[]        @relation("LinkPartnerCreatedByAdmin")
   chatMessages   ChatMessage[]
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -1157,6 +1158,7 @@ model Form {
   createdById      String
   createdBy        Admin            @relation(fields: [createdById], references: [id])
   submissions      FormSubmission[]
+  linkPartnerForms LinkPartnerForm[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -1815,4 +1817,97 @@ model TrackingCampaign {
   params    String   @db.Text         // 付与パラメータJSON
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// 連携パートナーポータル（外部連携パートナー向け・SalesPartnerとは別系統）
+// ============================================================
+
+// 連携パートナー（組織）。管理ポータルから作成し、共有フォームを割り当てる
+model LinkPartner {
+  id               String                  @id @default(cuid())
+  name             String                                       // 組織名
+  isActive         Boolean                 @default(true)       // 無効化で全メンバーのログインを遮断
+  note             String?                 @db.Text             // 管理者用の内部メモ
+  invitedByAdminId String?                                      // 作成した Admin
+  invitedByAdmin   Admin?                  @relation("LinkPartnerCreatedByAdmin", fields: [invitedByAdminId], references: [id], onDelete: SetNull)
+  members          LinkPartnerMember[]
+  forms            LinkPartnerForm[]
+  invitations      LinkPartnerInvitation[]
+  activityLogs     LinkPartnerActivityLog[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+}
+
+// 連携パートナーのログインアカウント（partner_admin / member の2階層）
+model LinkPartnerMember {
+  id                 String      @id @default(cuid())
+  linkPartnerId      String
+  linkPartner        LinkPartner @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
+  name               String
+  email              String      @unique                       // グローバル一意（v1: 1人1組織）
+  password           String?                                    // 招待受諾/初期発行で設定。未設定はnull
+  role               String      @default("member")            // "partner_admin" | "member"
+  isActive           Boolean     @default(true)
+  mustChangePassword Boolean     @default(false)               // 初期発行アカウントの初回強制変更
+  invitedByMemberId  String?                                    // 招待した partner_admin（初代はnull）
+  acceptedAt         DateTime?
+  lastLoginAt        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([linkPartnerId])
+  @@index([role])
+}
+
+// フォーム↔連携パートナー 割当（多対多結合表 = 編集可能な「共有内容」）
+model LinkPartnerForm {
+  id                String      @id @default(cuid())
+  linkPartnerId     String
+  linkPartner       LinkPartner @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
+  formId            String
+  form              Form        @relation(fields: [formId], references: [id], onDelete: Cascade)
+  assignedByAdminId String?                                     // 割り当てた Admin（監査用スカラー）
+  createdAt         DateTime    @default(now())
+
+  @@unique([linkPartnerId, formId])
+  @@index([formId])
+}
+
+// 連携パートナーのメンバー招待リンク（partner_admin または 管理者が発行）
+model LinkPartnerInvitation {
+  id                String      @id @default(cuid())
+  token             String      @unique
+  email             String                                     // 招待先メールアドレス
+  name              String?                                    // 想定名（省略可）
+  role              String      @default("member")            // 付与ロール
+  linkPartnerId     String
+  linkPartner       LinkPartner @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
+  expiresAt         DateTime
+  usedAt            DateTime?
+  invitedByMemberId String?                                    // 発行した partner_admin（管理者発行時はnull）
+  memberId          String?                                    // 受諾後にセット
+  createdAt         DateTime    @default(now())
+
+  @@index([email])
+  @@index([linkPartnerId])
+}
+
+// 連携パートナーの行動ログ（専用テーブル。利用状況ダッシュボードのソース）
+model LinkPartnerActivityLog {
+  id            String      @id @default(cuid())
+  linkPartnerId String
+  linkPartner   LinkPartner @relation(fields: [linkPartnerId], references: [id], onDelete: Cascade)
+  memberId      String?                                        // 実行メンバー（監査用スカラー）
+  memberName    String?                                        // 表示用スナップショット
+  action        String                                         // login|invite_member|accept_invite|view_customer|view_inquiry|export_customers|export_inquiries
+  targetType    String?                                        // customer|inquiry|member|form
+  targetId      String?
+  ip            String?
+  userAgent     String?     @db.Text
+  createdAt     DateTime    @default(now())
+
+  @@index([linkPartnerId, createdAt])
+  @@index([memberId])
+  @@index([action])
 }

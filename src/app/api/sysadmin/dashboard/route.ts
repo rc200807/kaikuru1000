@@ -129,6 +129,18 @@ export async function GET() {
     prisma.bugReport.count({ where: { status: { not: 'resolved' } } }),
   ])
 
+  // ===== システムヘルス =====
+  const h24 = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const [emailFailed, emailPending, errors24h, recordingErrors, blockedLogins, chat24h, line24h] = await Promise.all([
+    prisma.emailQueue.count({ where: { status: 'failed' } }),
+    prisma.emailQueue.count({ where: { status: 'pending' } }),
+    prisma.accessLog.count({ where: { userType: 'error', createdAt: { gte: h24 } } }),
+    prisma.dealRecording.count({ where: { status: 'error' } }),
+    prisma.loginAttempt.count({ where: { blockedUntil: { gt: now } } }),
+    prisma.chatMessage.count({ where: { deletedAt: null, createdAt: { gte: h24 } } }),
+    prisma.lineMessage.count({ where: { sentAt: { gte: h24 } } }),
+  ])
+
   return NextResponse.json({
     months,
     revenue: {
@@ -169,6 +181,15 @@ export async function GET() {
       usedLicenses,
       openInquiries,
       openBugReports,
+    },
+    health: {
+      emailFailed,
+      emailPending,
+      errors24h,
+      recordingErrors,
+      blockedLogins,
+      chat24h,
+      line24h,
     },
   })
 }

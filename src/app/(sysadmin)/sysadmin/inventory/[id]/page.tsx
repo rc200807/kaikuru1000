@@ -184,7 +184,7 @@ export default function SysAdminInventoryDetailPage({ params }: { params: Promis
   async function handleDelete() {
     if (!confirm('この商品を削除しますか？')) return
     const res = await fetch(`/api/sysadmin/inventory/${id}`, { method: 'DELETE' })
-    if (res.ok) router.push('/sysadmin/inventory')
+    if (res.ok) router.push('/sysadmin/supplies?tab=inventory')
   }
 
   if (status === 'loading' || loading) {
@@ -196,7 +196,7 @@ export default function SysAdminInventoryDetailPage({ params }: { params: Promis
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: 960, margin: '0 auto', color: 'var(--md-sys-color-on-surface)' }}>
-      <button onClick={() => router.push('/sysadmin/inventory')} style={{ background: 'transparent', border: 'none', color: 'var(--md-sys-color-primary)', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
+      <button onClick={() => router.push('/sysadmin/supplies?tab=inventory')} style={{ background: 'transparent', border: 'none', color: 'var(--md-sys-color-primary)', cursor: 'pointer', marginBottom: 12, padding: 0 }}>
         ← 一覧に戻る
       </button>
       <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 16px' }}>{product.name}</h1>

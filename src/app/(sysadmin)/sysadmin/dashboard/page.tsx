@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { Kpi, Panel, Empty, tooltipStyle, yen, PIE_COLORS } from '@/components/sysadmin/ui'
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -17,10 +18,9 @@ type Dashboard = {
   purchase: { itemTotal: number; categoryTotal: number; byMonth: { month: string; count: number }[] }
   accessLog: { today: number; last7d: number; last30d: number; byType: { type: string; count: number }[] }
   ops: { pendingOrders: number; activeStores: number; unusedLicenses: number; usedLicenses: number; openInquiries: number; openBugReports: number }
+  health?: { emailFailed: number; emailPending: number; errors24h: number; recordingErrors: number; blockedLogins: number; chat24h: number; line24h: number }
 }
 
-const yen = (n: number) => `¥${n.toLocaleString()}`
-const PIE_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#22d3ee']
 const TYPE_LABELS: Record<string, string> = { visit: '訪問', delivery: '宅配', regular: '常連', akikuru: 'アキクル' }
 
 export default function SysAdminDashboardPage() {
@@ -63,18 +63,34 @@ export default function SysAdminDashboardPage() {
 
       {/* KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
-        <Kpi label="累計売上（決済済）" value={yen(data.revenue.total)} />
-        <Kpi label="累計粗利" value={yen(data.revenue.grossProfit)} />
-        <Kpi label="累計運用コスト" value={yen(data.cost.total)} />
-        <Kpi label="未対応の発注" value={`${data.ops.pendingOrders} 件`} accent={data.ops.pendingOrders > 0} />
-        <Kpi label="総ユーザー数" value={`${data.users.total} 人`} />
-        <Kpi label="店舗数（稼働中）" value={`${data.ops.activeStores} / ${data.users.storeTotal}`} />
-        <Kpi label="買取品目登録数" value={`${data.purchase.itemTotal} 件`} />
-        <Kpi label="ログイン（24h）" value={`${data.accessLog.today} 回`} />
+        <Kpi label="累計売上（決済済）" value={yen(data.revenue.total)} href="/sysadmin/finance" />
+        <Kpi label="累計粗利" value={yen(data.revenue.grossProfit)} href="/sysadmin/finance" />
+        <Kpi label="累計運用コスト" value={yen(data.cost.total)} href="/sysadmin/finance?tab=costs" />
+        <Kpi label="未対応の発注" value={`${data.ops.pendingOrders} 件`} accent={data.ops.pendingOrders > 0} href="/sysadmin/supplies" />
+        <Kpi label="総ユーザー数" value={`${data.users.total} 人`} href="/sysadmin/users" />
+        <Kpi label="店舗数（稼働中）" value={`${data.ops.activeStores} / ${data.users.storeTotal}`} href="/sysadmin/users?tab=stores" />
+        <Kpi label="買取品目登録数" value={`${data.purchase.itemTotal} 件`} href="/sysadmin/activity" />
+        <Kpi label="ログイン（24h）" value={`${data.accessLog.today} 回`} href="/sysadmin/security" />
         <Kpi label="ライセンス未使用" value={`${data.ops.unusedLicenses} 件`} />
-        <Kpi label="未対応の問い合わせ" value={`${data.ops.openInquiries} 件`} accent={data.ops.openInquiries > 0} />
-        <Kpi label="未解決の不具合報告" value={`${data.ops.openBugReports} 件`} accent={data.ops.openBugReports > 0} />
+        <Kpi label="未対応の問い合わせ" value={`${data.ops.openInquiries} 件`} accent={data.ops.openInquiries > 0} href="/sysadmin/support" />
+        <Kpi label="未解決の不具合報告" value={`${data.ops.openBugReports} 件`} accent={data.ops.openBugReports > 0} href="/sysadmin/support?tab=bugs" />
       </div>
+
+      {/* システムヘルス */}
+      {data.health && (
+        <>
+          <h2 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>システムヘルス</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
+            <Kpi label="メールキュー失敗" value={`${data.health.emailFailed} 件`} accent={data.health.emailFailed > 0} href="/sysadmin/health" />
+            <Kpi label="メール送信待ち" value={`${data.health.emailPending} 件`} accent={data.health.emailPending > 10} href="/sysadmin/health" />
+            <Kpi label="未捕捉エラー（24h）" value={`${data.health.errors24h} 件`} accent={data.health.errors24h > 0} href="/sysadmin/health?tab=errors" />
+            <Kpi label="文字起こしエラー" value={`${data.health.recordingErrors} 件`} accent={data.health.recordingErrors > 0} href="/sysadmin/health" />
+            <Kpi label="ブロック中ログイン" value={`${data.health.blockedLogins} 件`} accent={data.health.blockedLogins > 0} href="/sysadmin/security?tab=login-attempts" />
+            <Kpi label="チャット（24h）" value={`${data.health.chat24h} 件`} href="/sysadmin/activity?tab=communication" />
+            <Kpi label="LINE（24h）" value={`${data.health.line24h} 件`} href="/sysadmin/activity?tab=communication" />
+          </div>
+        </>
+      )}
 
       {/* 売上 vs コスト */}
       <Panel title="売上・運用コスト推移（12ヶ月）">
@@ -191,28 +207,3 @@ export default function SysAdminDashboardPage() {
   )
 }
 
-const tooltipStyle: React.CSSProperties = {
-  background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#ededed', fontSize: 12,
-}
-
-function Kpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 16, border: '1px solid var(--md-sys-color-outline-variant)' }}>
-      <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: accent ? '#fbbf24' : 'var(--md-sys-color-on-surface)' }}>{value}</div>
-    </div>
-  )
-}
-
-function Panel({ title, children, style }: { title: string; children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div style={{ background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 20, border: '1px solid var(--md-sys-color-outline-variant)', ...style }}>
-      <h2 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>{title}</h2>
-      {children}
-    </div>
-  )
-}
-
-function Empty({ text = 'データがありません' }: { text?: string }) {
-  return <p style={{ color: 'var(--md-sys-color-on-surface-variant)', textAlign: 'center', padding: 40, fontSize: 13 }}>{text}</p>
-}

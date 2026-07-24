@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import AppBar from '@/components/AppBar'
-import Card from '@/components/Card'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import Modal from '@/components/Modal'
@@ -79,20 +78,11 @@ const STORE_COLUMN_KEYS = STORE_COLUMN_OPTIONS.map(c => c.key)
 const STORE_DEFAULT_COLS = ['code', 'prefecture', 'serviceAreas', 'customers', 'loginStatus']
 const STORE_COLS_STORAGE_KEY = 'kk-admin-stores-cols'
 
-type SyncLog = {
-  id: string
-  status: string
-  message: string | null
-  syncedAt: string
-}
-
 export default function AdminStoresPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [stores, setStores] = useState<Store[]>([])
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // 新規店舗追加モーダル
@@ -177,28 +167,6 @@ export default function AdminStoresPage() {
     return () => document.removeEventListener('keydown', handler)
   }, [selectedStore])
 
-  // スプレッドシートURL設定
-  const [storeSheetUrl, setStoreSheetUrl] = useState('')
-  const [storeSheetName, setStoreSheetName] = useState('店舗マスター')
-  const [savingSheet, setSavingSheet] = useState(false)
-  const [sheetSaved, setSheetSaved] = useState(false)
-
-  // カラムマッピング
-  type ColMap = {
-    code: string; name: string; prefecture: string; address: string; phone: string; email: string
-    storeStatus?: string; openingDate?: string; closingDate?: string
-    googleBusinessUrl?: string; oikuraPageUrl?: string; bankInfo?: string
-    invoiceNumber?: string; antiquePermitNumber?: string
-  }
-  const defaultColMap: ColMap = { code: 'A', name: 'B', prefecture: 'C', address: 'D', phone: 'E', email: 'F' }
-  const [colMap, setColMap] = useState<ColMap>(defaultColMap)
-  const [sheetHeaders, setSheetHeaders] = useState<{ letter: string; header: string }[]>([])
-  const [fetchingHeaders, setFetchingHeaders] = useState(false)
-  const [headerError, setHeaderError] = useState('')
-
-  // スプレッドシート設定セクションの開閉
-  const [sheetSectionOpen, setSheetSectionOpen] = useState(false)
-
 
   // 店舗詳細サイドバー
   const [detailStore, setDetailStore] = useState<Store | null>(null)
@@ -217,16 +185,10 @@ export default function AdminStoresPage() {
 
       Promise.all([
         fetch('/api/stores').then(r => r.json()),
-        fetch('/api/sync-stores').then(r => r.json()),
-        fetch('/api/admin/google-config').then(r => r.json()),
         fetch('/api/list-views?portal=admin-stores').then(r => r.ok ? r.json() : { views: [] }).catch(() => ({ views: [] })),
         fetch('/api/admin/operators').then(r => r.ok ? r.json() : []).catch(() => []),
-      ]).then(([storesData, logsData, sheetConfig, viewsData, operatorsData]) => {
+      ]).then(([storesData, viewsData, operatorsData]) => {
         setStores(Array.isArray(storesData) ? storesData : [])
-        setSyncLogs(Array.isArray(logsData) ? logsData : [])
-        if (sheetConfig?.storeSpreadsheetId) setStoreSheetUrl(sheetConfig.storeSpreadsheetId)
-        if (sheetConfig?.storeSheetName) setStoreSheetName(sheetConfig.storeSheetName)
-        if (sheetConfig?.storeColumnMapping) setColMap({ ...defaultColMap, ...sheetConfig.storeColumnMapping })
         const rawViews = Array.isArray(viewsData?.views) ? viewsData.views : []
         setSavedViews(rawViews.map((v: any) => ({
           id: v.id, name: v.name, filters: v.filters,
@@ -265,21 +227,6 @@ export default function AdminStoresPage() {
 
   function refreshStores() {
     fetch('/api/stores').then(r => r.json()).then(d => setStores(Array.isArray(d) ? d : []))
-  }
-
-  async function handleSync() {
-    setSyncing(true)
-    setMessage(null)
-    const res = await fetch('/api/sync-stores', { method: 'POST' })
-    const data = await res.json()
-    setSyncing(false)
-    if (data.success) {
-      setMessage({ type: 'success', text: `${data.message}` })
-      refreshStores()
-      fetch('/api/sync-stores').then(r => r.json()).then(d => setSyncLogs(Array.isArray(d) ? d : []))
-    } else {
-      setMessage({ type: 'error', text: `同期に失敗しました: ${data.message}` })
-    }
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -352,41 +299,6 @@ export default function AdminStoresPage() {
     } else {
       setMessage({ type: 'error', text: data.error || '初期ログイン情報の取得に失敗しました' })
     }
-  }
-
-  async function handleFetchHeaders() {
-    if (!storeSheetUrl.trim()) return
-    setFetchingHeaders(true)
-    setHeaderError('')
-    setSheetHeaders([])
-    const params = new URLSearchParams({
-      spreadsheetId: storeSheetUrl.trim(),
-      sheetName: storeSheetName.trim() || '店舗マスター',
-    })
-    const res = await fetch(`/api/admin/stores/sheet-headers?${params}`)
-    const data = await res.json()
-    setFetchingHeaders(false)
-    if (!res.ok) {
-      setHeaderError(data.error || '列の取得に失敗しました')
-    } else {
-      setSheetHeaders(data.columns)
-    }
-  }
-
-  async function handleSaveSheetUrl() {
-    setSavingSheet(true)
-    await fetch('/api/admin/google-config', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        storeSpreadsheetId: storeSheetUrl.trim(),
-        storeSheetName: storeSheetName.trim() || '店舗マスター',
-        storeColumnMapping: colMap,
-      }),
-    })
-    setSavingSheet(false)
-    setSheetSaved(true)
-    setTimeout(() => setSheetSaved(false), 3000)
   }
 
   function handleCopyPassword() {
@@ -771,36 +683,6 @@ export default function AdminStoresPage() {
     },
   ]
 
-  const syncLogColumns: Column<SyncLog>[] = [
-    {
-      key: 'date',
-      header: '日時',
-      render: (log) => (
-        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
-          {new Date(log.syncedAt).toLocaleString('ja-JP')}
-        </span>
-      ),
-    },
-    {
-      key: 'status',
-      header: '状態',
-      render: (log) => (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          log.status === 'success'
-            ? 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]'
-            : 'bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]'
-        }`}>
-          {log.status === 'success' ? '成功' : 'エラー'}
-        </span>
-      ),
-    },
-    {
-      key: 'message',
-      header: 'メッセージ',
-      render: (log) => <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{log.message}</span>,
-    },
-  ]
-
   return (
     <>
       <AppBar
@@ -843,20 +725,6 @@ export default function AdminStoresPage() {
                 問い合わせURL一覧
               </Button>
             </a>
-            <Button
-              size="sm"
-              variant="tonal"
-              onClick={handleSync}
-              disabled={syncing}
-              loading={syncing}
-              icon={
-                <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              }
-            >
-              {syncing ? '同期中...' : 'シート同期'}
-            </Button>
           </div>
         }
       />
@@ -869,140 +737,6 @@ export default function AdminStoresPage() {
           </MessageBanner>
         )}
 
-        {/* Google Sheetsスプレッドシート設定 (collapsible) */}
-        <Card variant="outlined" padding="none" className="mb-6 overflow-hidden">
-          {/* アコーディオンヘッダー */}
-          <button
-            type="button"
-            onClick={() => setSheetSectionOpen(v => !v)}
-            className="w-full flex items-center justify-between px-6 py-4 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-green-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7" />
-              </svg>
-              <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">同期するGoogleスプレッドシート</h3>
-              {storeSheetUrl && !sheetSectionOpen && (
-                <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-high)] px-2 py-0.5 rounded-full">設定済み</span>
-              )}
-            </div>
-            <svg
-              className={`w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] transition-transform duration-200 ${sheetSectionOpen ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {/* アコーディオンコンテンツ */}
-          {sheetSectionOpen && (
-          <div className="px-6 pb-5 border-t border-[var(--md-sys-color-outline-variant)] pt-4">
-
-          {/* URL・シート名 */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_auto] mb-3">
-            <div>
-              <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">スプレッドシートURL または ID</label>
-              <input
-                type="text"
-                value={storeSheetUrl}
-                onChange={e => { setStoreSheetUrl(e.target.value); setSheetHeaders([]) }}
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">シート名（タブ名）</label>
-              <input
-                type="text"
-                value={storeSheetName}
-                onChange={e => { setStoreSheetName(e.target.value); setSheetHeaders([]) }}
-                placeholder="SHOP"
-                className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-              />
-            </div>
-            <div className="flex items-end">
-              <Button
-                size="sm"
-                variant="tonal"
-                onClick={handleFetchHeaders}
-                disabled={fetchingHeaders || !storeSheetUrl.trim()}
-                loading={fetchingHeaders}
-              >
-                列を確認
-              </Button>
-            </div>
-          </div>
-
-          {headerError && (
-            <p className="text-xs text-[var(--md-sys-color-error)] mb-3">{headerError}</p>
-          )}
-
-          {/* カラムマッピング */}
-          {sheetHeaders.length > 0 && (
-            <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] p-4 mb-4 bg-[var(--md-sys-color-surface-container-low)]">
-              <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-3">各項目に対応する列を選択してください</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {([
-                  { key: 'code',        label: '店舗コード（必須）' },
-                  { key: 'name',        label: '店舗名（必須）' },
-                  { key: 'prefecture',  label: '都道府県' },
-                  { key: 'address',     label: '住所' },
-                  { key: 'phone',       label: '電話番号' },
-                  { key: 'email',       label: 'メールアドレス' },
-                  { key: 'storeStatus',         label: 'ステータス' },
-                  { key: 'openingDate',         label: '開業日' },
-                  { key: 'closingDate',         label: '閉店日' },
-                  { key: 'googleBusinessUrl',   label: 'GoogleビジネスURL' },
-                  { key: 'oikuraPageUrl',       label: 'おいくらURL' },
-                  { key: 'bankInfo',            label: '銀行情報' },
-                  { key: 'invoiceNumber',       label: 'インボイス番号' },
-                  { key: 'antiquePermitNumber', label: '古物許可番号' },
-                ] as { key: keyof ColMap; label: string }[]).map(({ key, label }) => (
-                  <div key={key}>
-                    <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">{label}</label>
-                    <select
-                      value={colMap[key]}
-                      onChange={e => setColMap(prev => ({ ...prev, [key]: e.target.value }))}
-                      className="w-full h-9 px-2 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-extra-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
-                    >
-                      <option value="">未設定</option>
-                      {sheetHeaders.map(col => (
-                        <option key={col.letter} value={col.letter}>
-                          {col.letter}列: {col.header}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 保存ボタン */}
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              onClick={handleSaveSheetUrl}
-              disabled={savingSheet || !storeSheetUrl.trim()}
-              loading={savingSheet}
-              icon={sheetSaved ? (
-                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : undefined}
-            >
-              {sheetSaved ? '保存しました' : '設定を保存'}
-            </Button>
-            {sheetHeaders.length === 0 && storeSheetUrl && (
-              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">「列を確認」で列マッピングを設定できます</p>
-            )}
-          </div>
-          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-3">
-            2行目以降がデータ行として読み込まれます（1行目はヘッダー）
-          </p>
-          </div>
-          )}
-        </Card>
 
         {/* 見出し + 店舗数 */}
         <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
@@ -1104,19 +838,6 @@ export default function AdminStoresPage() {
           )}
         </div>
 
-        {/* 同期ログ */}
-        {syncLogs.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide mb-4">同期ログ</h3>
-            <div className="bg-[var(--md-sys-color-surface-container-lowest,#fff)] rounded-[var(--md-sys-shape-medium)] shadow-[var(--md-sys-elevation-1)] overflow-hidden">
-              <DataTable<SyncLog>
-                columns={syncLogColumns}
-                data={syncLogs}
-                rowKey={(log) => log.id}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ─── 一括編集モーダル ─── */}

@@ -25,6 +25,7 @@ import {
 import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
 import { downloadCsv, csvDateStamp } from '@/lib/client-csv'
 import { parseServiceAreas } from '@/lib/address-utils'
+import { STORE_STATUSES, storeStatusLabel } from '@/lib/store-status'
 
 type Store = {
   id: string
@@ -725,6 +726,19 @@ export default function AdminStoresPage() {
                 問い合わせURL一覧
               </Button>
             </a>
+            <a href="/api/admin/stores/export" download>
+              <Button
+                size="sm"
+                variant="outlined"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                }
+              >
+                店舗情報CSV
+              </Button>
+            </a>
           </div>
         }
       />
@@ -1117,8 +1131,9 @@ export default function AdminStoresPage() {
                             onChange={e => setEditForm({...editForm, storeStatus: e.target.value})}
                             className="w-full h-10 px-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
                           >
-                            <option value="active">営業中</option>
-                            <option value="closed">閉店</option>
+                            {STORE_STATUSES.map(s => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -1184,7 +1199,7 @@ export default function AdminStoresPage() {
                       {[
                         { label: '店舗名', value: detailStore.name },
                         { label: '店舗コード', value: detailStore.code, mono: true },
-                        { label: 'ステータス', value: detailStore.storeStatus === 'closed' ? '閉店' : '営業中' },
+                        { label: 'ステータス', value: storeStatusLabel(detailStore.storeStatus) },
                         { label: '都道府県', value: detailStore.prefecture },
                         { label: '郵便番号', value: detailStore.postalCode ? `〒${detailStore.postalCode}` : null },
                         { label: '住所', value: detailStore.address },
@@ -1388,7 +1403,7 @@ export default function AdminStoresPage() {
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] px-4 py-3">
                   <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">ステータス</p>
                   <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
-                    {selectedStore.storeStatus === 'closed' ? '閉店' : '営業中'}
+                    {storeStatusLabel(selectedStore.storeStatus)}
                   </p>
                 </div>
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] px-4 py-3">

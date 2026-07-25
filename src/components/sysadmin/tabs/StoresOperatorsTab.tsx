@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { Kpi, Panel, Empty, StatusChip, TableCard, tableStyle, theadRowStyle, thStyle, tdStyle, trStyle } from '@/components/sysadmin/ui'
 import { formatJstDate, formatJstDateTime } from '@/lib/datetime'
+import { normalizeStoreStatus, storeStatusLabel } from '@/lib/store-status'
 
 type Resp = {
   summary: { active: number; closed: number; total: number }
@@ -74,16 +75,16 @@ export default function StoresOperatorsTab() {
                 <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--md-sys-color-on-surface-variant)' }}>店舗がありません</td></tr>
               )}
               {data.stores.map(s => {
-                const closed = s.storeStatus === 'closed'
+                const nonActive = normalizeStoreStatus(s.storeStatus) !== 'active'
                 return (
-                  <tr key={s.id} style={{ ...trStyle, color: closed ? 'var(--md-sys-color-on-surface-variant)' : undefined }}>
+                  <tr key={s.id} style={{ ...trStyle, color: nonActive ? 'var(--md-sys-color-on-surface-variant)' : undefined }}>
                     <td style={{ ...tdStyle, fontWeight: 600 }}>{s.name}</td>
                     <td style={tdStyle}>{s.code}</td>
                     <td style={tdStyle}>{s.prefecture ?? '—'}</td>
                     <td style={tdStyle}>{s.operatorName ?? '—'}</td>
                     <td style={tdStyle}>
-                      {closed
-                        ? <StatusChip label="閉店" bg="rgba(120,120,120,0.15)" fg="#a3a3a3" />
+                      {nonActive
+                        ? <StatusChip label={storeStatusLabel(s.storeStatus)} bg="rgba(120,120,120,0.15)" fg="#a3a3a3" />
                         : s.isActive
                           ? <StatusChip label="稼働中" bg="rgba(46,125,50,0.15)" fg="#66bb6a" />
                           : <StatusChip label="停止" bg="rgba(234,179,8,0.15)" fg="#eab308" />}

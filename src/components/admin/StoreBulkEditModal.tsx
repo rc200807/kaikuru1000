@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { PREFECTURES } from '@/lib/prefectures'
+import { STORE_STATUSES } from '@/lib/store-status'
 import BulkEditCell, { type CellEditorType } from './BulkEditCell'
 import ServiceAreaEditor from './ServiceAreaEditor'
 
@@ -54,11 +55,8 @@ type ColumnDef = {
 const COLUMNS: ColumnDef[] = [
   { key: 'name', label: '店舗名', editor: 'text', width: 180 },
   {
-    key: 'storeStatus', label: 'ステータス', editor: 'select', width: 110,
-    options: [
-      { value: 'active', label: '営業中' },
-      { value: 'closed', label: '閉店' },
-    ],
+    key: 'storeStatus', label: 'ステータス', editor: 'select', width: 120,
+    options: STORE_STATUSES.map(s => ({ value: s.value, label: s.label })),
   },
   // 運営者。options は実行時に運営者一覧をマージして表示（下記 GridRow 参照）
   { key: 'operatorId', label: '運営者', editor: 'select', width: 170, options: [{ value: '', label: '（未割り当て）' }] },
@@ -161,6 +159,48 @@ function serviceAreaSummary(json: string | null | undefined): string {
 type DirtyMap = Record<string, Record<string, string>>
 type PresenceEntry = { adminId: string; adminName: string; storeId: string | null }
 type RowFlash = 'saved' | 'error'
+
+// 問い合わせフォームURL（店舗コードから導出・読み取り専用・コピー可）
+function InquiryUrlCell({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  if (!code) {
+    return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] px-2">保存後に発行</span>
+  }
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const url = `${origin}/inquiry/${code}`
+  const copy = () => {
+    navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }).catch(() => {})
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={url}
+        className="flex-1 min-w-0 truncate text-xs underline text-[var(--md-sys-color-primary)]"
+      >
+        {url}
+      </a>
+      <button
+        type="button"
+        onClick={copy}
+        title="URLをコピー"
+        className="p-1 rounded text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] flex-shrink-0"
+      >
+        {copied ? (
+          <svg className="w-4 h-4 text-[var(--status-completed-text,#1a7f37)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        )}
+      </button>
+    </div>
+  )
+}
 
 // ─────────────────────────────────────────────
 // 行コンポーネント（memo でセル編集時の全行再レンダリングを防止）
@@ -270,6 +310,11 @@ const GridRow = memo(function GridRow({
           </td>
         )
       })}
+
+      {/* 問い合わせフォームURL（表示・コピー） */}
+      <td className="px-1 py-1">
+        <InquiryUrlCell code={store.code} />
+      </td>
 
       {/* アクション列（sticky 右端）: 新規作成 / 変更あり・保存 / ログイン情報取得 / 他ユーザー編集中 */}
       <td className={`sticky right-0 z-10 px-2 py-1 border-l border-[var(--md-sys-color-outline-variant)] ${draft ? 'bg-[var(--md-sys-color-primary-container,#eef2ff)]' : 'bg-[var(--md-sys-color-surface-container-lowest,#fff)]'}`}>
@@ -795,7 +840,7 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
 
   const draftCount = rows.filter(r => isDraft(r.id)).length
   const savedCount = rows.length - draftCount
-  const totalWidth = COLUMNS.reduce((sum, c) => sum + c.width, 0) + 240 // +アクション列
+  const totalWidth = COLUMNS.reduce((sum, c) => sum + c.width, 0) + 280 + 240 // +問い合わせURL列 +アクション列
 
   return (
     <dialog
@@ -865,6 +910,7 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
               {COLUMNS.map(col => (
                 <col key={col.key} style={{ width: col.width }} />
               ))}
+              <col style={{ width: 280 }} />
               <col style={{ width: 240 }} />
             </colgroup>
             <thead>
@@ -879,6 +925,9 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
                     {col.label}
                   </th>
                 ))}
+                <th className="sticky top-0 z-20 px-3 py-2.5 text-left text-xs font-medium whitespace-nowrap uppercase tracking-wider text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] border-b border-[var(--md-sys-color-outline-variant)]">
+                  問い合わせURL
+                </th>
                 <th className="sticky top-0 right-0 z-30 px-3 py-2.5 text-left text-xs font-medium whitespace-nowrap uppercase tracking-wider text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] border-b border-l border-[var(--md-sys-color-outline-variant)]">
                   操作
                 </th>
@@ -910,7 +959,7 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
               ))}
               {/* 行を追加（スプレッドシート風） */}
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="p-0 border-b border-[var(--md-sys-color-outline-variant)]">
+                <td colSpan={COLUMNS.length + 2} className="p-0 border-b border-[var(--md-sys-color-outline-variant)]">
                   <button
                     type="button"
                     onClick={handleAddRow}

@@ -7,11 +7,9 @@ import type { AdvField } from './AdvancedFilterPanel'
 import type { ListView } from './ViewTabs'
 import { PREFECTURES } from '@/lib/prefectures'
 import { parseServiceAreas } from '@/lib/address-utils'
+import { STORE_STATUSES, normalizeStoreStatus } from '@/lib/store-status'
 
-export const STORE_STATUS_OPTIONS: ChipOption[] = [
-  { value: 'active', label: '営業中' },
-  { value: 'closed', label: '閉店' },
-]
+export const STORE_STATUS_OPTIONS: ChipOption[] = STORE_STATUSES.map(s => ({ value: s.value, label: s.label }))
 
 export const LOGIN_OPTIONS: ChipOption[] = [
   { value: 'active', label: 'アクティブ（ログイン済み）' },
@@ -198,10 +196,9 @@ export function applyStoreFilters<T extends FilterableStore>(
   const bucketF = params.customers || ''
 
   return stores.filter(s => {
-    // ステータス（未設定は active 扱い＝既存表示と同じ解釈）
+    // ステータス（未設定・不明値は active 扱い）
     if (statusF) {
-      const st = s.storeStatus === 'closed' ? 'closed' : 'active'
-      if (st !== statusF) return false
+      if (normalizeStoreStatus(s.storeStatus) !== statusF) return false
     }
 
     // ログイン状態

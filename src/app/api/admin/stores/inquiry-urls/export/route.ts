@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildCsv } from '@/lib/csv-parser'
+import { storeStatusLabel } from '@/lib/store-status'
 
 /**
  * 店舗ごとの問い合わせフォームURL一覧をCSVでダウンロード
@@ -32,7 +33,7 @@ export async function GET() {
     s.prefecture ?? '',
     s.address ?? '',
     s.email ?? '',
-    !s.isActive ? '無効' : s.storeStatus === 'closed' ? '閉店' : '営業中',
+    !s.isActive ? '無効' : storeStatusLabel(s.storeStatus),
     `${baseUrl}/inquiry/${s.code}`,
   ])
 

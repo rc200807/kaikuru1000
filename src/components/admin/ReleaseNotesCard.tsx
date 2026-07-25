@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { formatJstDate } from '@/lib/datetime'
 import { getReleaseCategory, NoticeIcon } from '@/components/release-notes/categories'
 
@@ -19,7 +20,6 @@ const MAX_VISIBLE = 6
 export default function AdminReleaseNotesCard() {
   const [notes, setNotes] = useState<ReleaseNote[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -60,11 +60,10 @@ export default function AdminReleaseNotesCard() {
       <div className="divide-y" style={{ borderColor: '#262626' }}>
         {visible.map(n => {
           const cat = getReleaseCategory(n.category)
-          const open = openId === n.id
           return (
             <div key={n.id} className="py-2.5 first:pt-0 last:pb-0" style={{ borderColor: '#262626' }}>
-              <button
-                onClick={() => setOpenId(open ? null : n.id)}
+              <Link
+                href={`/admin/release-notes/${n.id}`}
                 className="w-full text-left flex items-start gap-2"
               >
                 <span className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
@@ -88,31 +87,27 @@ export default function AdminReleaseNotesCard() {
                       {formatJstDate(n.publishedAt, { year: undefined, month: 'numeric', day: 'numeric' })}
                     </span>
                   )}
-                  <svg
-                    className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`}
-                    style={{ color: '#a3a3a3' }}
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <svg className="w-4 h-4" style={{ color: '#a3a3a3' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </span>
-              </button>
-              {open && (
-                <div
-                  className="prose prose-sm prose-invert max-w-none leading-relaxed mt-2 pl-0.5"
-                  dangerouslySetInnerHTML={{ __html: n.content }}
-                />
-              )}
+              </Link>
             </div>
           )
         })}
       </div>
 
-      {notes.length > MAX_VISIBLE && (
-        <p className="text-[11px] mt-3" style={{ color: '#666666' }}>
-          ほか {notes.length - MAX_VISIBLE} 件のアップデートがあります
-        </p>
-      )}
+      <div className="mt-3 pt-3 flex items-center justify-between" style={{ borderTop: '1px solid #262626' }}>
+        {notes.length > MAX_VISIBLE ? (
+          <span className="text-[11px]" style={{ color: '#666666' }}>ほか {notes.length - MAX_VISIBLE} 件</span>
+        ) : <span />}
+        <Link href="/admin/release-notes" className="text-xs font-medium inline-flex items-center gap-1" style={{ color: '#a3a3a3' }}>
+          すべて見る
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      </div>
     </section>
   )
 }

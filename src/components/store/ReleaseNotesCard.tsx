@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { formatJstDate } from '@/lib/datetime'
 import { getReleaseCategory, NoticeIcon } from '@/components/release-notes/categories'
 
@@ -19,7 +20,6 @@ const MAX_VISIBLE = 6
 export default function StoreReleaseNotesCard() {
   const [notes, setNotes] = useState<ReleaseNote[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -29,7 +29,6 @@ export default function StoreReleaseNotesCard() {
         if (cancelled) return
         setNotes(data)
         setLoaded(true)
-        if (data.length > 0) setOpenId(data[0].id)
         // 未読があればすべて既読化し、ナビの未読バッジを消す
         if (data.some(n => !n.isRead)) {
           fetch('/api/store/release-notes/read', { method: 'POST' })
@@ -62,11 +61,10 @@ export default function StoreReleaseNotesCard() {
       <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
         {visible.map(n => {
           const cat = getReleaseCategory(n.category)
-          const open = openId === n.id
           return (
             <div key={n.id} className="py-2.5 first:pt-0 last:pb-0">
-              <button
-                onClick={() => setOpenId(open ? null : n.id)}
+              <Link
+                href={`/store/release-notes/${n.id}`}
                 className="w-full text-left flex items-start gap-2"
               >
                 <span className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
@@ -91,29 +89,29 @@ export default function StoreReleaseNotesCard() {
                     </span>
                   )}
                   <svg
-                    className={`w-4 h-4 text-[var(--md-sys-color-on-surface-variant)] transition-transform ${open ? 'rotate-180' : ''}`}
+                    className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)]"
                     fill="none" stroke="currentColor" viewBox="0 0 24 24"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </span>
-              </button>
-              {open && (
-                <div
-                  className="prose prose-sm max-w-none text-[var(--md-sys-color-on-surface)] leading-relaxed mt-2 pl-0.5"
-                  dangerouslySetInnerHTML={{ __html: n.content }}
-                />
-              )}
+              </Link>
             </div>
           )
         })}
       </div>
 
-      {notes.length > MAX_VISIBLE && (
-        <p className="text-[11px] text-[var(--md-sys-color-on-surface-faint)] mt-3">
-          ほか {notes.length - MAX_VISIBLE} 件のアップデートがあります
-        </p>
-      )}
+      <div className="mt-3 pt-3 flex items-center justify-between border-t border-[var(--md-sys-color-outline-variant)]">
+        {notes.length > MAX_VISIBLE ? (
+          <span className="text-[11px] text-[var(--md-sys-color-on-surface-faint)]">ほか {notes.length - MAX_VISIBLE} 件</span>
+        ) : <span />}
+        <Link href="/store/release-notes" className="text-xs font-medium inline-flex items-center gap-1 text-[var(--md-sys-color-on-surface-variant)]">
+          すべて見る
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      </div>
     </section>
   )
 }

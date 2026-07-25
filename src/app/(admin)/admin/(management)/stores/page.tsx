@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import AppBar from '@/components/AppBar'
@@ -390,6 +390,33 @@ export default function AdminStoresPage() {
     setEditMode(false)
   }
 
+  // ---- 店舗情報CSVインポート ----
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ totalRows: number; createdCount: number; updatedCount: number; errorCount: number; errors: { row: number; code?: string; message: string }[] } | null>(null)
+
+  async function handleImportFile(file: File) {
+    setImporting(true)
+    setMessage(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/stores/import', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || 'インポートに失敗しました' })
+        return
+      }
+      setImportResult(data)
+      refreshStores()
+    } catch {
+      setMessage({ type: 'error', text: 'インポートに失敗しました' })
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   if (status === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage />
   }
@@ -739,6 +766,27 @@ export default function AdminStoresPage() {
                 店舗情報CSV
               </Button>
             </a>
+            <Button
+              size="sm"
+              variant="outlined"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              loading={importing}
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 7.5L12 3m0 0L7.5 7.5M12 3v13.5" />
+                </svg>
+              }
+            >
+              {importing ? '取込中...' : 'インポート'}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
+            />
           </div>
         }
       />
@@ -861,6 +909,56 @@ export default function AdminStoresPage() {
         operators={operators}
         onClose={() => { setBulkEditTargets(null); refreshStores() }}
       />
+
+      {/* ─── CSVインポート結果 ─── */}
+      <Modal open={!!importResult} onClose={() => setImportResult(null)} title="CSVインポート結果" size="md">
+        {importResult && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg p-3 bg-[var(--md-sys-color-surface-container-low)] text-center">
+                <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">新規作成</div>
+                <div className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">{importResult.createdCount}</div>
+              </div>
+              <div className="rounded-lg p-3 bg-[var(--md-sys-color-surface-container-low)] text-center">
+                <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">更新</div>
+                <div className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">{importResult.updatedCount}</div>
+              </div>
+              <div className="rounded-lg p-3 bg-[var(--md-sys-color-surface-container-low)] text-center">
+                <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">エラー</div>
+                <div className={`text-xl font-bold ${importResult.errorCount > 0 ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface)]'}`}>{importResult.errorCount}</div>
+              </div>
+            </div>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              対象 {importResult.totalRows} 行を処理しました。店舗コードで既存店舗を更新し、コード空欄の行は新規作成します。
+            </p>
+            {importResult.errors.length > 0 && (
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--md-sys-color-outline-variant)]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]">
+                      <th className="px-2 py-1.5 text-left w-12">行</th>
+                      <th className="px-2 py-1.5 text-left w-24">店舗コード</th>
+                      <th className="px-2 py-1.5 text-left">エラー内容</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importResult.errors.map((e, i) => (
+                      <tr key={i} className="border-t border-[var(--md-sys-color-outline-variant)]">
+                        <td className="px-2 py-1.5">{e.row}</td>
+                        <td className="px-2 py-1.5 font-mono">{e.code ?? '—'}</td>
+                        <td className="px-2 py-1.5 text-[var(--md-sys-color-error)]">{e.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setImportResult(null)}>閉じる</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* ─── 詳細フィルター ─── */}
       <AdvancedFilterPanel

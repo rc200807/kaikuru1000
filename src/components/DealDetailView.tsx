@@ -16,6 +16,7 @@ import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
+import { storeSupportsAkikuru } from '@/lib/store-services'
 import { formatYen } from '@/lib/currency'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import { upload } from '@vercel/blob/client'
@@ -76,7 +77,7 @@ type Deal = {
   storeId: string | null
   inquiryId: string | null
   user: { id: string; name: string; furigana: string | null; email: string | null; phone: string | null; address: string | null; customerType: string }
-  store: { id: string; name: string; code: string; phone: string | null; address: string | null; prefecture: string | null; email: string | null; invoiceNumber: string | null; antiquePermitNumber: string | null } | null
+  store: { id: string; name: string; code: string; phone: string | null; address: string | null; prefecture: string | null; email: string | null; invoiceNumber: string | null; antiquePermitNumber: string | null; supportedServices?: string | null } | null
   inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
   visitSchedules: VisitSchedule[]
   // 案件直下（再ペアレント後の正）
@@ -612,11 +613,13 @@ export default function DealDetailView({
             {DEAL_CATEGORIES.map(cat => {
               const active = (deal.category ?? 'purchase') === cat
               const c = DEAL_CATEGORY_BADGE[cat]
+              const akikuruBlocked = cat === 'akikuru' && !!deal.store && !storeSupportsAkikuru(deal.store.supportedServices)
               return (
                 <button
                   key={cat}
                   type="button"
-                  disabled={savingCategory}
+                  disabled={savingCategory || akikuruBlocked}
+                  title={akikuruBlocked ? 'この店舗はアキクルに対応していません' : undefined}
                   onClick={() => changeCategory(cat)}
                   className="text-xs px-3 py-1.5 rounded-full border transition-all disabled:opacity-50"
                   style={active

@@ -33,6 +33,7 @@ import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomer
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
+import { storeSupportsAkikuru } from '@/lib/store-services'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 import CustomerJourneyCard from '@/components/admin/CustomerJourneyCard'
 import { CHANNEL_LABEL } from '@/lib/tracking-labels'
@@ -90,6 +91,7 @@ type Store = {
   code: string
   prefecture: string | null
   address: string | null
+  supportedServices?: string | null
 }
 
 type VisitSchedule = {
@@ -574,6 +576,10 @@ export default function AdminCustomersPage() {
       })
       .finally(() => setDealsLoading(false))
   }, [detailUser])
+
+  // 対象顧客の担当店舗がアキクル非対応か（未割当・店舗情報未取得時は制限しない）
+  const detailStore = detailUser?.store ? stores.find(s => s.id === detailUser.store!.id) : undefined
+  const detailAkikuruBlocked = !!detailStore && !storeSupportsAkikuru(detailStore.supportedServices)
 
   async function handleCreateDeal() {
     if (!detailUser) return
@@ -2322,7 +2328,7 @@ export default function AdminCustomersPage() {
             {detailTab === 'deals' && (
               <div className="space-y-3">
                 <div className="flex justify-end">
-                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); setNewDealCategory(dealCategoryFromCustomerType(detailUser?.customerType)); setShowNewDeal(v => !v) }}>
+                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); const def = dealCategoryFromCustomerType(detailUser?.customerType); setNewDealCategory(def === 'akikuru' && detailAkikuruBlocked ? 'purchase' : def); setShowNewDeal(v => !v) }}>
                     {showNewDeal ? 'キャンセル' : '+ 案件を追加'}
                   </Button>
                 </div>
@@ -2334,12 +2340,15 @@ export default function AdminCustomersPage() {
                         {DEAL_CATEGORIES.map(cat => {
                           const active = newDealCategory === cat
                           const c = DEAL_CATEGORY_BADGE[cat]
+                          const akikuruBlocked = cat === 'akikuru' && detailAkikuruBlocked
                           return (
                             <button
                               key={cat}
                               type="button"
+                              disabled={akikuruBlocked}
+                              title={akikuruBlocked ? 'この店舗はアキクルに対応していません' : undefined}
                               onClick={() => setNewDealCategory(cat)}
-                              className="text-xs px-3 py-1.5 rounded-full border transition-all"
+                              className="text-xs px-3 py-1.5 rounded-full border transition-all disabled:opacity-50"
                               style={active
                                 ? { background: c.bg, color: c.fg, borderColor: c.fg }
                                 : { background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', borderColor: 'var(--md-sys-color-outline-variant)' }}

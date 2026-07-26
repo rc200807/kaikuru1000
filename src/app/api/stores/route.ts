@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       contractNotifyEmail: true, calendarInviteEmail: true,
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
-      operatorId: true, serviceAreas: true, createdAt: true,
+      operatorId: true, serviceAreas: true, supportedServices: true, createdAt: true,
       operator: { select: { id: true, name: true } },
       _count: { select: { customers: true } },
     },

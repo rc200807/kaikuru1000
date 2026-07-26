@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { sendStorePasswordResetNotification } from '@/lib/mailer'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
+import { parseStoreServices, stringifyStoreServices } from '@/lib/store-services'
 
 function generatePassword(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -75,13 +76,17 @@ export async function PATCH(
       'googleBusinessUrl', 'oikuraPageUrl', 'lineAddFriendUrl', 'bankInfo',
       'bankName', 'branchName', 'accountType', 'accountNumber', 'accountHolder',
       'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail', 'calendarInviteEmail',
-      'serviceAreas',
+      'serviceAreas', 'supportedServices',
     ] as const
     const data: Record<string, any> = {}
     for (const field of allowedFields) {
       if (field in body) {
         if (field === 'openingDate' || field === 'closingDate') {
           data[field] = body[field] ? new Date(body[field]) : null
+        } else if (field === 'supportedServices') {
+          // JSON配列文字列 or 配列を受け取り、有効キーのみに正規化して保存
+          const raw = typeof body[field] === 'string' ? parseStoreServices(body[field]) : body[field]
+          data[field] = stringifyStoreServices(raw)
         } else {
           data[field] = body[field] || null
         }
@@ -123,7 +128,7 @@ export async function PATCH(
         googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
         bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
         invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
-        serviceAreas: true, operatorId: true,
+        serviceAreas: true, supportedServices: true, operatorId: true,
         operator: { select: { id: true, name: true } },
         _count: { select: { customers: true } },
       },
@@ -154,7 +159,7 @@ export async function GET(
       googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
-      serviceAreas: true,
+      serviceAreas: true, supportedServices: true,
       isActive: true,
       _count: { select: { customers: true } },
     },

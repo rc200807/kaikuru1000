@@ -6,6 +6,7 @@ import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory } from '@/lib/deal-categories'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { storeSupportsAkikuru } from '@/lib/store-services'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -35,6 +36,7 @@ export async function GET(
         select: {
           id: true, name: true, code: true, phone: true, address: true,
           prefecture: true, email: true, invoiceNumber: true, antiquePermitNumber: true,
+          supportedServices: true,
         },
       },
       inquiry: { select: { id: true, inquiryType: true, details: true, createdAt: true } },
@@ -205,6 +207,19 @@ export async function PATCH(
   }
   // 買取金額の上乗せ率（0/10/15%）
   if (purchaseUpliftPercent !== undefined) updateData.purchaseUpliftPercent = Number(purchaseUpliftPercent)
+
+  // アキクル案件は対応サービスに「アキクル」を含む店舗のみ扱える
+  // （カテゴリー変更 or 店舗変更のいずれかがあった場合のみ検証。既存データはそのまま）
+  const finalCategory = category !== undefined ? category : deal.category
+  const finalStoreId = 'storeId' in updateData ? updateData.storeId : deal.storeId
+  if (finalCategory === 'akikuru' && finalStoreId && (category !== undefined || 'storeId' in updateData)) {
+    const targetStore = await prisma.store.findUnique({
+      where: { id: finalStoreId }, select: { supportedServices: true },
+    })
+    if (!storeSupportsAkikuru(targetStore?.supportedServices)) {
+      return NextResponse.json({ error: 'この店舗はアキクルに対応していません' }, { status: 400 })
+    }
+  }
 
   const updated = await prisma.deal.update({
     where: { id },

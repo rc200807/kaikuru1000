@@ -26,6 +26,10 @@ import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
 import { downloadCsv, csvDateStamp } from '@/lib/client-csv'
 import { parseServiceAreas } from '@/lib/address-utils'
 import { STORE_STATUSES, storeStatusLabel } from '@/lib/store-status'
+import {
+  STORE_SERVICES, STORE_SERVICE_LABEL, STORE_SERVICE_BADGE,
+  parseStoreServices, stringifyStoreServices, storeServicesLabel,
+} from '@/lib/store-services'
 
 type Store = {
   id: string
@@ -53,6 +57,7 @@ type Store = {
   invoiceNumber: string | null
   antiquePermitNumber: string | null
   serviceAreas: string | null
+  supportedServices: string | null
   operatorId: string | null
   operator: { id: string; name: string } | null
   createdAt: string | null
@@ -66,6 +71,7 @@ const STORE_COLUMN_OPTIONS = [
   { key: 'code', label: 'コード' },
   { key: 'prefecture', label: 'エリア' },
   { key: 'serviceAreas', label: '対応エリア' },
+  { key: 'supportedServices', label: '対応サービス' },
   { key: 'contact', label: '連絡先' },
   { key: 'customers', label: '顧客数' },
   { key: 'loginStatus', label: 'ログイン状態' },
@@ -360,6 +366,7 @@ export default function AdminStoresPage() {
       accountHolder: store.accountHolder || '',
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
+      supportedServices: store.supportedServices || '[]',
     })
     setEditMode(true)
   }
@@ -470,6 +477,7 @@ export default function AdminStoresPage() {
           .map(a => a.cities.length > 0 ? `${a.prefecture}(${a.cities.length})` : a.prefecture)
           .join('; '),
       }],
+      supportedServices: [{ header: '対応サービス', value: s => storeServicesLabel(s.supportedServices) }],
       contact: [
         { header: 'メールアドレス', value: s => s.email || '' },
         { header: '電話番号', value: s => s.phone || '' },
@@ -553,6 +561,32 @@ export default function AdminStoresPage() {
           </div>
         )
       },
+    },
+    supportedServices: {
+      key: 'supportedServices',
+      header: '対応サービス',
+      hideOnMobile: true,
+      render: (store) => {
+        const services = parseStoreServices(store.supportedServices)
+        if (services.length === 0) {
+          return <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">未設定</span>
+        }
+        return (
+          <div className="flex flex-wrap gap-1 max-w-[220px]">
+            {services.map(k => (
+              <span
+                key={k}
+                className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap font-medium"
+                style={{ backgroundColor: STORE_SERVICE_BADGE[k].bg, color: STORE_SERVICE_BADGE[k].fg }}
+              >
+                {STORE_SERVICE_LABEL[k]}
+              </span>
+            ))}
+          </div>
+        )
+      },
+      sortable: true,
+      sortValue: (store) => parseStoreServices(store.supportedServices).length,
     },
     contact: {
       key: 'contact',
@@ -1235,6 +1269,34 @@ export default function AdminStoresPage() {
                           </select>
                         </div>
                       </div>
+                      <div>
+                        <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">対応サービス</label>
+                        <div className="flex flex-wrap gap-2">
+                          {STORE_SERVICES.map(svc => {
+                            const selected = parseStoreServices(editForm.supportedServices).includes(svc.key)
+                            return (
+                              <button
+                                key={svc.key}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => {
+                                  const current = parseStoreServices(editForm.supportedServices)
+                                  const next = selected ? current.filter(k => k !== svc.key) : [...current, svc.key]
+                                  setEditForm({ ...editForm, supportedServices: stringifyStoreServices(next) })
+                                }}
+                                className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-colors ${
+                                  selected
+                                    ? 'border-transparent'
+                                    : 'border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]'
+                                }`}
+                                style={selected ? { backgroundColor: STORE_SERVICE_BADGE[svc.key].bg, color: STORE_SERVICE_BADGE[svc.key].fg } : undefined}
+                              >
+                                {svc.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
                       <TextField label="郵便番号" value={editForm.postalCode || ''} onChange={v => setEditForm({...editForm, postalCode: v})} placeholder="123-4567" />
                       <TextField label="住所" value={editForm.address || ''} onChange={v => setEditForm({...editForm, address: v})} />
                       <TextField label="電話番号" value={editForm.phone || ''} onChange={v => setEditForm({...editForm, phone: v})} />
@@ -1298,6 +1360,7 @@ export default function AdminStoresPage() {
                         { label: '店舗名', value: detailStore.name },
                         { label: '店舗コード', value: detailStore.code, mono: true },
                         { label: 'ステータス', value: storeStatusLabel(detailStore.storeStatus) },
+                        { label: '対応サービス', value: storeServicesLabel(detailStore.supportedServices) || null },
                         { label: '都道府県', value: detailStore.prefecture },
                         { label: '郵便番号', value: detailStore.postalCode ? `〒${detailStore.postalCode}` : null },
                         { label: '住所', value: detailStore.address },

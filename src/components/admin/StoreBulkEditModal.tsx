@@ -3,6 +3,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { PREFECTURES } from '@/lib/prefectures'
 import { STORE_STATUSES } from '@/lib/store-status'
+import {
+  STORE_SERVICES, STORE_SERVICE_BADGE,
+  parseStoreServices, stringifyStoreServices,
+} from '@/lib/store-services'
 import BulkEditCell, { type CellEditorType } from './BulkEditCell'
 import ServiceAreaEditor from './ServiceAreaEditor'
 
@@ -33,6 +37,7 @@ export type BulkStore = {
   calendarInviteEmail: string | null
   operatorId: string | null
   serviceAreas: string | null
+  supportedServices: string | null
 }
 
 // 運営者から継承される項目（運営者が「正」。運営者割り当て済み店舗では読み取り専用）
@@ -71,6 +76,8 @@ const COLUMNS: ColumnDef[] = [
   { key: 'address', label: '住所', editor: 'text', width: 260 },
   // 対応エリアは専用エディタ（都道府県＋市区町村）で編集するため GridRow で特別扱いする
   { key: 'serviceAreas', label: '対応エリア', editor: 'text', width: 200 },
+  // 対応サービスはセル内トグルチップで編集するため GridRow で特別扱いする
+  { key: 'supportedServices', label: '対応サービス', editor: 'text', width: 200 },
   { key: 'phone', label: '電話番号', editor: 'text', width: 130 },
   { key: 'email', label: 'メールアドレス', editor: 'text', width: 200 },
   { key: 'openingDate', label: '開業日', editor: 'date', width: 140 },
@@ -118,7 +125,7 @@ function makeDraftRow(id: string): BulkStore {
     googleBusinessUrl: null, oikuraPageUrl: null, lineAddFriendUrl: null,
     bankName: null, branchName: null, accountType: null, accountNumber: null, accountHolder: null,
     invoiceNumber: null, antiquePermitNumber: null, contractNotifyEmail: null, calendarInviteEmail: null,
-    operatorId: null, serviceAreas: null,
+    operatorId: null, serviceAreas: null, supportedServices: '[]',
   }
 }
 
@@ -140,6 +147,7 @@ function toBulkStore(s: Record<string, any>): BulkStore {
     calendarInviteEmail: s.calendarInviteEmail ?? null,
     operatorId: s.operatorId ?? null,
     serviceAreas: s.serviceAreas ?? null,
+    supportedServices: s.supportedServices ?? null,
   }
 }
 
@@ -261,6 +269,42 @@ const GridRow = memo(function GridRow({
               >
                 {summary || <span className="text-[var(--md-sys-color-on-surface-variant)]">対応エリアを設定</span>}
               </button>
+            </td>
+          )
+        }
+        // 対応サービスはセル内トグルチップで直接切り替え（dirty値はJSON文字列）
+        if (col.key === 'supportedServices') {
+          const selectedKeys = parseStoreServices(value)
+          const isDirty = rowDirty ? 'supportedServices' in rowDirty : false
+          return (
+            <td key={col.key} className="px-1 py-1">
+              <div className={`flex items-center gap-1 px-1 h-8 rounded-md ${isDirty ? 'bg-[var(--md-sys-color-tertiary-container,#fef3c7)]/40' : ''}`}>
+                {STORE_SERVICES.map(svc => {
+                  const selected = selectedKeys.includes(svc.key)
+                  return (
+                    <button
+                      key={svc.key}
+                      type="button"
+                      aria-pressed={selected}
+                      title={`${svc.label}を${selected ? '解除' : '設定'}`}
+                      onClick={() => {
+                        const next = selected
+                          ? selectedKeys.filter(k => k !== svc.key)
+                          : [...selectedKeys, svc.key]
+                        onCommit(store.id, { supportedServices: stringifyStoreServices(next) })
+                      }}
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap border transition-colors ${
+                        selected
+                          ? 'border-transparent'
+                          : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                      }`}
+                      style={selected ? { backgroundColor: STORE_SERVICE_BADGE[svc.key].bg, color: STORE_SERVICE_BADGE[svc.key].fg } : undefined}
+                    >
+                      {svc.label}
+                    </button>
+                  )
+                })}
+              </div>
             </td>
           )
         }

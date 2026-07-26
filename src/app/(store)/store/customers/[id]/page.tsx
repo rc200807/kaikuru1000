@@ -25,6 +25,7 @@ import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { isSelectableVisitStatus } from '@/lib/visit-status'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 
 type Customer = {
   id: string
@@ -229,6 +230,9 @@ export default function StoreCustomerDetailPage() {
   const bizHours = useBusinessHours()
   const { id } = useParams<{ id: string }>()
   const searchParams = useSearchParams()
+  const scope = useStoreScope()
+  // セッション店舗がアキクル非対応か（読込中は制限しない）
+  const akikuruBlocked = !scope.loading && !scope.services.includes('akikuru')
 
   const tabFromUrl = (searchParams.get('tab') as TabKey) || 'info'
 
@@ -1359,7 +1363,7 @@ export default function StoreCustomerDetailPage() {
         {activeTab === 'deals' && (
           <div>
             <div className="flex justify-end mb-4">
-              <Button size="sm" onClick={() => { setNewDealDetail(''); setNewDealCategory(dealCategoryFromCustomerType(customer?.customerType)); setNewDealOpen(true) }}>
+              <Button size="sm" onClick={() => { setNewDealDetail(''); const def = dealCategoryFromCustomerType(customer?.customerType); setNewDealCategory(def === 'akikuru' && akikuruBlocked ? 'purchase' : def); setNewDealOpen(true) }}>
                 + 案件を追加
               </Button>
             </div>
@@ -1485,12 +1489,15 @@ export default function StoreCustomerDetailPage() {
                     {DEAL_CATEGORIES.map(cat => {
                       const active = newDealCategory === cat
                       const c = DEAL_CATEGORY_BADGE[cat]
+                      const catBlocked = cat === 'akikuru' && akikuruBlocked
                       return (
                         <button
                           key={cat}
                           type="button"
+                          disabled={catBlocked}
+                          title={catBlocked ? 'この店舗はアキクルに対応していません' : undefined}
                           onClick={() => setNewDealCategory(cat)}
-                          className="text-xs px-3 py-1.5 rounded-full border transition-all"
+                          className="text-xs px-3 py-1.5 rounded-full border transition-all disabled:opacity-50"
                           style={active
                             ? { background: c.bg, color: c.fg, borderColor: c.fg }
                             : { background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)', borderColor: 'var(--md-sys-color-outline-variant)' }}

@@ -5,7 +5,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
-import { ORG_NAV_ITEM } from '@/components/NavigationRail'
+import { ORG_NAV_ITEM, AKIYA_NAV_ITEM } from '@/components/NavigationRail'
 
 type LinkedStore = {
   id: string
@@ -454,7 +454,7 @@ export default function BottomNav() {
           {/* Navigation items */}
           <div className="flex-1 overflow-y-auto py-2 px-2">
             <div className="grid grid-cols-3 gap-1">
-              {[...menuNavItems, ...(scope.availableStores.length > 0 && scope.isOrgAdmin ? [ORG_NAV_ITEM] : [])].map(item => {
+              {[...menuNavItems, ...(scope.services.includes('akikuru') ? [AKIYA_NAV_ITEM] : []), ...(scope.availableStores.length > 0 && scope.isOrgAdmin ? [ORG_NAV_ITEM] : [])].map(item => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/')
                 const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : item.href === '/store/dashboard' ? releaseUnread : 0
                 const showBadge = badgeCount > 0

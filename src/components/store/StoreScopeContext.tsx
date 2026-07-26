@@ -27,6 +27,8 @@ type StoreScopeValue = {
   scopeQuery: string
   isOrgAdmin: boolean
   operatorName: string | null
+  /** セッション店舗の対応サービス（機能ゲート用。例: ['kaikuru','akikuru']） */
+  services: string[]
   loading: boolean
 }
 
@@ -40,6 +42,7 @@ const StoreScopeContext = createContext<StoreScopeValue>({
   scopeQuery: '',
   isOrgAdmin: false,
   operatorName: null,
+  services: [],
   loading: true,
 })
 
@@ -60,6 +63,7 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isOrgAdmin, setIsOrgAdmin] = useState(false)
   const [operatorName, setOperatorName] = useState<string | null>(null)
+  const [services, setServices] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   // 組織情報の取得（セッション店舗が変わるたびに再取得＝StoreLink切替にも追随）
@@ -80,6 +84,7 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
         setAvailableStores(stores)
         setIsOrgAdmin(!!data?.isOrgAdmin)
         setOperatorName(data?.operator?.name ?? null)
+        setServices(Array.isArray(data?.services) ? data.services : [])
 
         // localStorage から復元（無効IDを除去し、セッション店舗を必ず含める）
         const validIds = new Set(stores.map(s => s.id))
@@ -140,9 +145,10 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
       scopeQuery: isMulti ? `storeIds=${selectedIds.join(',')}` : '',
       isOrgAdmin,
       operatorName,
+      services,
       loading,
     }
-  }, [availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, loading])
+  }, [availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, loading])
 
   return <StoreScopeContext.Provider value={value}>{children}</StoreScopeContext.Provider>
 }

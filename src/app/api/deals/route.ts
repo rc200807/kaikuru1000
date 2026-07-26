@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
+import { storeSupportsAkikuru } from '@/lib/store-services'
 import { resolveStoreScope } from '@/lib/store-scope'
 import { buildDealFilterConditions, parseDealSort } from '@/lib/deal-list-query'
 
@@ -136,6 +137,16 @@ export async function POST(request: NextRequest) {
   const finalCategory = isDealCategory(category)
     ? category
     : dealCategoryFromCustomerType(targetUser.customerType)
+
+  // アキクル案件は対応サービスに「アキクル」を含む店舗のみ扱える（storeId 未割当は許容）
+  if (finalCategory === 'akikuru' && finalStoreId) {
+    const targetStore = await prisma.store.findUnique({
+      where: { id: finalStoreId }, select: { supportedServices: true },
+    })
+    if (!storeSupportsAkikuru(targetStore?.supportedServices)) {
+      return NextResponse.json({ error: 'この店舗はアキクルに対応していません' }, { status: 400 })
+    }
+  }
 
   const deal = await prisma.deal.create({
     data: {

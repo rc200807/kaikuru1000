@@ -39,7 +39,7 @@ export async function GET(
           },
         },
       },
-      deal: { select: { id: true, status: true, purchaseUpliftPercent: true } },
+      deal: { select: { id: true, status: true, purchaseUpliftPercent: true, category: true } },
     },
   })
 

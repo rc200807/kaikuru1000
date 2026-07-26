@@ -9,6 +9,11 @@ import StoreDashboard from '@/components/admin/StoreDashboard'
 import ServiceAreaEditor from '@/components/admin/ServiceAreaEditor'
 import BankSearch from '@/components/customer/BankSearch'
 import { parseServiceAreas, extractMunicipality } from '@/lib/address-utils'
+import { STORE_STATUSES, storeStatusLabel } from '@/lib/store-status'
+import {
+  STORE_SERVICES, STORE_SERVICE_LABEL, STORE_SERVICE_BADGE,
+  parseStoreServices, stringifyStoreServices,
+} from '@/lib/store-services'
 
 type DetailTab = 'dashboard' | 'info' | 'line'
 const DETAIL_TABS: { key: DetailTab; label: string }[] = [
@@ -41,6 +46,7 @@ type Store = {
   invoiceNumber?: string | null
   antiquePermitNumber?: string | null
   serviceAreas?: string | null
+  supportedServices?: string | null
   isActive: boolean
   _count?: { customers: number }
 }
@@ -82,6 +88,23 @@ type Insights = {
   messageStats?: any
 }
 
+type ConnectInfo = {
+  id: string
+  name: string
+  stripeConnectAccountId: string | null
+  stripeConnectStatus: string
+  stripeConnectChargesEnabled: boolean
+  stripeConnectPayoutsEnabled: boolean
+  stripeConnectOnboardedAt: string | null
+}
+
+const CONNECT_STATUS_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
+  none: { label: '未接続', bg: 'rgba(148,163,184,0.15)', fg: '#94a3b8' },
+  onboarding: { label: 'オンボーディング中', bg: 'rgba(251,191,36,0.15)', fg: '#fbbf24' },
+  active: { label: '有効', bg: 'rgba(74,222,128,0.15)', fg: '#4ade80' },
+  restricted: { label: '制限あり', bg: 'rgba(248,113,113,0.15)', fg: '#f87171' },
+}
+
 export default function StoreDetailPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -93,8 +116,11 @@ export default function StoreDetailPage() {
   // ページ内タブ（ダッシュボード / 店舗情報・設定 / LINE）。?tab= と同期
   const [activeTab, setActiveTab] = useState<DetailTab>('dashboard')
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get('tab')
+    const sp = new URLSearchParams(window.location.search)
+    const t = sp.get('tab')
     if (t === 'info' || t === 'line' || t === 'dashboard') setActiveTab(t)
+    // Stripe Connect オンボーディングからの戻り（?connect=done）は店舗情報タブへ
+    if (sp.get('connect') === 'done') setActiveTab('info')
   }, [])
   const changeTab = (t: DetailTab) => {
     setActiveTab(t)
@@ -111,6 +137,14 @@ export default function StoreDetailPage() {
   const [sheetModalOpen, setSheetModalOpen] = useState(false)
   const [sheetShareInput, setSheetShareInput] = useState('')
   const [sheetMessage, setSheetMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  /* Stripe Connect state */
+  const [connectInfo, setConnectInfo] = useState<ConnectInfo | null>(null)
+  const [connectLoading, setConnectLoading] = useState(false)
+  const [connectIssuing, setConnectIssuing] = useState(false)
+  const [connectLink, setConnectLink] = useState<string | null>(null)
+  const [connectCopied, setConnectCopied] = useState(false)
+  const [connectError, setConnectError] = useState('')
 
   const [channels, setChannels] = useState<LineChannel[]>([])
   const [lineUsers, setLineUsers] = useState<LineUser[]>([])
@@ -232,6 +266,58 @@ export default function StoreDetailPage() {
     if (status === 'authenticated') fetchData()
   }, [status, fetchData])
 
+  /* Stripe Connect 状態を取得（店舗情報タブ表示時。?connect=done での戻りも同経路で再取得） */
+  const fetchConnect = useCallback(async () => {
+    setConnectLoading(true)
+    try {
+      const res = await fetch(`/api/admin/stores/${storeId}/stripe-connect`)
+      if (res.ok) setConnectInfo(await res.json())
+    } finally {
+      setConnectLoading(false)
+    }
+  }, [storeId])
+
+  useEffect(() => {
+    if (status === 'authenticated' && activeTab === 'info') fetchConnect()
+  }, [status, activeTab, fetchConnect])
+
+  /* Connect オンボーディングリンク発行 */
+  async function handleIssueConnectLink() {
+    setConnectIssuing(true)
+    setConnectError('')
+    try {
+      const res = await fetch(`/api/admin/stores/${storeId}/stripe-connect`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setConnectError(data.error || 'オンボーディングリンクの発行に失敗しました')
+        return
+      }
+      setConnectLink(data.onboardingUrl)
+      setConnectCopied(false)
+      fetchConnect() // アカウント新規作成直後は状態が変わるため再取得
+    } finally {
+      setConnectIssuing(false)
+    }
+  }
+
+  async function handleCopyConnectLink() {
+    if (!connectLink) return
+    try {
+      await navigator.clipboard.writeText(connectLink)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = connectLink
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+    }
+    setConnectCopied(true)
+    setTimeout(() => setConnectCopied(false), 2000)
+  }
+
   /* チャネル分析を取得 */
   const fetchInsights = useCallback(async (channelId: string) => {
     setLoadingInsights(p => ({ ...p, [channelId]: true }))
@@ -294,6 +380,7 @@ export default function StoreDetailPage() {
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
       serviceAreas,
+      supportedServices: store.supportedServices || '[]',
     })
     setEditMode(true)
   }
@@ -466,7 +553,7 @@ export default function StoreDetailPage() {
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{store.name}</h1>
           <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
             <code>{store.code}</code>
-            {store.storeStatus && <span>{store.storeStatus === 'active' ? '営業中' : '閉店'}</span>}
+            {store.storeStatus && <span>{storeStatusLabel(store.storeStatus)}</span>}
             {store._count && <span>顧客 {store._count.customers}名</span>}
           </div>
         </div>
@@ -534,7 +621,7 @@ export default function StoreDetailPage() {
           <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 12, padding: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
               <EditField label="店舗名 *" value={editForm.name} onChange={v => setEditForm({ ...editForm, name: v })} />
-              <EditSelect label="ステータス" value={editForm.storeStatus} onChange={v => setEditForm({ ...editForm, storeStatus: v })} options={[{ value: 'active', label: '営業中' }, { value: 'closed', label: '閉店' }]} />
+              <EditSelect label="ステータス" value={editForm.storeStatus} onChange={v => setEditForm({ ...editForm, storeStatus: v })} options={STORE_STATUSES.map(s => ({ value: s.value, label: s.label }))} />
               <EditField label="電話番号" value={editForm.phone} onChange={v => setEditForm({ ...editForm, phone: v })} />
               <EditField label="メールアドレス" type="email" value={editForm.email} onChange={v => setEditForm({ ...editForm, email: v })} />
               <EditField label="郵便番号（入力で住所を自動補完）" value={editForm.postalCode} onChange={handlePostalChange} placeholder="123-4567" />
@@ -547,6 +634,34 @@ export default function StoreDetailPage() {
               <EditField label="LINE友達登録リンク" type="url" value={editForm.lineAddFriendUrl} onChange={v => setEditForm({ ...editForm, lineAddFriendUrl: v })} placeholder="https://lin.ee/..." />
               <EditField label="インボイス番号" value={editForm.invoiceNumber} onChange={v => setEditForm({ ...editForm, invoiceNumber: v })} />
               <EditField label="古物営業許可番号" value={editForm.antiquePermitNumber} onChange={v => setEditForm({ ...editForm, antiquePermitNumber: v })} />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>対応サービス</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {STORE_SERVICES.map(svc => {
+                  const selected = parseStoreServices(editForm.supportedServices).includes(svc.key)
+                  return (
+                    <button
+                      key={svc.key}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        const current = parseStoreServices(editForm.supportedServices)
+                        const next = selected ? current.filter(k => k !== svc.key) : [...current, svc.key]
+                        setEditForm({ ...editForm, supportedServices: stringifyStoreServices(next) })
+                      }}
+                      style={{
+                        padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: selected ? '1px solid transparent' : '1px solid var(--md-sys-color-outline-variant)',
+                        background: selected ? STORE_SERVICE_BADGE[svc.key].bg : 'var(--md-sys-color-surface-container-high)',
+                        color: selected ? STORE_SERVICE_BADGE[svc.key].fg : 'var(--md-sys-color-on-surface-variant)',
+                      }}
+                    >
+                      {svc.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
             <div style={{ marginTop: 16 }}>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>銀行口座情報</label>
@@ -598,6 +713,19 @@ export default function StoreDetailPage() {
         ) : (
           <InfoGrid items={[
             ['店舗コード', store.code],
+            ['対応サービス', (() => {
+              const services = parseStoreServices(store.supportedServices)
+              if (services.length === 0) return null
+              return (
+                <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
+                  {services.map(k => (
+                    <span key={k} style={{ padding: '2px 10px', borderRadius: 999, background: STORE_SERVICE_BADGE[k].bg, color: STORE_SERVICE_BADGE[k].fg, fontSize: 12, fontWeight: 600 }}>
+                      {STORE_SERVICE_LABEL[k]}
+                    </span>
+                  ))}
+                </span>
+              )
+            })()],
             ['電話番号', store.phone],
             ['メール', store.email],
             ['郵便番号', store.postalCode ? `〒${store.postalCode}` : null],
@@ -650,6 +778,62 @@ export default function StoreDetailPage() {
                 </div>
               )
             })()}
+          </div>
+        )}
+      </Section>
+
+      {/* Stripe Connect（アキクル分配） */}
+      <Section title="Stripe Connect（アキクル分配）">
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.7 }}>
+          アキクル請求の売上分配（自動送金）を受け取るためのStripe Connectアカウントです。
+        </p>
+        {connectLoading && !connectInfo ? (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>読み込み中...</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {(() => {
+              const s = CONNECT_STATUS_BADGE[connectInfo?.stripeConnectStatus ?? 'none'] ?? CONNECT_STATUS_BADGE.none
+              return (
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 999, background: s.bg, color: s.fg }}>{s.label}</span>
+                </div>
+              )
+            })()}
+            <InfoGrid items={[
+              ['アカウントID', connectInfo?.stripeConnectAccountId ? <code style={{ fontSize: 12 }}>{connectInfo.stripeConnectAccountId}</code> : null],
+              ['送金', connectInfo?.stripeConnectPayoutsEnabled ? <span style={{ color: '#4ade80', fontWeight: 600 }}>可能</span> : '不可'],
+              ['オンボーディング完了日', connectInfo?.stripeConnectOnboardedAt ? new Date(connectInfo.stripeConnectOnboardedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) : null],
+            ]} />
+            {connectError && <p style={{ margin: 0, fontSize: 13, color: '#f87171' }}>{connectError}</p>}
+            <button
+              onClick={handleIssueConnectLink}
+              disabled={connectIssuing}
+              style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: '#4f8ef7', color: '#fff', fontSize: 14, fontWeight: 600, cursor: connectIssuing ? 'wait' : 'pointer', alignSelf: 'flex-start', opacity: connectIssuing ? 0.7 : 1 }}
+            >
+              {connectIssuing ? '発行中...' : 'オンボーディングリンクを発行'}
+            </button>
+            {connectLink && (
+              <div style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>オンボーディングリンク</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    readOnly
+                    value={connectLink}
+                    onFocus={e => e.currentTarget.select()}
+                    style={{ flex: 1, minWidth: 240, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface)', color: 'var(--md-sys-color-on-surface)', fontSize: 12, fontFamily: 'monospace' }}
+                  />
+                  <button
+                    onClick={handleCopyConnectLink}
+                    style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: connectCopied ? '#4ade80' : '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+                  >
+                    {connectCopied ? 'コピー済' : 'コピー'}
+                  </button>
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#fbbf24' }}>
+                  このリンクは短時間で失効します。店舗の担当者に送付し、Stripeの画面で口座登録を完了してもらってください。
+                </p>
+              </div>
+            )}
           </div>
         )}
       </Section>

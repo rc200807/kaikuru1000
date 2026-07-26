@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getOperatorStores, isOrgAdmin } from '@/lib/store-scope'
+import { parseStoreServices } from '@/lib/store-services'
 
 /**
  * 組織（運営者）情報 — 店舗ポータル用。
@@ -16,9 +17,10 @@ export async function GET() {
   }
   const sessionStoreId = user.id as string
 
-  const [{ operator, stores }, orgAdmin] = await Promise.all([
+  const [{ operator, stores }, orgAdmin, self] = await Promise.all([
     getOperatorStores(sessionStoreId),
     isOrgAdmin({ id: sessionStoreId, memberId: user.memberId ?? null }),
+    prisma.store.findUnique({ where: { id: sessionStoreId }, select: { supportedServices: true } }),
   ])
 
   return NextResponse.json({
@@ -34,6 +36,8 @@ export async function GET() {
       memberCount: s._count.members,
     })),
     isOrgAdmin: operator ? orgAdmin : false,
+    // セッション店舗の対応サービス（機能ゲート用。例: ['kaikuru','akikuru']）
+    services: parseStoreServices(self?.supportedServices),
     sessionStoreId,
   })
 }

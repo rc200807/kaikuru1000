@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
+import { parseStoreServices, stringifyStoreServices } from '@/lib/store-services'
 
 function generatePassword(): string {
   // 読みやすい文字のみ（0/O/l/I 等を除く）
@@ -49,6 +50,7 @@ const createSchema = z.object({
   antiquePermitNumber: z.string().optional(),
   contractNotifyEmail: z.string().optional(),
   calendarInviteEmail: z.string().optional(),
+  supportedServices:   z.string().optional(), // JSON配列文字列（例: '["kaikuru","akikuru"]'）
   operatorId:          z.string().optional().or(z.literal('')),
 })
 
@@ -60,7 +62,7 @@ const STORE_DETAIL_SELECT = {
   googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
   bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
   invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
-  serviceAreas: true, operatorId: true,
+  serviceAreas: true, supportedServices: true, operatorId: true,
   operator: { select: { id: true, name: true } },
   _count: { select: { customers: true } },
 } as const
@@ -83,6 +85,7 @@ export async function POST(request: NextRequest) {
     googleBusinessUrl, oikuraPageUrl, lineAddFriendUrl,
     bankName, branchName, accountType, accountNumber, accountHolder,
     invoiceNumber, antiquePermitNumber, contractNotifyEmail, calendarInviteEmail,
+    supportedServices,
     operatorId,
   } = parsed.data
 
@@ -142,6 +145,7 @@ export async function POST(request: NextRequest) {
       antiquePermitNumber: antiquePermitNumber || null,
       contractNotifyEmail: contractNotifyEmail || null,
       calendarInviteEmail: calendarInviteEmail || null,
+      supportedServices:   stringifyStoreServices(parseStoreServices(supportedServices)),
       operatorId:          opId,
       // 運営者が割り当てられている場合は継承項目を運営者の値で上書き（運営者が「正」）
       ...(inherited ?? {}),

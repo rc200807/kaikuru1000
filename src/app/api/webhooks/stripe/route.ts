@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
 import { markSupplyOrderPaidAndNotify } from '@/lib/supply-orders'
+import { distributeAkikuruInvoice } from '@/lib/akikuru-distribution'
+import { syncConnectAccountStatus } from '@/lib/stripe-connect'
 
 export const runtime = 'nodejs'
 
@@ -48,6 +50,52 @@ export async function POST(req: NextRequest) {
           data: { paymentStatus: 'failed' },
         })
       }
+    } else if (event.type === 'invoice.paid') {
+      // アキクル請求の支払確定 → 分配実行
+      const invoice = event.data.object as any
+      if (invoice.metadata?.kind === 'akikuru') {
+        // 支払方法（card / customer_balance）と PaymentIntent を可能な範囲で記録
+        const payment = invoice.payments?.data?.find((p: any) => p?.status === 'paid')
+        const pi = payment?.payment?.payment_intent
+        const paymentIntentId = typeof pi === 'string' ? pi : (pi?.id ?? null)
+        const updated = await prisma.akikuruInvoice.updateMany({
+          where: { stripeInvoiceId: invoice.id, status: { not: 'paid' } },
+          data: {
+            status: 'paid',
+            paidAt: new Date(),
+            stripePaymentIntentId: paymentIntentId,
+            stripeInvoicePdfUrl: invoice.invoice_pdf ?? undefined,
+          },
+        })
+        if (updated.count > 0) {
+          const record = await prisma.akikuruInvoice.findUnique({ where: { stripeInvoiceId: invoice.id }, select: { id: true } })
+          if (record) await distributeAkikuruInvoice(record.id)
+        }
+      }
+    } else if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as any
+      if (invoice.metadata?.kind === 'akikuru') {
+        await prisma.akikuruInvoice.updateMany({
+          where: { stripeInvoiceId: invoice.id, status: 'open' },
+          data: { status: 'payment_failed' },
+        })
+      }
+    } else if (event.type === 'invoice.voided' || event.type === 'invoice.marked_uncollectible') {
+      const invoice = event.data.object as any
+      if (invoice.metadata?.kind === 'akikuru') {
+        await prisma.akikuruInvoice.updateMany({
+          where: { stripeInvoiceId: invoice.id, status: { not: 'paid' } },
+          data: { status: event.type === 'invoice.voided' ? 'void' : 'uncollectible' },
+        })
+      }
+    } else if (event.type === 'payment_intent.partially_funded') {
+      // 銀行振込の一部入金（全額到達まで invoice.paid は発火しない）。内部ログのみ
+      const pi = event.data.object as any
+      console.warn('[stripe-webhook] 銀行振込の一部入金を検知:', pi.id, pi.amount_received, '/', pi.amount)
+    } else if (event.type === 'account.updated') {
+      // Connect アカウントの状態同期（加盟店オンボーディング進捗）
+      const account = event.data.object as any
+      await syncConnectAccountStatus(account)
     }
   } catch (e) {
     console.error('[stripe-webhook] handler error', e)

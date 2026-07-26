@@ -90,6 +90,8 @@ model User {
   partnerNotes      SalesPartnerCustomerNote[]
   deals             Deal[]
   trackingVisitors  TrackingVisitor[]
+  akiyaCases        AkiyaCase[]
+  stripeCustomerId  String?   @unique  // アキクル請求用のStripe Customer ID（cus_...）
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -139,6 +141,14 @@ model Store {
   inquirySheetIssuedAt      DateTime?             // 発行日時
   // 対応エリア（出張買取などの対応可能地域）。JSON: [{ prefecture: string, cities: string[] }]
   serviceAreas              String?  @default("[]") @db.Text
+  // 対応サービス（複数選択）。JSON配列: ["kaikuru","akikuru"]（Operator.supportedServices と同形式）
+  supportedServices         String   @default("[]")
+  // Stripe Connect（アキクル請求の分配受取用）
+  stripeConnectAccountId      String?   @unique              // Connect Express アカウント（acct_...）
+  stripeConnectStatus         String    @default("none")     // none | onboarding | active | restricted
+  stripeConnectChargesEnabled Boolean   @default(false)      // account.updated webhook で同期
+  stripeConnectPayoutsEnabled Boolean   @default(false)
+  stripeConnectOnboardedAt    DateTime?
   customers  User[]
   visitSchedules VisitSchedule[]
   visitRequests  VisitRequest[]
@@ -158,6 +168,8 @@ model Store {
   trainingVideoViews   TrainingVideoView[]
   deals      Deal[]
   inventoryItems InventoryItem[]
+  akiyaCases AkiyaCase[]
+  akikuruInvoices AkikuruInvoice[]
   // 運営者（複数店舗を1運営者が運営できる）
   operatorId String?
   operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
@@ -248,6 +260,8 @@ model StoreMember {
   estimates      Estimate[]
   accessLogs     AccessLog[]
   chatMessages   ChatMessage[]
+  akiyaCases     AkiyaCase[]
+  akiyaRecords   AkiyaRecord[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -677,6 +691,7 @@ model Deal {
   salesContract  SalesContract?            // 案件の売買契約書（1:1）
   estimate       Estimate?                 // 案件の見積（1:1）
   recordings     DealRecording[]           // 会話の録音音声（AI文字起こし・要約）
+  akikuruInvoice AkikuruInvoice?           // アキクル案件のStripe請求書（1:1）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1949,4 +1964,169 @@ model LinkPartnerRecordStatus {
   @@unique([linkPartnerId, targetType, targetId])
   @@index([linkPartnerId, targetType])
   @@index([statusId])
+}
+
+// ============================================================
+// 空き家管理案件（アキクル対応店舗の定期管理代行サービス）
+// Deal（案件）とは独立した専用モデル群
+// ============================================================
+
+// 空き家管理案件
+model AkiyaCase {
+  id              String    @id @default(cuid())
+  userId          String                        // 物件所有者（顧客）
+  user            User      @relation(fields: [userId], references: [id])
+  storeId         String                        // 担当店舗
+  store           Store     @relation(fields: [storeId], references: [id])
+  propertyAddress String    @db.Text            // 物件所在地
+  startDate       DateTime?                     // 利用開始日
+  endDate         DateTime?                     // 利用終了日
+  plan            String    @default("standard")     // プラン（akiya-plans.ts: standard/light/premium/mansion）
+  status          String    @default("pre_contract") // ステータス（akiya-status.ts: pre_contract/contracting/contracted/cancelled）
+  photoUrls       String    @default("[]")      // 物件写真URL JSON配列
+  note            String?   @db.Text            // 物件メモ（長文）
+  lastVisitedAt   DateTime?                     // 前回訪問日（管理記録の追加で自動更新）
+  nextVisitAt     DateTime?                     // 次回訪問日
+  // 作成者スナップショット（Deal と同じ流儀）
+  createdByType   String?                       // store / admin / superadmin / hr
+  createdById     String?
+  createdByName   String?
+  memberId        String?                       // 作成した店舗メンバー（帰属）
+  member          StoreMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  records         AkiyaRecord[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([storeId])
+  @@index([status])
+  @@index([nextVisitAt])
+}
+
+// 管理記録（1案件:N記録。現場スマホから追加）
+model AkiyaRecord {
+  id          String    @id @default(cuid())
+  akiyaCaseId String
+  akiyaCase   AkiyaCase @relation(fields: [akiyaCaseId], references: [id], onDelete: Cascade)
+  performedAt DateTime  @default(now())     // 管理実行日時
+  gpsLat      Float?                        // 記録時GPS（内部向け証跡。取得失敗時は null）
+  gpsLng      Float?
+  gpsAccuracy Float?                        // 精度（メートル）
+  staffName   String?                       // 担当スタッフ名スナップショット
+  memberId    String?                       // 担当した店舗メンバー（帰属）
+  member      StoreMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  items       AkiyaRecordItem[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([akiyaCaseId, performedAt])
+  @@index([memberId])
+}
+
+// 記録×管理項目の明細。項目名・順序はマスタのスナップショット（マスタ変更・削除に耐える）
+model AkiyaRecordItem {
+  id           String   @id @default(cuid())
+  recordId     String
+  record       AkiyaRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  itemMasterId String?                      // マスタ削除時は SetNull（表示は itemName で継続）
+  itemMaster   AkiyaManagementItem? @relation(fields: [itemMasterId], references: [id], onDelete: SetNull)
+  itemName     String                       // 項目名スナップショット（例: 郵便受けの確認）
+  sortOrder    Int      @default(0)         // 記録時点のマスタ順スナップショット
+  photoUrls    String   @default("[]")      // 写真URL JSON配列
+  note         String?  @db.Text            // 項目別テキスト
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([recordId])
+  @@index([itemMasterId])
+}
+
+// 空き家管理項目マスタ（管理ポータルから追加・編集・並び替え・無効化）
+model AkiyaManagementItem {
+  id          String   @id @default(cuid())
+  name        String   @unique     // 例: 郵便受けの確認
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true) // false = 新規記録のフォームに出さない（既存記録には影響しない）
+  recordItems AkiyaRecordItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================================
+// アキクル案件のStripe請求・分配
+// ============================================================
+
+// 分配割合の設定（シングルトン。id は常に "default"）
+// 3者（システム管理者/本部/加盟店）の取り分%と、システム管理者/本部の受取先を保持する。
+// 受取先 recipientType: "platform"=プラットフォームのStripeアカウント自身が保持（Transferしない）
+//                       "connect" =別のConnectアカウントへTransfer（stripeAccountId 必須）
+// 加盟店は常に Store.stripeConnectAccountId へのTransfer。
+model RevenueShareSetting {
+  id                    String   @id @default("default")
+  systemPercent         Int      @default(0)    // システム管理者の取り分（%整数。3項目合計100）
+  hqPercent             Int      @default(0)    // 本部の取り分
+  storePercent          Int      @default(100)  // 加盟店の取り分
+  systemRecipientType   String   @default("platform")  // "platform" | "connect"
+  systemStripeAccountId String?                         // recipientType=connect のときの acct_...
+  hqRecipientType       String   @default("platform")
+  hqStripeAccountId     String?
+  updatedByAdminId      String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// アキクル案件のStripe請求書（Deal と 1:1）
+model AkikuruInvoice {
+  id                    String    @id @default(cuid())
+  dealId                String    @unique
+  deal                  Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  storeId               String?                    // 発行時点の担当店舗
+  store                 Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  stripeInvoiceId       String    @unique          // in_...
+  stripeCustomerId      String                     // cus_...
+  stripePaymentIntentId String?                    // 支払確定時に webhook で記録
+  hostedInvoiceUrl      String?   @db.Text         // Stripeホスト決済ページ（カード決済QRの宛先）
+  stripeInvoicePdfUrl   String?   @db.Text         // Stripe発行の請求書PDF（参考）
+  amount                Int                        // 請求額（円）。発行時スナップショット
+  status                String    @default("open") // open | paid | void | uncollectible | payment_failed
+  paymentMethod         String?                    // card | customer_balance（銀行振込）
+  paidAt                DateTime?
+  // 銀行振込先スナップショット（Stripe funding instructions。PDFへの印字内容と一致させて不変保持）
+  fundingInstructions   String?   @db.Text         // Stripeレスポンス生JSON
+  bankName              String?
+  bankBranchName        String?
+  bankAccountType       String?                    // 普通 等
+  bankAccountNumber     String?
+  bankAccountHolder     String?
+  // 分配
+  distributionStatus    String    @default("pending") // pending | processing | done | partial | failed
+  distributionError     String?   @db.Text
+  distributedAt         DateTime?
+  sharePercentsJson     String?   @db.Text         // 分配時の割合スナップショット {"system":10,"hq":20,"store":70}
+  transfers             RevenueTransfer[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+  @@index([distributionStatus])
+}
+
+// 分配Transfer台帳（1請求につき system/hq/store の3行を記録。platform保持分もretained_by_platformで記録）
+model RevenueTransfer {
+  id                       String   @id @default(cuid())
+  akikuruInvoiceId         String
+  akikuruInvoice           AkikuruInvoice @relation(fields: [akikuruInvoiceId], references: [id], onDelete: Cascade)
+  recipientType            String              // system | hq | store
+  recipientStripeAccountId String?             // acct_...（platform保持分は null）
+  amount                   Int                 // 円
+  stripeTransferId         String?  @unique    // tr_...（platform保持分は null）
+  sourceChargeId           String?             // source_transaction に使った charge id
+  status                   String   @default("pending") // pending | succeeded | failed | retained_by_platform
+  error                    String?  @db.Text
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([akikuruInvoiceId])
+  @@index([status])
 }

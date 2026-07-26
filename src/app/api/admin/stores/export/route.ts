@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildCsv } from '@/lib/csv-parser'
 import { storeStatusLabel } from '@/lib/store-status'
+import { storeServicesLabel } from '@/lib/store-services'
 import { STORE_CSV_COLUMNS } from '@/lib/store-csv'
 
 /**
@@ -27,6 +28,7 @@ export async function GET() {
       googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true,
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true, serviceAreas: true,
+      supportedServices: true,
       createdAt: true,
       operator: { select: { name: true } },
       _count: { select: { customers: true } },
@@ -44,6 +46,7 @@ export async function GET() {
       case 'openingDate':  return ymd(s.openingDate)
       case 'closingDate':  return ymd(s.closingDate)
       case 'serviceAreas': return s.serviceAreas ?? ''
+      case 'supportedServices': return storeServicesLabel(s.supportedServices)
       case 'operatorName': return s.operator?.name ?? ''
       case 'isActive':     return s.isActive ? '有効' : '無効'
       case 'customerCount': return String(s._count.customers)

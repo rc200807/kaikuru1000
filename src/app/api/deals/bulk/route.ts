@@ -6,6 +6,7 @@ import { recordAccessLog } from '@/lib/access-log'
 import { buildAdminDealsWhere } from '@/lib/deal-list-query'
 import { isDealStatus, DEAL_STATUS_LABEL } from '@/lib/deal-status'
 import { isDealCategory, DEAL_CATEGORY_LABEL } from '@/lib/deal-categories'
+import { storeSupportsAkikuru } from '@/lib/store-services'
 
 const BULK_LIMIT = 1000
 
@@ -52,6 +53,24 @@ export async function POST(request: NextRequest) {
     }
     case 'category': {
       if (!isDealCategory(value)) return NextResponse.json({ error: '無効なカテゴリーです' }, { status: 400 })
+      // アキクル案件は対応サービスに「アキクル」を含む店舗のみ扱える
+      if (value === 'akikuru') {
+        const targetDeals = await prisma.deal.findMany({
+          where, select: { storeId: true }, distinct: ['storeId'],
+        })
+        const storeIds = targetDeals.map(d => d.storeId).filter((v): v is string => !!v)
+        if (storeIds.length > 0) {
+          const stores = await prisma.store.findMany({
+            where: { id: { in: storeIds } }, select: { name: true, supportedServices: true },
+          })
+          const unsupported = stores.filter(s => !storeSupportsAkikuru(s.supportedServices))
+          if (unsupported.length > 0) {
+            return NextResponse.json({
+              error: `アキクル非対応の店舗が含まれています（${unsupported.map(s => s.name).slice(0, 3).join('、')}${unsupported.length > 3 ? ' ほか' : ''}）`,
+            }, { status: 400 })
+          }
+        }
+      }
       data = { category: value }
       label = `カテゴリー→${DEAL_CATEGORY_LABEL[value] ?? value}`
       break

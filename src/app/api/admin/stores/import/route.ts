@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { parseCsv } from '@/lib/csv-parser'
 import { STORE_CSV_COLUMNS, storeStatusValueFromCell } from '@/lib/store-csv'
+import { storeServicesValueFromCell } from '@/lib/store-services'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
 import { recordAccessLog } from '@/lib/access-log'
 
@@ -106,11 +107,16 @@ export async function POST(req: NextRequest) {
     const data: Record<string, unknown> = {}
     let rowError: string | null = null
     for (const col of fieldCols) {
+      // CSVに存在しない列は変更しない（旧フォーマットのCSVで既存値を消さない）
+      if (!(col.header in idxOf)) continue
       const raw = get(row, col.header)
       if (col.kind === 'status') {
         const v = storeStatusValueFromCell(raw)
         if (v === undefined) { rowError = `不明なステータス「${raw}」`; break }
         data.storeStatus = v
+      } else if (col.kind === 'services') {
+        // ラベル/キーの区切り文字列 → 正規化JSON配列（不明値は無視、空欄は '[]'）
+        data.supportedServices = storeServicesValueFromCell(raw)
       } else if (col.kind === 'date') {
         if (!raw) { data[col.key] = null; continue }
         const d = new Date(raw)

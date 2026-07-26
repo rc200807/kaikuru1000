@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { QRCodeSVG } from 'qrcode.react'
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
@@ -187,6 +188,7 @@ type VisitDetail = {
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
   purchaseUpliftPercent?: number
+  deal?: { id: string; status?: string; category?: string | null } | null
 }
 
 type ExistingContract = {
@@ -194,6 +196,22 @@ type ExistingContract = {
   agreedAt: string
   emailSentAt: string | null
   customerEmail: string | null
+}
+
+// アキクル案件のStripe請求情報（振込先＋カード決済ページ）
+type StripeBillingInfo = {
+  akikuruInvoiceId: string
+  stripeInvoiceId: string
+  hostedInvoiceUrl: string | null
+  amount: number
+  status: string
+  bank: {
+    bankName: string | null
+    branchName: string | null
+    accountType: string | null
+    accountNumber: string | null
+    accountHolder: string | null
+  }
 }
 
 /* ─── 手書きサインパッド ─── */
@@ -349,6 +367,8 @@ export default function FinalAgreementPage() {
   const [customerEmailInput, setCustomerEmailInput] = useState('')
   const [occupationInput, setOccupationInput] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
+  // アキクル案件のStripe請求情報（発行済みならPDFの請求書に振込先＋QRを印字する）
+  const [stripeBilling, setStripeBilling] = useState<StripeBillingInfo | null>(null)
   const saleRef = useRef<HTMLDivElement>(null)
   const invoiceRef = useRef<HTMLDivElement>(null)
 
@@ -441,6 +461,16 @@ export default function FinalAgreementPage() {
       setCustomerEmailInput(emailParam || data?.user?.email || '')
       setOccupationInput(occupationParam || data?.user?.occupation || '')
       setPhoneInput(data?.user?.phone || '')
+      // アキクル案件: 発行済みのStripe請求情報があれば取得（再表示時に振込先＋QRを印字するため）
+      if (data?.deal?.category === 'akikuru') {
+        try {
+          const billingRes = await fetch(`/api/visit-schedules/${scheduleId}/stripe-invoice`)
+          if (billingRes.ok) {
+            const { billing } = await billingRes.json()
+            if (billing) setStripeBilling(billing)
+          }
+        } catch { /* 取得失敗は無視（締結時に再発行される） */ }
+      }
     }
     if (contractRes.ok) {
       const contract = await contractRes.json()
@@ -491,6 +521,8 @@ export default function FinalAgreementPage() {
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
   // 請求項目が無い案件は請求書セクション・署名ごと不要
   const hasInvoice = (visit?.workItems.length ?? 0) > 0
+  // アキクル案件は締結時にStripe請求書を発行し、振込先＋カード決済QRを請求書に印字する
+  const isAkikuru = visit?.deal?.category === 'akikuru'
 
   const handleSubmit = async () => {
     if (!visit) return
@@ -506,6 +538,19 @@ export default function FinalAgreementPage() {
     setMessage(null)
 
     try {
+      // アキクル案件: PDF生成の前にStripe請求書を発行し、振込先＋QRをDOMに反映させる（冪等）
+      if (isAkikuru && hasInvoice) {
+        const billingRes = await fetch(`/api/visit-schedules/${scheduleId}/stripe-invoice`, { method: 'POST' })
+        if (!billingRes.ok) {
+          const err = await billingRes.json().catch(() => null)
+          throw new Error(err?.error ?? 'Stripe請求書の発行に失敗しました')
+        }
+        const { billing } = await billingRes.json()
+        // 同期コミット＋描画1フレーム待ちで、QRコード（canvas）をPDF化前に確実に描画する
+        flushSync(() => setStripeBilling(billing))
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      }
+
       let pdfBase64: string | null = null
       let invoicePdfBase64: string | null = null
       try {
@@ -984,6 +1029,46 @@ export default function FinalAgreementPage() {
               <li>本作業に起因する一切の紛争については、弊社本店所在地を管轄する裁判所とします。</li>
             </ol>
           </div>
+
+          {/* ──── お支払い方法（アキクル案件のみ。Stripe発行の振込先＋カード決済QR） ──── */}
+          {isAkikuru && stripeBilling && (
+            <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
+              <p className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-2">お支払い方法（いずれかをお選びください）</p>
+
+              {/* ① 銀行振込 */}
+              <div className="mb-3">
+                <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface)] mb-1">① 銀行振込（お客様専用口座）</p>
+                <table className="text-[10px] text-[var(--md-sys-color-on-surface)]">
+                  <tbody>
+                    <tr><td className="pr-3 py-0.5 text-[var(--md-sys-color-on-surface-variant)]">銀行名</td><td className="py-0.5 font-medium">{stripeBilling.bank.bankName ?? '—'}</td></tr>
+                    <tr><td className="pr-3 py-0.5 text-[var(--md-sys-color-on-surface-variant)]">支店名</td><td className="py-0.5 font-medium">{stripeBilling.bank.branchName ?? '—'}</td></tr>
+                    <tr><td className="pr-3 py-0.5 text-[var(--md-sys-color-on-surface-variant)]">口座種別</td><td className="py-0.5 font-medium">{stripeBilling.bank.accountType ?? '—'}</td></tr>
+                    <tr><td className="pr-3 py-0.5 text-[var(--md-sys-color-on-surface-variant)]">口座番号</td><td className="py-0.5 font-medium">{stripeBilling.bank.accountNumber ?? '—'}</td></tr>
+                    <tr><td className="pr-3 py-0.5 text-[var(--md-sys-color-on-surface-variant)]">口座名義</td><td className="py-0.5 font-medium">{stripeBilling.bank.accountHolder ?? '—'}</td></tr>
+                  </tbody>
+                </table>
+                <p className="text-[9px] text-[var(--md-sys-color-on-surface-variant)] mt-1 leading-relaxed">
+                  ※このお振込先はお客様専用の口座です。お振込みをもって入金確認となります（振込手数料はお客様負担）。
+                </p>
+              </div>
+
+              {/* ② クレジットカード決済 */}
+              {stripeBilling.hostedInvoiceUrl && (
+                <div>
+                  <p className="text-[10px] font-semibold text-[var(--md-sys-color-on-surface)] mb-1">② クレジットカード決済</p>
+                  <div className="flex items-center gap-3">
+                    <QRCodeCanvas value={stripeBilling.hostedInvoiceUrl} size={72} />
+                    <div className="min-w-0">
+                      <p className="text-[9px] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                        QRコードを読み取り、決済ページからお支払いください。
+                      </p>
+                      <p className="text-[8px] text-[var(--md-sys-color-on-surface-variant)] break-all">{stripeBilling.hostedInvoiceUrl}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* ──── 請求書への同意と署名 ──── */}

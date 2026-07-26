@@ -2016,6 +2016,11 @@ model AkiyaRecord {
   memberId    String?                       // 担当した店舗メンバー（帰属）
   member      StoreMember? @relation(fields: [memberId], references: [id], onDelete: SetNull)
   items       AkiyaRecordItem[]
+  // 顧客向けレポート（提出するとトークンURLを発行し、顧客メールへ送信する）
+  reportToken       String?   @unique       // 閲覧用トークン（提出時に発行・以後不変）
+  reportSubmittedAt DateTime?               // レポート提出日時（null = 未提出）
+  reportSentTo      String?                 // メール送信先アドレス（スナップショット）
+  reportSentAt      DateTime?               // メール送信に成功した日時
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

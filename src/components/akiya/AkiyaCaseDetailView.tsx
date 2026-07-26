@@ -33,6 +33,11 @@ type AkiyaRecord = {
   gpsAccuracy: number | null
   staffName: string | null
   createdAt: string
+  // 顧客向けレポート
+  reportToken: string | null
+  reportSubmittedAt: string | null
+  reportSentTo: string | null
+  reportSentAt: string | null
   items: RecordItem[]
 }
 
@@ -115,6 +120,9 @@ export default function AkiyaCaseDetailView({
 
   // 記録
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null)
+  // 顧客向けレポートの提出・URLコピー
+  const [submittingReportId, setSubmittingReportId] = useState<string | null>(null)
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
   // 案件削除
   const [deleting, setDeleting] = useState(false)
@@ -271,6 +279,47 @@ export default function AkiyaCaseDetailView({
       setMsg({ type: 'success', text: '管理記録を削除しました' })
     } else {
       setMsg({ type: 'error', text: '管理記録の削除に失敗しました' })
+    }
+  }
+
+  /** 管理記録を顧客向けレポートとして提出（URL発行＋メール送信） */
+  async function submitReport(recordId: string) {
+    if (submittingReportId) return
+    setSubmittingReportId(recordId)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/akiya-cases/${caseId}/records/${recordId}/report`, { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'レポートの提出に失敗しました')
+      setAkiyaCase(prev => prev ? {
+        ...prev,
+        records: prev.records.map(r => r.id === recordId ? {
+          ...r,
+          reportToken: data.url.split('/').pop() ?? r.reportToken,
+          reportSubmittedAt: data.submittedAt ?? new Date().toISOString(),
+          reportSentTo: data.sentTo ?? null,
+          reportSentAt: data.sentAt ?? null,
+        } : r),
+      } : prev)
+      setMsg(data.emailSent
+        ? { type: 'success', text: `レポートを提出し、${data.sentTo} へ送信しました` }
+        : { type: 'error', text: `レポートを提出しました（${data.emailError ?? 'メール未送信'}）。URLをコピーして共有してください` })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'レポートの提出に失敗しました' })
+    } finally {
+      setSubmittingReportId(null)
+    }
+  }
+
+  /** レポート閲覧URLをクリップボードにコピー */
+  async function copyReportUrl(token: string | null) {
+    if (!token) return
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/akiya-report/${token}`)
+      setCopiedToken(token)
+      setTimeout(() => setCopiedToken(null), 2000)
+    } catch {
+      setMsg({ type: 'error', text: 'URLをコピーできませんでした' })
     }
   }
 
@@ -541,15 +590,45 @@ export default function AkiyaCaseDetailView({
                           )}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => deleteRecord(record.id)}
-                        disabled={deletingRecordId === record.id}
-                        className="text-[11px] text-[#dc2626] hover:underline disabled:opacity-50 shrink-0"
-                      >
-                        {deletingRecordId === record.id ? '削除中...' : '削除'}
-                      </button>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {record.reportSubmittedAt ? (
+                          <>
+                            <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-[rgba(34,197,94,0.15)] text-[#16a34a]">
+                              レポート提出済み
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyReportUrl(record.reportToken)}
+                              className="text-[11px] text-[var(--portal-primary,#374151)] hover:underline"
+                            >
+                              {copiedToken === record.reportToken ? 'コピー済' : 'URLをコピー'}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => submitReport(record.id)}
+                            disabled={submittingReportId === record.id}
+                            className="text-[11px] text-[var(--portal-primary,#374151)] hover:underline disabled:opacity-50"
+                          >
+                            {submittingReportId === record.id ? '提出中...' : 'レポートを提出'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => deleteRecord(record.id)}
+                          disabled={deletingRecordId === record.id}
+                          className="text-[11px] text-[#dc2626] hover:underline disabled:opacity-50"
+                        >
+                          {deletingRecordId === record.id ? '削除中...' : '削除'}
+                        </button>
+                      </div>
                     </div>
+                    {record.reportSubmittedAt && record.reportSentTo && (
+                      <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                        {record.reportSentTo} へ送信済み
+                      </p>
+                    )}
 
                     {/* 入力のあった項目（折りたたみ） */}
                     {filledItems.length > 0 && (

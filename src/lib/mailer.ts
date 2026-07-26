@@ -1495,3 +1495,82 @@ export async function sendBugReportNotification(params: {
   })
   return true
 }
+
+/**
+ * 空き家管理レポートの閲覧URLを顧客へ送信する。
+ * 送信成功なら true、メール設定が未構成なら false を返す。
+ * ※内部証跡（GPS等）はレポートにも本メールにも含めない。
+ */
+export async function sendAkiyaReportEmail(params: {
+  customerEmail: string
+  customerName: string
+  propertyAddress: string
+  performedAt: Date
+  storeName: string
+  reportUrl: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const performedStr = params.performedAt.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+  const cName = escapeHtml(params.customerName)
+  const address = escapeHtml(params.propertyAddress)
+  const url = escapeHtml(params.reportUrl)
+
+  const html = `
+<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>空き家管理レポートのお知らせ</title></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;"><tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+      <tr><td style="background-color:#b45309;border-radius:12px 12px 0 0;padding:28px 32px;">
+        <p style="margin:0;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">アキクル</p>
+        <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">空き家管理レポートのお知らせ</h1>
+      </td></tr>
+      <tr><td style="background-color:#ffffff;padding:32px;">
+        <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.7;">
+          ${cName} 様<br><br>
+          いつもご利用いただきありがとうございます。<br>
+          下記の物件について、管理作業が完了いたしましたのでレポートをお送りいたします。
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+          <tr><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">物件所在地</td><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:14px;font-weight:600;color:#111827;text-align:right;">${address}</td></tr>
+          <tr><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">管理実施日時</td><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;text-align:right;">${performedStr}</td></tr>
+          <tr><td style="padding:12px 18px;font-size:13px;color:#6b7280;">担当</td><td style="padding:12px 18px;font-size:14px;color:#111827;text-align:right;">${escapeHtml(params.storeName)}</td></tr>
+        </table>
+        <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+          <a href="${url}" style="display:inline-block;background-color:#b45309;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:8px;">レポートを見る</a>
+        </td></tr></table>
+        <p style="margin:20px 0 0;color:#9ca3af;font-size:12px;line-height:1.7;text-align:center;">
+          ボタンが開かない場合は、次のURLをブラウザに貼り付けてください。<br>
+          <span style="color:#6b7280;word-break:break-all;">${url}</span>
+        </p>
+      </td></tr>
+      <tr><td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;"><p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">このメールは買いクル管理システムから自動送信されています</p></td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`
+
+  await transporter.sendMail({
+    from,
+    to: params.customerEmail,
+    subject: `【アキクル】空き家管理レポート（${performedStr}）`,
+    html,
+    text: [
+      `${params.customerName} 様`,
+      '',
+      'いつもご利用いただきありがとうございます。',
+      '下記の物件について、管理作業が完了いたしましたのでレポートをお送りいたします。',
+      '',
+      `物件所在地: ${params.propertyAddress}`,
+      `管理実施日時: ${performedStr}`,
+      `担当: ${params.storeName}`,
+      '',
+      `レポートはこちら: ${params.reportUrl}`,
+    ].join('\n'),
+  })
+  return true
+}

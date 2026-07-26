@@ -4,7 +4,6 @@
 // 管理項目マスタを縦積みし、項目ごとに写真＋メモを入力して一括保存する。
 // GPSは任意（拒否・失敗でも保存はブロックしない）。
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AppBar from '@/components/AppBar'
 import Card from '@/components/Card'
@@ -29,6 +28,13 @@ type ItemDraft = {
   photos: PhotoEntry[]
 }
 
+type ReportResult = {
+  url: string
+  emailSent: boolean
+  emailError: string | null
+  sentTo: string | null
+}
+
 type GpsState =
   | { status: 'loading' }
   | { status: 'ok'; lat: number; lng: number; accuracy: number | null }
@@ -50,7 +56,6 @@ export default function AkiyaRecordForm({
   caseId: string
   backHref: string
 }) {
-  const router = useRouter()
   const [items, setItems] = useState<ManagementItem[]>([])
   const [drafts, setDrafts] = useState<Record<string, ItemDraft>>({})
   const [loading, setLoading] = useState(true)
@@ -60,6 +65,11 @@ export default function AkiyaRecordForm({
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const savedRef = useRef(false)
+  // 保存完了後のレポート提出フロー
+  const [savedRecordId, setSavedRecordId] = useState<string | null>(null)
+  const [submittingReport, setSubmittingReport] = useState(false)
+  const [report, setReport] = useState<ReportResult | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // 管理項目マスタの取得
   useEffect(() => {
@@ -209,15 +219,144 @@ export default function AkiyaRecordForm({
         const data = await res.json().catch(() => null)
         throw new Error(data?.error || '記録の保存に失敗しました')
       }
+      const saved = await res.json()
       savedRef.current = true
-      router.push(backHref)
+      // 保存後は自動遷移せず、レポート提出まで行える完了画面に切り替える
+      setSavedRecordId(saved.id)
+      setSaving(false)
     } catch (err) {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : '記録の保存に失敗しました' })
       setSaving(false)
     }
   }
 
+  /** レポートを提出（URL発行＋顧客へメール送信）。再実行で同じURLのまま再送できる */
+  async function handleSubmitReport() {
+    if (!savedRecordId || submittingReport) return
+    setSubmittingReport(true)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/akiya-cases/${caseId}/records/${savedRecordId}/report`, { method: 'POST' })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'レポートの提出に失敗しました')
+      setReport({ url: data.url, emailSent: !!data.emailSent, emailError: data.emailError ?? null, sentTo: data.sentTo ?? null })
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'レポートの提出に失敗しました' })
+    } finally {
+      setSubmittingReport(false)
+    }
+  }
+
+  async function copyReportUrl() {
+    if (!report) return
+    try {
+      await navigator.clipboard.writeText(report.url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setMsg({ type: 'error', text: 'コピーできませんでした。URLを手動で選択してください' })
+    }
+  }
+
   if (loading) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
+
+  // 保存完了 → レポート提出フロー
+  if (savedRecordId) {
+    return (
+      <div className="min-h-screen bg-[var(--md-sys-color-background)] pb-8">
+        <AppBar title="管理記録を追加" subtitle="空き家管理" />
+
+        <div className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+          {msg && <MessageBanner severity={msg.type}>{msg.text}</MessageBanner>}
+
+          <Card variant="outlined" padding="md">
+            <div className="flex items-start gap-3">
+              <span className="w-9 h-9 shrink-0 rounded-full bg-[rgba(34,197,94,0.15)] text-[#16a34a] grid place-items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">管理記録を保存しました</h2>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                  案件の「前回訪問日」を更新しました。
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* レポート提出 */}
+          <Card variant="outlined" padding="md">
+            <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-1.5">顧客へレポートを提出</h2>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed mb-4">
+              この記録をまとめた閲覧ページのURLを発行し、顧客のメールアドレスへ送信します。
+              位置情報などの内部記録はレポートに含まれません。
+            </p>
+
+            {!report ? (
+              <Button onClick={handleSubmitReport} loading={submittingReport} disabled={submittingReport} fullWidth>
+                {submittingReport ? '提出中...' : 'レポートを提出'}
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <MessageBanner severity={report.emailSent ? 'success' : 'warning'}>
+                  {report.emailSent
+                    ? `レポートを提出し、${report.sentTo} へ送信しました。`
+                    : `レポートを提出しました。${report.emailError ?? 'メールは送信されませんでした'}。下記URLを直接お知らせください。`}
+                </MessageBanner>
+
+                <div>
+                  <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                    レポート閲覧URL
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={report.url}
+                      onFocus={e => e.currentTarget.select()}
+                      className="flex-1 min-w-0 h-11 px-3 text-xs bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none"
+                    />
+                    <Button variant="outlined" size="sm" onClick={copyReportUrl}>
+                      {copied ? 'コピー済' : 'コピー'}
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <a
+                      href={report.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-[var(--portal-primary,#374151)] hover:underline"
+                    >
+                      レポートを開く
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleSubmitReport}
+                      disabled={submittingReport}
+                      className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline disabled:opacity-50"
+                    >
+                      {submittingReport ? '再送中...' : 'メールを再送'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <div className="flex gap-2">
+            <Link href={backHref} className="flex-1">
+              <Button variant={report ? 'filled' : 'outlined'} fullWidth>案件詳細に戻る</Button>
+            </Link>
+          </div>
+          {!report && (
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] text-center">
+              レポートは後から案件詳細の記録一覧でも提出できます
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   const gpsChip = (() => {
     if (gps.status === 'loading') {

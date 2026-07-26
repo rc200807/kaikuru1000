@@ -33,6 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         select: {
           id: true, performedAt: true, gpsLat: true, gpsLng: true, gpsAccuracy: true,
           staffName: true, createdAt: true,
+          reportToken: true, reportSubmittedAt: true, reportSentTo: true, reportSentAt: true,
           items: {
             orderBy: { sortOrder: 'asc' },
             select: { id: true, itemMasterId: true, itemName: true, sortOrder: true, photoUrls: true, note: true },

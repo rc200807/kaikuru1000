@@ -1822,6 +1822,7 @@ model TrackingEvent {
   @@index([sessionId])
   @@index([type, occurredAt])
   @@index([storeId, occurredAt])
+  @@index([occurredAt]) // 期間指定のみの集計（アクセス解析の概要/CV推移）でシーケンシャルスキャンになるのを防ぐ
 }
 
 // キャンペーンURLビルダー（パラメータ付きURLの発行・成果の自動追跡）

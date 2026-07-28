@@ -59,6 +59,34 @@ export const SESSION_FETCH_CAP = 20_000
 export const PV_FETCH_CAP = 50_000
 export const FLOW_SESSION_CAP = 5_000
 
+// 概要タブ用の上限。生行の取り込みは「時刻列だけ」「直近サンプルだけ」に限定し、
+// 件数系は DB 側 count/groupBy で求めることで件数に依存しない応答時間にする。
+/** 時系列・ヒートマップ用に取り込むセッション数の上限（時刻＋訪問者IDのみ） */
+export const SESSION_TS_CAP = 200_000
+/** 参照元・LP・離脱ページのサンプル対象セッション数 */
+export const SAMPLE_SESSION_CAP = 3_000
+/** サンプルセッションのPV取得上限（暴走セッション対策のバックストップ） */
+export const SAMPLE_PV_CAP = 60_000
+/** 直帰率算出（sessionId 別PV件数）の groupBy 上限 */
+export const PV_GROUP_CAP = 150_000
+/** CVイベント取得上限 */
+export const EVENT_FETCH_CAP = 20_000
+
+/** 同時実行数を絞って並列実行する（バケット単位のcountクエリ用） */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async () => {
+    for (;;) {
+      const i = cursor++
+      if (i >= items.length) return
+      out[i] = await fn(items[i], i)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 export type SessionLite = {
   id: string
   visitorId: string

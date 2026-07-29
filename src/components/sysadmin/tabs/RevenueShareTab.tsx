@@ -154,6 +154,140 @@ export default function RevenueShareTab() {
           {saving ? '保存中…' : '保存'}
         </button>
       </div>
+
+      <hr style={{ margin: '32px 0 24px', border: 'none', borderTop: '1px solid var(--md-sys-color-outline-variant)' }} />
+
+      <SystemFeeSharePanel />
+    </div>
+  )
+}
+
+/** システム利用料の分配設定（システム管理者/本部の2者。加盟店は対象外） */
+function SystemFeeSharePanel() {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [savedMsg, setSavedMsg] = useState('')
+
+  const [systemPercent, setSystemPercent] = useState('100')
+  const [hqPercent, setHqPercent] = useState('0')
+  const [systemRecipientType, setSystemRecipientType] = useState<RecipientType>('platform')
+  const [systemStripeAccountId, setSystemStripeAccountId] = useState('')
+  const [hqRecipientType, setHqRecipientType] = useState<RecipientType>('platform')
+  const [hqStripeAccountId, setHqStripeAccountId] = useState('')
+
+  useEffect(() => {
+    fetch('/api/sysadmin/system-fee-share')
+      .then(r => (r.ok ? r.json() : null))
+      .then((s: Setting | null) => {
+        if (!s) return
+        setSystemPercent(String(s.systemPercent))
+        setHqPercent(String(s.hqPercent))
+        setSystemRecipientType(s.systemRecipientType)
+        setSystemStripeAccountId(s.systemStripeAccountId ?? '')
+        setHqRecipientType(s.hqRecipientType)
+        setHqStripeAccountId(s.hqStripeAccountId ?? '')
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const total = (Number(systemPercent) || 0) + (Number(hqPercent) || 0)
+  const totalOk = total === 100
+
+  async function handleSave() {
+    setError('')
+    setSavedMsg('')
+    setSaving(true)
+    try {
+      const res = await fetch('/api/sysadmin/system-fee-share', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPercent: Number(systemPercent) || 0,
+          hqPercent: Number(hqPercent) || 0,
+          systemRecipientType,
+          systemStripeAccountId: systemRecipientType === 'connect' ? (systemStripeAccountId.trim() || null) : null,
+          hqRecipientType,
+          hqStripeAccountId: hqRecipientType === 'connect' ? (hqStripeAccountId.trim() || null) : null,
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(j.error ?? '保存に失敗しました'); return }
+      setSavedMsg('システム利用料の分配設定を保存しました')
+      setTimeout(() => setSavedMsg(''), 5000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return null
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700, color: 'var(--md-sys-color-on-surface)' }}>システム利用料の分配</h3>
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)' }}>
+        店舗から回収した月額システム利用料の分配割合です。支払確定時に自動でStripe Connect送金されます（加盟店への分配はありません）。
+      </p>
+
+      {savedMsg && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: 'rgba(74,222,128,0.12)', color: '#4ade80', fontSize: 13 }}>
+          {savedMsg}
+        </div>
+      )}
+      {error && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.12)', color: '#f87171', fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <Panel title="分配割合（システム利用料）">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <PercentField label="システム管理者" value={systemPercent} onChange={setSystemPercent} />
+          <PercentField label="本部" value={hqPercent} onChange={setHqPercent} />
+        </div>
+        <div style={{ marginTop: 12, fontSize: 13, fontWeight: 700, color: totalOk ? '#4ade80' : '#f87171' }}>
+          合計: {total}%{!totalOk && '（100%になるように調整してください）'}
+        </div>
+      </Panel>
+
+      <Panel title="受取先の設定（システム利用料）" style={{ marginTop: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <RecipientRow
+            label="システム管理者"
+            type={systemRecipientType}
+            onTypeChange={setSystemRecipientType}
+            accountId={systemStripeAccountId}
+            onAccountIdChange={setSystemStripeAccountId}
+            name="fee-system-recipient"
+          />
+          <RecipientRow
+            label="本部"
+            type={hqRecipientType}
+            onTypeChange={setHqRecipientType}
+            accountId={hqStripeAccountId}
+            onAccountIdChange={setHqStripeAccountId}
+            name="fee-hq-recipient"
+          />
+        </div>
+      </Panel>
+
+      <p style={{ margin: '12px 0 0', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>
+        Stripe決済手数料と分配の端数はプラットフォームが負担・保持します。
+      </p>
+
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={handleSave}
+          disabled={saving || !totalOk}
+          style={{
+            padding: '10px 24px', borderRadius: 8, border: 'none', fontSize: 14, fontWeight: 700,
+            background: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)',
+            cursor: (saving || !totalOk) ? 'default' : 'pointer', opacity: (saving || !totalOk) ? 0.5 : 1,
+          }}
+        >
+          {saving ? '保存中…' : '保存'}
+        </button>
+      </div>
     </div>
   )
 }

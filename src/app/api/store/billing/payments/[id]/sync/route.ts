@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { stripe } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
+import { markStorePaymentPaidAndDistribute } from '@/lib/store-payment-distribution'
 
 export const runtime = 'nodejs'
 
@@ -24,10 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const pi = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId)
     if (pi.status === 'succeeded') {
-      await prisma.storePayment.updateMany({
-        where: { id: payment.id, status: { not: 'paid' } },
-        data: { status: 'paid', paidAt: new Date(), failureMessage: null },
-      })
+      await markStorePaymentPaidAndDistribute(payment.id)
       return NextResponse.json({ status: 'paid' })
     }
     if (pi.status === 'canceled') {

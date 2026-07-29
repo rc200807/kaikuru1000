@@ -34,7 +34,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   await recordAccessLog({
     userType: 'sysadmin', userId: admin.id, userName: admin.name,
-    action: `システム利用料を設定（${store.name}: ¥${monthlyAmount.toLocaleString()}/月・${isActive ? '有効' : '無効'}）`,
+    action: `システム利用料を設定（${store.name}: ${monthlyAmount > 0 ? `上書き¥${monthlyAmount.toLocaleString()}/月` : '自動算出'}・${isActive ? '有効' : '無効'}）`,
     req: request,
   })
   return NextResponse.json(setting)

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { stripe } from '@/lib/stripe'
 import { markSupplyOrderPaidAndNotify } from '@/lib/supply-orders'
 import { distributeAkikuruInvoice } from '@/lib/akikuru-distribution'
+import { markStorePaymentPaidAndDistribute } from '@/lib/store-payment-distribution'
 import { syncConnectAccountStatus } from '@/lib/stripe-connect'
 
 export const runtime = 'nodejs'
@@ -53,13 +54,10 @@ export async function POST(req: NextRequest) {
         // 支払い確定 + 初回確定時のみ Slack 通知
         await markSupplyOrderPaidAndNotify(orderId)
       }
-      // 店舗決済（システム利用料等）のセーフティネット。主経路は同期確定
+      // 店舗決済（システム利用料等）のセーフティネット。主経路は同期確定。分配も実行
       const storePaymentId = pi.metadata?.storePaymentId
       if (storePaymentId) {
-        await prisma.storePayment.updateMany({
-          where: { id: storePaymentId, status: { not: 'paid' } },
-          data: { status: 'paid', paidAt: new Date(), stripePaymentIntentId: pi.id, failureMessage: null },
-        })
+        await markStorePaymentPaidAndDistribute(storePaymentId, pi.id)
       }
     } else if (event.type === 'payment_intent.payment_failed') {
       const pi = event.data.object as any

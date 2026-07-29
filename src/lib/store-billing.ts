@@ -53,6 +53,46 @@ export function billingMonthLabel(month: string): string {
   return `${y}年${Number(m)}月分`
 }
 
+// ─── 料金項目マスタ（対応サービスごとの月額） ───
+
+/** 初期マスタ（テーブルが空のときに遅延シード） */
+const DEFAULT_FEE_SERVICES = [
+  { serviceKey: 'kaikuru', label: '買いクル', monthlyAmount: 8800, sortOrder: 1 },
+  { serviceKey: 'akikuru', label: 'アキクル', monthlyAmount: 8800, sortOrder: 2 },
+]
+
+/** 料金項目マスタを取得（0件なら既定の買いクル/アキクルをシード） */
+export async function getSystemFeeServices() {
+  const services = await prisma.systemFeeService.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] })
+  if (services.length > 0) return services
+  // createMany の skipDuplicates は SQLite 非対応のため upsert（開発=SQLite/本番=PG 両対応）
+  for (const s of DEFAULT_FEE_SERVICES) {
+    await prisma.systemFeeService.upsert({ where: { serviceKey: s.serviceKey }, create: s, update: {} })
+  }
+  return prisma.systemFeeService.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] })
+}
+
+export type FeeBreakdownItem = { serviceKey: string; label: string; amount: number }
+
+/**
+ * 店舗の対応サービス（Store.supportedServices の生JSON）から月額を算出する。
+ * マスタで isActive の項目のうち、店舗の対応キーに含まれるものを合算。
+ */
+export function computeStoreFee(
+  supportedServicesJson: string | null | undefined,
+  services: { serviceKey: string; label: string; monthlyAmount: number; isActive: boolean }[],
+): { total: number; breakdown: FeeBreakdownItem[] } {
+  let keys: string[] = []
+  try {
+    const parsed = JSON.parse(supportedServicesJson || '[]')
+    if (Array.isArray(parsed)) keys = parsed.filter((k): k is string => typeof k === 'string')
+  } catch { /* ignore */ }
+  const breakdown = services
+    .filter(s => s.isActive && s.monthlyAmount > 0 && keys.includes(s.serviceKey))
+    .map(s => ({ serviceKey: s.serviceKey, label: s.label, amount: s.monthlyAmount }))
+  return { total: breakdown.reduce((sum, b) => sum + b.amount, 0), breakdown }
+}
+
 type ChargeResult = { status: 'paid' | 'failed' | 'no_card' | 'skipped'; message?: string }
 
 /**
@@ -109,6 +149,13 @@ export async function chargeStorePayment(paymentId: string): Promise<ChargeResul
     )
     if (pi.status === 'succeeded') {
       await markAttempt({ status: 'paid', paidAt: new Date(), stripePaymentIntentId: pi.id, failureMessage: null })
+      // 分配（システム管理者/本部）。失敗しても支払い自体は成立（台帳にfailedで残りリトライ可能）
+      try {
+        const { distributeStorePayment } = await import('@/lib/store-payment-distribution')
+        await distributeStorePayment(payment.id)
+      } catch (e) {
+        console.error('[store-billing] 分配に失敗:', e)
+      }
       return { status: 'paid' }
     }
     // requires_action（3DS必須）等 — off-session では完了できない
@@ -145,23 +192,34 @@ export type SystemFeeRunSummary = {
 
 /**
  * 指定月のシステム利用料を全アクティブ店舗へ課金する（cron・sysadmin手動実行の共通実装）。
+ * 金額 = 店舗ごとの上書き額（SystemFeeSetting.monthlyAmount > 0）または
+ *        対応サービス（Store.supportedServices × SystemFeeService）からの自動算出。
  * 冪等: StorePayment の @@unique([storeId, kind, billingMonth]) を create-first で利用し、
  * 既存が paid/pending 以外（failed/no_card）の場合のみ再課金する。
  */
 export async function runSystemFeeBilling(month?: string, onlyStoreId?: string): Promise<SystemFeeRunSummary> {
   const billingMonth = month ?? jstMonthKey(new Date())
-  const settings = await prisma.systemFeeSetting.findMany({
-    where: {
-      isActive: true,
-      monthlyAmount: { gt: 0 },
-      ...(onlyStoreId ? { storeId: onlyStoreId } : {}),
-    },
-    select: { storeId: true, monthlyAmount: true },
-  })
+  const [settings, services] = await Promise.all([
+    prisma.systemFeeSetting.findMany({
+      where: { isActive: true, ...(onlyStoreId ? { storeId: onlyStoreId } : {}) },
+      select: { storeId: true, monthlyAmount: true, store: { select: { supportedServices: true } } },
+    }),
+    getSystemFeeServices(),
+  ])
 
-  const summary: SystemFeeRunSummary = { month: billingMonth, targets: settings.length, paid: 0, failed: 0, noCard: 0, skipped: 0 }
+  const summary: SystemFeeRunSummary = { month: billingMonth, targets: 0, paid: 0, failed: 0, noCard: 0, skipped: 0 }
 
   for (const setting of settings) {
+    const auto = computeStoreFee(setting.store.supportedServices, services)
+    const override = setting.monthlyAmount > 0
+    const amount = override ? setting.monthlyAmount : auto.total
+    if (amount <= 0) continue // 対応サービスなし・金額0は課金対象外
+    summary.targets++
+
+    const breakdown = override ? null : auto.breakdown
+    const serviceNote = breakdown && breakdown.length > 0 ? `: ${breakdown.map(b => b.label).join('・')}` : ''
+    const description = `システム利用料（${billingMonthLabel(billingMonth)}${serviceNote}）`
+
     // create-first（P2002 = 既に当月分がある）
     let paymentId: string
     try {
@@ -170,8 +228,9 @@ export async function runSystemFeeBilling(month?: string, onlyStoreId?: string):
           storeId: setting.storeId,
           kind: 'system_fee',
           billingMonth,
-          description: `システム利用料（${billingMonthLabel(billingMonth)}）`,
-          amount: setting.monthlyAmount,
+          description,
+          amount,
+          breakdownJson: breakdown ? JSON.stringify(breakdown) : null,
           status: 'pending',
         },
         select: { id: true },
@@ -187,8 +246,11 @@ export async function runSystemFeeBilling(month?: string, onlyStoreId?: string):
         summary.skipped++
         continue
       }
-      // failed / no_card は再試行（pending に戻してから課金）
-      await prisma.storePayment.update({ where: { id: existing.id }, data: { status: 'pending' } })
+      // failed / no_card は再試行（最新の金額・内訳に更新して pending に戻してから課金）
+      await prisma.storePayment.update({
+        where: { id: existing.id },
+        data: { status: 'pending', amount, description, breakdownJson: breakdown ? JSON.stringify(breakdown) : null },
+      })
       paymentId = existing.id
     }
 

@@ -1425,10 +1425,22 @@ model SystemFeeSetting {
   id            String   @id @default(cuid())
   storeId       String   @unique
   store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  monthlyAmount Int      @default(0)          // 月額（円・税込）
+  monthlyAmount Int      @default(0)          // 上書き月額（円・税込）。0 = 対応サービスから自動算出
   isActive      Boolean  @default(false)      // true の店舗のみ毎月課金
   note          String?  @db.Text
   updatedByName String?                       // 最終更新者（sysadmin名）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// システム利用料の料金項目マスタ（対応サービスごとの月額。sysadminで追加・編集）
+model SystemFeeService {
+  id            String   @id @default(cuid())
+  serviceKey    String   @unique              // Store.supportedServices のキー（kaikuru | akikuru | 追加キー）
+  label         String                        // 表示名（買いクル 等）
+  monthlyAmount Int      @default(0)          // 月額（円・税込）
+  isActive      Boolean  @default(true)       // 無効にすると課金対象から除外
+  sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -1451,6 +1463,11 @@ model StorePayment {
   receiptNumber         String?   @unique                 // R-YYYYMM-NNNN（初回発行時に採番・不変）
   receiptName           String?                           // 領収書宛名（既定=店舗名・再編集可）
   receiptIssuedAt       DateTime?
+  breakdownJson         String?   @db.Text                // 内訳 [{serviceKey,label,amount}]（自動算出時）
+  distributionStatus    String    @default("none")        // none | done | partial（分配設定が全platformなら done=保持のみ）
+  distributionError     String?   @db.Text
+  distributedAt         DateTime?
+  transfers             RevenueTransfer[]
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -2171,8 +2188,10 @@ model AkikuruInvoice {
 // 分配Transfer台帳（1請求につき system/hq/store の3行を記録。platform保持分もretained_by_platformで記録）
 model RevenueTransfer {
   id                       String   @id @default(cuid())
-  akikuruInvoiceId         String
-  akikuruInvoice           AkikuruInvoice @relation(fields: [akikuruInvoiceId], references: [id], onDelete: Cascade)
+  akikuruInvoiceId         String?             // アキクル請求の分配（どちらか一方が入る）
+  akikuruInvoice           AkikuruInvoice? @relation(fields: [akikuruInvoiceId], references: [id], onDelete: Cascade)
+  storePaymentId           String?             // システム利用料など店舗決済の分配
+  storePayment             StorePayment? @relation(fields: [storePaymentId], references: [id], onDelete: Cascade)
   recipientType            String              // system | hq | store
   recipientStripeAccountId String?             // acct_...（platform保持分は null）
   amount                   Int                 // 円
@@ -2184,5 +2203,6 @@ model RevenueTransfer {
   updatedAt                DateTime @updatedAt
 
   @@index([akikuruInvoiceId])
+  @@index([storePaymentId])
   @@index([status])
 }

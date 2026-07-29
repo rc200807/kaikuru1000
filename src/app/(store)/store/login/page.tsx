@@ -9,6 +9,7 @@ import TextField from '@/components/TextField'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import PasskeyLoginButton from '@/components/PasskeyLoginButton'
+import LoginFooter from '@/components/LoginFooter'
 
 export default function StoreLoginPage() {
   const router = useRouter()
@@ -160,11 +161,7 @@ export default function StoreLoginPage() {
           )}
         </Card>
 
-        <p className="text-center mt-5 text-sm text-[var(--md-sys-color-on-surface-variant)]">
-          <Link href="/" className="hover:text-[var(--md-sys-color-on-surface)] transition-colors">
-            ← トップページへ
-          </Link>
-        </p>
+        <LoginFooter />
       </div>
     </div>
   )

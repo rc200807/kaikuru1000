@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
@@ -66,6 +66,9 @@ export default function PurchaseItemManager({
   const [showScanner, setShowScanner] = useState(false)
   const [janLookupLoading, setJanLookupLoading] = useState(false)
   const [janLookupError, setJanLookupError] = useState<string | null>(null)
+
+  // 画像の拡大表示（品目ごとに最大3枚あるので前後送りつき）
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number; title: string } | null>(null)
 
   const [researchingItemId, setResearchingItemId] = useState<string | null>(null)
   const [researchResults, setResearchResults] = useState<Record<string, MarketResearch>>({})
@@ -226,6 +229,32 @@ export default function PurchaseItemManager({
     setExpandedResearch(prev => ({ ...prev, [itemId]: !prev[itemId] }))
   }
 
+  /** 拡大表示の画像を前後に送る（端でループ） */
+  const stepLightbox = useCallback((delta: number) => {
+    setLightbox(prev => {
+      if (!prev || prev.urls.length < 2) return prev
+      const next = (prev.index + delta + prev.urls.length) % prev.urls.length
+      return { ...prev, index: next }
+    })
+  }, [])
+
+  // 拡大表示中のキーボード操作（Esc で閉じる・左右で送り）と背面スクロールの固定
+  useEffect(() => {
+    if (!lightbox) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setLightbox(null); return }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); stepLightbox(-1) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); stepLightbox(1) }
+    }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [lightbox, stepLightbox])
+
   return (
     <div>
       {/* 操作バー */}
@@ -254,9 +283,16 @@ export default function PurchaseItemManager({
                 {item.imageUrls.length > 0 && (
                   <div className="flex gap-1 flex-shrink-0">
                     {item.imageUrls.map((url, i) => (
-                      <div key={i} className="relative w-12 h-12 overflow-hidden rounded">
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setLightbox({ urls: item.imageUrls, index: i, title: item.itemName })}
+                        className="relative w-12 h-12 overflow-hidden rounded cursor-zoom-in hover:opacity-80 transition-opacity"
+                        title={`${item.itemName} の画像を拡大`}
+                        aria-label={`${item.itemName} の画像${item.imageUrls.length > 1 ? ` ${i + 1}枚目` : ''}を拡大表示`}
+                      >
                         <img src={url} alt="" className={`w-full h-full object-cover border border-[var(--md-sys-color-outline-variant)] rounded ${researchingItemId === item.id ? 'animate-pulse' : ''}`} />
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -460,6 +496,62 @@ export default function PurchaseItemManager({
           })}
           onSaved={() => { setConvertItem(null); onChanged() }}
         />
+      )}
+
+      {/* 画像の拡大表示。背景クリック・×・Esc で閉じ、複数枚なら前後送り可 */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-4 gap-3"
+          onClick={() => setLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${lightbox.title} の画像`}
+        >
+          <img
+            src={lightbox.urls[lightbox.index]}
+            alt={`${lightbox.title} の拡大画像`}
+            className="max-w-full max-h-[75vh] object-contain rounded-lg"
+            onClick={e => e.stopPropagation()}
+          />
+
+          <div className="text-center text-white text-xs" onClick={e => e.stopPropagation()}>
+            <div className="font-medium">{lightbox.title}</div>
+            {lightbox.urls.length > 1 && (
+              <div className="text-white/70 mt-0.5 tabular-nums">{lightbox.index + 1} / {lightbox.urls.length}</div>
+            )}
+          </div>
+
+          {/* 前後送りは画像の左右に重ねる（横並びにするとスマホ幅で画面外に出る） */}
+          {lightbox.urls.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); stepLightbox(-1) }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                aria-label="前の画像"
+              >
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); stepLightbox(1) }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                aria-label="次の画像"
+              >
+                <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+            aria-label="閉じる"
+          >
+            <svg fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
       )}
     </div>
   )

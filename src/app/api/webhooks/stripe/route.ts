@@ -8,12 +8,15 @@ import { syncConnectAccountStatus } from '@/lib/stripe-connect'
 export const runtime = 'nodejs'
 
 // Stripe Webhook（署名検証 + 冪等化）
+// エンドポイントは2本（プラットフォームイベント用 / Connectイベント用 account.updated）で
+// URLは共通のため、署名検証は両方のシークレットで試す。
 export async function POST(req: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
   if (!webhookSecret) {
     console.error('[stripe-webhook] STRIPE_WEBHOOK_SECRET not set')
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
   }
+  const connectWebhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET
 
   const sig = req.headers.get('stripe-signature')
   if (!sig) return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
@@ -24,8 +27,17 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
   } catch (e: any) {
-    console.error('[stripe-webhook] signature verification failed', e.message)
-    return NextResponse.json({ error: `Webhook Error: ${e.message}` }, { status: 400 })
+    if (connectWebhookSecret) {
+      try {
+        event = stripe.webhooks.constructEvent(rawBody, sig, connectWebhookSecret)
+      } catch {
+        console.error('[stripe-webhook] signature verification failed (both secrets)', e.message)
+        return NextResponse.json({ error: `Webhook Error: ${e.message}` }, { status: 400 })
+      }
+    } else {
+      console.error('[stripe-webhook] signature verification failed', e.message)
+      return NextResponse.json({ error: `Webhook Error: ${e.message}` }, { status: 400 })
+    }
   }
 
   // 冪等性: 同じ event を二重処理しない

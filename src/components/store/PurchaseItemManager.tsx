@@ -304,12 +304,14 @@ export default function PurchaseItemManager({
                 )}
               </div>
 
-              {/* AI査定結果 */}
+              {/* AI査定結果。濃紫の常時ダークなパネルとして色を固定する（ポータルで切り替えない）。
+                  店舗ポータルはライトテーマ固定なのに Tailwind の dark: はOSの設定で効くため、
+                  併用すると「濃紫の背景 + 黒文字」になり読めなくなる。 */}
               {researchResults[item.id] && expandedResearch[item.id] && (
-                <div className="mx-3 mb-3 rounded-[var(--md-sys-shape-small,8px)] border border-purple-200 dark:border-purple-700 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950 dark:to-blue-950 p-3">
+                <div className="mx-3 mb-3 rounded-[var(--md-sys-shape-small,8px)] border border-purple-700 bg-gradient-to-br from-purple-950 to-blue-950 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-purple-700 dark:text-purple-300">AI 市場調査結果</span>
-                    {item.aiResearchedAt && <span className="text-[10px] text-purple-500 dark:text-purple-400">({format(new Date(item.aiResearchedAt), 'M/d HH:mm', { locale: ja })} 調査)</span>}
+                    <span className="text-xs font-bold text-purple-200">AI 市場調査結果</span>
+                    {item.aiResearchedAt && <span className="text-[10px] text-purple-300">({format(new Date(item.aiResearchedAt), 'M/d HH:mm', { locale: ja })} 調査)</span>}
                   </div>
                   <dl className="space-y-1.5 text-xs">
                     {[
@@ -321,13 +323,13 @@ export default function PurchaseItemManager({
                       { label: '補足情報', value: researchResults[item.id].supplement },
                     ].map((row) => (
                       <div key={row.label} className="flex gap-2">
-                        <dt className="w-28 flex-shrink-0 font-medium text-purple-800 dark:text-purple-200">{row.label}</dt>
-                        <dd className={`flex-1 break-all ${row.highlight ? 'font-bold text-purple-700 dark:text-purple-300' : 'text-[var(--md-sys-color-on-surface)]'}`}>{row.value}</dd>
+                        <dt className="w-28 flex-shrink-0 font-medium text-purple-200">{row.label}</dt>
+                        <dd className={`flex-1 break-all ${row.highlight ? 'font-bold text-purple-100' : 'text-white'}`}>{row.value}</dd>
                       </div>
                     ))}
                   </dl>
                   <div className="flex justify-end mt-2">
-                    <button onClick={() => handleAiResearch(item.id)} disabled={researchingItemId === item.id} className="text-[10px] px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-300 hover:bg-purple-200 disabled:opacity-50">再調査</button>
+                    <button onClick={() => handleAiResearch(item.id)} disabled={researchingItemId === item.id} className="text-[10px] px-2 py-1 rounded-full bg-purple-800/70 text-purple-100 hover:bg-purple-700 disabled:opacity-50">再調査</button>
                   </div>
                 </div>
               )}

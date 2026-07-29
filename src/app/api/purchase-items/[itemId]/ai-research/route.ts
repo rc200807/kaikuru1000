@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { researchMarketPrice, GeminiError, type ImageData } from '@/lib/gemini'
+import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
@@ -55,14 +56,14 @@ export async function GET(
 
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    select: { aiResearch: true, aiResearchedAt: true, visitSchedule: { select: { storeId: true } } },
+    select: { aiResearch: true, aiResearchedAt: true, ...PURCHASE_ITEM_OWNER_SELECT },
   })
 
   if (!item) {
     return NextResponse.json({ error: '品目が見つかりません' }, { status: 404 })
   }
 
-  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
+  if (sessionUser.role === 'store' && !storeOwnsPurchaseItem(item, sessionUser.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -91,14 +92,17 @@ export async function POST(
 
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    include: { visitSchedule: { select: { storeId: true } } },
+    select: {
+      itemName: true, category: true, imageUrls: true, janCode: true, rakutenData: true,
+      ...PURCHASE_ITEM_OWNER_SELECT,
+    },
   })
 
   if (!item) {
     return NextResponse.json({ error: '品目が見つかりません' }, { status: 404 })
   }
 
-  if (sessionUser.role === 'store' && item.visitSchedule?.storeId !== sessionUser.id) {
+  if (sessionUser.role === 'store' && !storeOwnsPurchaseItem(item, sessionUser.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

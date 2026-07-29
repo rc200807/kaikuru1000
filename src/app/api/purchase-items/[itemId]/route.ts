@@ -3,16 +3,16 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    include: { visitSchedule: { select: { storeId: true } }, deal: { select: { storeId: true } } },
+    select: { id: true, dealId: true, visitScheduleId: true, ...PURCHASE_ITEM_OWNER_SELECT },
   })
   if (!item) return { error: '品目が見つかりません', status: 404 }
-  if (sessionUser.role === 'store') {
-    const ownStore = item.deal?.storeId === sessionUser.id || item.visitSchedule?.storeId === sessionUser.id
-    if (!ownStore) return { error: 'Forbidden', status: 403 }
+  if (sessionUser.role === 'store' && !storeOwnsPurchaseItem(item, sessionUser.id)) {
+    return { error: 'Forbidden', status: 403 }
   }
   return { item }
 }

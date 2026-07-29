@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+  PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem, customerOwnsPurchaseItem,
+} from '@/lib/purchase-item-access'
 
 /**
  * 買取品目画像を認証プロキシ経由で配信
@@ -20,17 +23,17 @@ export async function GET(
 
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    include: { visitSchedule: { select: { storeId: true, userId: true } } },
+    select: { imageUrls: true, ...PURCHASE_ITEM_OWNER_SELECT },
   })
   if (!item) return NextResponse.json({ error: '品目が見つかりません' }, { status: 404 })
 
-  // 認可チェック
+  // 認可チェック（所有者は案件・訪問の両方から判定する）
   if (sessionUser.role === 'customer') {
-    if (item.visitSchedule?.userId !== sessionUser.id) {
+    if (!customerOwnsPurchaseItem(item, sessionUser.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   } else if (sessionUser.role === 'store') {
-    if (item.visitSchedule?.storeId !== sessionUser.id) {
+    if (!storeOwnsPurchaseItem(item, sessionUser.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }

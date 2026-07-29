@@ -149,6 +149,10 @@ model Store {
   stripeConnectChargesEnabled Boolean   @default(false)      // account.updated webhook で同期
   stripeConnectPayoutsEnabled Boolean   @default(false)
   stripeConnectOnboardedAt    DateTime?
+  // 店舗の支払い用 Stripe Customer（システム利用料・今後の店舗決済すべて）
+  stripeCustomerId            String?   @unique              // cus_...
+  systemFeeSetting            SystemFeeSetting?
+  storePayments               StorePayment[]
   customers  User[]
   visitSchedules VisitSchedule[]
   visitRequests  VisitRequest[]
@@ -1414,6 +1418,52 @@ model SupplyBillingAccount {
   stripeCustomerId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// 月額システム利用料の設定（sysadminが店舗ごとに設定）
+model SystemFeeSetting {
+  id            String   @id @default(cuid())
+  storeId       String   @unique
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  monthlyAmount Int      @default(0)          // 月額（円・税込）
+  isActive      Boolean  @default(false)      // true の店舗のみ毎月課金
+  note          String?  @db.Text
+  updatedByName String?                       // 最終更新者（sysadmin名）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// 店舗の決済台帳（システム利用料・今後の店舗決済すべてをここに記録）
+model StorePayment {
+  id                    String    @id @default(cuid())
+  storeId               String
+  store                 Store     @relation(fields: [storeId], references: [id])
+  kind                  String    @default("system_fee")  // system_fee | manual（将来: supply_order 等）
+  billingMonth          String?                           // "yyyy-MM"（system_fee の冪等キー）
+  description           String                            // 例: システム利用料（2026年8月分）
+  amount                Int                               // 円
+  status                String    @default("pending")     // pending | paid | failed | no_card
+  stripePaymentIntentId String?   @unique
+  failureMessage        String?   @db.Text                // 失敗理由（日本語）
+  attemptCount          Int       @default(0)
+  lastAttemptAt         DateTime?
+  paidAt                DateTime?
+  receiptNumber         String?   @unique                 // R-YYYYMM-NNNN（初回発行時に採番・不変）
+  receiptName           String?                           // 領収書宛名（既定=店舗名・再編集可）
+  receiptIssuedAt       DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([storeId, kind, billingMonth])                 // 月次課金の二重実行防止
+  @@index([storeId, createdAt])
+  @@index([status])
+  @@index([billingMonth])
+}
+
+// 領収書番号の採番カウンタ（シングルトン。$transaction でインクリメント）
+model ReceiptCounter {
+  id   String @id @default("default")
+  last Int    @default(0)
 }
 
 // 備品発注（ヘッダー）

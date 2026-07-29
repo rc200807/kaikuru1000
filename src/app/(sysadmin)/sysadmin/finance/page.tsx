@@ -5,10 +5,12 @@ import RevenueTab from '@/components/sysadmin/tabs/RevenueTab'
 import CostsTab from '@/components/sysadmin/tabs/CostsTab'
 import RevenueShareTab from '@/components/sysadmin/tabs/RevenueShareTab'
 import RevenueTransfersTab from '@/components/sysadmin/tabs/RevenueTransfersTab'
+import SystemFeesTab from '@/components/sysadmin/tabs/SystemFeesTab'
 
 const TABS = [
   { key: 'revenue', label: '売上' },
   { key: 'costs', label: '運用コスト' },
+  { key: 'fees', label: 'システム利用料' },
   { key: 'share', label: '分配設定' },
   { key: 'transfers', label: '分配台帳' },
 ]
@@ -17,10 +19,10 @@ export default function SysAdminFinancePage() {
   return (
     <SysAdminTabPage
       title="売上・コスト"
-      description="備品売上と運用コストの管理"
+      description="備品売上・システム利用料と運用コストの管理"
       tabs={TABS}
       defaultKey="revenue"
-      components={{ revenue: RevenueTab, costs: CostsTab, share: RevenueShareTab, transfers: RevenueTransfersTab }}
+      components={{ revenue: RevenueTab, costs: CostsTab, fees: SystemFeesTab, share: RevenueShareTab, transfers: RevenueTransfersTab }}
       maxWidth={1080}
     />
   )

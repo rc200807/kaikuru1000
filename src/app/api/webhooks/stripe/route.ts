@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
         // 支払い確定 + 初回確定時のみ Slack 通知
         await markSupplyOrderPaidAndNotify(orderId)
       }
+      // 店舗決済（システム利用料等）のセーフティネット。主経路は同期確定
+      const storePaymentId = pi.metadata?.storePaymentId
+      if (storePaymentId) {
+        await prisma.storePayment.updateMany({
+          where: { id: storePaymentId, status: { not: 'paid' } },
+          data: { status: 'paid', paidAt: new Date(), stripePaymentIntentId: pi.id, failureMessage: null },
+        })
+      }
     } else if (event.type === 'payment_intent.payment_failed') {
       const pi = event.data.object as any
       const orderId = pi.metadata?.supplyOrderId
@@ -48,6 +56,13 @@ export async function POST(req: NextRequest) {
         await prisma.supplyOrder.updateMany({
           where: { id: orderId, paymentStatus: 'pending' },
           data: { paymentStatus: 'failed' },
+        })
+      }
+      const storePaymentId = pi.metadata?.storePaymentId
+      if (storePaymentId) {
+        await prisma.storePayment.updateMany({
+          where: { id: storePaymentId, status: 'pending' },
+          data: { status: 'failed', failureMessage: pi.last_payment_error?.message ?? '決済に失敗しました' },
         })
       }
     } else if (event.type === 'invoice.paid') {

@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { mergeCustomers, MERGE_SCALAR_FIELDS, type MergeScalarField } from '@/lib/merge-customers'
+import { autoSyncCustomerRows, autoSyncCustomerRowsDeleted } from '@/lib/sheet-sync'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -61,5 +62,12 @@ export async function POST(request: NextRequest) {
   }
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `顧客を統合（${mergedId} → ${survivorId}）`, req: request })
+
+  after(async () => {
+    // 吸収された側は一覧・シートから消し、残った側は統合後の値で更新する
+    await autoSyncCustomerRowsDeleted([mergedId])
+    await autoSyncCustomerRows([survivorId])
+  })
+
   return NextResponse.json({ success: true, survivorId })
 }

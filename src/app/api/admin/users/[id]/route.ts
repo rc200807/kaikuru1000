@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { CUSTOMER_TYPES, isCustomerType, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { recordAccessLog } from '@/lib/access-log'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
+import { autoSyncCustomerRows, autoSyncCustomerRowsDeleted } from '@/lib/sheet-sync'
 
 const VALID_CUSTOMER_TYPES = CUSTOMER_TYPES as readonly string[]
 
@@ -39,6 +40,7 @@ export async function PATCH(
       data: { isActive: body.isActive },
     })
     await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `顧客を${body.isActive ? '有効化' : '無効化'}「${user.name}」`, req: request })
+    after(() => autoSyncCustomerRows([id]))
     return NextResponse.json({ id: updated.id, isActive: updated.isActive })
   }
 
@@ -67,6 +69,7 @@ export async function PATCH(
       data,
       select: { id: true, customerType: true, customerTypes: true },
     })
+    after(() => autoSyncCustomerRows([id]))
     return NextResponse.json(updated)
   }
 
@@ -77,6 +80,7 @@ export async function PATCH(
       where: { id },
       data: { visitFrequencyMonths: freq },
     })
+    after(() => autoSyncCustomerRows([id]))
     return NextResponse.json({ id: updated.id, visitFrequencyMonths: updated.visitFrequencyMonths })
   }
 
@@ -127,6 +131,7 @@ export async function PATCH(
       select: { id: true, name: true, furigana: true, lastName: true, firstName: true, lastNameKana: true, firstNameKana: true, email: true, phone: true, phone2: true, phone3: true, address: true, internalNote: true, customerType: true, customerTypes: true, visitFrequencyMonths: true, occupation: true, leadSource: true },
     })
     await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, action: `顧客情報を編集「${updated.name}」`, req: request })
+    after(() => autoSyncCustomerRows([id]))
     return NextResponse.json(updated)
   }
 
@@ -169,6 +174,7 @@ export async function PATCH(
       data,
       select: { id: true, bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true },
     })
+    after(() => autoSyncCustomerRows([id]))
     return NextResponse.json(updated)
   }
 
@@ -232,6 +238,8 @@ export async function DELETE(
   operations.push(prisma.user.delete({ where: { id } }))
 
   await prisma.$transaction(operations)
+
+  after(() => autoSyncCustomerRowsDeleted([id]))
 
   return NextResponse.json({ deleted: true })
 }

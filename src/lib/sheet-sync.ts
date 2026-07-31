@@ -27,6 +27,15 @@ import {
   operatorServicesLabel,
 } from './operator-sheet'
 import { operatorInheritedValues, syncStoresForOperator } from './operator-store-sync'
+import {
+  CUSTOMER_SHEET_COLUMNS,
+  customerTypesFromCell,
+  customerTypesLabel,
+  activeFromCell,
+  normalizePhoneCell,
+} from './customer-sheet'
+import { stringifyCustomerTypes } from './customer-types'
+import { buildUserNameUpdateData } from './name-utils'
 
 export type SheetSyncColumn = { key: string; header: string; kind: string }
 /** 1レコード分のシート行データ。key は突合キー（店舗コード / 運営者ID） */
@@ -714,6 +723,258 @@ export async function importOperatorsFromSheet(): Promise<ImportResult> {
 }
 
 // =============================================================
+// 顧客情報
+// =============================================================
+
+async function getCustomerSheetTarget(): Promise<{ spreadsheetId: string; sheetName: string } | null> {
+  const config = await prisma.googleSheetsConfig.findFirst()
+  if (!config?.customerSpreadsheetId) return null
+  return {
+    spreadsheetId: extractSpreadsheetId(config.customerSpreadsheetId),
+    sheetName: config.customerSheetName || '顧客情報',
+  }
+}
+
+const CUSTOMER_SELECT = {
+  id: true, name: true, furigana: true,
+  lastName: true, firstName: true, lastNameKana: true, firstNameKana: true,
+  email: true, phone: true, phone2: true, phone3: true, address: true,
+  customerType: true, customerTypes: true, visitFrequencyMonths: true,
+  occupation: true, leadSource: true, internalNote: true, birthDate: true,
+  bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
+  isActive: true, createdAt: true,
+  store: { select: { code: true, name: true } },
+} as const
+
+/** 顧客レコードをシート行データに変換する（ids 指定時はその顧客のみ） */
+async function buildCustomerRecords(ids?: string[]): Promise<RecordRow[]> {
+  const customers = await prisma.user.findMany({
+    // 統合で吸収された顧客（論理削除）はシートに出さない
+    where: { mergedIntoUserId: null, ...(ids ? { id: { in: ids } } : {}) },
+    orderBy: { createdAt: 'asc' },
+    select: CUSTOMER_SELECT,
+  })
+  const day = (d: Date) => new Date(d).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
+
+  return customers.map(c => {
+    const values: Record<string, string> = {}
+    for (const col of CUSTOMER_SHEET_COLUMNS) {
+      switch (col.key) {
+        case 'customerTypes':
+          values[col.key] = customerTypesLabel(c.customerTypes, c.customerType); break
+        case 'visitFrequencyMonths':
+          values[col.key] = String(c.visitFrequencyMonths ?? ''); break
+        case 'isActive':   values[col.key] = c.isActive ? '有効' : '無効'; break
+        case 'storeCode':  values[col.key] = c.store?.code ?? ''; break
+        case 'storeName':  values[col.key] = c.store?.name ?? ''; break
+        case 'createdAt':  values[col.key] = day(c.createdAt); break
+        default: {
+          const v = (c as Record<string, unknown>)[col.key]
+          values[col.key] = v != null ? String(v) : ''
+        }
+      }
+    }
+    return { key: c.id, values }
+  })
+}
+
+/** 全顧客を設定済みスプレッドシートへ出力する */
+export async function exportCustomersToSheet(): Promise<ExportResult> {
+  const target = await getCustomerSheetTarget()
+  if (!target) return { success: false, message: '顧客情報用スプレッドシートIDが設定されていません', exported: 0 }
+
+  const records = await buildCustomerRecords()
+
+  try {
+    return await exportRecordsToSheet({
+      ...target,
+      columns: CUSTOMER_SHEET_COLUMNS,
+      keyColumnKey: 'id',
+      records,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[sheet-sync] exportCustomersToSheet 失敗:', message)
+    return { success: false, message, exported: 0 }
+  }
+}
+
+/** 設定済みスプレッドシートから顧客情報を取り込む（顧客IDで突合・空欄は新規作成） */
+export async function importCustomersFromSheet(): Promise<ImportResult> {
+  const fail = (message: string): ImportResult =>
+    ({ success: false, message, totalRows: 0, createdCount: 0, updatedCount: 0, errorCount: 0, errors: [] })
+
+  const target = await getCustomerSheetTarget()
+  if (!target) return fail('顧客情報用スプレッドシートIDが設定されていません')
+
+  const keyCol = CUSTOMER_SHEET_COLUMNS.find(c => c.kind === 'key')!
+
+  let sheetData: Awaited<ReturnType<typeof readSheetForImport>>
+  try {
+    sheetData = await readSheetForImport({ ...target, keyHeader: keyCol.header })
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error))
+  }
+  if (!sheetData.ok) return fail(sheetData.message)
+  const { sheets, rows, headerIdx, keyIdx } = sheetData
+
+  const get = (row: string[], header: string) => {
+    const idx = headerIdx[header]
+    return idx === undefined ? '' : (row[idx] ?? '').trim()
+  }
+  const headerOf = (key: string) => CUSTOMER_SHEET_COLUMNS.find(c => c.key === key)!.header
+  /** 空欄は undefined。name-utils は undefined と空文字を区別するため必須の変換 */
+  const orUndef = (s: string) => (s.trim() ? s.trim() : undefined)
+
+  // 既存顧客をIDで一括取得
+  const ids = new Set<string>()
+  for (let r = 1; r < rows.length; r++) {
+    const v = get(rows[r], keyCol.header)
+    if (v) ids.add(v)
+  }
+  const existing = await prisma.user.findMany({
+    where: { id: { in: [...ids] } },
+    select: { id: true, customerType: true },
+  })
+  const byId = new Map(existing.map(u => [u.id, u]))
+
+  // 担当店舗コード → 店舗ID（シートに出てくるコードだけ引く）
+  const storeCodeHeader = headerOf('storeCode')
+  const storeCodes = new Set<string>()
+  if (storeCodeHeader in headerIdx) {
+    for (let r = 1; r < rows.length; r++) {
+      const c = get(rows[r], storeCodeHeader)
+      if (c) storeCodes.add(c)
+    }
+  }
+  const storeIdByCode = new Map<string, string>()
+  if (storeCodes.size > 0) {
+    const stores = await prisma.store.findMany({
+      where: { code: { in: [...storeCodes] } },
+      select: { id: true, code: true },
+    })
+    for (const s of stores) storeIdByCode.set(s.code, s.id)
+  }
+
+  const errors: RowError[] = []
+  const keyWrites: { rowNumber: number; value: string }[] = []
+  let createdCount = 0
+  let updatedCount = 0
+  let totalRows = 0
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]
+    if (isEmptyRow(row)) continue
+    totalRows++
+    const lineNo = r + 1
+    const id = get(row, keyCol.header)
+    const isNew = !id
+
+    const data: Record<string, unknown> = {}
+    let rowError: string | null = null
+
+    // 氏名6フィールドは name-utils 経由でまとめて構築（結合値が正）
+    const nameData = buildUserNameUpdateData({
+      name:          orUndef(get(row, headerOf('name'))),
+      furigana:      orUndef(get(row, headerOf('furigana'))),
+      lastName:      orUndef(get(row, headerOf('lastName'))),
+      firstName:     orUndef(get(row, headerOf('firstName'))),
+      lastNameKana:  orUndef(get(row, headerOf('lastNameKana'))),
+      firstNameKana: orUndef(get(row, headerOf('firstNameKana'))),
+    })
+    Object.assign(data, nameData)
+
+    for (const col of CUSTOMER_SHEET_COLUMNS) {
+      if (col.kind === 'key' || col.kind === 'ref' || col.kind === 'name') continue
+      // シートに存在しない列は変更しない
+      if (!(col.header in headerIdx)) continue
+      const raw = get(row, col.header)
+
+      if (col.kind === 'email') {
+        if (raw && !EMAIL_RE.test(raw)) { rowError = `メール形式が不正「${raw}」`; break }
+        data.email = raw || null
+      } else if (col.kind === 'required') {
+        const v = col.key === 'phone' ? normalizePhoneCell(raw) : raw
+        // 空欄は「変更しない」扱い（NOT NULL 列を空文字で潰さないため）
+        if (v) data[col.key] = v
+      } else if (col.kind === 'types') {
+        const types = customerTypesFromCell(raw)
+        if (types.length > 0) {
+          const primary = types[0]
+          data.customerType = primary
+          data.customerTypes = stringifyCustomerTypes(types, primary)
+        }
+      } else if (col.kind === 'int') {
+        if (!raw) continue
+        const n = Number(raw)
+        if (!Number.isFinite(n) || n < 1) { rowError = `${col.header}は1以上の数値で指定してください「${raw}」`; break }
+        data.visitFrequencyMonths = Math.floor(n)
+      } else if (col.kind === 'active') {
+        const v = activeFromCell(raw)
+        if (v !== undefined) data.isActive = v
+      } else if (col.kind === 'store') {
+        if (!raw) { data.storeId = null; continue }
+        const storeId = storeIdByCode.get(raw)
+        if (!storeId) { rowError = `担当店舗コード「${raw}」の店舗が見つかりません`; break }
+        data.storeId = storeId
+      } else if (col.key === 'phone2' || col.key === 'phone3') {
+        data[col.key] = normalizePhoneCell(raw) || null
+      } else {
+        data[col.key] = raw || null
+      }
+    }
+    if (rowError) { errors.push({ row: lineNo, key: id || undefined, message: rowError }); continue }
+
+    try {
+      if (!isNew) {
+        if (!byId.has(id)) {
+          errors.push({ row: lineNo, key: id, message: `顧客ID「${id}」が見つかりません（新規作成する場合はID欄を空にしてください）` })
+          continue
+        }
+        await prisma.user.update({ where: { id }, data })
+        updatedCount++
+      } else {
+        // 新規作成: NOT NULL 項目が揃っているか検証（氏名・ふりがな・電話・住所）
+        const missing: string[] = []
+        if (!data.name) missing.push('氏名')
+        if (!data.furigana) missing.push('ふりがな')
+        if (!data.phone) missing.push('電話番号')
+        if (!data.address) missing.push('住所')
+        if (missing.length > 0) {
+          errors.push({ row: lineNo, message: `新規作成には ${missing.join('・')} が必要です` })
+          continue
+        }
+        const created = await prisma.user.create({
+          data: {
+            ...data,
+            // シート経由の新規顧客はログイン想定が無いためランダムパスワードを設定
+            password: await bcrypt.hash(randomBytes(24).toString('hex'), 10),
+          } as any,
+        })
+        keyWrites.push({ rowNumber: lineNo, value: created.id })
+        createdCount++
+      }
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e)
+      // メールの一意制約は原因が分かる文言に置き換える
+      const message = /Unique constraint.*email|`email`/i.test(raw)
+        ? `このメールアドレスは既に別の顧客に登録されています`
+        : `保存に失敗: ${raw}`
+      errors.push({ row: lineNo, key: id || undefined, message })
+    }
+  }
+
+  // 新規作成分の顧客IDをシートへ書き戻す
+  await writeBackKeys(sheets, target.spreadsheetId, target.sheetName, keyIdx, keyWrites)
+
+  return {
+    success: true,
+    message: `更新${updatedCount}件・新規${createdCount}件を取り込みました${errors.length ? `（エラー${errors.length}件）` : ''}`,
+    totalRows, createdCount, updatedCount, errorCount: errors.length, errors,
+  }
+}
+
+// =============================================================
 // 自動同期（システム側の更新 → シートへ即時反映）
 //
 // 全件出力と違い、変更されたレコードの行だけを書き換える。
@@ -948,6 +1209,39 @@ export async function autoSyncOperatorRowsDeleted(ids: string[]): Promise<void> 
     })
   } catch (error) {
     await logAutoSyncFailure('sheet-auto-sync:operators', error)
+  }
+}
+
+/** 指定顧客の行をシートへ反映する（ベストエフォート・例外を投げない） */
+export async function autoSyncCustomerRows(ids: string[]): Promise<void> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const target = await getCustomerSheetTarget()
+    if (!autoSyncEnabled(target)) return
+    const records = await buildCustomerRecords(unique)
+    if (records.length === 0) return
+    const res = await syncRecordRowsToSheet({
+      ...target, columns: CUSTOMER_SHEET_COLUMNS, keyColumnKey: 'id', records,
+    })
+    if (res.needsFullExport) await exportCustomersToSheet()
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:customers', error)
+  }
+}
+
+/** 削除・統合された顧客の行をシートから取り除く（ベストエフォート） */
+export async function autoSyncCustomerRowsDeleted(ids: string[]): Promise<void> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const target = await getCustomerSheetTarget()
+    if (!autoSyncEnabled(target)) return
+    await deleteRecordRowsFromSheet({
+      ...target, columns: CUSTOMER_SHEET_COLUMNS, keyColumnKey: 'id', keys: unique,
+    })
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:customers', error)
   }
 }
 

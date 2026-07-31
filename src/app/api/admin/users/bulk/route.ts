@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminUsersWhere } from '@/lib/customer-list-query'
 import { CUSTOMER_TYPES } from '@/lib/customer-types'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 
 // 一括操作の対象上限（誤操作・タイムアウト防止）
 const BULK_LIMIT = 1000
@@ -80,8 +81,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '不明なアクションです' }, { status: 400 })
   }
 
+  // 更新対象のIDを控えてからシートへ反映する（updateMany は対象IDを返さないため）
+  const affected = await prisma.user.findMany({ where, select: { id: true } })
+
   const result = await prisma.user.updateMany({ where, data })
   console.log(`[BulkAction] admin=${sessionUser.id} action=${action} affected=${result.count}`)
+
+  after(() => autoSyncCustomerRows(affected.map(u => u.id)))
 
   return NextResponse.json({ ok: true, count: result.count })
 }

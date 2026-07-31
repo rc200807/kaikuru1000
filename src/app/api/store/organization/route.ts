@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getOperatorStores, isOrgAdmin } from '@/lib/store-scope'
 import { parseStoreServices } from '@/lib/store-services'
-import { autoSyncOperatorRows } from '@/lib/sheet-sync'
+import { autoSyncOperatorRows, autoSyncStoreRows } from '@/lib/sheet-sync'
+import { OPERATOR_INHERITED_FIELDS, syncStoresForOperator } from '@/lib/operator-store-sync'
 
 /**
  * 組織（運営者）情報 — 店舗ポータル用。
@@ -87,6 +88,24 @@ export async function PATCH(request: NextRequest) {
     data,
     select: { id: true, phone: true, email: true, address: true, invoiceNumber: true, service: true },
   })
-  after(() => autoSyncOperatorRows([updated.id]))
+
+  // 継承項目（インボイス番号など）を含む更新なら、管理ポータル側の PATCH と同様に
+  // 紐づく全店舗へ反映する。運営者を「正」とする設計を経路によらず揃えるため。
+  const touchesInherited = Object.keys(data).some(
+    k => (OPERATOR_INHERITED_FIELDS as readonly string[]).includes(k),
+  )
+  if (touchesInherited) await syncStoresForOperator(prisma, store.operatorId)
+
+  after(async () => {
+    await autoSyncOperatorRows([updated.id])
+    if (touchesInherited) {
+      const stores = await prisma.store.findMany({
+        where: { operatorId: store.operatorId },
+        select: { code: true },
+      })
+      await autoSyncStoreRows(stores.map(s => s.code))
+    }
+  })
+
   return NextResponse.json(updated)
 }

@@ -20,6 +20,7 @@ import {
 } from '@/components/list/customer-filter-defs'
 import Modal from '@/components/Modal'
 import CustomerMergeModal from '@/components/CustomerMergeModal'
+import SheetSyncModal from '@/components/admin/SheetSyncModal'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
@@ -241,7 +242,8 @@ export default function AdminCustomersPage() {
   // 顧客詳細モーダル
   const [detailUser, setDetailUser] = useState<User | null>(null)
   const [showMerge, setShowMerge] = useState(false)
-  const [mergeRefresh, setMergeRefresh] = useState(0)
+  const [listRefresh, setListRefresh] = useState(0)
+  const [sheetSyncOpen, setSheetSyncOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<DetailTab>('info')
   // 顧客に紐づくお問い合わせ
   const [customerInquiries, setCustomerInquiries] = useState<CustomerInquiry[]>([])
@@ -399,7 +401,7 @@ export default function AdminCustomersPage() {
     }, params.search?.trim() ? 300 : 0)
     return () => clearTimeout(handle)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, ready, filterQuery, page, buildUserParams, mergeRefresh])
+  }, [status, session, ready, filterQuery, page, buildUserParams, listRefresh])
 
   // フィルタ・ページが変わったら行選択を解除
   useEffect(() => {
@@ -1402,6 +1404,14 @@ export default function AdminCustomersPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12L12 7.5m0 0l4.5 4.5M12 7.5V21" />
                 </svg>
                 CSVエクスポート
+              </span>
+            </Button>
+            <Button variant="outlined" onClick={() => setSheetSyncOpen(true)}>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                シート同期
               </span>
             </Button>
             <Button onClick={() => setShowAddCustomer(true)}>
@@ -2567,9 +2577,19 @@ export default function AdminCustomersPage() {
             const list = data?.users ?? (Array.isArray(data) ? data : [])
             return list.map((u: any) => ({ id: u.id, name: u.name, furigana: u.furigana, email: u.email, phone: u.phone, address: u.address, birthDate: u.birthDate }))
           }}
-          onMerged={() => { setShowMerge(false); closeDetailModal(); setMergeRefresh(x => x + 1) }}
+          onMerged={() => { setShowMerge(false); closeDetailModal(); setListRefresh(x => x + 1) }}
         />
       )}
+
+      {/* ─── スプレッドシート同期 ─── */}
+      <SheetSyncModal
+        open={sheetSyncOpen}
+        onClose={() => setSheetSyncOpen(false)}
+        title="顧客情報のスプレッドシート同期"
+        apiBase="/api/admin/users/sheet-sync"
+        keyLabel="顧客ID"
+        onSynced={() => setListRefresh(x => x + 1)}
+      />
 
       {/* 新規顧客追加ウィザードモーダル */}
       <Modal

@@ -454,6 +454,8 @@ model GoogleSheetsConfig {
   storeInfoSheetName  String    @default("店舗情報")
   operatorSpreadsheetId String?           // 運営者情報 双方向同期用スプレッドシートID
   operatorSheetName   String    @default("運営者情報")
+  customerSpreadsheetId String?           // 顧客情報 双方向同期用スプレッドシートID
+  customerSheetName   String    @default("顧客情報")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }

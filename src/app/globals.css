@@ -378,3 +378,53 @@ h1, h2, h3 { font-feature-settings: "liga" 1; }
 h1 { letter-spacing: -0.04em; }
 h2 { letter-spacing: -0.03em; }
 h3 { letter-spacing: -0.02em; }
+
+/* ── FAQ本文（ナレッジベース） ────────────────────────
+   RichTextEditor が出力する HTML を表示するためのスタイル。
+   このプロジェクトには @tailwindcss/typography が入っておらず `prose` は効かないため、
+   必要な要素だけを自前で整える。文字色は各ポータルのテーマ変数に従う。 */
+.faq-content { color: var(--md-sys-color-on-surface); line-height: 1.75; }
+.faq-content > :first-child { margin-top: 0; }
+.faq-content > :last-child { margin-bottom: 0; }
+.faq-content p { margin: 0.6rem 0; }
+.faq-content h1, .faq-content h2, .faq-content h3, .faq-content h4 {
+  font-weight: 700;
+  margin: 1.1rem 0 0.5rem;
+  line-height: 1.4;
+}
+.faq-content h1 { font-size: 1.3rem; }
+.faq-content h2 { font-size: 1.15rem; }
+.faq-content h3 { font-size: 1.03rem; }
+.faq-content h4 { font-size: 0.95rem; }
+.faq-content ul, .faq-content ol { margin: 0.6rem 0; padding-left: 1.5rem; }
+.faq-content ul { list-style: disc; }
+.faq-content ol { list-style: decimal; }
+.faq-content li { margin: 0.25rem 0; }
+.faq-content li::marker { color: var(--md-sys-color-on-surface-variant); }
+.faq-content strong, .faq-content b { font-weight: 700; }
+.faq-content em, .faq-content i { font-style: italic; }
+.faq-content u { text-decoration: underline; }
+.faq-content s, .faq-content del, .faq-content strike { text-decoration: line-through; }
+.faq-content a { color: #3b82f6; text-decoration: underline; word-break: break-all; }
+.faq-content blockquote {
+  margin: 0.7rem 0;
+  padding: 0.1rem 0 0.1rem 0.8rem;
+  border-left: 3px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+}
+.faq-content code {
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+.faq-content pre {
+  background: var(--md-sys-color-surface-container-high);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  margin: 0.7rem 0;
+  overflow-x: auto;
+}
+.faq-content pre code { background: none; padding: 0; }
+.faq-content img { max-width: 100%; height: auto; border-radius: 8px; margin: 0.7rem 0; }
+.faq-content hr { border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); margin: 1.1rem 0; }

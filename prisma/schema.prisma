@@ -412,6 +412,7 @@ model Admin {
   complaintsAsPrimary   Complaint[] @relation("ComplaintPrimaryHandler")
   complaintsAsSecondary Complaint[] @relation("ComplaintSecondaryHandler")
   complaintsAsFinal     Complaint[] @relation("ComplaintFinalHandler")
+  faqsCreated           Faq[]       @relation("FaqCreatedBy")
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -2240,4 +2241,64 @@ model Complaint {
   @@index([storeId])
   @@index([status])
   @@index([occurredOn])
+}
+
+// ナレッジベース（FAQ）のカテゴリー
+model FaqCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#6B7280")
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  faqs      Faq[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ナレッジベースのFAQ（登録は管理ポータルのみ）
+model Faq {
+  id          String       @id @default(cuid())
+  question    String
+  answer      String       @db.Text            // 回答（RichTextEditor の HTML）
+  categoryId  String?
+  category    FaqCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  visibility  String       @default("all")     // "all"=店舗にも公開 | "admin"=管理者のみ
+  isPublished Boolean      @default(true)      // false は下書き（AIの参照対象からも外れる）
+  sortOrder   Int          @default(0)
+  createdById String?                          // 作成した管理者（Admin.id）
+  createdBy   Admin?       @relation("FaqCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([categoryId])
+  @@index([isPublished, visibility])
+}
+
+// AIチャットの直近の会話（1ユーザー1件。新しい会話を始めると上書き）
+model KnowledgeChatSession {
+  id         String   @id @default(cuid())
+  viewerType String                            // "admin" | "store"
+  viewerId   String                            // Admin.id / (StoreMember.id ?? Store.id)
+  storeId    String?
+  messages   String   @db.Text                 // JSON: [{role, content, faqIds?, at}]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([viewerType, viewerId])
+}
+
+// AIチャットの質問ログ。未回答の抽出・1日あたりの利用回数制限・利用状況の把握を兼ねる
+model KnowledgeQuery {
+  id         String   @id @default(cuid())
+  question   String   @db.Text
+  answered   Boolean                           // ナレッジで回答できたか
+  usedFaqIds String   @default("[]")           // 参照したFAQのID（JSON配列）
+  viewerType String
+  viewerId   String
+  storeId    String?
+  status     String   @default("open")         // open | resolved | ignored（未回答の消し込み用）
+  createdAt  DateTime @default(now())
+
+  @@index([answered, status, createdAt])
+  @@index([viewerType, viewerId, createdAt])
 }

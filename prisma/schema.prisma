@@ -450,6 +450,10 @@ model GoogleSheetsConfig {
   storeColumnMapping  String?     // JSON: {"code":"A","name":"B",...}
   inquirySpreadsheetId String?            // お問い合わせ用スプレッドシートID
   inquirySheetName    String    @default("お問い合わせ")
+  storeInfoSpreadsheetId String?          // 店舗情報 双方向同期用スプレッドシートID
+  storeInfoSheetName  String    @default("店舗情報")
+  operatorSpreadsheetId String?           // 運営者情報 双方向同期用スプレッドシートID
+  operatorSheetName   String    @default("運営者情報")
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { ENTITY_TYPE_LABEL, formalName, type EntityType } from '@/lib/operator-utils'
 import OperatorBulkEditModal, { toBulkOperator } from '@/components/admin/OperatorBulkEditModal'
+import SheetSyncModal from '@/components/admin/SheetSyncModal'
 
 type ImportResult = {
   created: number
@@ -41,6 +42,7 @@ export default function OperatorListPage() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string>('')
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
+  const [sheetSyncOpen, setSheetSyncOpen] = useState(false)
 
   function refresh() {
     fetch('/api/admin/operators')
@@ -162,6 +164,12 @@ export default function OperatorListPage() {
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600 }}
           >
             CSVインポート
+          </button>
+          <button
+            onClick={() => setSheetSyncOpen(true)}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', cursor: 'pointer', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600 }}
+          >
+            シート同期
           </button>
           <button
             onClick={() => router.push('/admin/operators/new')}
@@ -427,6 +435,16 @@ export default function OperatorListPage() {
           </div>
         )}
       </div>
+
+      {/* ─── スプレッドシート同期 ─── */}
+      <SheetSyncModal
+        open={sheetSyncOpen}
+        onClose={() => setSheetSyncOpen(false)}
+        title="運営者情報のスプレッドシート同期"
+        apiBase="/api/admin/operators/sheet-sync"
+        keyLabel="運営者ID"
+        onSynced={refresh}
+      />
 
       {/* ─── 一括編集モーダル ─── */}
       <OperatorBulkEditModal

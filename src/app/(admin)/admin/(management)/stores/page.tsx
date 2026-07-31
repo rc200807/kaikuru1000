@@ -12,6 +12,7 @@ import DataTable, { type Column } from '@/components/DataTable'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import BankSearch from '@/components/customer/BankSearch'
 import StoreBulkEditModal from '@/components/admin/StoreBulkEditModal'
+import SheetSyncModal from '@/components/admin/SheetSyncModal'
 import ViewTabs, { type ListView } from '@/components/list/ViewTabs'
 import FilterChipBar from '@/components/list/FilterChipBar'
 import AdvancedFilterPanel from '@/components/list/AdvancedFilterPanel'
@@ -396,6 +397,9 @@ export default function AdminStoresPage() {
     setDetailStore(null)
     setEditMode(false)
   }
+
+  // ---- スプレッドシート同期 ----
+  const [sheetSyncOpen, setSheetSyncOpen] = useState(false)
 
   // ---- 店舗情報CSVインポート ----
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -821,8 +825,30 @@ export default function AdminStoresPage() {
               className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
             />
+            <Button
+              size="sm"
+              variant="outlined"
+              onClick={() => setSheetSyncOpen(true)}
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              }
+            >
+              シート同期
+            </Button>
           </div>
         }
+      />
+
+      {/* ─── スプレッドシート同期 ─── */}
+      <SheetSyncModal
+        open={sheetSyncOpen}
+        onClose={() => setSheetSyncOpen(false)}
+        title="店舗情報のスプレッドシート同期"
+        apiBase="/api/admin/stores/sheet-sync"
+        keyLabel="店舗コード"
+        onSynced={refreshStores}
       />
 
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6">

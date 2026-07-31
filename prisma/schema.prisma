@@ -167,6 +167,7 @@ model Store {
   announcementReads AnnouncementRead[]
   inquiries  Inquiry[]
   bugReports BugReport[]
+  complaints Complaint[]
   lineChannels LineChannel[]
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
   trainingVideoViews   TrainingVideoView[]
@@ -408,6 +409,9 @@ model Admin {
   partnerInvitationsCreated SalesPartnerInvitation[] @relation("SalesPartnerInvCreatedBy")
   linkPartnersCreated LinkPartner[]        @relation("LinkPartnerCreatedByAdmin")
   chatMessages   ChatMessage[]
+  complaintsAsPrimary   Complaint[] @relation("ComplaintPrimaryHandler")
+  complaintsAsSecondary Complaint[] @relation("ComplaintSecondaryHandler")
+  complaintsAsFinal     Complaint[] @relation("ComplaintFinalHandler")
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -2211,4 +2215,29 @@ model RevenueTransfer {
   @@index([akikuruInvoiceId])
   @@index([storePaymentId])
   @@index([status])
+}
+
+// クレーム対応記録（管理ポータル）
+model Complaint {
+  id                 String    @id @default(cuid())
+  // 発生日。時刻を持たない暦日なので UTC 0時に正規化して保存し、表示も UTC で取り出す
+  // （JST変換を挟むと日付が前日にずれるため）
+  occurredOn         DateTime
+  storeId            String
+  store              Store     @relation(fields: [storeId], references: [id])
+  storeOwnership     String                        // "direct"（直営） | "franchise"（加盟店）
+  status             String    @default("in_progress")  // resolved | in_progress | unresolved
+  primaryHandlerId   String?                       // 一次対応者（Admin.id）
+  primaryHandler     Admin?    @relation("ComplaintPrimaryHandler",   fields: [primaryHandlerId],   references: [id], onDelete: SetNull)
+  secondaryHandlerId String?                       // 二次対応者
+  secondaryHandler   Admin?    @relation("ComplaintSecondaryHandler", fields: [secondaryHandlerId], references: [id], onDelete: SetNull)
+  finalHandlerId     String?                       // 最終対応者
+  finalHandler       Admin?    @relation("ComplaintFinalHandler",     fields: [finalHandlerId],     references: [id], onDelete: SetNull)
+  content            String    @db.Text            // クレーム内容
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([storeId])
+  @@index([status])
+  @@index([occurredOn])
 }

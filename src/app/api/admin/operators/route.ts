@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { ENTITY_TYPES, CORPORATE_PREFIXES, OPERATOR_SUPPORTED_SERVICE_KEYS } from '@/lib/operator-utils'
+import { autoSyncOperatorRows } from '@/lib/sheet-sync'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -70,5 +71,6 @@ export async function POST(req: NextRequest) {
   }
 
   const operator = await prisma.operator.create({ data: data as any })
+  after(() => autoSyncOperatorRows([operator.id]))
   return NextResponse.json(operator, { status: 201 })
 }

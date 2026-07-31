@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { syncStoresForOperator } from '@/lib/operator-store-sync'
+import { autoSyncOperatorRows, autoSyncStoreRows } from '@/lib/sheet-sync'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -39,6 +40,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // 紐付けを外される店舗も「運営者名」列が変わるため、更新前に控える
+  const previousStores = await prisma.store.findMany({
+    where: { operatorId: id },
+    select: { code: true },
+  })
+
   await prisma.$transaction([
     // 旧紐付けのうち、新リストに含まれない店舗を null に
     prisma.store.updateMany({
@@ -62,5 +69,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     select: { id: true, name: true, code: true },
     orderBy: { code: 'asc' },
   })
+
+  after(async () => {
+    // 外された店舗と新たに紐づいた店舗の両方を反映。運営者側も店舗数が変わる
+    await autoSyncStoreRows([...previousStores.map(s => s.code), ...stores.map(s => s.code)])
+    await autoSyncOperatorRows([id])
+  })
+
   return NextResponse.json({ stores })
 }

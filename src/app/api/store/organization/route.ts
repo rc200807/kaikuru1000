@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getOperatorStores, isOrgAdmin } from '@/lib/store-scope'
 import { parseStoreServices } from '@/lib/store-services'
+import { autoSyncOperatorRows } from '@/lib/sheet-sync'
 
 /**
  * 組織（運営者）情報 — 店舗ポータル用。
@@ -86,5 +87,6 @@ export async function PATCH(request: NextRequest) {
     data,
     select: { id: true, phone: true, email: true, address: true, invoiceNumber: true, service: true },
   })
+  after(() => autoSyncOperatorRows([updated.id]))
   return NextResponse.json(updated)
 }

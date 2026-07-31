@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { validateAvatarFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { revokeAllDeviceSessions } from '@/lib/device-session'
+import { autoSyncStoreRows } from '@/lib/sheet-sync'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -82,6 +83,7 @@ export async function PATCH(request: NextRequest) {
     const updated = await prisma.store.update({ where: { id: store.id }, data: updateData })
     // パスワード変更時は全デバイスの長期セッションを失効
     if (updateData.password) await revokeAllDeviceSessions('store', store.id)
+    after(() => autoSyncStoreRows([updated.code]))
     return NextResponse.json({
       name: updated.name,
       email: updated.email,

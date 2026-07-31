@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { deleteFile } from '@/lib/storage'
 import { ENTITY_TYPES, CORPORATE_PREFIXES, OPERATOR_SUPPORTED_SERVICE_KEYS, parseSupportedServices } from '@/lib/operator-utils'
 import { syncStoresForOperator } from '@/lib/operator-store-sync'
+import { autoSyncOperatorRows, autoSyncOperatorRowsDeleted, autoSyncStoreRows } from '@/lib/sheet-sync'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -81,6 +82,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const updated = await prisma.operator.update({ where: { id }, data })
   // 継承項目（銀行口座/古物許可番号/インボイス番号）を紐づく全店舗へ反映
   await syncStoresForOperator(prisma, id)
+
+  after(async () => {
+    await autoSyncOperatorRows([id])
+    // 継承項目が変わるため、紐づく店舗の行もあわせて更新する
+    const stores = await prisma.store.findMany({ where: { operatorId: id }, select: { code: true } })
+    await autoSyncStoreRows(stores.map(s => s.code))
+  })
+
   return NextResponse.json({ ...updated, supportedServices: parseSupportedServices(updated.supportedServices) })
 }
 
@@ -97,6 +106,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     try { await deleteFile(operator.contractFilePath) } catch { /* ignore */ }
   }
 
+  // 削除で operatorId が SetNull される店舗は「運営者名」列が変わるため、削除前に控える
+  const affectedStores = await prisma.store.findMany({ where: { operatorId: id }, select: { code: true } })
+
   await prisma.operator.delete({ where: { id } })
+
+  after(async () => {
+    await autoSyncOperatorRowsDeleted([id])
+    await autoSyncStoreRows(affectedStores.map(s => s.code))
+  })
+
   return NextResponse.json({ ok: true })
 }

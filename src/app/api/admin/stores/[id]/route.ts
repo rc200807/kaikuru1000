@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { recordAccessLog } from '@/lib/access-log'
+import { autoSyncStoreRows } from '@/lib/sheet-sync'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
@@ -134,6 +135,7 @@ export async function PATCH(
       },
     })
     await recordAccessLog({ userType: user.role, userId: user.id, userName: user.name, action: `店舗情報を編集「${updated.name}」`, req: request })
+    after(() => autoSyncStoreRows([updated.code]))
     return NextResponse.json(updated)
   }
 

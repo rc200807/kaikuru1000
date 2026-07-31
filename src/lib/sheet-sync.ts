@@ -29,6 +29,8 @@ import {
 import { operatorInheritedValues, syncStoresForOperator } from './operator-store-sync'
 
 export type SheetSyncColumn = { key: string; header: string; kind: string }
+/** 1レコード分のシート行データ。key は突合キー（店舗コード / 運営者ID） */
+export type RecordRow = { key: string; values: Record<string, string> }
 export type RowError = { row: number; key?: string; message: string }
 export type ExportResult = { success: boolean; message: string; exported: number; url?: string }
 export type ImportResult = {
@@ -115,8 +117,7 @@ async function exportRecordsToSheet(params: {
   sheetName: string
   columns: SheetSyncColumn[]
   keyColumnKey: string
-  /** key: 突合キー値, values: 列key→セル値 */
-  records: { key: string; values: Record<string, string> }[]
+  records: RecordRow[]
 }): Promise<ExportResult> {
   if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
     return { success: false, message: 'Googleサービスアカウントが設定されていません（GOOGLE_SHEETS_CLIENT_EMAIL）', exported: 0 }
@@ -129,7 +130,6 @@ async function exportRecordsToSheet(params: {
 
   const keyHeader = columns.find(c => c.key === keyColumnKey)!.header
   const systemHeaders = columns.map(c => c.header)
-  const systemHeaderSet = new Set(systemHeaders)
 
   const existingHeaderRaw = existing[0] ?? []
   const existingHeader = existingHeaderRaw.map(normHeader)
@@ -318,18 +318,19 @@ const STORE_SELECT = {
   _count: { select: { customers: true } },
 } as const
 
-/** 全店舗を設定済みスプレッドシートへ出力する */
-export async function exportStoresToSheet(): Promise<ExportResult> {
-  const target = await getStoreSheetTarget()
-  if (!target) return { success: false, message: '店舗情報用スプレッドシートIDが設定されていません', exported: 0 }
-
-  const stores = await prisma.store.findMany({ orderBy: { code: 'asc' }, select: STORE_SELECT })
+/** 店舗レコードをシート行データに変換する（codes 指定時はその店舗のみ） */
+async function buildStoreRecords(codes?: string[]): Promise<RecordRow[]> {
+  const stores = await prisma.store.findMany({
+    where: codes ? { code: { in: codes } } : undefined,
+    orderBy: { code: 'asc' },
+    select: STORE_SELECT,
+  })
 
   const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
   const ymd = (d: Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : '')
   const day = (d: Date | null) => (d ? new Date(d).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '')
 
-  const records = stores.map(s => {
+  return stores.map(s => {
     const values: Record<string, string> = {}
     for (const col of STORE_CSV_COLUMNS) {
       switch (col.key) {
@@ -351,6 +352,14 @@ export async function exportStoresToSheet(): Promise<ExportResult> {
     }
     return { key: s.code, values }
   })
+}
+
+/** 全店舗を設定済みスプレッドシートへ出力する */
+export async function exportStoresToSheet(): Promise<ExportResult> {
+  const target = await getStoreSheetTarget()
+  if (!target) return { success: false, message: '店舗情報用スプレッドシートIDが設定されていません', exported: 0 }
+
+  const records = await buildStoreRecords()
 
   try {
     return await exportRecordsToSheet({
@@ -523,18 +532,16 @@ async function getOperatorSheetTarget(): Promise<{ spreadsheetId: string; sheetN
   }
 }
 
-/** 全運営者を設定済みスプレッドシートへ出力する */
-export async function exportOperatorsToSheet(): Promise<ExportResult> {
-  const target = await getOperatorSheetTarget()
-  if (!target) return { success: false, message: '運営者情報用スプレッドシートIDが設定されていません', exported: 0 }
-
+/** 運営者レコードをシート行データに変換する（ids 指定時はその運営者のみ） */
+async function buildOperatorRecords(ids?: string[]): Promise<RecordRow[]> {
   const operators = await prisma.operator.findMany({
+    where: ids ? { id: { in: ids } } : undefined,
     orderBy: { createdAt: 'asc' },
     include: { _count: { select: { stores: true } } },
   })
   const day = (d: Date) => new Date(d).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
 
-  const records = operators.map(op => {
+  return operators.map(op => {
     const values: Record<string, string> = {}
     for (const col of OPERATOR_SHEET_COLUMNS) {
       switch (col.key) {
@@ -552,6 +559,14 @@ export async function exportOperatorsToSheet(): Promise<ExportResult> {
     }
     return { key: op.id, values }
   })
+}
+
+/** 全運営者を設定済みスプレッドシートへ出力する */
+export async function exportOperatorsToSheet(): Promise<ExportResult> {
+  const target = await getOperatorSheetTarget()
+  if (!target) return { success: false, message: '運営者情報用スプレッドシートIDが設定されていません', exported: 0 }
+
+  const records = await buildOperatorRecords()
 
   try {
     return await exportRecordsToSheet({
@@ -695,5 +710,261 @@ export async function importOperatorsFromSheet(): Promise<ImportResult> {
     success: true,
     message: `更新${updatedCount}件・新規${createdCount}件を取り込みました${errors.length ? `（エラー${errors.length}件）` : ''}`,
     totalRows, createdCount, updatedCount, errorCount: errors.length, errors,
+  }
+}
+
+// =============================================================
+// 自動同期（システム側の更新 → シートへ即時反映）
+//
+// 全件出力と違い、変更されたレコードの行だけを書き換える。
+// シート側で編集中／未取込の他行を巻き込まないための行単位方式。
+// 呼び出し側は after() 経由のベストエフォート実行を想定し、例外は投げない。
+// =============================================================
+
+/** 既存シートのレイアウト（ヘッダーと行番号索引） */
+type SheetLayout = {
+  /** キー列を含むヘッダー行が存在するか。false ならシートは未初期化 */
+  hasHeader: boolean
+  headerNorm: string[]
+  /** 突合キー → シート上の行番号（1始まり） */
+  rowNumberByKey: Map<string, number>
+  /** 突合キー → 既存の行データ（独自列の持ち越し用） */
+  existingRowByKey: Map<string, string[]>
+  /** データ行の最終行番号（データが無ければヘッダー行番号） */
+  lastRowNumber: number
+}
+
+/** シートの生データからレイアウトを読み取る（export はロジック単体検証のため） */
+export function readLayout(values: string[][], keyHeader: string): SheetLayout {
+  const headerNorm = (values[0] ?? []).map(normHeader)
+  const keyIdx = headerNorm.indexOf(keyHeader)
+  const rowNumberByKey = new Map<string, number>()
+  const existingRowByKey = new Map<string, string[]>()
+  let lastRowNumber = 1
+  if (keyIdx >= 0) {
+    for (let r = 1; r < values.length; r++) {
+      if (!isEmptyRow(values[r])) lastRowNumber = r + 1
+      const k = (values[r][keyIdx] ?? '').trim()
+      if (!k || rowNumberByKey.has(k)) continue
+      rowNumberByKey.set(k, r + 1)
+      existingRowByKey.set(k, values[r])
+    }
+  }
+  return { hasHeader: keyIdx >= 0, headerNorm, rowNumberByKey, existingRowByKey, lastRowNumber }
+}
+
+/**
+ * レコードを既存シートのヘッダー列順に並べる。
+ * 行単位同期では列の増減をしないため、シートに無いシステム列は書き込まず、
+ * システム定義に無い独自列は既存値をそのまま残す。
+ */
+export function alignRowToHeader(
+  layout: SheetLayout,
+  columns: SheetSyncColumn[],
+  rec: RecordRow,
+): string[] {
+  const keyByHeader = new Map(columns.map(c => [c.header, c.key]))
+  const oldRow = layout.existingRowByKey.get(rec.key)
+  return layout.headerNorm.map((h, i) => {
+    const colKey = keyByHeader.get(h)
+    if (colKey) return rec.values[colKey] ?? ''
+    return oldRow?.[i] ?? ''
+  })
+}
+
+/**
+ * 指定レコードの行だけを更新する（シートに無いキーは末尾に追加）。
+ * シートが未初期化（ヘッダー無し）の場合は needsFullExport を返す。
+ */
+async function syncRecordRowsToSheet(params: {
+  spreadsheetId: string
+  sheetName: string
+  columns: SheetSyncColumn[]
+  keyColumnKey: string
+  records: RecordRow[]
+}): Promise<{ needsFullExport: boolean; updated: number; appended: number }> {
+  const { spreadsheetId, sheetName, columns, keyColumnKey, records } = params
+  if (records.length === 0) return { needsFullExport: false, updated: 0, appended: 0 }
+
+  const keyHeader = columns.find(c => c.key === keyColumnKey)!.header
+  const sheets = getSheetsClient()
+  const sheetId = await resolveSheetTab(sheets, spreadsheetId, sheetName, false)
+  if (sheetId == null) return { needsFullExport: true, updated: 0, appended: 0 }
+
+  const values = await readAllValues(sheets, spreadsheetId, sheetName)
+  const layout = readLayout(values, keyHeader)
+  if (!layout.hasHeader) return { needsFullExport: true, updated: 0, appended: 0 }
+
+  const lastCol = idxToCol(layout.headerNorm.length - 1)
+  const updates: sheets_v4.Schema$ValueRange[] = []
+  const appends: string[][] = []
+
+  for (const rec of records) {
+    const row = alignRowToHeader(layout, columns, rec)
+    const rowNumber = layout.rowNumberByKey.get(rec.key)
+    if (rowNumber) {
+      updates.push({ range: `${quoteSheetName(sheetName)}!A${rowNumber}:${lastCol}${rowNumber}`, values: [row] })
+    } else {
+      appends.push(row)
+    }
+  }
+
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    })
+  }
+  if (appends.length > 0) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${quoteSheetName(sheetName)}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: appends },
+    })
+  }
+
+  return { needsFullExport: false, updated: updates.length, appended: appends.length }
+}
+
+/** 指定キーの行をシートから削除する（見つからないキーは無視） */
+async function deleteRecordRowsFromSheet(params: {
+  spreadsheetId: string
+  sheetName: string
+  columns: SheetSyncColumn[]
+  keyColumnKey: string
+  keys: string[]
+}): Promise<number> {
+  const { spreadsheetId, sheetName, columns, keyColumnKey, keys } = params
+  if (keys.length === 0) return 0
+
+  const keyHeader = columns.find(c => c.key === keyColumnKey)!.header
+  const sheets = getSheetsClient()
+  const sheetId = await resolveSheetTab(sheets, spreadsheetId, sheetName, false)
+  if (sheetId == null) return 0
+
+  const values = await readAllValues(sheets, spreadsheetId, sheetName)
+  const layout = readLayout(values, keyHeader)
+  if (!layout.hasHeader) return 0
+
+  // 行番号の大きい順に削除しないと、削除で行がずれて別の行を消してしまう
+  const rowNumbers = keys
+    .map(k => layout.rowNumberByKey.get(k))
+    .filter((n): n is number => typeof n === 'number')
+    .sort((a, b) => b - a)
+  if (rowNumbers.length === 0) return 0
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: rowNumbers.map(n => ({
+        deleteDimension: {
+          range: { sheetId, dimension: 'ROWS', startIndex: n - 1, endIndex: n },
+        },
+      })),
+    },
+  })
+  return rowNumbers.length
+}
+
+async function logAutoSyncFailure(type: string, error: unknown): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`[sheet-sync] 自動同期に失敗 (${type}):`, message)
+  try {
+    await prisma.syncLog.create({ data: { type, status: 'error', message: message.slice(0, 1000) } })
+  } catch { /* ログ保存の失敗で呼び出し元に影響を出さない */ }
+}
+
+/** 自動同期が有効か（スプレッドシート未設定・サービスアカウント未設定なら何もしない） */
+function autoSyncEnabled(target: { spreadsheetId: string } | null): target is { spreadsheetId: string; sheetName: string } {
+  return !!target && !!process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+}
+
+/**
+ * 指定店舗の行をシートへ反映する（ベストエフォート・例外を投げない）。
+ * 店舗コードの配列を渡す。設定が無ければ何もしない。
+ */
+export async function autoSyncStoreRows(codes: string[]): Promise<void> {
+  const unique = [...new Set(codes.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const target = await getStoreSheetTarget()
+    if (!autoSyncEnabled(target)) return
+    const records = await buildStoreRecords(unique)
+    if (records.length === 0) return
+    const res = await syncRecordRowsToSheet({
+      ...target, columns: STORE_CSV_COLUMNS, keyColumnKey: 'code', records,
+    })
+    // シート未初期化なら全件出力でヘッダーごと作る
+    if (res.needsFullExport) await exportStoresToSheet()
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:stores', error)
+  }
+}
+
+/** 削除された店舗の行をシートから取り除く（ベストエフォート） */
+export async function autoSyncStoreRowsDeleted(codes: string[]): Promise<void> {
+  const unique = [...new Set(codes.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const target = await getStoreSheetTarget()
+    if (!autoSyncEnabled(target)) return
+    await deleteRecordRowsFromSheet({
+      ...target, columns: STORE_CSV_COLUMNS, keyColumnKey: 'code', keys: unique,
+    })
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:stores', error)
+  }
+}
+
+/** 指定運営者の行をシートへ反映する（ベストエフォート・例外を投げない） */
+export async function autoSyncOperatorRows(ids: string[]): Promise<void> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const target = await getOperatorSheetTarget()
+    if (!autoSyncEnabled(target)) return
+    const records = await buildOperatorRecords(unique)
+    if (records.length === 0) return
+    const res = await syncRecordRowsToSheet({
+      ...target, columns: OPERATOR_SHEET_COLUMNS, keyColumnKey: 'id', records,
+    })
+    if (res.needsFullExport) await exportOperatorsToSheet()
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:operators', error)
+  }
+}
+
+/** 削除された運営者の行をシートから取り除く（ベストエフォート） */
+export async function autoSyncOperatorRowsDeleted(ids: string[]): Promise<void> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const target = await getOperatorSheetTarget()
+    if (!autoSyncEnabled(target)) return
+    await deleteRecordRowsFromSheet({
+      ...target, columns: OPERATOR_SHEET_COLUMNS, keyColumnKey: 'id', keys: unique,
+    })
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:operators', error)
+  }
+}
+
+/**
+ * 運営者の変更に伴い、紐づく店舗の行（運営者名・継承項目）もまとめて反映する。
+ * 店舗IDから店舗コードを引いてから行単位で更新する。
+ */
+export async function autoSyncStoreRowsByIds(storeIds: string[]): Promise<void> {
+  const unique = [...new Set(storeIds.filter(Boolean))]
+  if (unique.length === 0) return
+  try {
+    const stores = await prisma.store.findMany({
+      where: { id: { in: unique } },
+      select: { code: true },
+    })
+    await autoSyncStoreRows(stores.map(s => s.code))
+  } catch (error) {
+    await logAutoSyncFailure('sheet-auto-sync:stores', error)
   }
 }

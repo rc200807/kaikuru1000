@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
 import { parseStoreServices, stringifyStoreServices } from '@/lib/store-services'
+import { autoSyncStoreRows } from '@/lib/sheet-sync'
 
 function generatePassword(): string {
   // 読みやすい文字のみ（0/O/l/I 等を除く）
@@ -152,6 +153,8 @@ export async function POST(request: NextRequest) {
     },
     select: STORE_DETAIL_SELECT,
   })
+
+  after(() => autoSyncStoreRows([store.code]))
 
   return NextResponse.json({ store, password: plainPassword }, { status: 201 })
 }

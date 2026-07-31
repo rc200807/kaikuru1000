@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { autoSyncStoreRows } from '@/lib/sheet-sync'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
   }
 
   const errors: RowError[] = []
+  const syncedCodes: string[] = []
   let createdCount = 0
   let updatedCount = 0
   const totalRows = rows.length - 1
@@ -151,11 +153,13 @@ export async function POST(req: NextRequest) {
           Object.assign(finalData, inheritedByOp.get(store.operatorId))
         }
         await prisma.store.update({ where: { id: store.id }, data: finalData })
+        syncedCodes.push(code)
         updatedCount++
       } else {
         const newCode = await genUniqueCode()
         const hashed = await bcrypt.hash(genPassword(), 10)
         await prisma.store.create({ data: { ...data, name, code: newCode, password: hashed } as any })
+        syncedCodes.push(newCode)
         createdCount++
       }
     } catch (e) {
@@ -167,6 +171,8 @@ export async function POST(req: NextRequest) {
     userType: user.role, userId: user.id, userName: user.name,
     action: `店舗情報CSVインポート（新規${createdCount}・更新${updatedCount}・エラー${errors.length}）`, req,
   })
+
+  after(() => autoSyncStoreRows(syncedCodes))
 
   return NextResponse.json({ totalRows, createdCount, updatedCount, errorCount: errors.length, errors })
 }

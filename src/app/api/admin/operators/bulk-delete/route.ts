@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { deleteFile } from '@/lib/storage'
 import { z } from 'zod'
+import { autoSyncOperatorRowsDeleted, autoSyncStoreRows } from '@/lib/sheet-sync'
 
 const schema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500),
@@ -31,6 +32,12 @@ export async function POST(req: NextRequest) {
     select: { id: true, contractFilePath: true },
   })
 
+  // 削除で operatorId が SetNull される店舗は「運営者名」列が変わるため、削除前に控える
+  const affectedStores = await prisma.store.findMany({
+    where: { operatorId: { in: ids } },
+    select: { code: true },
+  })
+
   const result = await prisma.operator.deleteMany({ where: { id: { in: ids } } })
 
   // 契約書ファイルの削除はベストエフォート
@@ -39,6 +46,11 @@ export async function POST(req: NextRequest) {
       try { await deleteFile(o.contractFilePath) } catch { /* ignore */ }
     }
   }))
+
+  after(async () => {
+    await autoSyncOperatorRowsDeleted(ids)
+    await autoSyncStoreRows(affectedStores.map(s => s.code))
+  })
 
   return NextResponse.json({ deleted: result.count })
 }

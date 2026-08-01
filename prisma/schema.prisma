@@ -169,6 +169,8 @@ model Store {
   bugReports BugReport[]
   complaints Complaint[]
   lineChannels LineChannel[]
+  lineUsers    LineUser[]
+  lineScenarios LineScenario[]
   formsAsCustomerStore Form[]   @relation("FormCustomerStore")
   trainingVideoViews   TrainingVideoView[]
   deals      Deal[]
@@ -1205,10 +1207,15 @@ model LineChannel {
   channelSecret      String        @db.Text         // AES-256-GCM 暗号化
   channelAccessToken String        @db.Text         // AES-256-GCM 暗号化
   isActive           Boolean       @default(true)
+  isDefault          Boolean       @default(false)  // 公開LINE登録・トーク画面が使う既定チャネル（全体で1つ）
+  loginChannelId     String?                        // LINE Login チャネルID（公開値のため平文）
+  loginChannelSecret String?       @db.Text         // LINE Login チャネルシークレット（AES-256-GCM 暗号化）
+  addFriendUrl       String?                        // 友だち追加URL（https://line.me/R/ti/p/@xxx）
   storeId            String?                        // 紐付け店舗（任意）
   store              Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
   lineUsers          LineUser[]
   messages           LineMessage[]
+  scenarios          LineScenario[]
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -1225,13 +1232,22 @@ model LineUser {
   lineChannel   LineChannel   @relation(fields: [lineChannelId], references: [id], onDelete: Cascade)
   userId        String?                            // 既存顧客との紐付け（任意）
   user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId       String?                            // 店舗割当（トーク画面の閲覧スコープの正。User.storeId とは独立）
+  store         Store?        @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  isFollowing   Boolean       @default(true)       // 友だち状態（unfollow で false）
+  followedAt    DateTime?
+  unfollowedAt  DateTime?
+  registeredAt  DateTime?                          // 公開LINE登録フォームからの登録日時（シナリオ基準日）
   messages      LineMessage[]
+  scenarioEnrollments LineScenarioEnrollment[]
+  queuedMessages      LineMessageQueue[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
   @@unique([lineUserId, lineChannelId])
   @@index([lineChannelId])
   @@index([userId])
+  @@index([storeId])
 }
 
 // LINE メッセージ履歴
@@ -1254,6 +1270,91 @@ model LineMessage {
   @@index([lineUserId])
   @@index([lineChannelId])
   @@index([sentAt])
+}
+
+// LINE Login 連携用ワンタイム state トークン（公開LINE登録フォーム → 認可 → callback の突合に使用）
+model LineLinkToken {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  userId        String                  // 紐付け対象の顧客
+  storeId       String                  // 割当店舗
+  lineChannelId String                  // 対象チャネル（既定チャネル）
+  expiresAt     DateTime                // 発行から15分
+  usedAt        DateTime?               // 使用済みマーク（リプレイ防止）
+  createdAt     DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+// LINE 自動配信シナリオ（管理ポータルで設定。トリガー発火時にステップを送信キューへ事前投入する）
+model LineScenario {
+  id            String             @id @default(cuid())
+  name          String
+  lineChannelId String
+  lineChannel   LineChannel        @relation(fields: [lineChannelId], references: [id], onDelete: Cascade)
+  triggerType   String             // "registration"(LINE登録フォーム完了) | "follow"(友だち追加) | "keyword"(キーワード応答)
+  keyword       String?            // triggerType=keyword 時の部分一致キーワード
+  storeId       String?            // null=全店共通、指定時はその店舗割当の LineUser のみ対象
+  store         Store?             @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  isActive      Boolean            @default(true)
+  steps         LineScenarioStep[]
+  enrollments   LineScenarioEnrollment[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([lineChannelId])
+  @@index([storeId])
+}
+
+// シナリオの配信ステップ（keyword シナリオは order=0 の1ステップを即時応答に使う）
+model LineScenarioStep {
+  id           String       @id @default(cuid())
+  scenarioId   String
+  scenario     LineScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  order        Int
+  delayMinutes Int          @default(0) // トリガーからの経過分（0=即時、1440=翌日）
+  sendHour     Int?         // 指定時（JST 0-23）に丸める。深夜配信防止
+  content      String       @db.Text    // {name} {storeName} プレースホルダ対応
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([scenarioId, order])
+}
+
+// シナリオへの登録状況（二重配信防止）
+model LineScenarioEnrollment {
+  id         String       @id @default(cuid())
+  scenarioId String
+  scenario   LineScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  lineUserId String
+  lineUser   LineUser     @relation(fields: [lineUserId], references: [id], onDelete: Cascade)
+  status     String       @default("active") // active | completed | cancelled
+  enrolledAt DateTime     @default(now())
+
+  @@unique([scenarioId, lineUserId])
+  @@index([lineUserId])
+}
+
+// LINE 送信キュー（EmailQueue と同型。cron /api/cron/process-line-queue が2分毎に消化）
+model LineMessageQueue {
+  id             String    @id @default(cuid())
+  lineUserId     String
+  lineUser       LineUser  @relation(fields: [lineUserId], references: [id], onDelete: Cascade)
+  lineChannelId  String
+  scenarioStepId String?   // シナリオ由来の場合（ステップ編集時の一括キャンセル用）
+  enrollmentId   String?   // 由来の enrollment（unfollow 時の一括キャンセル用）
+  content        String    @db.Text   // プレースホルダ展開済み本文
+  status         String    @default("pending") // pending | processing | sent | failed | cancelled
+  attempts       Int       @default(0)
+  lastError      String?   @db.Text
+  scheduledAt    DateTime
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([lineUserId])
+  @@index([enrollmentId])
 }
 
 // フォーム回答

@@ -13,6 +13,10 @@
       "schedule": "*/2 * * * *"
     },
     {
+      "path": "/api/cron/process-line-queue",
+      "schedule": "*/2 * * * *"
+    },
+    {
       "path": "/api/cron/process-transcriptions",
       "schedule": "* * * * *"
     },

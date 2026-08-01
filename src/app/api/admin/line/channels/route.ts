@@ -11,6 +11,10 @@ const createSchema = z.object({
   channelSecret:      z.string().min(1),
   channelAccessToken: z.string().min(1),
   storeId:            z.string().nullable().optional(),
+  isDefault:          z.boolean().optional(),
+  loginChannelId:     z.string().max(100).nullable().optional(),
+  loginChannelSecret: z.string().nullable().optional(),
+  addFriendUrl:       z.string().max(500).nullable().optional(),
 })
 
 async function requireAdmin(request: NextRequest) {
@@ -48,11 +52,12 @@ export async function GET(request: NextRequest) {
   )
   const unreadMap = Object.fromEntries(unreadCounts.map((u) => [u.id, u.unread]))
 
-  // channelSecret / channelAccessToken は返さない
-  const result = channels.map(({ channelSecret: _s, channelAccessToken: _t, ...ch }) => ({
+  // channelSecret / channelAccessToken / loginChannelSecret は返さない
+  const result = channels.map(({ channelSecret: _s, channelAccessToken: _t, loginChannelSecret: _l, ...ch }) => ({
     ...ch,
     userCount: ch._count.lineUsers,
     unreadCount: unreadMap[ch.id] ?? 0,
+    hasLoginSecret: !!_l,
   }))
 
   return NextResponse.json(result)
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
   }
 
-  const { name, channelId, channelSecret, channelAccessToken, storeId } = parsed.data
+  const { name, channelId, channelSecret, channelAccessToken, storeId, isDefault, loginChannelId, loginChannelSecret, addFriendUrl } = parsed.data
 
   // channelId 重複確認
   const existing = await prisma.lineChannel.findUnique({ where: { channelId } })
@@ -77,16 +82,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'このチャネルIDは既に登録されています' }, { status: 400 })
   }
 
-  const channel = await prisma.lineChannel.create({
-    data: {
-      name,
-      channelId,
-      channelSecret: encrypt(channelSecret),
-      channelAccessToken: encrypt(channelAccessToken),
-      storeId: storeId ?? null,
-    },
+  // 既定チャネルは全体で1つ（設定時は他チャネルを解除）
+  const channel = await prisma.$transaction(async (tx) => {
+    if (isDefault) {
+      await tx.lineChannel.updateMany({ where: { isDefault: true }, data: { isDefault: false } })
+    }
+    return tx.lineChannel.create({
+      data: {
+        name,
+        channelId,
+        channelSecret: encrypt(channelSecret),
+        channelAccessToken: encrypt(channelAccessToken),
+        storeId: storeId ?? null,
+        isDefault: isDefault ?? false,
+        loginChannelId: loginChannelId || null,
+        loginChannelSecret: loginChannelSecret ? encrypt(loginChannelSecret) : null,
+        addFriendUrl: addFriendUrl || null,
+      },
+    })
   })
 
-  const { channelSecret: _s, channelAccessToken: _t, ...safe } = channel
-  return NextResponse.json(safe, { status: 201 })
+  const { channelSecret: _s, channelAccessToken: _t, loginChannelSecret: _l, ...safe } = channel
+  return NextResponse.json({ ...safe, hasLoginSecret: !!_l }, { status: 201 })
 }

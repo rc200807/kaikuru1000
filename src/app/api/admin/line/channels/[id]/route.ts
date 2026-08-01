@@ -11,6 +11,10 @@ const updateSchema = z.object({
   channelAccessToken: z.string().min(1).optional(),
   isActive:           z.boolean().optional(),
   storeId:            z.string().nullable().optional(),
+  isDefault:          z.boolean().optional(),
+  loginChannelId:     z.string().max(100).nullable().optional(),
+  loginChannelSecret: z.string().nullable().optional(),
+  addFriendUrl:       z.string().max(500).nullable().optional(),
 })
 
 async function requireAdmin(request: NextRequest) {
@@ -41,14 +45,27 @@ export async function PATCH(
   if (parsed.data.channelAccessToken !== undefined)  updateData.channelAccessToken = encrypt(parsed.data.channelAccessToken)
   if (parsed.data.isActive !== undefined)            updateData.isActive = parsed.data.isActive
   if (parsed.data.storeId !== undefined)             updateData.storeId = parsed.data.storeId
+  if (parsed.data.isDefault !== undefined)           updateData.isDefault = parsed.data.isDefault
+  if (parsed.data.loginChannelId !== undefined)      updateData.loginChannelId = parsed.data.loginChannelId || null
+  if (parsed.data.loginChannelSecret !== undefined)  updateData.loginChannelSecret = parsed.data.loginChannelSecret ? encrypt(parsed.data.loginChannelSecret) : null
+  if (parsed.data.addFriendUrl !== undefined)        updateData.addFriendUrl = parsed.data.addFriendUrl || null
 
-  const channel = await prisma.lineChannel.update({
-    where: { id },
-    data: updateData,
+  // 既定チャネルは全体で1つ（設定時は他チャネルを解除）
+  const channel = await prisma.$transaction(async (tx) => {
+    if (updateData.isDefault === true) {
+      await tx.lineChannel.updateMany({
+        where: { isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      })
+    }
+    return tx.lineChannel.update({
+      where: { id },
+      data: updateData,
+    })
   })
 
-  const { channelSecret: _s, channelAccessToken: _t, ...safe } = channel
-  return NextResponse.json(safe)
+  const { channelSecret: _s, channelAccessToken: _t, loginChannelSecret: _l, ...safe } = channel
+  return NextResponse.json({ ...safe, hasLoginSecret: !!_l })
 }
 
 // DELETE /api/admin/line/channels/[id] — チャネル削除

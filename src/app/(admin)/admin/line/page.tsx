@@ -15,6 +15,10 @@ type Channel = {
   unreadCount: number
   storeId?: string | null
   store?: { id: string; name: string } | null
+  isDefault?: boolean
+  loginChannelId?: string | null
+  addFriendUrl?: string | null
+  hasLoginSecret?: boolean
 }
 
 type StoreOption = { id: string; name: string }
@@ -72,6 +76,10 @@ function ChannelModal({
   const [channelSecret, setChannelSecret] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [storeId, setStoreId] = useState<string>(channel?.storeId ?? '')
+  const [isDefault, setIsDefault] = useState(channel?.isDefault ?? false)
+  const [loginChannelId, setLoginChannelId] = useState(channel?.loginChannelId ?? '')
+  const [loginChannelSecret, setLoginChannelSecret] = useState('')
+  const [addFriendUrl, setAddFriendUrl] = useState(channel?.addFriendUrl ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [storeQuery, setStoreQuery] = useState('')
@@ -115,7 +123,13 @@ function ChannelModal({
     setSaving(true)
     setError('')
     try {
-      const body: any = { name, storeId: storeId || null }
+      const body: any = {
+        name,
+        storeId: storeId || null,
+        isDefault,
+        loginChannelId: loginChannelId || null,
+        addFriendUrl: addFriendUrl || null,
+      }
       if (isNew) {
         body.channelId = channelId
         body.channelSecret = channelSecret
@@ -124,6 +138,8 @@ function ChannelModal({
         if (channelSecret) body.channelSecret = channelSecret
         if (accessToken) body.channelAccessToken = accessToken
       }
+      // Login Secret は入力があった場合のみ送信（空 = 変更なし）
+      if (loginChannelSecret) body.loginChannelSecret = loginChannelSecret
 
       const res = await fetch(
         isNew ? '/api/admin/line/channels' : `/api/admin/line/channels/${channel!.id}`,
@@ -284,6 +300,79 @@ function ChannelModal({
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* LINE友達登録（公開フォーム）設定 */}
+        <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: 16, marginBottom: 16 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: 'var(--md-sys-color-on-surface)' }}>
+            LINE友達登録（公開フォーム）設定
+          </p>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={isDefault}
+              onChange={(e) => setIsDefault(e.target.checked)}
+            />
+            <span style={{ fontSize: 14, color: 'var(--md-sys-color-on-surface)' }}>
+              既定チャネルにする（LINE友達登録・トーク画面で使用。全体で1つ）
+            </span>
+          </label>
+
+          {[
+            { label: 'LINE Login チャネルID', value: loginChannelId, set: setLoginChannelId, placeholder: '1234567890' },
+            { label: `LINE Login チャネルシークレット${channel?.hasLoginSecret ? '（変更する場合のみ）' : ''}`, value: loginChannelSecret, set: setLoginChannelSecret, placeholder: channel?.hasLoginSecret ? '入力しない場合は変更なし' : 'LINE Developersで確認', type: 'password' },
+            { label: '友だち追加URL', value: addFriendUrl, set: setAddFriendUrl, placeholder: 'https://line.me/R/ti/p/@xxxx' },
+          ].map((f) => (
+            <div key={f.label} style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>
+                {f.label}
+              </label>
+              <input
+                type={f.type ?? 'text'}
+                value={f.value}
+                onChange={(e) => f.set(e.target.value)}
+                placeholder={f.placeholder}
+                style={{
+                  width: '100%', boxSizing: 'border-box', padding: '10px 14px', borderRadius: 8,
+                  border: '1px solid var(--md-sys-color-outline-variant)',
+                  background: 'var(--md-sys-color-surface-container-highest)',
+                  color: 'var(--md-sys-color-on-surface)', fontSize: 14,
+                }}
+              />
+            </div>
+          ))}
+
+          <div style={{ marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>
+              コールバックURL（LINE Login チャネルに設定）
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                readOnly
+                value={typeof window !== 'undefined' ? `${window.location.origin}/api/line/link/callback` : ''}
+                style={{
+                  flex: 1, padding: '10px 14px', borderRadius: 8,
+                  border: '1px solid var(--md-sys-color-outline-variant)',
+                  background: 'var(--md-sys-color-surface-container)',
+                  color: 'var(--md-sys-color-on-surface-variant)', fontSize: 13,
+                }}
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/line/link/callback`)}
+                style={{
+                  padding: '0 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  background: 'var(--md-sys-color-secondary-container)',
+                  color: 'var(--md-sys-color-on-secondary-container)', fontSize: 13,
+                }}
+              >
+                コピー
+              </button>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
+              LINE Login チャネルは同一プロバイダーで作成し、このMessaging APIチャネルとリンクしてください
+            </p>
           </div>
         </div>
 

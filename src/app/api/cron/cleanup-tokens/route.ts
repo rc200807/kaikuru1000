@@ -70,6 +70,11 @@ export async function POST(request: NextRequest) {
     where: { expiresAt: { lt: now } },
   })
 
+  // 期限切れ LINE Login 連携トークン
+  const lineLinkTokensDeleted = await prisma.lineLinkToken.deleteMany({
+    where: { expiresAt: { lt: now } },
+  })
+
   // 期限切れ・失効済みデバイスセッション（監査のため失効後30日は保持）
   const deviceSessionsDeleted = await prisma.deviceSession.deleteMany({
     where: {
@@ -88,6 +93,7 @@ export async function POST(request: NextRequest) {
     sentEmails: emailQueueDeleted.count,
     webAuthnChallenges: challengesDeleted.count,
     passkeyLoginTokens: passkeyTokensDeleted.count,
+    lineLinkTokens: lineLinkTokensDeleted.count,
     deviceSessions: deviceSessionsDeleted.count,
   }
 

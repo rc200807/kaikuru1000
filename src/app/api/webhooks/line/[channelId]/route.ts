@@ -8,6 +8,7 @@ import {
   getMessageContent,
 } from '@/lib/line'
 import { uploadFile } from '@/lib/storage'
+import { enrollByTrigger, cancelScenariosForLineUser, handleKeywordReply } from '@/lib/line-scenario'
 
 export async function POST(
   request: NextRequest,
@@ -84,6 +85,34 @@ async function handleEvent(
     })
   }
 
+  // 友だち追加・ブロックの状態を記録
+  if (event.type === 'follow') {
+    const updated = await prisma.lineUser.update({
+      where: { id: lineUser.id },
+      data: { isFollowing: true, followedAt: new Date(event.timestamp) },
+    })
+    // 「友だち追加」トリガーのシナリオへ enroll（失敗しても webhook 応答は止めない）
+    try {
+      await enrollByTrigger('follow', updated)
+    } catch (e) {
+      console.error('[line-webhook] follow enroll failed', e)
+    }
+    return
+  }
+  if (event.type === 'unfollow') {
+    await prisma.lineUser.update({
+      where: { id: lineUser.id },
+      data: { isFollowing: false, unfollowedAt: new Date(event.timestamp) },
+    })
+    // 未送信の自動配信をキャンセル
+    try {
+      await cancelScenariosForLineUser(lineUser.id)
+    } catch (e) {
+      console.error('[line-webhook] unfollow cancel failed', e)
+    }
+    return
+  }
+
   // メッセージイベントのみ保存
   if (event.type !== 'message') return
 
@@ -147,4 +176,13 @@ async function handleEvent(
       sentAt: new Date(event.timestamp),
     },
   })
+
+  // キーワード自動応答（テキスト受信時のみ。失敗しても webhook 応答は止めない）
+  if (messageType === 'text' && content) {
+    try {
+      await handleKeywordReply(lineUser, content)
+    } catch (e) {
+      console.error('[line-webhook] keyword reply failed', e)
+    }
+  }
 }

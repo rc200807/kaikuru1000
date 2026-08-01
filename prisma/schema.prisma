@@ -534,6 +534,7 @@ model Estimate {
   pdfBase64       String?       @db.Text       // 買取見積PDF（base64）
   invoicePdfBase64 String?      @db.Text       // 請求見積PDF（base64）
   emailSentAt     DateTime?                   // メール送信日時
+  lineSentAt      DateTime?                   // LINE送付日時（閲覧リンクをトークへ送信）
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -553,6 +554,7 @@ model SalesContract {
   invoicePdfBase64      String?       @db.Text  // 請求書PDF（base64）
   customerEmail         String?       // 送信先メールアドレス（記録用）
   emailSentAt           DateTime?     // メール送信日時
+  lineSentAt            DateTime?     // LINE送付日時（閲覧リンクをトークへ送信）
   agreedAt              DateTime      @default(now())
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
@@ -1274,14 +1276,16 @@ model LineMessage {
 
 // LINE Login 連携用ワンタイム state トークン（公開LINE登録フォーム → 認可 → callback の突合に使用）
 model LineLinkToken {
-  id            String    @id @default(cuid())
-  token         String    @unique
-  userId        String                  // 紐付け対象の顧客
-  storeId       String                  // 割当店舗
-  lineChannelId String                  // 対象チャネル（既定チャネル）
-  expiresAt     DateTime                // 発行から15分
-  usedAt        DateTime?               // 使用済みマーク（リプレイ防止）
-  createdAt     DateTime  @default(now())
+  id              String    @id @default(cuid())
+  token           String    @unique
+  userId          String                  // 紐付け対象の顧客
+  storeId         String                  // 割当店舗
+  lineChannelId   String                  // 対象チャネル（既定チャネル）
+  purpose         String    @default("register") // "register"(登録フォーム) | "contract" | "estimate"（連携後に書類をLINEへ自動送付）
+  visitScheduleId String?                 // purpose=contract/estimate 時の対象訪問
+  expiresAt       DateTime                // 発行から15分
+  usedAt          DateTime?               // 使用済みマーク（リプレイ防止）
+  createdAt       DateTime  @default(now())
 
   @@index([expiresAt])
 }

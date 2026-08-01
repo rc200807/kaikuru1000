@@ -11,6 +11,7 @@ import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import CompletionModal from '@/components/store/CompletionModal'
+import LineSendCard from '@/components/store/LineSendCard'
 import { formalName, storeContractName } from '@/lib/operator-utils'
 
 // base64 PDF を新規タブで開く（ブラウザのPDFビューアで確認・ダウンロードできる）
@@ -737,6 +738,11 @@ export default function FinalAgreementPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {/* LINEで送付（契約書記録がある場合のみ。未連携ならQR→連携完了と同時に自動送付） */}
+      {existingContract && (
+        <LineSendCard visitScheduleId={scheduleId} docType="contract" />
       )}
 
       {/* ──── PDF出力対象エリア①：売買契約書（買取・店舗情報） ──── */}

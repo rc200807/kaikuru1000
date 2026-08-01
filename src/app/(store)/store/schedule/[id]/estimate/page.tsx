@@ -9,6 +9,7 @@ import Card from '@/components/Card'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import CompletionModal from '@/components/store/CompletionModal'
+import LineSendCard from '@/components/store/LineSendCard'
 import { QRCodeSVG } from 'qrcode.react'
 import { formalName, storeContractName } from '@/lib/operator-utils'
 import { buildInvoiceNotesHtml, buildTokushohoHtml } from '@/lib/legal-texts'
@@ -408,6 +409,11 @@ export default function EstimatePage() {
           </div>
         )}
       </Card>
+
+      {/* LINEで送付（見積の保存後のみ。未連携ならQR→連携完了と同時に自動送付） */}
+      {existing && (
+        <LineSendCard visitScheduleId={scheduleId} docType="estimate" />
+      )}
 
       {/* 作成後のPDF確認 */}
       {(generatedPdfs.sale || generatedPdfs.invoice) && (

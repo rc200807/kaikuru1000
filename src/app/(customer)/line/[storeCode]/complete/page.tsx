@@ -29,6 +29,10 @@ function CompleteContent() {
   const errorCode = searchParams.get('error')
   const isFriend = searchParams.get('friend') === 'true'
   const error = errorCode ? (ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.server) : null
+  // 契約書・見積書のQR連携経由（連携完了と同時にLINEへ書類リンクを自動送付）
+  const docLabel = searchParams.get('doc') === 'contract' ? '売買契約書'
+    : searchParams.get('doc') === 'estimate' ? 'お見積書' : null
+  const docSent = searchParams.get('sent') === 'true'
 
   const [info, setInfo] = useState<LinePublicInfo | null>(null)
 
@@ -71,12 +75,16 @@ function CompleteContent() {
 
       <div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">
-          登録が完了しました
+          {docLabel ? 'LINE連携が完了しました' : '登録が完了しました'}
         </h2>
         <p className="text-sm text-gray-500">
-          {isFriend
-            ? 'LINEのトークから査定のご相談やお問い合わせができます'
-            : 'あと少しです。下のボタンから友だち追加をお願いします'}
+          {docLabel
+            ? (docSent
+              ? `${docLabel}をLINEのトークにお送りしました。LINEを開いてご確認ください`
+              : `${docLabel}の送付に失敗しました。お手数ですが店舗スタッフにお声がけください`)
+            : isFriend
+              ? 'LINEのトークから査定のご相談やお問い合わせができます'
+              : 'あと少しです。下のボタンから友だち追加をお願いします'}
         </p>
       </div>
 

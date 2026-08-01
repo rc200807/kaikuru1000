@@ -106,16 +106,38 @@ export async function GET(request: NextRequest) {
     })
 
     // --- 「LINE登録フォーム完了」トリガーのシナリオへ enroll（失敗しても登録自体は成功させる）---
-    try {
-      const { enrollByTrigger } = await import('@/lib/line-scenario')
-      await enrollByTrigger('registration', lineUser)
-    } catch (e) {
-      console.error('[line/link/callback] registration enroll failed', e)
+    // 契約書・見積書のQR連携（purpose=contract/estimate）はフォーム登録ではないため対象外
+    if (linkToken.purpose === 'register') {
+      try {
+        const { enrollByTrigger } = await import('@/lib/line-scenario')
+        await enrollByTrigger('registration', lineUser)
+      } catch (e) {
+        console.error('[line/link/callback] registration enroll failed', e)
+      }
+    }
+
+    // --- 契約書・見積書のQR連携なら、連携完了と同時に書類の閲覧リンクを自動送付 ---
+    let docSent: 'true' | 'false' | null = null
+    if ((linkToken.purpose === 'contract' || linkToken.purpose === 'estimate') && linkToken.visitScheduleId) {
+      try {
+        const { sendDocumentViaLine } = await import('@/lib/line-document')
+        const sendResult = await sendDocumentViaLine(linkToken.visitScheduleId, linkToken.purpose, lineUser.id)
+        docSent = sendResult.ok ? 'true' : 'false'
+        if (!sendResult.ok) {
+          console.error('[line/link/callback] document send failed:', sendResult.error)
+        }
+      } catch (e) {
+        docSent = 'false'
+        console.error('[line/link/callback] document send failed', e)
+      }
     }
 
     // --- 友だち状態を確認して完了ページへ ---
     const isFriend = await getFriendshipStatus(tokenResult.accessToken)
-    return redirectTo({ friend: isFriend ? 'true' : 'false' })
+    return redirectTo({
+      friend: isFriend ? 'true' : 'false',
+      ...(docSent !== null ? { doc: linkToken.purpose, sent: docSent } : {}),
+    })
   } catch (error) {
     console.error('[line/link/callback] error:', error)
     return redirectTo({ error: 'server' })

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
+import { normalizePostalCode } from '@/lib/postal'
 
 const VALID_CUSTOMER_TYPES = ['visit', 'delivery', 'regular', 'akikuru'] as const
 
@@ -21,6 +22,7 @@ const updateUserSchema = z.object({
   phone:            z.string().max(20).optional(),
   phone2:           z.string().max(20).nullable().optional(),
   phone3:           z.string().max(20).nullable().optional(),
+  postalCode:       z.string().max(10).nullable().optional(),
   address:          z.string().max(200).optional(),
   currentPassword:  z.string().optional(),
   newPassword:      z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional(),
@@ -102,7 +104,7 @@ export async function PATCH(
   }
 
   const { name, furigana, lastName, firstName, lastNameKana, firstNameKana,
-          email, phone, phone2, phone3, address, currentPassword, newPassword, idOcrIssueReport,
+          email, phone, phone2, phone3, postalCode, address, currentPassword, newPassword, idOcrIssueReport,
           internalNote, customerType, customerTypes, visitFrequencyMonths, occupation, leadSource,
           bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
@@ -116,6 +118,7 @@ export async function PATCH(
   if (phone !== undefined) updateData.phone = phone.replace(/[-ー\s]/g, '')
   if (phone2 !== undefined) updateData.phone2 = phone2 ? phone2.trim() : null
   if (phone3 !== undefined) updateData.phone3 = phone3 ? phone3.trim() : null
+  if (postalCode !== undefined) updateData.postalCode = normalizePostalCode(postalCode)
   if (address !== undefined) updateData.address = address.trim()
   // OCR誤り報告（null は削除、文字列は更新）
   if (idOcrIssueReport !== undefined) updateData.idOcrIssueReport = idOcrIssueReport

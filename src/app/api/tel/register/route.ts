@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { checkInquiryRateLimit, getClientIp } from '@/lib/inquiry-rate-limit'
 import { verifyTurnstile } from '@/lib/turnstile'
 import { buildUserNameData } from '@/lib/name-utils'
-import { buildAuthorizeUrl } from '@/lib/line-login'
 import { resolveOrCreateCustomer } from '@/lib/public-customer'
 import { normalizePostalCode } from '@/lib/postal'
 
-// POST /api/line/register — LINE友達登録フォームの送信（公開API）
-// 顧客を作成（または既存顧客に突合）して LINE Login のワンタイム state トークンを発行し、
-// 認可URLを返す。実際の LINE 紐付けは /api/line/link/callback で行う。
+/** 店舗に電話番号が未設定の場合の発信先（本部代表番号。問い合わせAPIと同じフォールバック） */
+const FALLBACK_TEL = '0120-22-8196'
+
+// POST /api/tel/register — 電話問い合わせフォームの送信（公開API）
+// 顧客を作成（または既存顧客に突合）して、発信先の電話番号を返す。
+// クライアントはレスポンスの tel を使って発信する（登録と発信を同時に行う）。
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -67,19 +68,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 })
     }
 
-    // --- 既定チャネル（LINE Login 設定済み）を解決 ---
-    const channel = await prisma.lineChannel.findFirst({
-      where: { isDefault: true, isActive: true },
-    })
-    if (!channel || !channel.loginChannelId || !channel.loginChannelSecret) {
-      return NextResponse.json(
-        { error: 'LINE登録は現在ご利用いただけません。お手数ですが店舗までお問い合わせください。' },
-        { status: 503 }
-      )
-    }
-
     // --- 顧客の突合・作成（住所は郵便番号から自動解決した値を格納）---
-    const { userId } = await resolveOrCreateCustomer({
+    await resolveOrCreateCustomer({
       name: body.name, furigana: body.furigana,
       lastName: body.lastName, firstName: body.firstName,
       lastNameKana: body.lastNameKana, firstNameKana: body.firstNameKana,
@@ -88,27 +78,16 @@ export async function POST(request: NextRequest) {
       postalCode,
       address,
       storeId: store.id,
-      leadSource: 'LINE登録',
-    })
-
-    // --- ワンタイム state トークン発行（15分有効・1回限り）---
-    const token = crypto.randomBytes(32).toString('hex')
-    await prisma.lineLinkToken.create({
-      data: {
-        token,
-        userId,
-        storeId: store.id,
-        lineChannelId: channel.id,
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-      },
+      leadSource: '電話問い合わせ',
     })
 
     return NextResponse.json({
       success: true,
-      authUrl: buildAuthorizeUrl(channel.loginChannelId, token),
+      tel: store.phone || FALLBACK_TEL,
+      storeName: store.name,
     })
   } catch (error) {
-    console.error('[line/register] POST error:', error)
+    console.error('[tel/register] POST error:', error)
     return NextResponse.json({ error: 'サーバーエラーが発生しました' }, { status: 500 })
   }
 }

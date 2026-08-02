@@ -35,6 +35,7 @@ type Customer = {
   phone: string
   phone2: string | null
   phone3: string | null
+  postalCode: string | null
   address: string
   internalNote: string | null
   idDocumentPath: string | null
@@ -267,6 +268,7 @@ export default function StoreCustomerDetailPage() {
     phone: string
     phone2: string
     phone3: string
+    postalCode: string
     address: string
     customerType: CustomerType
     visitFrequencyMonths: number
@@ -274,7 +276,7 @@ export default function StoreCustomerDetailPage() {
   }
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [showMerge, setShowMerge] = useState(false)
-  const [editDraft, setEditDraft] = useState<EditDraft>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
+  const [editDraft, setEditDraft] = useState<EditDraft>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', postalCode: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
   const [savingEdit, setSavingEdit] = useState(false)
   const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
 
@@ -293,6 +295,7 @@ export default function StoreCustomerDetailPage() {
       phone: customer.phone || '',
       phone2: customer.phone2 || '',
       phone3: customer.phone3 || '',
+      postalCode: customer.postalCode || '',
       address: customer.address || '',
       customerType: (CUSTOMER_TYPES.includes(customer.customerType as CustomerType) ? customer.customerType : 'visit') as CustomerType,
       visitFrequencyMonths: (customer as any).visitFrequencyMonths ?? 1,
@@ -321,6 +324,7 @@ export default function StoreCustomerDetailPage() {
           phone: editDraft.phone.trim(),
           phone2: editDraft.phone2.trim() || null,
           phone3: editDraft.phone3.trim() || null,
+          postalCode: editDraft.postalCode.replace(/[-ー－\s]/g, '') || null,
           address: editDraft.address.trim(),
           customerType: editDraft.customerType,
           customerTypes: [editDraft.customerType],
@@ -341,6 +345,7 @@ export default function StoreCustomerDetailPage() {
           phone: editDraft.phone.trim(),
           phone2: editDraft.phone2.trim() || null,
           phone3: editDraft.phone3.trim() || null,
+          postalCode: editDraft.postalCode.replace(/[-ー－\s]/g, '') || null,
           address: editDraft.address.trim(),
           customerType: editDraft.customerType,
           leadSource: editDraft.leadSource || null,
@@ -1171,7 +1176,7 @@ export default function StoreCustomerDetailPage() {
                   { label: '電話番号', value: customer.phone },
                   ...(customer.phone2 ? [{ label: '電話番号 2', value: customer.phone2 }] : []),
                   ...(customer.phone3 ? [{ label: '電話番号 3', value: customer.phone3 }] : []),
-                  { label: '訪問先住所', value: customer.address },
+                  { label: '訪問先住所', value: customer.postalCode ? `〒${customer.postalCode} ${customer.address}` : customer.address },
                   { label: '顧客タイプ', value: typeInfo.label },
                   ...(customer.leadSource ? [{ label: '流入経路', value: customer.leadSource }] : []),
                   { label: '登録日', value: format(new Date(customer.createdAt), 'yyyy年M月d日', { locale: ja }) },
@@ -2255,6 +2260,25 @@ export default function StoreCustomerDetailPage() {
             <TextField label="電話番号 2（任意）" type="tel" value={editDraft.phone2} onChange={v => setEditDraft(d => ({ ...d, phone2: v }))} autoComplete="off" name="kk-edit-phone2" />
             <TextField label="電話番号 3（任意）" type="tel" value={editDraft.phone3} onChange={v => setEditDraft(d => ({ ...d, phone3: v }))} autoComplete="off" name="kk-edit-phone3" />
           </div>
+          <TextField
+            label="郵便番号"
+            value={editDraft.postalCode}
+            onChange={v => {
+              setEditDraft(d => ({ ...d, postalCode: v }))
+              // 7桁揃ったら住所を自動補完（既に住所が入っている場合は上書きしない）
+              const cleaned = v.replace(/[-ー－\s]/g, '')
+              if (cleaned.length === 7) {
+                fetch(`/api/postal-lookup?zipcode=${cleaned}`)
+                  .then(r => r.ok ? r.json() : null)
+                  .then(d => {
+                    if (d?.address) setEditDraft(prev => (prev.address.trim() ? prev : { ...prev, address: d.address }))
+                  })
+                  .catch(() => {})
+              }
+            }}
+            autoComplete="off"
+            name="kk-edit-postal"
+          />
           <TextField label="住所" value={editDraft.address} onChange={v => setEditDraft(d => ({ ...d, address: v }))} autoComplete="off" name="kk-edit-address" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

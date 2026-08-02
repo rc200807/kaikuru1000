@@ -1,5 +1,8 @@
 'use client'
 
+// 電話問い合わせフォーム（公開ページ・店舗ごと）
+// お客様情報を入力して「電話をかける」を押すと、顧客登録と同時に発信する。
+// 電話は履歴が残らないため、発信前に情報を取得して顧客として記録する狙い。
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import GlassBackground from '@/components/customer/GlassBackground'
@@ -8,18 +11,18 @@ import GlassButton from '@/components/customer/GlassButton'
 import MessageBanner from '@/components/MessageBanner'
 import TurnstileWidget from '@/components/TurnstileWidget'
 
-type LinePublicInfo = {
-  storeName: string
-  enabled: boolean
-  addFriendUrl: string | null
+type StoreInfo = {
+  name: string
+  address: string | null
+  phone: string | null
 }
 
-export default function LineRegisterPage() {
+export default function TelInquiryPage() {
   const params = useParams()
   const storeCode = params.storeCode as string
 
-  const [info, setInfo] = useState<LinePublicInfo | null>(null)
-  const [infoLoading, setInfoLoading] = useState(true)
+  const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null)
+  const [storeLoading, setStoreLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
   // Form fields
@@ -36,6 +39,7 @@ export default function LineRegisterPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [calledTel, setCalledTel] = useState<string | null>(null)
 
   // Turnstile (CAPTCHA) トークン
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
@@ -43,21 +47,18 @@ export default function LineRegisterPage() {
   const handleTurnstileExpire = useCallback(() => setTurnstileToken(null), [])
 
   useEffect(() => {
-    async function fetchInfo() {
+    async function fetchStore() {
       try {
-        const res = await fetch(`/api/line/public/${storeCode}`)
-        if (res.ok) {
-          setInfo(await res.json())
-        } else {
-          setNotFound(true)
-        }
+        const res = await fetch(`/api/stores/public/${storeCode}`)
+        if (res.ok) setStoreInfo(await res.json())
+        else setNotFound(true)
       } catch {
         setNotFound(true)
       } finally {
-        setInfoLoading(false)
+        setStoreLoading(false)
       }
     }
-    if (storeCode) fetchInfo()
+    if (storeCode) fetchStore()
   }, [storeCode])
 
   // 郵便番号から住所を自動入力（番地以降は入力不要）
@@ -92,7 +93,7 @@ export default function LineRegisterPage() {
     const cleanPostal = postalCode.replace(/[-ー－\s]/g, '')
 
     try {
-      const res = await fetch('/api/line/register', {
+      const res = await fetch('/api/tel/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -109,17 +110,18 @@ export default function LineRegisterPage() {
         }),
       })
 
-      const data = await res.json().catch(() => ({} as { error?: string; authUrl?: string }))
-      if (!res.ok || !data.authUrl) {
+      const data = await res.json().catch(() => ({} as { error?: string; tel?: string }))
+      if (!res.ok || !data.tel) {
         setError(data.error || '送信に失敗しました。もう一度お試しください')
-        setLoading(false)
         return
       }
 
-      // LINE Login の認可画面へ（同意画面内で友だち追加も完了する）
-      window.location.href = data.authUrl
+      // 顧客登録が完了したので発信する
+      setCalledTel(data.tel)
+      window.location.href = `tel:${data.tel.replace(/[-\s]/g, '')}`
     } catch {
       setError('サーバーエラーが発生しました。もう一度お試しください')
+    } finally {
       setLoading(false)
     }
   }
@@ -134,35 +136,64 @@ export default function LineRegisterPage() {
     )
   }
 
+  // 発信後の画面（スマホのダイヤラーから戻ってきたときにここが見える）
+  if (calledTel) {
+    const telHref = `tel:${calledTel.replace(/[-\s]/g, '')}`
+    return (
+      <GlassBackground maxWidth="max-w-lg">
+        <div className="text-center space-y-6">
+          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-green-500/25">
+            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+            </svg>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">お客様情報を受け付けました</h2>
+            <p className="text-sm text-gray-500">
+              電話アプリが起動しない場合は、下の番号をタップしてください
+            </p>
+          </div>
+
+          <a
+            href={telHref}
+            className="inline-block px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-500 text-white text-lg font-bold shadow-lg shadow-green-500/25 hover:opacity-90 transition-opacity tracking-wider"
+          >
+            {calledTel}
+          </a>
+
+          {storeInfo && (
+            <div className="bg-white/40 rounded-2xl p-4 border border-white/50">
+              <p className="text-xs text-gray-400 mb-1">担当店舗</p>
+              <p className="text-sm font-semibold text-gray-700">{storeInfo.name}</p>
+            </div>
+          )}
+        </div>
+      </GlassBackground>
+    )
+  }
+
   return (
     <GlassBackground maxWidth="max-w-lg">
       {/* Header */}
       <div className="text-center mb-6">
         <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
-        {infoLoading ? (
+        {storeLoading ? (
           <p className="text-sm text-gray-400">読み込み中...</p>
-        ) : info ? (
+        ) : storeInfo ? (
           <>
-            <h1 className="text-lg font-bold text-gray-800">{info.storeName}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">LINE友だち登録</p>
+            <h1 className="text-lg font-bold text-gray-800">{storeInfo.name}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">お電話でのお問い合わせ</p>
           </>
         ) : (
-          <p className="text-sm text-gray-500 mt-1">LINE友だち登録</p>
+          <p className="text-sm text-gray-500 mt-1">お電話でのお問い合わせ</p>
         )}
         <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-          お客様情報をご入力のうえ登録すると、LINEで査定のご相談や
+          お客様情報をご入力のうえ発信いただくと、
           <br className="hidden sm:block" />
-          お知らせの受け取りができるようになります
+          お電話がつながった際のご案内がスムーズになります
         </p>
       </div>
-
-      {info && !info.enabled && !infoLoading && (
-        <div className="mb-5">
-          <MessageBanner severity="error">
-            LINE登録は現在ご利用いただけません。お手数ですが店舗までお問い合わせください。
-          </MessageBanner>
-        </div>
-      )}
 
       {error && (
         <div className="mb-5">
@@ -172,37 +203,13 @@ export default function LineRegisterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <GlassInput
-            label="姓"
-            value={lastName}
-            onChange={setLastName}
-            required
-            placeholder="山田"
-          />
-          <GlassInput
-            label="名"
-            value={firstName}
-            onChange={setFirstName}
-            required
-            placeholder="太郎"
-          />
+          <GlassInput label="姓" value={lastName} onChange={setLastName} required placeholder="山田" />
+          <GlassInput label="名" value={firstName} onChange={setFirstName} required placeholder="太郎" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <GlassInput
-            label="セイ（フリガナ）"
-            value={lastNameKana}
-            onChange={setLastNameKana}
-            required
-            placeholder="ヤマダ"
-          />
-          <GlassInput
-            label="メイ（フリガナ）"
-            value={firstNameKana}
-            onChange={setFirstNameKana}
-            required
-            placeholder="タロウ"
-          />
+          <GlassInput label="セイ（フリガナ）" value={lastNameKana} onChange={setLastNameKana} required placeholder="ヤマダ" />
+          <GlassInput label="メイ（フリガナ）" value={firstNameKana} onChange={setFirstNameKana} required placeholder="タロウ" />
         </div>
 
         <GlassInput
@@ -247,11 +254,7 @@ export default function LineRegisterPage() {
 
         {/* CAPTCHA（NEXT_PUBLIC_TURNSTILE_SITE_KEY 未設定の場合は何も表示されない） */}
         <div className="flex justify-center pt-2">
-          <TurnstileWidget
-            onVerify={handleTurnstileVerify}
-            onExpire={handleTurnstileExpire}
-            theme="auto"
-          />
+          <TurnstileWidget onVerify={handleTurnstileVerify} onExpire={handleTurnstileExpire} theme="auto" />
         </div>
 
         <div className="pt-2">
@@ -261,20 +264,19 @@ export default function LineRegisterPage() {
             loading={loading}
             disabled={
               loading
-              || !info?.enabled
-              || !lastName.trim() || !firstName.trim() || !lastNameKana.trim() || !firstNameKana.trim() || !phone.trim()
-              || postalCode.replace(/[-ー－\s]/g, '').length !== 7
+              || !lastName.trim() || !firstName.trim() || !lastNameKana.trim() || !firstNameKana.trim()
+              || !phone.trim() || postalCode.replace(/[-ー－\s]/g, '').length !== 7
               // CAPTCHAキー設定時のみトークンを必須にする
               || (!!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken)
             }
           >
-            {loading ? '処理中...' : 'LINEで登録する'}
+            {loading ? '処理中...' : '電話をかける'}
           </GlassButton>
         </div>
       </form>
 
       <p className="text-center text-xs text-gray-400 mt-5">
-        登録ボタンを押すとLINEの認証画面に移動します。
+        ボタンを押すと電話アプリが起動します。
         <br />
         送信いただいた情報は担当店舗でのみ利用されます
       </p>

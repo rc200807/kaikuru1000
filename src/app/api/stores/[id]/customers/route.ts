@@ -33,7 +33,7 @@ export async function GET(
       select: {
       id: true, name: true, furigana: true,
       lastName: true, firstName: true, lastNameKana: true, firstNameKana: true,
-      email: true, phone: true, phone2: true, phone3: true, address: true,
+      email: true, phone: true, phone2: true, phone3: true, postalCode: true, address: true,
       internalNote: true,
       idDocumentPath: true, createdAt: true,
       // 顧客タイプ

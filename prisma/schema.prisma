@@ -34,6 +34,7 @@ model User {
   phone          String
   phone2         String?   // 追加連絡先 1（任意）
   phone3         String?   // 追加連絡先 2（任意）
+  postalCode     String?   // 訪問先の郵便番号（住所の自動補完に使用。ハイフンなし7桁）
   address        String
   birthDate      String?             // 生年月日（顧客プロフィール。身分証OCRから選択反映）
   internalNote   String?   @db.Text  // 店舗・管理者のみ閲覧可能な内部メモ（顧客には非公開）

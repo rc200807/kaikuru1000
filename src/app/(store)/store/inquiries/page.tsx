@@ -57,6 +57,7 @@ export default function StoreInquiriesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [telCopied, setTelCopied] = useState(false)
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') router.push('/store/login')
@@ -113,6 +114,14 @@ export default function StoreInquiriesPage() {
     })
   }
 
+  function handleCopyTelUrl() {
+    const url = `https://system.rcinc.jp/tel/${storeCode}`
+    navigator.clipboard.writeText(url).then(() => {
+      setTelCopied(true)
+      setTimeout(() => setTelCopied(false), 2000)
+    })
+  }
+
   const filtered = useMemo(() => {
     const q = searchText.trim().toLowerCase()
     if (!q) return inquiries
@@ -156,6 +165,32 @@ export default function StoreInquiriesPage() {
             >
               {copied ? '✓ コピー済み' : 'URLをコピー'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 電話問い合わせフォームURL（お客様情報を入力してから発信してもらう導線） */}
+      {storeCode && (
+        <div className="px-4 sm:px-6 pt-2">
+          <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-3 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-[var(--md-sys-color-on-surface-variant)]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+              </svg>
+              <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">電話問い合わせフォーム</p>
+            </div>
+            <div className="flex-1 min-w-0 px-3 py-1.5 rounded-lg bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)]">
+              <p className="text-xs text-[var(--md-sys-color-on-surface)] truncate font-mono">{`https://system.rcinc.jp/tel/${storeCode}`}</p>
+            </div>
+            <button
+              onClick={handleCopyTelUrl}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--store-primary)] text-[var(--store-on-primary)] hover:opacity-90 transition-opacity"
+            >
+              {telCopied ? '✓ コピー済み' : 'URLをコピー'}
+            </button>
+            <p className="w-full text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              お客様が情報を入力して発信すると、電話が鳴る前に顧客として登録されます（流入経路「電話問い合わせ」）
+            </p>
           </div>
         </div>
       )}

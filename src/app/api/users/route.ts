@@ -10,6 +10,7 @@ import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { recordAccessLog } from '@/lib/access-log'
 import { buildUserNameData } from '@/lib/name-utils'
+import { normalizePostalCode } from '@/lib/postal'
 
 const registerSchema = z.object({
   // 新形式（姓・名分割）と旧形式（結合 name/furigana）の両方を受理
@@ -21,6 +22,7 @@ const registerSchema = z.object({
   firstNameKana: z.string().max(50).optional().or(z.literal('')),
   email:        z.string().email('有効なメールアドレスを入力してください').optional().or(z.literal('')),
   phone:        z.string().max(20).optional().or(z.literal('')).transform(v => (v ?? '').replace(/[-ー\s]/g, '')),
+  postalCode:   z.string().max(10).optional().or(z.literal('')),
   address:      z.string().max(200).optional().or(z.literal('')),
   password:     z.string().regex(PASSWORD_REGEX, PASSWORD_ERROR).optional().or(z.literal('')),
   licenseKey:   z.string().optional(),
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest) {
     const { email, phone, password, licenseKey, customerType, customerTypes, leadSource, skipLicenseKey } = parsed.data
     const nameData = buildUserNameData(parsed.data)
     const address = parsed.data.address ?? ''
+    const postalCode = normalizePostalCode(parsed.data.postalCode)
     const leadSourceValue = leadSource && leadSource.trim() ? leadSource.trim() : null
 
     // 店舗ユーザーが登録した場合は、その店舗に自動割り当てする
@@ -83,7 +86,7 @@ export async function POST(request: NextRequest) {
     if (isLicenseFree || skipLicenseKey || !licenseKey) {
       const user = await prisma.user.create({
         data: {
-          ...nameData, email: email || null, phone, address,
+          ...nameData, email: email || null, phone, address, postalCode,
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,
@@ -137,7 +140,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          ...nameData, email, phone, address,
+          ...nameData, email, phone, address, postalCode,
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,

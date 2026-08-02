@@ -168,16 +168,31 @@ type DirtyMap = Record<string, Record<string, string>>
 type PresenceEntry = { adminId: string; adminName: string; storeId: string | null }
 type RowFlash = 'saved' | 'error'
 
-// 問い合わせフォームURL（店舗コードから導出・読み取り専用・コピー可）
-function InquiryUrlCell({ code }: { code: string }) {
+// 公開フォームURL（店舗コードから導出・読み取り専用・コピー可）
+// path は '/inquiry' | '/tel' | '/line'
+function PublicFormUrlCell({ code, path }: { code: string; path: string }) {
   const [copied, setCopied] = useState(false)
   if (!code) {
     return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] px-2">保存後に発行</span>
   }
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const url = `${origin}/inquiry/${code}`
-  const copy = () => {
-    navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }).catch(() => {})
+  const url = `${origin}${path}/${code}`
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // クリップボードAPIが使えない環境向けのフォールバック（店舗詳細ページと同じ）
+      const ta = document.createElement('textarea')
+      ta.value = url
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { document.execCommand('copy') } catch {}
+      document.body.removeChild(ta)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
   return (
     <div className="flex items-center gap-1">
@@ -355,9 +370,15 @@ const GridRow = memo(function GridRow({
         )
       })}
 
-      {/* 問い合わせフォームURL（表示・コピー） */}
+      {/* 公開フォームURL（表示・コピー。いずれも店舗コードから導出） */}
       <td className="px-1 py-1">
-        <InquiryUrlCell code={store.code} />
+        <PublicFormUrlCell code={store.code} path="/inquiry" />
+      </td>
+      <td className="px-1 py-1">
+        <PublicFormUrlCell code={store.code} path="/tel" />
+      </td>
+      <td className="px-1 py-1">
+        <PublicFormUrlCell code={store.code} path="/line" />
       </td>
 
       {/* アクション列（sticky 右端）: 新規作成 / 変更あり・保存 / ログイン情報取得 / 他ユーザー編集中 */}
@@ -884,7 +905,7 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
 
   const draftCount = rows.filter(r => isDraft(r.id)).length
   const savedCount = rows.length - draftCount
-  const totalWidth = COLUMNS.reduce((sum, c) => sum + c.width, 0) + 280 + 240 // +問い合わせURL列 +アクション列
+  const totalWidth = COLUMNS.reduce((sum, c) => sum + c.width, 0) + 280 * 3 + 240 // +公開フォームURL3列 +アクション列
 
   return (
     <dialog
@@ -969,9 +990,14 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
                     {col.label}
                   </th>
                 ))}
-                <th className="sticky top-0 z-20 px-3 py-2.5 text-left text-xs font-medium whitespace-nowrap uppercase tracking-wider text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] border-b border-[var(--md-sys-color-outline-variant)]">
-                  問い合わせURL
-                </th>
+                {['問い合わせURL', '電話問い合わせURL', 'LINE登録URL'].map(label => (
+                  <th
+                    key={label}
+                    className="sticky top-0 z-20 px-3 py-2.5 text-left text-xs font-medium whitespace-nowrap uppercase tracking-wider text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] border-b border-[var(--md-sys-color-outline-variant)]"
+                  >
+                    {label}
+                  </th>
+                ))}
                 <th className="sticky top-0 right-0 z-30 px-3 py-2.5 text-left text-xs font-medium whitespace-nowrap uppercase tracking-wider text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container)] border-b border-l border-[var(--md-sys-color-outline-variant)]">
                   操作
                 </th>
@@ -1003,7 +1029,8 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
               ))}
               {/* 行を追加（スプレッドシート風） */}
               <tr>
-                <td colSpan={COLUMNS.length + 2} className="p-0 border-b border-[var(--md-sys-color-outline-variant)]">
+                {/* +公開フォームURL3列 +アクション列 */}
+                <td colSpan={COLUMNS.length + 4} className="p-0 border-b border-[var(--md-sys-color-outline-variant)]">
                   <button
                     type="button"
                     onClick={handleAddRow}

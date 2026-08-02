@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse , after} from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import bcrypt from 'bcryptjs'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
       }
 
       await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, memberId: sessionUser?.memberId ?? null, action: `顧客追加「${user.name}」`, req: request })
+      after(() => autoSyncCustomerRows([user.id]))
       return NextResponse.json({
         id: user.id,
         name: user.name,
@@ -152,6 +154,7 @@ export async function POST(request: NextRequest) {
     })
 
     await recordAccessLog({ userType: sessionUser?.role ?? 'customer', userId: sessionUser?.id ?? user.id, userName: sessionUser?.name ?? user.name, memberId: sessionUser?.memberId ?? null, action: `顧客追加「${user.name}」`, req: request })
+    after(() => autoSyncCustomerRows([user.id]))
     return NextResponse.json({
       id: user.id,
       name: user.name,

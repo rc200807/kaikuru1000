@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -338,6 +339,8 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[inquiry] Sheets append failed', e)
     }
+
+    if (userId) after(() => autoSyncCustomerRows([userId!]))
 
     return NextResponse.json({
       success: true,

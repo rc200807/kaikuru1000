@@ -21,6 +21,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/sync-sheets",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/apply-recurring-costs",
       "schedule": "0 5 1 * *"
     },

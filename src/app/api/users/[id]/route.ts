@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import bcrypt from 'bcryptjs'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -155,6 +156,8 @@ export async function PATCH(
     where: { id },
     data: updateData,
   })
+
+  after(() => autoSyncCustomerRows([id]))
 
   const { password: _, ...userWithoutPassword } = updated
   return NextResponse.json(userWithoutPassword)

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -53,10 +54,14 @@ export async function POST(
   }
 
   // 一括変更は主タイプの置き換え。表示に使う customerTypes 配列も揃える
+  // updateMany は対象IDを返さないため、シート反映用に事前に控える
+  const affected = await prisma.user.findMany({ where, select: { id: true } })
+
   const result = await prisma.user.updateMany({
     where,
     data: { customerType, customerTypes: JSON.stringify([customerType]) },
   })
+  after(() => autoSyncCustomerRows(affected.map(u => u.id)))
   console.log(`[BulkAction] store=${id} action=setType affected=${result.count}`)
 
   return NextResponse.json({ ok: true, count: result.count })

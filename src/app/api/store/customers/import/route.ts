@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { getServerSession } from 'next-auth'
@@ -120,6 +121,8 @@ export async function POST(req: NextRequest) {
   }
 
   const errors: RowError[] = []
+  // シートへ反映する対象（新規・更新の両方）
+  const syncedUserIds: string[] = []
   let createdCount = 0
   let updatedCount = 0
   const totalRows = rows.length - 1
@@ -190,11 +193,12 @@ export async function POST(req: NextRequest) {
         data.customerTypes = customerTypesJson
         data.visitFrequencyMonths = visitFrequencyMonths
         await prisma.user.update({ where: { id: existingId }, data })
+        syncedUserIds.push(existingId)
         updatedCount++
       } else {
         // 新規作成（仮パスワードを自動生成）
         const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10)
-        await prisma.user.create({
+        const createdUser = await prisma.user.create({
           data: {
             ...nameData,
             furigana: furigana || '',
@@ -211,6 +215,7 @@ export async function POST(req: NextRequest) {
             internalNote: note || null,
           },
         })
+        syncedUserIds.push(createdUser.id)
         createdCount++
       }
     } catch (e: unknown) {
@@ -218,6 +223,8 @@ export async function POST(req: NextRequest) {
       errors.push({ row: lineNo, name, message: `保存に失敗: ${message}` })
     }
   }
+
+  after(() => autoSyncCustomerRows(syncedUserIds))
 
   return NextResponse.json({ totalRows, createdCount, updatedCount, errorCount: errors.length, errors })
 }

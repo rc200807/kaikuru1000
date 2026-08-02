@@ -1262,3 +1262,85 @@ export async function autoSyncStoreRowsByIds(storeIds: string[]): Promise<void> 
     await logAutoSyncFailure('sheet-auto-sync:stores', error)
   }
 }
+
+// =============================================================
+// 定期同期（取りこぼしの回収）
+//
+// 変更時の即時反映は各APIに仕込んだフックで行うが、新しい更新経路が
+// 追加されたときにフックの入れ忘れが起きうる。ここでは「直近に更新された
+// レコード」をまとめて行単位で反映し、漏れを自動で回収する。
+// 全件書き換えではないのでシート側の未取込の編集を壊さない。
+// =============================================================
+
+/** 1回の実行で反映する最大件数（暴走防止。超えた分は次回に回る） */
+const RECONCILE_MAX_ROWS = 500
+
+export type ReconcileResult = {
+  stores: number
+  operators: number
+  customers: number
+  skipped: string[]
+}
+
+/**
+ * 直近 sinceMinutes 分に更新されたレコードをシートへ反映する。
+ * cron の間隔より長めの窓を指定して取りこぼしを防ぐ（重複反映は無害）。
+ */
+export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileResult> {
+  const since = new Date(Date.now() - sinceMinutes * 60 * 1000)
+  const result: ReconcileResult = { stores: 0, operators: 0, customers: 0, skipped: [] }
+
+  if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
+    result.skipped.push('サービスアカウント未設定')
+    return result
+  }
+
+  const config = await prisma.googleSheetsConfig.findFirst()
+
+  if (config?.storeInfoSpreadsheetId) {
+    const rows = await prisma.store.findMany({
+      where: { updatedAt: { gte: since } },
+      select: { code: true },
+      orderBy: { updatedAt: 'desc' },
+      take: RECONCILE_MAX_ROWS,
+    })
+    if (rows.length > 0) {
+      await autoSyncStoreRows(rows.map(r => r.code))
+      result.stores = rows.length
+    }
+  } else {
+    result.skipped.push('店舗（シート未設定）')
+  }
+
+  if (config?.operatorSpreadsheetId) {
+    const rows = await prisma.operator.findMany({
+      where: { updatedAt: { gte: since } },
+      select: { id: true },
+      orderBy: { updatedAt: 'desc' },
+      take: RECONCILE_MAX_ROWS,
+    })
+    if (rows.length > 0) {
+      await autoSyncOperatorRows(rows.map(r => r.id))
+      result.operators = rows.length
+    }
+  } else {
+    result.skipped.push('運営者（シート未設定）')
+  }
+
+  if (config?.customerSpreadsheetId) {
+    const rows = await prisma.user.findMany({
+      where: { updatedAt: { gte: since }, mergedIntoUserId: null },
+      select: { id: true },
+      orderBy: { updatedAt: 'desc' },
+      take: RECONCILE_MAX_ROWS,
+    })
+    if (rows.length > 0) {
+      await autoSyncCustomerRows(rows.map(r => r.id))
+      result.customers = rows.length
+    }
+  } else {
+    result.skipped.push('顧客（シート未設定）')
+  }
+
+  return result
+}

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
@@ -93,6 +94,8 @@ export async function POST(req: NextRequest) {
   const keyMap = new Map(licenseKeys.map(lk => [lk.key, lk]))
 
   const errors: RowError[] = []
+  // シートへ反映する対象（新規・更新の両方）
+  const syncedUserIds: string[] = []
   let createdCount = 0
   let updatedCount = 0
   const totalRows = rows.length - 1
@@ -146,11 +149,12 @@ export async function POST(req: NextRequest) {
         if (address)  data.address  = address
         if (emailRaw !== '') data.email = email
         await prisma.user.update({ where: { id: lk.user.id }, data })
+        syncedUserIds.push(lk.user.id)
         updatedCount++
       } else {
         // 新規作成：仮パスワードを自動生成
         const tempPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10)
-        await prisma.$transaction([
+        const [createdUser] = await prisma.$transaction([
           prisma.user.create({
             data: {
               ...nameData,
@@ -164,6 +168,7 @@ export async function POST(req: NextRequest) {
           }),
           prisma.licenseKey.update({ where: { id: lk.id }, data: { isUsed: true } }),
         ])
+        syncedUserIds.push(createdUser.id)
         createdCount++
       }
     } catch (e: unknown) {
@@ -184,6 +189,8 @@ export async function POST(req: NextRequest) {
       errors:       errors.length > 0 ? errors : undefined,
     },
   })
+
+  after(() => autoSyncCustomerRows(syncedUserIds))
 
   return NextResponse.json({ totalRows, createdCount, updatedCount, errorCount: errors.length, errors })
 }

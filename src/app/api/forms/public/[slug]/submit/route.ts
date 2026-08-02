@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { parseSchema } from '@/lib/forms/types'
@@ -275,6 +276,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       } catch { /* ignore */ }
     }
   }
+
+  if (createdUserId) after(() => autoSyncCustomerRows([createdUserId!]))
 
   return NextResponse.json({ ok: true, submissionId: submission.id }, { status: 201 })
 }

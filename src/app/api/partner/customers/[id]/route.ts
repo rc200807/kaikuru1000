@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import { prisma } from '@/lib/prisma'
 import { requirePartner } from '@/lib/partner-auth'
 import { z } from 'zod'
@@ -94,6 +95,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       customerType: true, visitFrequencyMonths: true, updatedAt: true,
     },
   })
+  after(() => autoSyncCustomerRows([id]))
   return NextResponse.json(updated)
 }
 

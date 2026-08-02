@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse , after} from 'next/server'
+import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -79,6 +80,8 @@ export async function POST(request: NextRequest) {
       console.error('[Assignment] 顧客通知メールの送信に失敗しました:', err.message)
     }
   }
+
+  after(() => autoSyncCustomerRows([userId]))
 
   return NextResponse.json({ userId, storeId, storeName: user.store?.name })
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { recordAccessLog } from '@/lib/access-log'
-import { autoSyncStoreRows } from '@/lib/sheet-sync'
+import { autoSyncStoreRows, autoSyncStoreRowsDeleted } from '@/lib/sheet-sync'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
@@ -168,4 +168,85 @@ export async function GET(
   })
   if (!store) return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 })
   return NextResponse.json(store)
+}
+
+/**
+ * 店舗の削除。
+ *
+ * 顧客・案件・決済などの業務データが1件でも紐づいている店舗は削除できない
+ * （DBの外部キーが Restrict のため実行しても失敗するうえ、消してしまうと
+ *  会計・契約の履歴が失われる）。その場合は何が残っているかを返して中止し、
+ *  営業ステータス「閉店」に切り替える運用を案内する。
+ *
+ * 削除できるのは実質的に未使用の店舗のみ。店舗メンバー・チャットルーム・
+ * 在庫・カレンダー連携などの付随データは店舗と一緒に削除される。
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as any
+  if (!['admin', 'superadmin', 'hr'].includes(user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { id } = await params
+  const store = await prisma.store.findUnique({
+    where: { id },
+    select: {
+      id: true, code: true, name: true,
+      _count: {
+        select: {
+          customers: true, visitSchedules: true, visitRequests: true,
+          deals: true, inquiries: true, storePayments: true,
+          complaints: true, bugReports: true, akiyaCases: true,
+          communityThreads: true, communityReplies: true, communityReactions: true,
+          members: true,
+        },
+      },
+    },
+  })
+  if (!store) return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 })
+
+  const c = store._count
+  // 消すと履歴が失われる業務データ（DB側も Restrict で守られている）
+  const blockers = [
+    { label: '顧客', count: c.customers },
+    { label: '訪問予定', count: c.visitSchedules },
+    { label: '訪問依頼', count: c.visitRequests },
+    { label: '案件', count: c.deals },
+    { label: 'お問い合わせ', count: c.inquiries },
+    { label: '決済記録', count: c.storePayments },
+    { label: 'クレーム', count: c.complaints },
+    { label: '不具合報告', count: c.bugReports },
+    { label: '空き家案件', count: c.akiyaCases },
+    { label: '知恵袋の投稿', count: c.communityThreads },
+    { label: '知恵袋の返信', count: c.communityReplies },
+    { label: '知恵袋のリアクション', count: c.communityReactions },
+  ].filter(b => b.count > 0)
+
+  if (blockers.length > 0) {
+    return NextResponse.json({
+      error: 'この店舗には業務データが紐づいているため削除できません',
+      blockers,
+      hint: '履歴を残す必要があるため削除はできません。営業ステータスを「閉店」に変更してください。顧客は一括操作で別の店舗へ割り当て直せます。',
+    }, { status: 409 })
+  }
+
+  // 店舗メンバーは店舗が無くなると意味を持たないため一緒に削除する
+  await prisma.$transaction([
+    prisma.storeMember.deleteMany({ where: { storeId: id } }),
+    prisma.store.delete({ where: { id } }),
+  ])
+
+  await recordAccessLog({
+    userType: user.role, userId: user.id, userName: user.name,
+    action: `店舗を削除「${store.name}」（${store.code}）`, req: request,
+  })
+
+  after(() => autoSyncStoreRowsDeleted([store.code]))
+
+  return NextResponse.json({ deleted: true, memberCount: c.members })
 }

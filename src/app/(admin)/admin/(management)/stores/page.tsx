@@ -147,6 +147,12 @@ export default function AdminStoresPage() {
   // 行アクションメニュー（3点リーダー）— テーブルの overflow クリップを避けるため fixed 配置
   const [rowMenu, setRowMenu] = useState<{ store: Store; x: number; y: number } | null>(null)
 
+  // 店舗の削除（業務データが紐づく店舗は削除できず、何が残っているかを表示する）
+  const [deleteTarget, setDeleteTarget] = useState<Store | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteBlockers, setDeleteBlockers] = useState<{ label: string; count: number }[] | null>(null)
+  const [deleteHint, setDeleteHint] = useState('')
+
   // メニューを ESC / スクロール / リサイズで閉じる
   useEffect(() => {
     if (!rowMenu) return
@@ -306,6 +312,41 @@ export default function AdminStoresPage() {
       setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null })
     } else {
       setMessage({ type: 'error', text: data.error || '初期ログイン情報の取得に失敗しました' })
+    }
+  }
+
+  // 3点リーダー「この店舗を削除」
+  function openDelete(store: Store) {
+    setRowMenu(null)
+    setDeleteBlockers(null)
+    setDeleteHint('')
+    setDeleteTarget(store)
+  }
+
+  async function handleDeleteStore() {
+    if (!deleteTarget) return
+    setDeleteBusy(true)
+    try {
+      const res = await fetch(`/api/admin/stores/${deleteTarget.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409) {
+        // 業務データが残っている → 中止して内訳を表示
+        setDeleteBlockers(data.blockers ?? [])
+        setDeleteHint(data.hint ?? '')
+        return
+      }
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || '削除に失敗しました' })
+        setDeleteTarget(null)
+        return
+      }
+      setDeleteTarget(null)
+      setMessage({ type: 'success', text: `店舗「${deleteTarget.name}」を削除しました` })
+      refreshStores()
+    } catch {
+      setMessage({ type: 'error', text: '削除に失敗しました' })
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
@@ -1236,9 +1277,69 @@ export default function AdminStoresPage() {
               </svg>
               初期ログイン情報を取得
             </button>
+            <div className="my-1 border-t border-[var(--md-sys-color-outline-variant)]" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openDelete(rowMenu.store)}
+              className="w-full text-left px-4 py-2.5 text-sm text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors flex items-center gap-2.5"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              この店舗を削除
+            </button>
           </div>
         </>
       )}
+
+      {/* ─── 店舗の削除確認 ─── */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => { if (!deleteBusy) setDeleteTarget(null) }}
+        title={deleteBlockers ? 'この店舗は削除できません' : '店舗を削除しますか？'}
+        size="sm"
+      >
+        {deleteTarget && (
+          <div className="space-y-4">
+            {deleteBlockers ? (
+              <>
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                  「{deleteTarget.name}」には次のデータが紐づいています。
+                </p>
+                <ul className="rounded-lg bg-[var(--md-sys-color-surface-container-low)] p-3 space-y-1">
+                  {deleteBlockers.map(b => (
+                    <li key={b.label} className="text-sm flex justify-between">
+                      <span className="text-[var(--md-sys-color-on-surface-variant)]">{b.label}</span>
+                      <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{b.count}件</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">{deleteHint}</p>
+                <div className="flex justify-end">
+                  <Button onClick={() => setDeleteTarget(null)}>閉じる</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                  「{deleteTarget.name}」（{deleteTarget.code}）を削除します。<br />
+                  店舗メンバーのアカウント・チャット・在庫・カレンダー連携も一緒に削除されます。<br />
+                  スプレッドシートを設定している場合は、その行も削除されます。<br />
+                  <span className="text-[var(--md-sys-color-error)]">この操作は元に戻せません。</span>
+                </p>
+                <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  顧客・案件・決済などの記録がある店舗は削除できません。実行時に確認します。
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="text" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>キャンセル</Button>
+                  <Button onClick={handleDeleteStore} loading={deleteBusy} disabled={deleteBusy}>削除する</Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* ─── 店舗詳細サイドバー ─── */}
       {/* オーバーレイ */}

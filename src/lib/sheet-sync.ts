@@ -353,6 +353,8 @@ async function buildStoreRecords(codes?: string[]): Promise<RecordRow[]> {
         case 'customerCount':     values[col.key] = String(s._count.customers); break
         case 'createdAt':         values[col.key] = day(s.createdAt); break
         case 'inquiryUrl':        values[col.key] = `${baseUrl}/inquiry/${s.code}`; break
+        case 'telUrl':            values[col.key] = `${baseUrl}/tel/${s.code}`; break
+        case 'lineUrl':           values[col.key] = `${baseUrl}/line/${s.code}`; break
         default: {
           const v = (s as Record<string, unknown>)[col.key]
           values[col.key] = v != null ? String(v) : ''

@@ -43,6 +43,8 @@ export const STORE_CSV_COLUMNS: StoreCsvColumn[] = [
   { key: 'customerCount',       header: '顧客数',                kind: 'ref' },
   { key: 'createdAt',           header: '登録日',                kind: 'ref' },
   { key: 'inquiryUrl',          header: '問い合わせフォームURL', kind: 'ref' },
+  { key: 'telUrl',              header: '電話問い合わせフォームURL', kind: 'ref' },
+  { key: 'lineUrl',             header: 'LINE登録フォームURL',   kind: 'ref' },
 ]
 
 const LABEL_TO_VALUE: Record<string, string> = Object.fromEntries(STORE_STATUSES.map(s => [s.label, s.value]))

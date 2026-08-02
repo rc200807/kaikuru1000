@@ -52,6 +52,8 @@ export async function GET() {
       case 'customerCount': return String(s._count.customers)
       case 'createdAt':    return day(s.createdAt)
       case 'inquiryUrl':   return `${baseUrl}/inquiry/${s.code}`
+      case 'telUrl':       return `${baseUrl}/tel/${s.code}`
+      case 'lineUrl':      return `${baseUrl}/line/${s.code}`
       default:             return (s as Record<string, unknown>)[key] != null ? String((s as Record<string, unknown>)[key]) : ''
     }
   }

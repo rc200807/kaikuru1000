@@ -167,7 +167,7 @@ export default function StoreDetailPage() {
   const [resetting, setResetting] = useState(false)
   const [pwModal, setPwModal] = useState<{ password: string } | null>(null)
   const [pwCopied, setPwCopied] = useState(false)
-  const [inquiryUrlCopied, setInquiryUrlCopied] = useState(false)
+  const [copiedUrlKey, setCopiedUrlKey] = useState<string | null>(null)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -470,9 +470,8 @@ export default function StoreDetailPage() {
     setTimeout(() => setPwCopied(false), 2000)
   }
 
-  async function handleCopyInquiryUrl() {
-    if (!store) return
-    const url = `${window.location.origin}/inquiry/${store.code}`
+  /** 公開フォームURLをクリップボードへコピー（コピー済み表示はキーごとに管理） */
+  async function handleCopyPublicUrl(key: string, url: string) {
     try {
       await navigator.clipboard.writeText(url)
     } catch {
@@ -486,8 +485,8 @@ export default function StoreDetailPage() {
       try { document.execCommand('copy') } catch {}
       document.body.removeChild(ta)
     }
-    setInquiryUrlCopied(true)
-    setTimeout(() => setInquiryUrlCopied(false), 2000)
+    setCopiedUrlKey(key)
+    setTimeout(() => setCopiedUrlKey(k => (k === key ? null : k)), 2000)
   }
 
   async function handleSendPasswordEmail() {
@@ -538,7 +537,13 @@ export default function StoreDetailPage() {
   }
   if (!store) return <p style={{ padding: 40, textAlign: 'center' }}>店舗が見つかりません</p>
 
-  const inquiryUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/inquiry/${store.code}`
+  // 店舗専用の公開フォームURL（すべて店舗コード直結）
+  const publicOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+  const publicFormUrls = [
+    { key: 'inquiry', label: 'お問い合わせフォーム', url: `${publicOrigin}/inquiry/${store.code}` },
+    { key: 'tel', label: '電話問い合わせフォーム', url: `${publicOrigin}/tel/${store.code}` },
+    { key: 'line', label: 'LINE登録フォーム', url: `${publicOrigin}/line/${store.code}` },
+  ]
 
   return (
     <div style={{ padding: '24px 32px', width: '100%', color: 'var(--md-sys-color-on-surface)' }}>
@@ -838,34 +843,39 @@ export default function StoreDetailPage() {
         )}
       </Section>
 
-      {/* お問い合わせフォームURL */}
-      <Section title="店舗専用お問い合わせフォームURL">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* 公開フォームURL（お問い合わせ・電話問い合わせ・LINE登録） */}
+      <Section title="店舗専用フォームURL">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.7 }}>
-            この店舗専用のお問い合わせフォームのURLです。お客様へのご案内やQRコード化などにご利用ください。
+            この店舗専用の公開フォームURLです。お客様へのご案内やQRコード化などにご利用ください。
           </p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              readOnly
-              value={inquiryUrl}
-              onFocus={e => e.currentTarget.select()}
-              style={{ flex: 1, minWidth: 240, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'monospace' }}
-            />
-            <button
-              onClick={handleCopyInquiryUrl}
-              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: inquiryUrlCopied ? '#4ade80' : '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
-            >
-              {inquiryUrlCopied ? 'コピー済' : 'URLをコピー'}
-            </button>
-            <a
-              href={inquiryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
-            >
-              開く
-            </a>
-          </div>
+          {publicFormUrls.map(({ key, label, url }) => (
+            <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--md-sys-color-on-surface-variant)' }}>{label}</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  readOnly
+                  value={url}
+                  onFocus={e => e.currentTarget.select()}
+                  style={{ flex: 1, minWidth: 240, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'monospace' }}
+                />
+                <button
+                  onClick={() => handleCopyPublicUrl(key, url)}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: copiedUrlKey === key ? '#4ade80' : '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+                >
+                  {copiedUrlKey === key ? 'コピー済' : 'URLをコピー'}
+                </button>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                >
+                  開く
+                </a>
+              </div>
+            </div>
+          ))}
         </div>
       </Section>
 

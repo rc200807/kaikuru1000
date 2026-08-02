@@ -1281,7 +1281,69 @@ export type ReconcileResult = {
   stores: number
   operators: number
   customers: number
+  /** シートから削除した行数（DBに存在しなくなったレコード） */
+  pruned: { stores: number; operators: number; customers: number }
   skipped: string[]
+  warnings: string[]
+}
+
+/**
+ * 一度に削除してよい行数の上限。
+ * 取得失敗や設定ミスで「DB側が空」に見えたときに、シート全体を消し飛ばさないための安全弁。
+ */
+const PRUNE_MAX_ROWS = 200
+
+/**
+ * シートに残っているが DB にもう存在しないキーの行を削除する。
+ * 削除時のフックが失敗した場合や、フックを通らない経路で消えた場合の取りこぼしを回収する。
+ *
+ * @param existsInDb シート上のキー配列を受け取り、実在するキーだけを返す
+ */
+async function pruneDeletedRows(params: {
+  spreadsheetId: string
+  sheetName: string
+  columns: SheetSyncColumn[]
+  keyColumnKey: string
+  existsInDb: (keys: string[]) => Promise<Set<string>>
+  label: string
+}): Promise<{ pruned: number; warning?: string }> {
+  const { spreadsheetId, sheetName, columns, keyColumnKey, existsInDb, label } = params
+
+  const keyHeader = columns.find(c => c.key === keyColumnKey)!.header
+  const sheets = getSheetsClient()
+  const sheetId = await resolveSheetTab(sheets, spreadsheetId, sheetName, false)
+  if (sheetId == null) return { pruned: 0 }
+
+  const values = await readAllValues(sheets, spreadsheetId, sheetName)
+  const layout = readLayout(values, keyHeader)
+  if (!layout.hasHeader) return { pruned: 0 }
+
+  // キー欄が空の行は「シート上で新規追加しようとしている行」なので触らない
+  const sheetKeys = [...layout.rowNumberByKey.keys()]
+  if (sheetKeys.length === 0) return { pruned: 0 }
+
+  // 実在チェックは件数が多くなりうるので分割して問い合わせる
+  const alive = new Set<string>()
+  for (let i = 0; i < sheetKeys.length; i += 500) {
+    const found = await existsInDb(sheetKeys.slice(i, i + 500))
+    for (const k of found) alive.add(k)
+  }
+
+  const orphans = sheetKeys.filter(k => !alive.has(k))
+  if (orphans.length === 0) return { pruned: 0 }
+
+  if (orphans.length > PRUNE_MAX_ROWS) {
+    // 大量に消える＝設定ミスや取得失敗の可能性が高い。安全側に倒して何もしない
+    return {
+      pruned: 0,
+      warning: `${label}: 削除対象が${orphans.length}行と多いため中止しました（上限${PRUNE_MAX_ROWS}行）。シートの指定が正しいか確認してください`,
+    }
+  }
+
+  const deleted = await deleteRecordRowsFromSheet({
+    spreadsheetId, sheetName, columns, keyColumnKey, keys: orphans,
+  })
+  return { pruned: deleted }
 }
 
 /**
@@ -1290,7 +1352,11 @@ export type ReconcileResult = {
  */
 export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileResult> {
   const since = new Date(Date.now() - sinceMinutes * 60 * 1000)
-  const result: ReconcileResult = { stores: 0, operators: 0, customers: 0, skipped: [] }
+  const result: ReconcileResult = {
+    stores: 0, operators: 0, customers: 0,
+    pruned: { stores: 0, operators: 0, customers: 0 },
+    skipped: [], warnings: [],
+  }
 
   if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
     result.skipped.push('サービスアカウント未設定')
@@ -1299,7 +1365,12 @@ export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileR
 
   const config = await prisma.googleSheetsConfig.findFirst()
 
+  // ── 店舗 ──
   if (config?.storeInfoSpreadsheetId) {
+    const target = {
+      spreadsheetId: extractSpreadsheetId(config.storeInfoSpreadsheetId),
+      sheetName: config.storeInfoSheetName || '店舗情報',
+    }
     const rows = await prisma.store.findMany({
       where: { updatedAt: { gte: since } },
       select: { code: true },
@@ -1310,11 +1381,29 @@ export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileR
       await autoSyncStoreRows(rows.map(r => r.code))
       result.stores = rows.length
     }
+    try {
+      const { pruned, warning } = await pruneDeletedRows({
+        ...target, columns: STORE_CSV_COLUMNS, keyColumnKey: 'code', label: '店舗',
+        existsInDb: async (codes) => {
+          const found = await prisma.store.findMany({ where: { code: { in: codes } }, select: { code: true } })
+          return new Set(found.map(f => f.code))
+        },
+      })
+      result.pruned.stores = pruned
+      if (warning) result.warnings.push(warning)
+    } catch (e) {
+      result.warnings.push(`店舗の削除行の整理に失敗: ${e instanceof Error ? e.message : String(e)}`)
+    }
   } else {
     result.skipped.push('店舗（シート未設定）')
   }
 
+  // ── 運営者 ──
   if (config?.operatorSpreadsheetId) {
+    const target = {
+      spreadsheetId: extractSpreadsheetId(config.operatorSpreadsheetId),
+      sheetName: config.operatorSheetName || '運営者情報',
+    }
     const rows = await prisma.operator.findMany({
       where: { updatedAt: { gte: since } },
       select: { id: true },
@@ -1325,11 +1414,29 @@ export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileR
       await autoSyncOperatorRows(rows.map(r => r.id))
       result.operators = rows.length
     }
+    try {
+      const { pruned, warning } = await pruneDeletedRows({
+        ...target, columns: OPERATOR_SHEET_COLUMNS, keyColumnKey: 'id', label: '運営者',
+        existsInDb: async (ids) => {
+          const found = await prisma.operator.findMany({ where: { id: { in: ids } }, select: { id: true } })
+          return new Set(found.map(f => f.id))
+        },
+      })
+      result.pruned.operators = pruned
+      if (warning) result.warnings.push(warning)
+    } catch (e) {
+      result.warnings.push(`運営者の削除行の整理に失敗: ${e instanceof Error ? e.message : String(e)}`)
+    }
   } else {
     result.skipped.push('運営者（シート未設定）')
   }
 
+  // ── 顧客 ──
   if (config?.customerSpreadsheetId) {
+    const target = {
+      spreadsheetId: extractSpreadsheetId(config.customerSpreadsheetId),
+      sheetName: config.customerSheetName || '顧客情報',
+    }
     const rows = await prisma.user.findMany({
       where: { updatedAt: { gte: since }, mergedIntoUserId: null },
       select: { id: true },
@@ -1339,6 +1446,23 @@ export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileR
     if (rows.length > 0) {
       await autoSyncCustomerRows(rows.map(r => r.id))
       result.customers = rows.length
+    }
+    try {
+      const { pruned, warning } = await pruneDeletedRows({
+        ...target, columns: CUSTOMER_SHEET_COLUMNS, keyColumnKey: 'id', label: '顧客',
+        existsInDb: async (ids) => {
+          // 統合で吸収された顧客は「存在しない」扱い（一覧にもシートにも出さない方針）
+          const found = await prisma.user.findMany({
+            where: { id: { in: ids }, mergedIntoUserId: null },
+            select: { id: true },
+          })
+          return new Set(found.map(f => f.id))
+        },
+      })
+      result.pruned.customers = pruned
+      if (warning) result.warnings.push(warning)
+    } catch (e) {
+      result.warnings.push(`顧客の削除行の整理に失敗: ${e instanceof Error ? e.message : String(e)}`)
     }
   } else {
     result.skipped.push('顧客（シート未設定）')

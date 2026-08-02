@@ -25,15 +25,22 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await reconcileSheetSync(120)
-    const total = result.stores + result.operators + result.customers
+    const updated = result.stores + result.operators + result.customers
+    const pruned = result.pruned.stores + result.pruned.operators + result.pruned.customers
 
-    // 反映対象があったときだけログを残す（毎時0件のログでSyncLogを埋めない）
-    if (total > 0) {
+    // 反映・削除があったとき、または警告が出たときだけログを残す
+    // （毎時0件のログで SyncLog を埋めない）
+    if (updated > 0 || pruned > 0 || result.warnings.length > 0) {
+      const parts = [`更新 店舗${result.stores}・運営者${result.operators}・顧客${result.customers}`]
+      if (pruned > 0) {
+        parts.push(`削除 店舗${result.pruned.stores}・運営者${result.pruned.operators}・顧客${result.pruned.customers}`)
+      }
+      if (result.warnings.length > 0) parts.push(`警告: ${result.warnings.join(' / ')}`)
       await prisma.syncLog.create({
         data: {
           type: 'sheet-reconcile',
-          status: 'success',
-          message: `店舗${result.stores}・運営者${result.operators}・顧客${result.customers}件を反映`,
+          status: result.warnings.length > 0 ? 'error' : 'success',
+          message: parts.join(' / ').slice(0, 1000),
         },
       })
     }

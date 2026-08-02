@@ -2,6 +2,7 @@ import { google } from 'googleapis'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
+import { autoSyncStoreRows, autoSyncStoreRowsDeleted } from './sheet-sync'
 
 const SHEET_NAME = '店舗マスター'
 
@@ -621,6 +622,9 @@ export async function syncStoresFromGoogleSheets(): Promise<{
       },
     })
 
+    // 実際に削除した店舗コード（店舗情報シートからも行を消すために控える）
+    const deletedCodes: string[] = []
+
     for (const store of obsoleteStores) {
       const hasVisits = store._count.visitSchedules > 0
       const hasCustomers = store._count.customers > 0
@@ -631,6 +635,7 @@ export async function syncStoresFromGoogleSheets(): Promise<{
           prisma.storeMember.deleteMany({ where: { storeId: store.id } }),
           prisma.store.delete({ where: { id: store.id } }),
         ])
+        deletedCodes.push(store.code)
         deleted++
       } else {
         // 訪問記録または顧客が存在 → isActive=false に設定して履歴を保持
@@ -649,6 +654,16 @@ export async function syncStoresFromGoogleSheets(): Promise<{
         ])
         deactivated++
       }
+    }
+
+    // 店舗情報シート（双方向同期側）にも削除・更新を反映する。
+    // こちらは旧「店舗マスター」とは別のシートなので、行が取り残されないよう明示的に消す。
+    if (deletedCodes.length > 0) {
+      await autoSyncStoreRowsDeleted(deletedCodes)
+    }
+    const touchedCodes = storeRows.map(r => r.code)
+    if (touchedCodes.length > 0) {
+      await autoSyncStoreRows(touchedCodes)
     }
 
     // 同期ログ記録

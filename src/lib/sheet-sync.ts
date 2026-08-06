@@ -14,7 +14,10 @@ import { google, type sheets_v4 } from 'googleapis'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { prisma } from './prisma'
-import { STORE_CSV_COLUMNS, storeStatusValueFromCell } from './store-csv'
+import {
+  STORE_SHEET_COLUMNS, STORE_SHEET_REMOVED_HEADERS,
+  storeStatusValueFromCell,
+} from './store-csv'
 import { storeStatusLabel } from './store-status'
 import { storeServicesLabel, storeServicesValueFromCell } from './store-services'
 import {
@@ -127,11 +130,17 @@ async function exportRecordsToSheet(params: {
   columns: SheetSyncColumn[]
   keyColumnKey: string
   records: RecordRow[]
+  /**
+   * 同期対象から外した旧列の見出し。シートに残っていればこの出力で削除する。
+   * 指定しない限り、システム定義に無い列は独自列として温存される。
+   */
+  removedHeaders?: string[]
 }): Promise<ExportResult> {
   if (!process.env.GOOGLE_SHEETS_CLIENT_EMAIL) {
     return { success: false, message: 'Googleサービスアカウントが設定されていません（GOOGLE_SHEETS_CLIENT_EMAIL）', exported: 0 }
   }
   const { spreadsheetId, sheetName, columns, keyColumnKey, records } = params
+  const removedHeaders = new Set(params.removedHeaders ?? [])
 
   const sheets = getSheetsClient()
   const sheetId = await resolveSheetTab(sheets, spreadsheetId, sheetName, true)
@@ -148,8 +157,11 @@ async function exportRecordsToSheet(params: {
   // ヘッダーが無い（キー列が見つからない）場合はシステム定義の順で作成。
   let finalHeader: string[]
   if (hasHeader) {
-    finalHeader = [...existingHeaderRaw.map(h => (h == null ? '' : String(h)))]
-    const present = new Set(existingHeader)
+    finalHeader = existingHeaderRaw
+      .map(h => (h == null ? '' : String(h)))
+      // 同期対象から外した旧列はここで落とす（古い値が残り続けないように）
+      .filter(h => !removedHeaders.has(normHeader(h)))
+    const present = new Set(finalHeader.map(normHeader))
     for (const h of systemHeaders) {
       if (!present.has(h)) finalHeader.push(h)
     }
@@ -324,7 +336,7 @@ const STORE_SELECT = {
   supportedServices: true,
   createdAt: true,
   operator: { select: { name: true } },
-  _count: { select: { customers: true } },
+  // 顧客数はシートの同期対象外なので集計しない（顧客の増減で毎回シートが書き換わるのを避ける）
 } as const
 
 /** 店舗レコードをシート行データに変換する（codes 指定時はその店舗のみ） */
@@ -341,7 +353,7 @@ async function buildStoreRecords(codes?: string[]): Promise<RecordRow[]> {
 
   return stores.map(s => {
     const values: Record<string, string> = {}
-    for (const col of STORE_CSV_COLUMNS) {
+    for (const col of STORE_SHEET_COLUMNS) {
       switch (col.key) {
         case 'storeStatus':       values[col.key] = storeStatusLabel(s.storeStatus); break
         case 'openingDate':       values[col.key] = ymd(s.openingDate); break
@@ -350,7 +362,6 @@ async function buildStoreRecords(codes?: string[]): Promise<RecordRow[]> {
         case 'supportedServices': values[col.key] = storeServicesLabel(s.supportedServices); break
         case 'operatorName':      values[col.key] = s.operator?.name ?? ''; break
         case 'isActive':          values[col.key] = s.isActive ? '有効' : '無効'; break
-        case 'customerCount':     values[col.key] = String(s._count.customers); break
         case 'createdAt':         values[col.key] = day(s.createdAt); break
         case 'inquiryUrl':        values[col.key] = `${baseUrl}/inquiry/${s.code}`; break
         case 'telUrl':            values[col.key] = `${baseUrl}/tel/${s.code}`; break
@@ -375,9 +386,10 @@ export async function exportStoresToSheet(): Promise<ExportResult> {
   try {
     return await exportRecordsToSheet({
       ...target,
-      columns: STORE_CSV_COLUMNS,
+      columns: STORE_SHEET_COLUMNS,
       keyColumnKey: 'code',
       records,
+      removedHeaders: STORE_SHEET_REMOVED_HEADERS,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -406,8 +418,8 @@ export async function importStoresFromSheet(): Promise<ImportResult> {
   const target = await getStoreSheetTarget()
   if (!target) return fail('店舗情報用スプレッドシートIDが設定されていません')
 
-  const codeCol = STORE_CSV_COLUMNS.find(c => c.kind === 'key')!
-  const nameCol = STORE_CSV_COLUMNS.find(c => c.key === 'name')!
+  const codeCol = STORE_SHEET_COLUMNS.find(c => c.kind === 'key')!
+  const nameCol = STORE_SHEET_COLUMNS.find(c => c.key === 'name')!
 
   let sheetData: Awaited<ReturnType<typeof readSheetForImport>>
   try {
@@ -448,7 +460,7 @@ export async function importStoresFromSheet(): Promise<ImportResult> {
     for (const op of ops) inheritedByOp.set(op.id, operatorInheritedValues(op))
   }
 
-  const fieldCols = STORE_CSV_COLUMNS.filter(c => c.kind !== 'key' && c.kind !== 'ref')
+  const fieldCols = STORE_SHEET_COLUMNS.filter(c => c.kind !== 'key' && c.kind !== 'ref')
   const errors: RowError[] = []
   const keyWrites: { rowNumber: number; value: string }[] = []
   let createdCount = 0
@@ -1157,7 +1169,7 @@ export async function autoSyncStoreRows(codes: string[]): Promise<void> {
     const records = await buildStoreRecords(unique)
     if (records.length === 0) return
     const res = await syncRecordRowsToSheet({
-      ...target, columns: STORE_CSV_COLUMNS, keyColumnKey: 'code', records,
+      ...target, columns: STORE_SHEET_COLUMNS, keyColumnKey: 'code', records,
     })
     // シート未初期化なら全件出力でヘッダーごと作る
     if (res.needsFullExport) await exportStoresToSheet()
@@ -1174,7 +1186,7 @@ export async function autoSyncStoreRowsDeleted(codes: string[]): Promise<void> {
     const target = await getStoreSheetTarget()
     if (!autoSyncEnabled(target)) return
     await deleteRecordRowsFromSheet({
-      ...target, columns: STORE_CSV_COLUMNS, keyColumnKey: 'code', keys: unique,
+      ...target, columns: STORE_SHEET_COLUMNS, keyColumnKey: 'code', keys: unique,
     })
   } catch (error) {
     await logAutoSyncFailure('sheet-auto-sync:stores', error)
@@ -1383,7 +1395,7 @@ export async function reconcileSheetSync(sinceMinutes = 120): Promise<ReconcileR
     }
     try {
       const { pruned, warning } = await pruneDeletedRows({
-        ...target, columns: STORE_CSV_COLUMNS, keyColumnKey: 'code', label: '店舗',
+        ...target, columns: STORE_SHEET_COLUMNS, keyColumnKey: 'code', label: '店舗',
         existsInDb: async (codes) => {
           const found = await prisma.store.findMany({ where: { code: { in: codes } }, select: { code: true } })
           return new Set(found.map(f => f.code))

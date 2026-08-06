@@ -47,6 +47,25 @@ export const STORE_CSV_COLUMNS: StoreCsvColumn[] = [
   { key: 'lineUrl',             header: 'LINE登録フォームURL',   kind: 'ref' },
 ]
 
+/**
+ * スプレッドシート同期で使う列。CSV とほぼ同じだが「顧客数」は含めない。
+ * 顧客が増減するたびに値が変わり、シートが常に書き換わってしまうため
+ * （CSVは取得時点のスナップショットとして意味があるので残す）。
+ */
+export const STORE_SHEET_EXCLUDED_KEYS = ['customerCount'] as const
+
+export const STORE_SHEET_COLUMNS: StoreCsvColumn[] = STORE_CSV_COLUMNS.filter(
+  c => !(STORE_SHEET_EXCLUDED_KEYS as readonly string[]).includes(c.key),
+)
+
+/**
+ * かつてシートに出力していたが、現在は同期対象から外した列の見出し。
+ * 「シートへ出力」時にこの列をシートから削除して、古い値が残らないようにする。
+ */
+export const STORE_SHEET_REMOVED_HEADERS: string[] = STORE_CSV_COLUMNS
+  .filter(c => (STORE_SHEET_EXCLUDED_KEYS as readonly string[]).includes(c.key))
+  .map(c => c.header)
+
 const LABEL_TO_VALUE: Record<string, string> = Object.fromEntries(STORE_STATUSES.map(s => [s.label, s.value]))
 const VALID_VALUES = new Set(STORE_STATUSES.map(s => s.value))
 

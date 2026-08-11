@@ -1180,6 +1180,9 @@ model Form {
   customerType     String?          // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
   customerTypes    String?          // JSON配列（複数可）
   customerFieldMap String?          @db.Text  // JSON: { name?, furigana?, email?, phone?, address?, postalCode? } → fieldId
+  // 設問を作り直して項目IDが変わったとき、過去の回答を現在の設問に結びつけるための対応表
+  // JSON: { "<過去の回答キー>": "<現在のfieldId>" }
+  legacyFieldMap   String?          @db.Text
   customerStoreId  String?
   customerStore    Store?           @relation("FormCustomerStore", fields: [customerStoreId], references: [id], onDelete: SetNull)
   // 外部API送信（汎用Webhook）設定

@@ -5,6 +5,7 @@ import { resolveAssignedFormIds, LINKPARTNER_SAFE_SUBMISSION_SELECT } from '@/li
 import { recordLinkPartnerActivity } from '@/lib/link-partner-activity'
 import { parseSchema, isInputField, type FormSchema } from '@/lib/forms/types'
 import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
+import { applyLegacyFieldMap, parseLegacyFieldMap } from '@/lib/forms/legacy-field-map'
 
 function csvEscape(v: string): string {
   if (v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')) {
@@ -66,7 +67,9 @@ export async function GET(req: Request) {
     try {
       const schema = schemaOf(s)
       const names = columnsByForm.get(s.formId) ?? []
-      const data = JSON.parse(s.data || '{}')
+      const raw = JSON.parse(s.data || '{}')
+      // 設問を作り直して項目IDが変わった回答は、対応表で現在の設問の列に寄せる
+      const data = applyLegacyFieldMap(schema, raw, parseLegacyFieldMap(s.form.legacyFieldMap))
       formatAnswersForDisplay(schema, data, { includeUnknown: true }).forEach((a, i) => {
         const name = i < names.length ? names[i] : a.label
         if (!values.has(name)) values.set(name, a.value)

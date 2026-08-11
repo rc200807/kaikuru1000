@@ -140,7 +140,9 @@ export function formatAnswersForDisplay(
   if (options?.includeUnknown && data && typeof data === 'object') {
     for (const [k, v] of Object.entries(data)) {
       if (known.has(k)) continue
-      out.push({ label: unknownAnswerLabel(k), value: stringifyAnswerValue(v) })
+      const value = stringifyAnswerValue(v)
+      if (value === '' || value === '{}') continue // 中身のないものは行を増やさない
+      out.push({ label: unknownAnswerLabel(k), value })
     }
   }
   return out

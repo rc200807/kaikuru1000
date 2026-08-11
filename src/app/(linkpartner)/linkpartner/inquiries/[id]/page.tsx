@@ -5,13 +5,14 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { parseSchema } from '@/lib/forms/types'
 import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
+import { applyLegacyFieldMap, parseLegacyFieldMap } from '@/lib/forms/legacy-field-map'
 
 type Submission = {
   id: string
   formId: string
   createdAt: string
   data: string
-  form: { id: string; title: string; slug: string; schema: string }
+  form: { id: string; title: string; slug: string; schema: string; legacyFieldMap: string | null }
   user: { id: string; name: string } | null
 }
 
@@ -42,8 +43,10 @@ export default function LinkPartnerInquiryDetailPage() {
   let answers: { label: string; value: string }[] = []
   try {
     const schema = parseSchema(submission.form.schema)
-    const data = JSON.parse(submission.data || '{}')
-    // 設問の作り直しなどでスキーマに残っていない回答も隠さず出す
+    const raw = JSON.parse(submission.data || '{}')
+    // 設問を作り直して項目IDが変わった回答は、対応表で現在の設問に寄せてから表示する。
+    // それでも残るキー（未割り当て）も隠さず出す。
+    const data = applyLegacyFieldMap(schema, raw, parseLegacyFieldMap(submission.form.legacyFieldMap))
     answers = formatAnswersForDisplay(schema, data, { includeUnknown: true })
   } catch {
     answers = []

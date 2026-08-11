@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseSchema } from '@/lib/forms/types'
 import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
+import { applyLegacyFieldMap, parseLegacyFieldMap } from '@/lib/forms/legacy-field-map'
 
 function csvEscape(v: string): string {
   if (v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')) {
@@ -30,10 +31,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   })
 
   // 設問の作り直しなどで現在のスキーマに無いキーの回答も、末尾に列を足して出力する
+  const legacyMap = parseLegacyFieldMap(form.legacyFieldMap)
   const answered = submissions.map(s => {
     let data: Record<string, unknown> = {}
     try { data = JSON.parse(s.data) } catch { /* ignore */ }
-    return formatAnswersForDisplay(schema, data, { includeUnknown: true })
+    return formatAnswersForDisplay(schema, applyLegacyFieldMap(schema, data, legacyMap), { includeUnknown: true })
   })
   const extraLabels: string[] = []
   for (const fields of answered) {

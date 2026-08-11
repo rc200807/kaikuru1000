@@ -9,6 +9,7 @@ import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { parseSchema, type FormSchema } from '@/lib/forms/types'
 import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
+import { applyLegacyFieldMap, parseLegacyFieldMap } from '@/lib/forms/legacy-field-map'
 
 type Submission = {
   id: string
@@ -22,17 +23,24 @@ type Submission = {
 }
 
 type ApiResponse = {
-  form: { id: string; title: string; schema: string }
+  form: { id: string; title: string; schema: string; legacyFieldMap: string | null }
   total: number
   page: number
   limit: number
   submissions: Submission[]
 }
 
+type LegacyInfo = {
+  unassigned: { key: string; samples: string[]; count: number; suggestedFieldId: string | null }[]
+  map: Record<string, string>
+  questions: { id: string; label: string; type: string }[]
+}
+
 export default function SubmissionsPage() {
   const params = useParams<{ id: string }>()
   const id = params.id
   const [data, setData] = useState<ApiResponse | null>(null)
+  const [legacy, setLegacy] = useState<LegacyInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
   const [resyncing, setResyncing] = useState<string | null>(null)
@@ -41,8 +49,12 @@ export default function SubmissionsPage() {
 
   async function load() {
     setLoading(true)
-    const res = await fetch(`/api/admin/forms/${id}/submissions`)
+    const [res, legacyRes] = await Promise.all([
+      fetch(`/api/admin/forms/${id}/submissions`),
+      fetch(`/api/admin/forms/${id}/legacy-fields`),
+    ])
     if (res.ok) setData(await res.json())
+    setLegacy(legacyRes.ok ? await legacyRes.json() : null)
     setLoading(false)
   }
 
@@ -61,6 +73,7 @@ export default function SubmissionsPage() {
   if (loading || !data) return <LoadingSpinner size="lg" fullPage />
 
   const schema: FormSchema = parseSchema(data.form.schema)
+  const legacyMap = parseLegacyFieldMap(data.form.legacyFieldMap)
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -86,6 +99,10 @@ export default function SubmissionsPage() {
           </Link>
         </div>
       </div>
+
+      {legacy && legacy.unassigned.length > 0 && (
+        <LegacyFieldAssigner formId={id} legacy={legacy} onSaved={load} />
+      )}
 
       {data.submissions.length === 0 ? (
         <Card variant="outlined" padding="none">
@@ -133,7 +150,7 @@ export default function SubmissionsPage() {
                           <td colSpan={4} className="px-4 py-4">
                             <table className="w-full text-sm">
                               <tbody>
-                                {formatAnswersForDisplay(schema, parsed, { includeUnknown: true }).map((a, i) => (
+                                {formatAnswersForDisplay(schema, applyLegacyFieldMap(schema, parsed, legacyMap), { includeUnknown: true }).map((a, i) => (
                                   <tr key={i}>
                                     <td className="py-1.5 pr-4 text-[var(--md-sys-color-on-surface-variant)] align-top w-1/3 text-xs uppercase tracking-wide">{a.label}</td>
                                     <td className="py-1.5 text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{a.value || '—'}</td>
@@ -156,6 +173,88 @@ export default function SubmissionsPage() {
         </Card>
       )}
     </div>
+  )
+}
+
+/**
+ * 設問を作り直すと項目IDが変わり、それ以前の回答が現在の設問と結びつかなくなる。
+ * どの設問の回答だったかを選んで保存すると、詳細表示・CSVで本来の設問の位置に入る。
+ */
+function LegacyFieldAssigner({ formId, legacy, onSaved }: { formId: string; legacy: LegacyInfo; onSaved: () => Promise<void> | void }) {
+  const [choices, setChoices] = useState<Record<string, string>>(() =>
+    Object.fromEntries(legacy.unassigned.map(u => [u.key, u.suggestedFieldId ?? '']))
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const assignedCount = Object.values(choices).filter(Boolean).length
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    try {
+      const next = { ...legacy.map }
+      for (const [key, fieldId] of Object.entries(choices)) {
+        if (fieldId) next[key] = fieldId
+      }
+      const res = await fetch(`/api/admin/forms/${formId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ legacyFieldMap: next }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setError(j.error ?? '保存に失敗しました')
+        return
+      }
+      await onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card variant="outlined" padding="none">
+      <div className="p-4 border-b" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">未割り当ての回答（{legacy.unassigned.length}件）</h2>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+          設問を作り直すと項目IDが変わり、それ以前の回答が現在の設問と結びつかなくなります。
+          どの設問への回答だったかを選んで保存すると、回答詳細とCSVで本来の設問の位置に表示されます（保存されている回答自体は書き換えません）。
+        </p>
+      </div>
+      <div className="divide-y" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+        {legacy.unassigned.map(u => (
+          <div key={u.key} className="p-4 grid gap-3 sm:grid-cols-[1fr_260px] sm:items-start">
+            <div className="min-w-0">
+              <p className="text-sm text-[var(--md-sys-color-on-surface)] break-words">{u.samples.join(' / ') || '（値なし）'}</p>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1 font-mono break-all">{u.key}・{u.count}件</p>
+            </div>
+            <select
+              value={choices[u.key] ?? ''}
+              onChange={(e) => setChoices(prev => ({ ...prev, [u.key]: e.target.value }))}
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={{
+                backgroundColor: 'var(--md-sys-color-surface-container-high)',
+                color: 'var(--md-sys-color-on-surface)',
+                border: '1px solid var(--md-sys-color-outline-variant)',
+              }}
+            >
+              <option value="">割り当てない</option>
+              {legacy.questions.map(q => (
+                <option key={q.id} value={q.id}>{q.label}</option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+      <div className="p-4 flex items-center justify-between gap-3 border-t" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+          {assignedCount > 0 ? `${assignedCount}件を割り当てます` : '割り当てる設問を選んでください'}
+          {error && <span className="ml-2" style={{ color: '#f87171' }}>{error}</span>}
+        </p>
+        <Button variant="filled" size="md" loading={saving} disabled={assignedCount === 0} onClick={save}>保存</Button>
+      </div>
+    </Card>
   )
 }
 

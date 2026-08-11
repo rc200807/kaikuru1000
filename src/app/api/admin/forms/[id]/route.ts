@@ -38,6 +38,8 @@ const updateSchema = z.object({
   customerType: z.enum(CUSTOMER_TYPES).nullable().optional(),
   customerTypes: z.array(z.enum(CUSTOMER_TYPES)).nullable().optional(),
   customerFieldMap: customerFieldMapSchema.nullable().optional(),
+  // 過去の回答キー → 現在のfieldId（設問を作り直したときの救済用）
+  legacyFieldMap: z.record(z.string(), z.string()).nullable().optional(),
   customerStoreId: z.string().nullable().optional(),
   // 外部API送信（汎用Webhook）
   externalApiEnabled: z.boolean().optional(),
@@ -107,6 +109,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   if ('customerFieldMap' in data) {
     data.customerFieldMap = data.customerFieldMap ? JSON.stringify(data.customerFieldMap) : null
+  }
+  if ('legacyFieldMap' in data) {
+    // 空文字の割り当て（＝未割り当てに戻す）は保存しない
+    const entries = Object.entries((data.legacyFieldMap ?? {}) as Record<string, string>).filter(([k, v]) => k && v)
+    data.legacyFieldMap = entries.length > 0 ? JSON.stringify(Object.fromEntries(entries)) : null
   }
   if (data.customerStoreId === '') data.customerStoreId = null
 

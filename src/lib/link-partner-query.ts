@@ -36,7 +36,7 @@ export const LINKPARTNER_SAFE_SUBMISSION_SELECT = {
   formId: true,
   data: true,
   createdAt: true,
-  form: { select: { id: true, title: true, slug: true, schema: true } },
+  form: { select: { id: true, title: true, slug: true, schema: true, legacyFieldMap: true } },
   user: { select: { id: true, name: true } },
 } satisfies Prisma.FormSubmissionSelect
 

@@ -19,6 +19,9 @@ import { STORE_SERVICE_LABEL } from '@/lib/store-services'
 /** 集計対象＝アクティブとみなす営業ステータス（営業中のみ） */
 const ACTIVE_STATUS = 'active'
 
+/** 「最近ログインあり」とみなす日数 */
+const RECENT_LOGIN_DAYS = 30
+
 /** 直近 n ヶ月の月キー（JST・古い順） */
 function recentMonthKeys(n: number, from: string): string[] {
   const [y, m] = from.split('-').map(Number)
@@ -69,6 +72,18 @@ export async function GET() {
   ])
   const disabledAccounts = await prisma.store.count({ where: { isActive: false } })
 
+  // ログイン実績（店舗管理ページの「ログイン状態」と同じ判定＝AccessLog に store の login がある）
+  const storeIds = stores.map(s => s.id)
+  const loginLogs = storeIds.length
+    ? await prisma.accessLog.groupBy({
+        by: ['userId'],
+        where: { userType: 'store', action: 'login', userId: { in: storeIds } },
+        _max: { createdAt: true },
+      })
+    : []
+  const lastLoginByStore = new Map(loginLogs.map(l => [l.userId as string, l._max.createdAt]))
+  const recentThreshold = new Date(Date.now() - RECENT_LOGIN_DAYS * 24 * 3600_000)
+
   const settingByStore = new Map(settings.map(s => [s.storeId, s]))
 
   // ─── 店舗ごとの行データ（料金・ステータス・対応サービス） ───
@@ -77,8 +92,12 @@ export async function GET() {
     const overrideAmount = setting?.monthlyAmount ?? 0
     const auto = computeStoreFee(s.supportedServices, services)
     const status = normalizeStoreStatus(s.storeStatus)
+    const lastLoginAt = lastLoginByStore.get(s.id) ?? null
     return {
       id: s.id,
+      hasLoggedIn: !!lastLoginAt,
+      lastLoginAt,
+      recentlyLoggedIn: !!lastLoginAt && lastLoginAt >= recentThreshold,
       name: s.name,
       code: s.code,
       prefecture: s.prefecture,
@@ -102,14 +121,29 @@ export async function GET() {
 
   const activeRows = rows.filter(r => r.isActiveStore)
 
-  // ─── 営業ステータス別 ───
-  const statusCount = new Map<string, number>()
-  for (const r of rows) statusCount.set(r.status, (statusCount.get(r.status) ?? 0) + 1)
-  const byStatus = STORE_STATUSES.map(s => ({
-    value: s.value,
-    label: s.label,
-    count: statusCount.get(s.value) ?? 0,
-  }))
+  // ─── 営業ステータス別（ログイン済み内訳つき） ───
+  const byStatus = STORE_STATUSES.map(s => {
+    const inStatus = rows.filter(r => r.status === s.value)
+    return {
+      value: s.value,
+      label: s.label,
+      count: inStatus.length,
+      loggedIn: inStatus.filter(r => r.hasLoggedIn).length,
+    }
+  })
+
+  // ─── ログイン状態別（店舗管理ページの「ログイン状態」と同じ判定） ───
+  const login = {
+    recentDays: RECENT_LOGIN_DAYS,
+    loggedIn: rows.filter(r => r.hasLoggedIn).length,
+    never: rows.filter(r => !r.hasLoggedIn).length,
+    recent: rows.filter(r => r.recentlyLoggedIn).length,
+    // アクティブ（営業中）店舗に絞った内訳
+    activeTotal: activeRows.length,
+    activeLoggedIn: activeRows.filter(r => r.hasLoggedIn).length,
+    activeNever: activeRows.filter(r => !r.hasLoggedIn).length,
+    activeRecent: activeRows.filter(r => r.recentlyLoggedIn).length,
+  }
 
   // ─── 対応サービス別（マスタ＋店舗が持つ独自キーの和集合） ───
   const serviceKeysInUse = new Set<string>(rows.flatMap(r => r.serviceKeys))
@@ -131,22 +165,25 @@ export async function GET() {
       inMaster: !!master,
       stores: supported.length,
       activeStores: active.length,
+      loggedInStores: supported.filter(r => r.hasLoggedIn).length,
+      activeLoggedInStores: active.filter(r => r.hasLoggedIn).length,
       // 当月の想定売上（アクティブ店舗のみ・上書き設定の店舗は自動算出から外れるため除く）
       monthlyRevenue: active.filter(r => r.overrideAmount === 0).length * billable,
     }
   })
 
   // ─── 対応サービスの組み合わせ別 ───
-  const comboMap = new Map<string, { label: string; count: number; activeCount: number }>()
+  const comboMap = new Map<string, { label: string; count: number; activeCount: number; loggedInCount: number }>()
   for (const r of rows) {
     const keys = orderedKeys.filter(k => r.serviceKeys.includes(k))
     const key = keys.join('+') || '__none__'
     const label = keys.length === 0
       ? '未設定'
       : keys.map(k => serviceRows.find(s => s.serviceKey === k)?.label ?? k).join(' ＋ ')
-    const cur = comboMap.get(key) ?? { label, count: 0, activeCount: 0 }
+    const cur = comboMap.get(key) ?? { label, count: 0, activeCount: 0, loggedInCount: 0 }
     cur.count++
     if (r.isActiveStore) cur.activeCount++
+    if (r.hasLoggedIn) cur.loggedInCount++
     comboMap.set(key, cur)
   }
   const combos = [...comboMap.entries()]
@@ -186,6 +223,7 @@ export async function GET() {
       byStatus,
       withoutServices: rows.filter(r => r.serviceKeys.length === 0).length,
     },
+    login,
     services: serviceRows,
     combos,
     fee: {
@@ -205,6 +243,8 @@ export async function GET() {
       status: r.status,
       statusLabel: r.statusLabel,
       isActiveStore: r.isActiveStore,
+      hasLoggedIn: r.hasLoggedIn,
+      lastLoginAt: r.lastLoginAt,
       services: r.services,
       serviceKeys: r.serviceKeys,
       autoAmount: r.autoAmount,

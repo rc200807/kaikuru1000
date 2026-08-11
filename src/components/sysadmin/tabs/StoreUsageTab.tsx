@@ -22,6 +22,7 @@ const STATUS_COLOR: Record<string, string> = {
 function ServiceCard({ s, totalStores }: { s: UsageServiceRow; totalStores: number }) {
   const rate = totalStores > 0 ? Math.round((s.stores / totalStores) * 100) : 0
   const activeRate = s.stores > 0 ? Math.round((s.activeStores / s.stores) * 100) : 0
+  const loginRate = s.stores > 0 ? Math.round((s.loggedInStores / s.stores) * 100) : 0
   return (
     <div style={{
       background: 'var(--md-sys-color-surface-container-low)', borderRadius: 12, padding: 16,
@@ -42,9 +43,17 @@ function ServiceCard({ s, totalStores }: { s: UsageServiceRow; totalStores: numb
         <span style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>うちアクティブ（{activeRate}%）</span>
       </div>
 
-      {/* 対応店舗のうちアクティブの割合バー */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#60a5fa' }}>{s.loggedInStores}</span>
+        <span style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>うちログイン済み（{loginRate}%）</span>
+      </div>
+
+      {/* 対応店舗のうちアクティブ／ログイン済みの割合バー */}
       <div style={{ height: 6, borderRadius: 999, background: 'var(--md-sys-color-surface-container-highest)', marginTop: 12, overflow: 'hidden' }}>
         <div style={{ width: `${activeRate}%`, height: '100%', background: '#34d399' }} />
+      </div>
+      <div style={{ height: 6, borderRadius: 999, background: 'var(--md-sys-color-surface-container-highest)', marginTop: 4, overflow: 'hidden' }}>
+        <div style={{ width: `${loginRate}%`, height: '100%', background: '#60a5fa' }} />
       </div>
 
       <div style={{ marginTop: 12, fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)' }}>
@@ -61,9 +70,13 @@ export default function StoreUsageTab() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><LoadingSpinner /></div>
   if (!data) return <div style={{ padding: 40, textAlign: 'center' }}>データを取得できませんでした</div>
 
-  const { stores, services, combos } = data
+  const { stores, services, combos, login } = data
   const activeRate = stores.total > 0 ? Math.round((stores.active / stores.total) * 100) : 0
   const pieData = stores.byStatus.filter(s => s.count > 0)
+  const loginPie = [
+    { key: 'loggedIn', label: 'ログイン済み', count: login.loggedIn, color: '#60a5fa' },
+    { key: 'never', label: '未ログイン', count: login.never, color: '#525252' },
+  ].filter(x => x.count > 0)
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
@@ -71,9 +84,52 @@ export default function StoreUsageTab() {
         <Kpi label="登録店舗（有効アカウント）" value={`${stores.total} 店舗`} />
         <Kpi label="アクティブ店舗（営業中）" value={`${stores.active} 店舗`} />
         <Kpi label="アクティブ率" value={`${activeRate}%`} />
+        <Kpi label="ログイン済み店舗" value={`${login.loggedIn} 店舗`} />
+        <Kpi label="未ログイン店舗" value={`${login.never} 店舗`} accent={login.never > 0} />
         <Kpi label="対応サービス未設定" value={`${stores.withoutServices} 店舗`} accent={stores.withoutServices > 0} />
         <Kpi label="停止アカウント" value={`${stores.disabledAccounts} 店舗`} />
       </div>
+
+      <Panel title="ログイン状態">
+        <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 14px' }}>
+          店舗管理ページの「ログイン状態」と同じ判定です（一度でも店舗としてログインした実績があれば「ログイン済み」）。
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignItems: 'center' }}>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={loginPie} dataKey="count" nameKey="label" cx="50%" cy="50%" outerRadius={72} innerRadius={40}>
+                {loginPie.map(x => <Cell key={x.key} fill={x.color} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} formatter={((v: any) => `${v} 店舗`) as any} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <table style={tableStyle}>
+            <thead>
+              <tr style={theadRowStyle}>
+                <th style={thStyle}>対象</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>ログイン済み</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>未ログイン</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>直近{login.recentDays}日</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={trStyle}>
+                <td style={tdStyle}>全店舗（{stores.total}）</td>
+                <td style={{ ...tdStyle, textAlign: 'right', color: '#60a5fa', fontWeight: 700 }}>{login.loggedIn}</td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>{login.never}</td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>{login.recent}</td>
+              </tr>
+              <tr style={trStyle}>
+                <td style={tdStyle}>アクティブ店舗（{login.activeTotal}）</td>
+                <td style={{ ...tdStyle, textAlign: 'right', color: '#60a5fa', fontWeight: 700 }}>{login.activeLoggedIn}</td>
+                <td style={{ ...tdStyle, textAlign: 'right', color: login.activeNever > 0 ? '#fbbf24' : undefined }}>{login.activeNever}</td>
+                <td style={{ ...tdStyle, textAlign: 'right' }}>{login.activeRecent}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Panel>
 
       <Panel title="対応サービス別の店舗数">
         <p style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', margin: '0 0 14px' }}>
@@ -104,6 +160,7 @@ export default function StoreUsageTab() {
                   <tr style={theadRowStyle}>
                     <th style={thStyle}>ステータス</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>店舗数</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>ログイン済み</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>構成比</th>
                   </tr>
                 </thead>
@@ -115,6 +172,7 @@ export default function StoreUsageTab() {
                         {s.label}
                       </td>
                       <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{s.count}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right', color: '#60a5fa', fontWeight: 700 }}>{s.loggedIn}</td>
                       <td style={{ ...tdStyle, textAlign: 'right', color: 'var(--md-sys-color-on-surface-variant)' }}>
                         {stores.total > 0 ? `${Math.round((s.count / stores.total) * 100)}%` : '—'}
                       </td>
@@ -134,6 +192,7 @@ export default function StoreUsageTab() {
                   <th style={thStyle}>組み合わせ</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>店舗数</th>
                   <th style={{ ...thStyle, textAlign: 'right' }}>うちアクティブ</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }}>ログイン済み</th>
                 </tr>
               </thead>
               <tbody>
@@ -142,6 +201,7 @@ export default function StoreUsageTab() {
                     <td style={tdStyle}>{c.label}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{c.count}</td>
                     <td style={{ ...tdStyle, textAlign: 'right', color: '#34d399', fontWeight: 700 }}>{c.activeCount}</td>
+                    <td style={{ ...tdStyle, textAlign: 'right', color: '#60a5fa', fontWeight: 700 }}>{c.loggedInCount}</td>
                   </tr>
                 ))}
               </tbody>

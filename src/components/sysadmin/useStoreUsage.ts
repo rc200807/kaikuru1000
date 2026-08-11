@@ -13,6 +13,8 @@ export type UsageServiceRow = {
   inMaster: boolean
   stores: number
   activeStores: number
+  loggedInStores: number
+  activeLoggedInStores: number
   monthlyRevenue: number
 }
 
@@ -24,6 +26,9 @@ export type UsageStoreRow = {
   status: string
   statusLabel: string
   isActiveStore: boolean
+  /** 店舗管理の「ログイン状態」と同じ判定（一度でもログインした実績があるか） */
+  hasLoggedIn: boolean
+  lastLoginAt: string | null
   services: { serviceKey: string; label: string; amount: number }[]
   serviceKeys: string[]
   autoAmount: number
@@ -43,10 +48,20 @@ export type StoreUsage = {
     active: number
     disabledAccounts: number
     withoutServices: number
-    byStatus: { value: string; label: string; count: number }[]
+    byStatus: { value: string; label: string; count: number; loggedIn: number }[]
+  }
+  login: {
+    recentDays: number
+    loggedIn: number
+    never: number
+    recent: number
+    activeTotal: number
+    activeLoggedIn: number
+    activeNever: number
+    activeRecent: number
   }
   services: UsageServiceRow[]
-  combos: { key: string; label: string; count: number; activeCount: number }[]
+  combos: { key: string; label: string; count: number; activeCount: number; loggedInCount: number }[]
   fee: {
     billableStores: number
     unbillableActiveStores: number

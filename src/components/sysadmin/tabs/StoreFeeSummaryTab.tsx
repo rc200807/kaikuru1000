@@ -6,11 +6,12 @@
 import { useMemo, useState } from 'react'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import {
-  yen, Kpi, Panel, Empty, TableCard, FilterChip,
+  yen, Kpi, Panel, Empty, TableCard, FilterChip, StatusChip,
   tableStyle, theadRowStyle, thStyle, tdStyle, trStyle, tooltipStyle,
 } from '@/components/sysadmin/ui'
 import { useStoreUsage, type UsageStoreRow } from '@/components/sysadmin/useStoreUsage'
 import { STORE_STATUSES } from '@/lib/store-status'
+import { formatJstDate } from '@/lib/datetime'
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
@@ -21,7 +22,7 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid var(--md-sys-color-outline-variant)',
 }
 
-type StatusFilter = 'all' | 'active' | 'billable' | string
+type StatusFilter = 'all' | 'active' | 'billable' | 'loggedIn' | 'neverLoggedIn' | string
 
 export default function StoreFeeSummaryTab() {
   const { data, loading, reload } = useStoreUsage()
@@ -34,10 +35,13 @@ export default function StoreFeeSummaryTab() {
   const rows = data?.rows ?? []
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase()
+    const presets = ['all', 'active', 'billable', 'loggedIn', 'neverLoggedIn']
     return rows.filter(r => {
       if (filter === 'active' && !r.isActiveStore) return false
       if (filter === 'billable' && !(r.isActiveStore && r.effectiveAmount > 0)) return false
-      if (filter !== 'all' && filter !== 'active' && filter !== 'billable' && r.status !== filter) return false
+      if (filter === 'loggedIn' && !r.hasLoggedIn) return false
+      if (filter === 'neverLoggedIn' && r.hasLoggedIn) return false
+      if (!presets.includes(filter) && r.status !== filter) return false
       if (kw && !`${r.name} ${r.code} ${r.prefecture ?? ''}`.toLowerCase().includes(kw)) return false
       return true
     })
@@ -83,9 +87,11 @@ export default function StoreFeeSummaryTab() {
 
   function exportCsv() {
     if (!data) return
-    const header = ['店舗コード', '店舗名', '都道府県', '営業ステータス', '対応サービス', '自動算出額', '上書き額', '適用月額']
+    const header = ['店舗コード', '店舗名', '都道府県', '営業ステータス', 'ログイン状態', '最終ログイン', '対応サービス', '自動算出額', '上書き額', '適用月額']
     const lines = filtered.map(r => [
       r.code, r.name, r.prefecture ?? '', r.statusLabel,
+      r.hasLoggedIn ? 'アクティブ' : '未ログイン',
+      r.lastLoginAt ? formatJstDate(r.lastLoginAt) : '',
       r.services.map(s => s.label).join('・'),
       String(r.autoAmount), r.overrideAmount > 0 ? String(r.overrideAmount) : '', String(r.effectiveAmount),
     ])
@@ -109,6 +115,8 @@ export default function StoreFeeSummaryTab() {
   const statusChips: { key: StatusFilter; label: string }[] = [
     { key: 'active', label: 'アクティブのみ' },
     { key: 'billable', label: '課金対象のみ' },
+    { key: 'loggedIn', label: 'ログイン済み' },
+    { key: 'neverLoggedIn', label: '未ログイン' },
     { key: 'all', label: 'すべて' },
     ...STORE_STATUSES.filter(s => s.value !== 'active').map(s => ({ key: s.value as StatusFilter, label: s.label })),
   ]
@@ -226,6 +234,7 @@ export default function StoreFeeSummaryTab() {
               <tr style={theadRowStyle}>
                 <th style={thStyle}>店舗</th>
                 <th style={thStyle}>ステータス</th>
+                <th style={thStyle}>ログイン状態</th>
                 <th style={thStyle}>対応サービス</th>
                 <th style={{ ...thStyle, textAlign: 'right' }}>自動算出</th>
                 <th style={thStyle}>上書き（円）</th>
@@ -249,6 +258,18 @@ export default function StoreFeeSummaryTab() {
                       <span style={{ fontSize: 12, color: row.isActiveStore ? '#34d399' : 'var(--md-sys-color-on-surface-variant)' }}>
                         {row.statusLabel}
                       </span>
+                    </td>
+                    <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                      <StatusChip
+                        label={row.hasLoggedIn ? 'アクティブ' : '未ログイン'}
+                        bg={row.hasLoggedIn ? '#14532d' : 'var(--md-sys-color-surface-container-highest)'}
+                        fg={row.hasLoggedIn ? '#4ade80' : 'var(--md-sys-color-on-surface-variant)'}
+                      />
+                      {row.lastLoginAt && (
+                        <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
+                          {formatJstDate(row.lastLoginAt)}
+                        </div>
+                      )}
                     </td>
                     <td style={tdStyle}>
                       {row.services.length === 0 ? (

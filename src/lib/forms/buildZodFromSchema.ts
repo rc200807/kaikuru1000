@@ -91,11 +91,41 @@ export function buildZodFromSchema(schema: FormSchema) {
   return z.object(shape)
 }
 
-/** 検証済み値を表示用の {label, value} 配列に整形する */
-export function formatAnswersForDisplay(schema: FormSchema, data: Record<string, unknown>): { label: string; value: string }[] {
+/** 回答値を表示用の文字列にする（配列・氏名オブジェクトにも対応） */
+export function stringifyAnswerValue(v: unknown): string {
+  if (v == null) return ''
+  if (Array.isArray(v)) return v.map(stringifyAnswerValue).filter((s) => s !== '').join(', ')
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    if ('last' in o || 'first' in o) return `${o.last ?? ''} ${o.first ?? ''}`.trim()
+    return JSON.stringify(v)
+  }
+  return String(v)
+}
+
+/**
+ * 現在のフォーム設問に無いキーの表示ラベル。
+ * 設問を作り直すと ID が変わり、過去の回答が「どの設問のものか」を失う。
+ * 値を捨てずに、どのキーの回答かが分かる形で見せる。
+ */
+export function unknownAnswerLabel(key: string): string {
+  return `（フォームにない項目: ${key}）`
+}
+
+/**
+ * 検証済み値を表示用の {label, value} 配列に整形する。
+ * includeUnknown を渡すと、現在のスキーマに無いキーの回答も末尾に付ける。
+ */
+export function formatAnswersForDisplay(
+  schema: FormSchema,
+  data: Record<string, unknown>,
+  options?: { includeUnknown?: boolean },
+): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = []
+  const known = new Set<string>()
   for (const f of schema) {
     if (f.type === 'heading' || f.type === 'paragraph') continue
+    known.add(f.id)
     const v = data[f.id]
     if (f.type === 'name' && v && typeof v === 'object') {
       const nv = v as { last?: string; first?: string }
@@ -105,6 +135,12 @@ export function formatAnswersForDisplay(schema: FormSchema, data: Record<string,
     } else {
       const label = (f as Exclude<FormField, { type: 'heading' | 'paragraph' }>).label
       out.push({ label, value: v == null ? '' : String(v) })
+    }
+  }
+  if (options?.includeUnknown && data && typeof data === 'object') {
+    for (const [k, v] of Object.entries(data)) {
+      if (known.has(k)) continue
+      out.push({ label: unknownAnswerLabel(k), value: stringifyAnswerValue(v) })
     }
   }
   return out

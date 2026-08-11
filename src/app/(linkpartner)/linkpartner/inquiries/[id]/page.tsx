@@ -43,7 +43,8 @@ export default function LinkPartnerInquiryDetailPage() {
   try {
     const schema = parseSchema(submission.form.schema)
     const data = JSON.parse(submission.data || '{}')
-    answers = formatAnswersForDisplay(schema, data)
+    // 設問の作り直しなどでスキーマに残っていない回答も隠さず出す
+    answers = formatAnswersForDisplay(schema, data, { includeUnknown: true })
   } catch {
     answers = []
   }

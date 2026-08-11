@@ -49,15 +49,39 @@ export async function GET(req: Request) {
   // フォームごとに schema を1度だけ解析し、列名を決める
   const schemaByForm = new Map<string, FormSchema>()
   const columnsByForm = new Map<string, string[]>()
+  const schemaOf = (s: (typeof submissions)[number]) => {
+    let schema = schemaByForm.get(s.formId)
+    if (!schema) {
+      schema = parseSchema(s.form.schema)
+      schemaByForm.set(s.formId, schema)
+      columnsByForm.set(s.formId, columnNamesForSchema(schema))
+    }
+    return schema
+  }
+
+  // 回答を「列名 → 値」に変換。スキーマの項目は設問順、それ以外（設問の作り直しなどで
+  // スキーマに残っていないキー）はその後ろに続く。
+  const valuesByRow = submissions.map((s) => {
+    const values = new Map<string, string>()
+    try {
+      const schema = schemaOf(s)
+      const names = columnsByForm.get(s.formId) ?? []
+      const data = JSON.parse(s.data || '{}')
+      formatAnswersForDisplay(schema, data, { includeUnknown: true }).forEach((a, i) => {
+        const name = i < names.length ? names[i] : a.label
+        if (!values.has(name)) values.set(name, a.value)
+      })
+    } catch {
+      // 壊れた回答データは空欄で出力する
+      for (const name of columnsByForm.get(s.formId) ?? []) values.set(name, '')
+    }
+    return values
+  })
+
   const answerColumns: string[] = []
   const seen = new Set<string>()
-  for (const s of submissions) {
-    if (columnsByForm.has(s.formId)) continue
-    const schema = parseSchema(s.form.schema)
-    const names = columnNamesForSchema(schema)
-    schemaByForm.set(s.formId, schema)
-    columnsByForm.set(s.formId, names)
-    for (const name of names) {
+  for (const values of valuesByRow) {
+    for (const name of values.keys()) {
       if (seen.has(name)) continue
       seen.add(name)
       answerColumns.push(name)
@@ -65,26 +89,12 @@ export async function GET(req: Request) {
   }
 
   const headers = ['受信日時', 'フォーム', '顧客名', ...answerColumns]
-  const rows = submissions.map((s) => {
-    const values = new Map<string, string>()
-    try {
-      const schema = schemaByForm.get(s.formId) ?? []
-      const names = columnsByForm.get(s.formId) ?? []
-      const data = JSON.parse(s.data || '{}')
-      formatAnswersForDisplay(schema, data).forEach((a, i) => {
-        const name = names[i]
-        if (name) values.set(name, a.value)
-      })
-    } catch {
-      // 壊れた回答データは空欄で出力する
-    }
-    return [
-      jst(s.createdAt),
-      s.form.title,
-      s.user?.name ?? '',
-      ...answerColumns.map((name) => values.get(name) ?? ''),
-    ]
-  })
+  const rows = submissions.map((s, i) => [
+    jst(s.createdAt),
+    s.form.title,
+    s.user?.name ?? '',
+    ...answerColumns.map((name) => valuesByRow[i].get(name) ?? ''),
+  ])
   const csv = [headers, ...rows].map((row) => row.map((cell) => csvEscape(String(cell ?? ''))).join(',')).join('\r\n')
   const body = '﻿' + csv
 

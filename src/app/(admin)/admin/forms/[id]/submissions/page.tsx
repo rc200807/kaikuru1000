@@ -8,6 +8,7 @@ import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { parseSchema, type FormSchema } from '@/lib/forms/types'
+import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
 
 type Submission = {
   id: string
@@ -60,11 +61,6 @@ export default function SubmissionsPage() {
   if (loading || !data) return <LoadingSpinner size="lg" fullPage />
 
   const schema: FormSchema = parseSchema(data.form.schema)
-  const labelById: Record<string, string> = {}
-  for (const f of schema) {
-    if (f.type === 'heading' || f.type === 'paragraph') continue
-    labelById[f.id] = (f as any).label
-  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -137,10 +133,10 @@ export default function SubmissionsPage() {
                           <td colSpan={4} className="px-4 py-4">
                             <table className="w-full text-sm">
                               <tbody>
-                                {Object.entries(parsed).map(([k, v]) => (
-                                  <tr key={k}>
-                                    <td className="py-1.5 pr-4 text-[var(--md-sys-color-on-surface-variant)] align-top w-1/3 text-xs uppercase tracking-wide">{labelById[k] ?? k}</td>
-                                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{formatVal(v)}</td>
+                                {formatAnswersForDisplay(schema, parsed, { includeUnknown: true }).map((a, i) => (
+                                  <tr key={i}>
+                                    <td className="py-1.5 pr-4 text-[var(--md-sys-color-on-surface-variant)] align-top w-1/3 text-xs uppercase tracking-wide">{a.label}</td>
+                                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">{a.value || '—'}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -179,15 +175,4 @@ function SyncBadge({ synced, error }: { synced: boolean; error: string | null })
     )
   }
   return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">−</span>
-}
-
-function formatVal(v: unknown): string {
-  if (v == null) return ''
-  if (Array.isArray(v)) return v.join(', ')
-  if (typeof v === 'object') {
-    const o = v as any
-    if ('last' in o || 'first' in o) return `${o.last ?? ''} ${o.first ?? ''}`.trim()
-    return JSON.stringify(v)
-  }
-  return String(v)
 }

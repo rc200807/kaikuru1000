@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import { parseSchema } from '@/lib/forms/types'
+import { parseSchema, isInputField, type FormSchema } from '@/lib/forms/types'
 import { buildZodFromSchema, formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
 import { verifyRecaptcha } from '@/lib/recaptcha'
 import { postToSheetWebhook } from '@/lib/forms/sheetWebhook'
@@ -52,6 +52,51 @@ function extractCustomerFields(
     address:    get('address'),
     postalCode: get('postalCode'),
   }
+}
+
+/**
+ * スキーマに無いキーの回答を拾う。
+ *
+ * zod の z.object() は未知のキーを黙って捨てる。設問を作り直すと ID が変わるため、
+ * 送信ページが古いスキーマを掴んでいた場合などに回答が丸ごと消えてしまう。
+ * 公開エンドポイントなので、いたずら送信で肥大化しないよう上限を設けたうえで保存する。
+ */
+const MAX_EXTRA_KEYS = 30
+const MAX_EXTRA_KEY_LENGTH = 100
+const MAX_EXTRA_STRING = 2000
+const MAX_EXTRA_ITEMS = 30
+
+function sanitizeExtraValue(v: unknown, depth = 0): unknown {
+  if (typeof v === 'string') return v.slice(0, MAX_EXTRA_STRING)
+  if (typeof v === 'number' || typeof v === 'boolean') return v
+  if (depth > 0) return undefined // 入れ子は1段まで
+  if (Array.isArray(v)) {
+    const arr = v.slice(0, MAX_EXTRA_ITEMS).map((x) => sanitizeExtraValue(x, depth + 1)).filter((x) => x !== undefined)
+    return arr.length > 0 ? arr : undefined
+  }
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>).slice(0, MAX_EXTRA_ITEMS)) {
+      const s = sanitizeExtraValue(val, depth + 1)
+      if (s !== undefined) out[k.slice(0, MAX_EXTRA_KEY_LENGTH)] = s
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+  }
+  return undefined
+}
+
+function collectUnknownAnswers(schema: FormSchema, raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const known = new Set(schema.filter(isInputField).map((f) => f.id))
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (Object.keys(out).length >= MAX_EXTRA_KEYS) break
+    if (known.has(k) || k.length > MAX_EXTRA_KEY_LENGTH) continue
+    const s = sanitizeExtraValue(v)
+    if (s === undefined) continue
+    out[k] = s
+  }
+  return out
 }
 
 // 簡易メモリレート制限（IP+slug ごと、60秒で10リクエストまで）
@@ -158,10 +203,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     }
   }
 
+  // 検証済みの値を正とし、スキーマに無いキーの回答も落とさずに残す
+  const answers: Record<string, unknown> = {
+    ...collectUnknownAnswers(schema, data),
+    ...(parsed.data as Record<string, unknown>),
+  }
+
   const submission = await prisma.formSubmission.create({
     data: {
       formId: form.id,
-      data: JSON.stringify(parsed.data),
+      data: JSON.stringify(answers),
       ipAddress: ip,
       userAgent: req.headers.get('user-agent') ?? null,
       ...(createdUserId ? { userId: createdUserId } : {}),
@@ -180,7 +231,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     })
   }
 
-  const formatted = formatAnswersForDisplay(schema, parsed.data as Record<string, unknown>)
+  // シート連携・外部API連携は列（キー）を固定したいのでスキーマの項目だけを渡す。
+  // メール通知は取りこぼしに気づけるよう、スキーマに無い回答も載せる。
+  const formatted = formatAnswersForDisplay(schema, answers)
+  const formattedForMail = formatAnswersForDisplay(schema, answers, { includeUnknown: true })
 
   // メール通知（失敗は握り潰し）
   // ⚠️ Vercelサーバーレスでは fire-and-forget だとレスポンス返却後に関数が終了して
@@ -195,7 +249,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
           formTitle: form.title,
           submissionId: submission.id,
           submittedAt: submission.createdAt,
-          fields: formatted,
+          fields: formattedForMail,
           reviewUrl: `${baseUrl}/admin/forms/${form.id}/submissions`,
         })
       } catch (err: any) {

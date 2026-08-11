@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireLinkPartner } from '@/lib/link-partner-auth'
 import { resolveAssignedFormIds, LINKPARTNER_SAFE_SUBMISSION_SELECT } from '@/lib/link-partner-query'
 import { recordLinkPartnerActivity } from '@/lib/link-partner-activity'
-import { parseSchema } from '@/lib/forms/types'
+import { parseSchema, isInputField, type FormSchema } from '@/lib/forms/types'
 import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
 
 function csvEscape(v: string): string {
@@ -14,8 +14,24 @@ function csvEscape(v: string): string {
 }
 const jst = (d: Date) => new Date(d).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
 
+/**
+ * フォームの入力項目に対する列名を、schema の並び順で返す。
+ * 返り値の並びは formatAnswersForDisplay() の出力と 1:1 で対応する（どちらも装飾項目を除いた schema 順）。
+ * 同一フォーム内でラベルが重複する場合は「ラベル (2)」のように連番を付けて列を分ける。
+ */
+function columnNamesForSchema(schema: FormSchema): string[] {
+  const used = new Map<string, number>()
+  return schema.filter(isInputField).map((f) => {
+    const base = f.label?.trim() || '（無題項目）'
+    const n = (used.get(base) ?? 0) + 1
+    used.set(base, n)
+    return n === 1 ? base : `${base} (${n})`
+  })
+}
+
 // 問い合わせCSVエクスポート（割当フォームのみ・BOM付きUTF-8）
-// フォームごとに項目が異なるため、回答は「ラベル: 値」を並べた1列にまとめる。
+// 回答は項目ごとに列を分ける。複数フォームをまとめて出力する場合は全フォームの列を和集合にし、
+// 同名の列は共有する（フォームが違っても同じ設問なら同じ列に入る）。
 export async function GET(req: Request) {
   const user = await requireLinkPartner()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -30,17 +46,44 @@ export async function GET(req: Request) {
     ? await prisma.formSubmission.findMany({ where, select: LINKPARTNER_SAFE_SUBMISSION_SELECT, orderBy: { createdAt: 'desc' } })
     : []
 
-  const headers = ['受信日時', 'フォーム', '顧客名', '回答内容']
-  const rows = submissions.map((s) => {
-    let answersStr = ''
-    try {
-      const schema = parseSchema(s.form.schema)
-      const data = JSON.parse(s.data || '{}')
-      answersStr = formatAnswersForDisplay(schema, data).map((a) => `${a.label}: ${a.value}`).join(' / ')
-    } catch {
-      answersStr = ''
+  // フォームごとに schema を1度だけ解析し、列名を決める
+  const schemaByForm = new Map<string, FormSchema>()
+  const columnsByForm = new Map<string, string[]>()
+  const answerColumns: string[] = []
+  const seen = new Set<string>()
+  for (const s of submissions) {
+    if (columnsByForm.has(s.formId)) continue
+    const schema = parseSchema(s.form.schema)
+    const names = columnNamesForSchema(schema)
+    schemaByForm.set(s.formId, schema)
+    columnsByForm.set(s.formId, names)
+    for (const name of names) {
+      if (seen.has(name)) continue
+      seen.add(name)
+      answerColumns.push(name)
     }
-    return [jst(s.createdAt), s.form.title, s.user?.name ?? '', answersStr]
+  }
+
+  const headers = ['受信日時', 'フォーム', '顧客名', ...answerColumns]
+  const rows = submissions.map((s) => {
+    const values = new Map<string, string>()
+    try {
+      const schema = schemaByForm.get(s.formId) ?? []
+      const names = columnsByForm.get(s.formId) ?? []
+      const data = JSON.parse(s.data || '{}')
+      formatAnswersForDisplay(schema, data).forEach((a, i) => {
+        const name = names[i]
+        if (name) values.set(name, a.value)
+      })
+    } catch {
+      // 壊れた回答データは空欄で出力する
+    }
+    return [
+      jst(s.createdAt),
+      s.form.title,
+      s.user?.name ?? '',
+      ...answerColumns.map((name) => values.get(name) ?? ''),
+    ]
   })
   const csv = [headers, ...rows].map((row) => row.map((cell) => csvEscape(String(cell ?? ''))).join(',')).join('\r\n')
   const body = '﻿' + csv

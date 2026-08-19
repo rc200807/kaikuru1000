@@ -38,6 +38,7 @@ import { storeSupportsAkikuru } from '@/lib/store-services'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 import CustomerJourneyCard from '@/components/admin/CustomerJourneyCard'
 import { CHANNEL_LABEL } from '@/lib/tracking-labels'
+import { TAG_MAX_LENGTH, type CustomerTagView } from '@/lib/customer-tags'
 
 type User = {
   id: string
@@ -61,6 +62,7 @@ type User = {
   visitFrequencyMonths: number
   leadSource?: string | null  // 流入経路（手入力）
   trackedChannel?: string | null  // 計測流入元（アクセス解析の初回セッションchannel。紐付けなしはnull）
+  tags?: CustomerTagView[]        // 顧客タグ（フォーム由来の自動付与＋手動付与）
   // 振込先口座情報
   bankName:      string | null
   branchName:    string | null
@@ -158,6 +160,7 @@ const ADMIN_COLUMN_OPTIONS = [
   { key: 'store', label: '担当店舗' },
   { key: 'customerType', label: 'タイプ' },
   { key: 'trackedChannel', label: '計測流入元' },
+  { key: 'tags', label: 'タグ' },
   { key: 'createdAt', label: '登録日' },
 ]
 const ADMIN_DEFAULT_COLS = ADMIN_COLUMN_OPTIONS.map(c => c.key)
@@ -165,6 +168,33 @@ const ADMIN_COLS_STORAGE_KEY = 'kk-admin-customers-cols'
 
 // テーブル列キー → サーバーソートフィールド
 const SORT_FIELD_BY_COL: Record<string, string> = { name: 'furigana', createdAt: 'createdAt' }
+
+/** 顧客タグのチップ。フォーム回答由来と手動付与で色を分ける */
+function CustomerTagChip({ tag, onRemove }: { tag: CustomerTagView; onRemove?: () => void }) {
+  const fromForm = tag.source === 'form'
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap"
+      style={fromForm
+        ? { background: 'hsla(212,100%,48%,0.14)', color: 'hsla(212,100%,72%,1)' }
+        : { background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface-variant)' }}
+      title={fromForm ? 'フォーム回答から自動で付いたタグ' : '手動で付けたタグ'}
+    >
+      {fromForm && <span aria-hidden>▸</span>}
+      {tag.label}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ml-0.5 opacity-60 hover:opacity-100"
+          aria-label={`タグ「${tag.label}」を外す`}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  )
+}
 
 function KpiCard({ label, value, unit, icon }: { label: string; value: string; unit?: string; icon: React.ReactNode }) {
   return (
@@ -267,6 +297,10 @@ export default function AdminCustomersPage() {
   const [editMode, setEditMode] = useState(false)
   const [editForm, setEditForm] = useState<{ lastName: string; firstName: string; lastNameKana: string; firstNameKana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number; leadSource: string }>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1, leadSource: '' })
   const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
+  // 絞り込みの選択肢用（使われている顧客タグ）
+  const [allTags, setAllTags] = useState<{ label: string; count: number }[]>([])
+  const [tagInput, setTagInput] = useState('')
+  const [tagSaving, setTagSaving] = useState(false)
   const [changingFrequency, setChangingFrequency] = useState<string | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
 
@@ -342,9 +376,11 @@ export default function AdminCustomersPage() {
       fetch('/api/stores').then(r => r.json()),
       fetch(statsUrl).then(r => r.ok ? r.json() : null),
       fetch('/api/lead-sources').then(r => r.ok ? r.json() : []),
-    ]).then(([storesData, statsData, leadSourcesData]) => {
+      fetch('/api/admin/customer-tags').then(r => r.ok ? r.json() : { tags: [] }),
+    ]).then(([storesData, statsData, leadSourcesData, tagsData]) => {
       setStores(Array.isArray(storesData) ? storesData : [])
       setLeadSources(Array.isArray(leadSourcesData) ? leadSourcesData : [])
+      setAllTags(Array.isArray(tagsData?.tags) ? tagsData.tags : [])
       if (statsData) {
         setStatsTotal(statsData.total ?? 0)
         setStatsUnassigned(statsData.unassigned ?? 0)
@@ -749,6 +785,58 @@ export default function AdminCustomersPage() {
       leadSource: (detailUser as any).leadSource || '',
     })
     setEditMode(true)
+  }
+
+  /** 顧客一覧側のタグも同期させる（詳細を閉じても表示が食い違わないように） */
+  function patchTags(userId: string, tags: CustomerTagView[]) {
+    setDetailUser(prev => prev && prev.id === userId ? { ...prev, tags } : prev)
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, tags } : u))
+  }
+
+  async function handleAddTag() {
+    if (!detailUser) return
+    const label = tagInput.trim()
+    if (!label) return
+    setTagSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${detailUser.id}/tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || 'タグの追加に失敗しました' })
+        return
+      }
+      const current = detailUser.tags ?? []
+      if (!current.some(t => t.id === data.tag.id)) patchTags(detailUser.id, [...current, data.tag])
+      setTagInput('')
+      // 絞り込みの選択肢にも反映
+      setAllTags(prev => prev.some(t => t.label === data.tag.label) ? prev : [...prev, { label: data.tag.label, count: 1 }].sort((a, b) => a.label.localeCompare(b.label)))
+    } catch {
+      setMessage({ type: 'error', text: 'タグの追加に失敗しました' })
+    } finally {
+      setTagSaving(false)
+    }
+  }
+
+  async function handleRemoveTag(tag: CustomerTagView) {
+    if (!detailUser) return
+    setTagSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${detailUser.id}/tags?tagId=${encodeURIComponent(tag.id)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setMessage({ type: 'error', text: data.error || 'タグの削除に失敗しました' })
+        return
+      }
+      patchTags(detailUser.id, (detailUser.tags ?? []).filter(t => t.id !== tag.id))
+    } catch {
+      setMessage({ type: 'error', text: 'タグの削除に失敗しました' })
+    } finally {
+      setTagSaving(false)
+    }
   }
 
   async function handleSaveCustomer() {
@@ -1279,6 +1367,18 @@ export default function AdminCustomersPage() {
       ),
     },
     {
+      key: 'tags',
+      header: 'タグ',
+      hideOnMobile: true,
+      render: (user) => (user.tags && user.tags.length > 0) ? (
+        <div className="flex gap-1 flex-wrap">
+          {user.tags.map(t => <CustomerTagChip key={t.id} tag={t} />)}
+        </div>
+      ) : (
+        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">—</span>
+      ),
+    },
+    {
       key: 'createdAt',
       header: '登録日',
       hideOnMobile: true,
@@ -1423,7 +1523,7 @@ export default function AdminCustomersPage() {
         {/* クイックフィルタチップ */}
         <div className="mb-4">
           <FilterChipBar
-            chips={adminChips(stores, leadSources)}
+            chips={adminChips(stores, leadSources, allTags)}
             values={params}
             onChange={(patch) => setParams(patch)}
             trailing={
@@ -1499,7 +1599,7 @@ export default function AdminCustomersPage() {
       <AdvancedFilterPanel
         open={advOpen}
         onClose={() => setAdvOpen(false)}
-        fields={adminAdvFields(stores, leadSources)}
+        fields={adminAdvFields(stores, leadSources, allTags)}
         values={params}
         onApply={(patch) => setParams(patch)}
         fetchCount={async (draft) => {
@@ -1848,6 +1948,43 @@ export default function AdminCustomersPage() {
                     )}
                   </dl>
                 )}
+
+                {/* 顧客タグ（フォーム回答からの自動付与＋手動付与） */}
+                <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+                  <div className="px-4 py-2 bg-[var(--md-sys-color-surface-container)]">
+                    <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">タグ</span>
+                  </div>
+                  <div className="px-4 py-3 space-y-3">
+                    {(detailUser.tags && detailUser.tags.length > 0) ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {detailUser.tags.map(t => (
+                          <CustomerTagChip key={t.id} tag={t} onRemove={tagSaving ? undefined : () => handleRemoveTag(t)} />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">タグはまだありません。</p>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={tagInput}
+                        onChange={e => setTagInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddTag() } }}
+                        maxLength={TAG_MAX_LENGTH}
+                        placeholder="タグを追加（例: 資料請求）"
+                        list="customer-tag-suggestions"
+                        className="flex-1 h-10 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+                      />
+                      <datalist id="customer-tag-suggestions">
+                        {allTags.map(t => <option key={t.label} value={t.label} />)}
+                      </datalist>
+                      <Button size="sm" onClick={handleAddTag} disabled={!tagInput.trim() || tagSaving} loading={tagSaving}>追加</Button>
+                    </div>
+                    <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                      フォーム設定で「作成した顧客にタグを付ける」を有効にすると、そのフォームからの回答で作られた顧客に自動でタグが付きます。
+                    </p>
+                  </div>
+                </div>
 
                 {/* 問い合わせ経路（アクセス計測。計測データが無くても枠と流入経路を表示） */}
                 <CustomerJourneyCard userId={detailUser.id} leadSource={detailUser.leadSource} />

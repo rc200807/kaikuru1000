@@ -112,6 +112,16 @@ export function buildCustomerFilterConditions(
   }
 
   if (opts.admin) {
+    // 顧客タグ（複数可＝いずれかを持つ。"none"=タグなし）
+    const tags = csv(searchParams.get('tags'))
+    if (tags.length > 0) {
+      const or: any[] = []
+      const labels = tags.filter(t => t !== 'none')
+      if (labels.length > 0) or.push({ customerTags: { some: { label: { in: labels } } } })
+      if (tags.includes('none')) or.push({ customerTags: { none: {} } })
+      and.push({ OR: or })
+    }
+
     // 身分証明書の提出状況
     const idDoc = searchParams.get('idDoc') || ''
     if (idDoc === 'missing') and.push({ idDocumentPath: null })
@@ -173,5 +183,5 @@ export function buildStoreCustomersWhere(storeId: string, searchParams: URLSearc
 export const CUSTOMER_FILTER_KEYS = [
   'search', 'types', 'leadSources', 'createdFrom', 'createdTo',
   'lastVisit', 'nextVisit', 'freq', 'prefecture', 'sort',
-  'storeId', 'includeInactive', 'idDoc', 'addrVerify', 'bank',
+  'storeId', 'includeInactive', 'idDoc', 'addrVerify', 'bank', 'tags',
 ] as const

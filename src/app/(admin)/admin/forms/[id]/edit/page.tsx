@@ -13,6 +13,7 @@ import FieldEditor from '@/components/forms/FieldEditor'
 import FormRenderer from '@/components/forms/FormRenderer'
 import { FIELD_TYPE_LABELS, parseSchema, isInputField, formAdminLabel, type FormField, type FormSchema, type FormStatus } from '@/lib/forms/types'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { TAG_MAX_LENGTH } from '@/lib/customer-tags'
 
 type CustomerFieldMap = {
   name?: string
@@ -42,6 +43,8 @@ type FormData = {
   customerTypes: string | null  // JSON
   customerFieldMap: string | null // JSON
   customerStoreId: string | null
+  customerTagEnabled: boolean
+  customerTag: string | null
   // 外部API送信（汎用Webhook）
   externalApiEnabled: boolean
   externalApiUrl: string | null
@@ -203,6 +206,8 @@ export default function FormEditPage() {
         customerTypes: customerTypesArr,
         customerFieldMap: customerFieldMap,
         customerStoreId: data.customerStoreId,
+        customerTagEnabled: data.customerTagEnabled,
+        customerTag: data.customerTag,
         // 外部API送信
         externalApiEnabled: data.externalApiEnabled,
         externalApiUrl: data.externalApiUrl,
@@ -423,6 +428,33 @@ export default function FormEditPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* 顧客タグ */}
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer mb-1.5">
+                <input
+                  type="checkbox"
+                  checked={data.customerTagEnabled}
+                  onChange={(e) => setField('customerTagEnabled', e.target.checked)}
+                  className="w-4 h-4 rounded accent-[hsla(212,100%,48%,1)]"
+                />
+                <span className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">
+                  作成した顧客に「このフォームから来た」タグを付ける
+                </span>
+              </label>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-2">
+                顧客管理でタグとして表示・絞り込みができます。既存顧客に紐付いた回答にも付きます。
+              </p>
+              {data.customerTagEnabled && (
+                <Input
+                  label="タグ名"
+                  value={data.customerTag ?? ''}
+                  onChange={(v) => setField('customerTag', v)}
+                  placeholder={formAdminLabel(data)}
+                  hint={`空ならフォーム名「${formAdminLabel(data)}」をタグ名にします（最大${TAG_MAX_LENGTH}文字）`}
+                />
+              )}
             </div>
 
             {/* 紐付け店舗 */}

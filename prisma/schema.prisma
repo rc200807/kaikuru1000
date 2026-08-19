@@ -88,6 +88,7 @@ model User {
   inquiries         Inquiry[]
   lineUsers         LineUser[]
   formSubmissions   FormSubmission[]
+  customerTags      CustomerTag[]
   partnerNotes      SalesPartnerCustomerNote[]
   deals             Deal[]
   trackingVisitors  TrackingVisitor[]
@@ -1182,6 +1183,9 @@ model Form {
   customerType     String?          // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
   customerTypes    String?          // JSON配列（複数可）
   customerFieldMap String?          @db.Text  // JSON: { name?, furigana?, email?, phone?, address?, postalCode? } → fieldId
+  // 顧客自動作成時に付けるタグ（このフォームから作成されたと分かるようにする）
+  customerTagEnabled Boolean @default(false)
+  customerTag        String?  // 空なら管理用の名前（internalName）／公開タイトルをタグ名にする
   // 設問を作り直して項目IDが変わったとき、過去の回答を現在の設問に結びつけるための対応表
   // JSON: { "<過去の回答キー>": "<現在のfieldId>" }
   legacyFieldMap   String?          @db.Text
@@ -1199,6 +1203,7 @@ model Form {
   createdBy        Admin            @relation(fields: [createdById], references: [id])
   submissions      FormSubmission[]
   linkPartnerForms LinkPartnerForm[]
+  customerTags     CustomerTag[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
@@ -1387,6 +1392,22 @@ model FormSubmission {
 
   @@index([formId, createdAt])
   @@index([userId])
+}
+
+// 顧客タグ（フォーム回答からの自動付与＋管理者の手動付与）
+model CustomerTag {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String
+  source    String   @default("manual")  // "form"（フォーム回答由来） | "manual"（管理者が手動で付与）
+  formId    String?                       // source="form" のときの出所フォーム（フォーム削除時は null）
+  form      Form?    @relation(fields: [formId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, label])
+  @@index([label])
+  @@index([formId])
 }
 
 // 備品（社内商品）

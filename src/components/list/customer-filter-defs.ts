@@ -51,6 +51,13 @@ export const PREFECTURE_OPTIONS: ChipOption[] = (PREFECTURES as readonly string[
   value: p, label: p,
 }))
 
+export function tagOptions(tags: { label: string }[]): ChipOption[] {
+  return [
+    { value: 'none', label: 'タグなし' },
+    ...tags.map(t => ({ value: t.label, label: t.label })),
+  ]
+}
+
 export function leadSourceOptions(leadSources: { name: string }[]): ChipOption[] {
   return [
     { value: 'none', label: '未設定' },
@@ -74,7 +81,8 @@ export function storeChips(leadSources: { name: string }[]): ChipDef[] {
 /** 管理ポータルのクイックフィルタチップ */
 export function adminChips(
   stores: { id: string; name: string }[],
-  leadSources: { name: string }[]
+  leadSources: { name: string }[],
+  tags: { label: string }[] = []
 ): ChipDef[] {
   return [
     {
@@ -90,6 +98,9 @@ export function adminChips(
     { key: 'nextVisit', label: '次回予定', type: 'single', options: NEXT_VISIT_OPTIONS },
     ...(leadSources.length > 0
       ? [{ key: 'leadSources', label: '流入経路', type: 'multi', options: leadSourceOptions(leadSources) } as ChipDef]
+      : []),
+    ...(tags.length > 0
+      ? [{ key: 'tags', label: 'タグ', type: 'multi', options: tagOptions(tags) } as ChipDef]
       : []),
   ]
 }
@@ -112,7 +123,8 @@ export function storeAdvFields(leadSources: { name: string }[]): AdvField[] {
 /** 管理ポータルの詳細フィルター項目 */
 export function adminAdvFields(
   stores: { id: string; name: string }[],
-  leadSources: { name: string }[]
+  leadSources: { name: string }[],
+  tags: { label: string }[] = []
 ): AdvField[] {
   return [
     {
@@ -129,6 +141,7 @@ export function adminAdvFields(
     ...(leadSources.length > 0
       ? [{ key: 'leadSources', label: '流入経路', type: 'multi', options: leadSourceOptions(leadSources) } as AdvField]
       : []),
+    { key: 'tags', label: 'タグ', type: 'multi', options: tagOptions(tags) },
     { key: 'idDoc', label: '身分証明書', type: 'single', options: ID_DOC_OPTIONS },
     { key: 'addrVerify', label: '住所確認', type: 'single', options: ADDR_VERIFY_OPTIONS },
     { key: 'bank', label: '振込先口座', type: 'single', options: BANK_OPTIONS },
@@ -161,7 +174,7 @@ export const ADMIN_PRESET_VIEWS: ListView[] = [
 export const FILTER_PARAM_KEYS = [
   'search', 'types', 'leadSources', 'createdFrom', 'createdTo',
   'lastVisit', 'nextVisit', 'freq', 'prefecture', 'sort',
-  'storeId', 'includeInactive', 'idDoc', 'addrVerify', 'bank',
+  'storeId', 'includeInactive', 'idDoc', 'addrVerify', 'bank', 'tags',
 ] as const
 
 /** フィルタ文字列(クエリ文字列)をparamsオブジェクトへ */

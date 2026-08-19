@@ -8,6 +8,7 @@ import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { parseSchema, formAdminLabel, type FormSchema } from '@/lib/forms/types'
+import { resolveFormCustomerTag } from '@/lib/customer-tags'
 import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
 type FormDetail = {
@@ -27,6 +28,8 @@ type FormDetail = {
   customerTypes: string | null
   customerFieldMap: string | null
   customerStoreId: string | null
+  customerTagEnabled: boolean
+  customerTag: string | null
   submissionCount: number
   createdAt: string
   updatedAt: string
@@ -186,6 +189,14 @@ export default function FormDetailPage() {
             })}
           </div>
           <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">氏名・電話が揃った回答時に顧客レコードを自動作成します。</p>
+          {form.customerTagEnabled && (
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+              作成した顧客に付けるタグ:{' '}
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: 'hsla(212,100%,48%,0.14)', color: 'hsla(212,100%,72%,1)' }}>
+                {resolveFormCustomerTag(form) ?? '—'}
+              </span>
+            </p>
+          )}
         </Card>
       )}
 

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { normalizeCustomSlug } from '@/lib/forms/slug'
 import { CUSTOMER_TYPES } from '@/lib/customer-types'
 import { encrypt } from '@/lib/encrypt'
+import { normalizeTagLabel, TAG_MAX_LENGTH } from '@/lib/customer-tags'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -39,6 +40,9 @@ const updateSchema = z.object({
   customerType: z.enum(CUSTOMER_TYPES).nullable().optional(),
   customerTypes: z.array(z.enum(CUSTOMER_TYPES)).nullable().optional(),
   customerFieldMap: customerFieldMapSchema.nullable().optional(),
+  // 顧客自動作成時に付けるタグ
+  customerTagEnabled: z.boolean().optional(),
+  customerTag: z.string().max(TAG_MAX_LENGTH).nullable().optional(),
   // 過去の回答キー → 現在のfieldId（設問を作り直したときの救済用）
   legacyFieldMap: z.record(z.string(), z.string()).nullable().optional(),
   customerStoreId: z.string().nullable().optional(),
@@ -106,6 +110,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // 管理用の名前は空なら未設定（＝公開タイトルを表示）に戻す
   if (typeof data.internalName === 'string') data.internalName = data.internalName.trim() || null
+
+  // タグ名は空なら未設定（＝フォーム名をタグ名に使う）に戻す
+  if (typeof data.customerTag === 'string') data.customerTag = normalizeTagLabel(data.customerTag)
 
   // 顧客自動作成: customerTypes と customerFieldMap は JSON 文字列に直列化
   if ('customerTypes' in data) {

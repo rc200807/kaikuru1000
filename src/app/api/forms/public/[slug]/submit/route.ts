@@ -11,6 +11,7 @@ import { decrypt } from '@/lib/encrypt'
 import { buildExternalPayload, parseHeaders, postToExternalApi } from '@/lib/forms/externalApi'
 import { isCustomerType, parseCustomerTypes, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { buildUserNameData } from '@/lib/name-utils'
+import { applyFormCustomerTag } from '@/lib/customer-tags-server'
 
 /** フォーム回答から顧客フィールドを抽出。fieldMap で指定された fieldId の値を読む。 */
 function extractCustomerFields(
@@ -202,6 +203,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
       console.error('[FormSubmit] customer auto-create failed:', err?.message)
     }
   }
+
+  // このフォームから来た顧客だと分かるようにタグを付ける（新規作成・既存紐付けの両方）
+  if (createdUserId) await applyFormCustomerTag(form, createdUserId)
 
   // 検証済みの値を正とし、スキーマに無いキーの回答も落とさずに残す
   const answers: Record<string, unknown> = {

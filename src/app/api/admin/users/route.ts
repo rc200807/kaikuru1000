@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminUsersWhere, parseCustomerSort } from '@/lib/customer-list-query'
 import { getTrackedChannels } from '@/lib/customer-tracking'
+import { getCustomerTags } from '@/lib/customer-tags-server'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -38,10 +39,18 @@ export async function GET(request: NextRequest) {
     prisma.user.count({ where }),
   ])
 
-  const trackedChannels = await getTrackedChannels(users.map(u => u.id))
+  const userIds = users.map(u => u.id)
+  const [trackedChannels, tagMap] = await Promise.all([
+    getTrackedChannels(userIds),
+    getCustomerTags(userIds),
+  ])
 
   return NextResponse.json({
-    users: users.map(({ password: _, ...u }) => ({ ...u, trackedChannel: trackedChannels[u.id] ?? null })),
+    users: users.map(({ password: _, ...u }) => ({
+      ...u,
+      trackedChannel: trackedChannels[u.id] ?? null,
+      tags: tagMap[u.id] ?? [],
+    })),
     total,
     page,
     limit,

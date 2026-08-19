@@ -7,7 +7,7 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import { parseSchema, type FormSchema } from '@/lib/forms/types'
+import { parseSchema, formAdminLabel, type FormSchema } from '@/lib/forms/types'
 import { formatAnswersForDisplay } from '@/lib/forms/buildZodFromSchema'
 import { applyLegacyFieldMap, parseLegacyFieldMap } from '@/lib/forms/legacy-field-map'
 
@@ -23,7 +23,7 @@ type Submission = {
 }
 
 type ApiResponse = {
-  form: { id: string; title: string; schema: string; legacyFieldMap: string | null }
+  form: { id: string; title: string; internalName: string | null; schema: string; legacyFieldMap: string | null }
   total: number
   page: number
   limit: number
@@ -84,7 +84,7 @@ export default function SubmissionsPage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             一覧へ戻る
           </Link>
-          <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] mt-1 truncate">{data.form.title}</h1>
+          <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] mt-1 truncate">{formAdminLabel(data.form)}</h1>
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">合計 {data.total} 件の回答</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

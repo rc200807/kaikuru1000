@@ -7,13 +7,14 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import { parseSchema, type FormSchema } from '@/lib/forms/types'
+import { parseSchema, formAdminLabel, type FormSchema } from '@/lib/forms/types'
 import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
 type FormDetail = {
   id: string
   slug: string
   title: string
+  internalName: string | null
   description: string | null
   schema: string
   status: 'draft' | 'published' | 'closed'
@@ -125,11 +126,14 @@ export default function FormDetailPage() {
             一覧へ戻る
           </Link>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] truncate">{form.title}</h1>
+            <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] truncate">{formAdminLabel(form)}</h1>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: st.bg, color: st.fg }}>
               {st.label}
             </span>
           </div>
+          {form.internalName?.trim() && (
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">公開タイトル: {form.title}</p>
+          )}
           {form.description && (
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">{form.description}</p>
           )}

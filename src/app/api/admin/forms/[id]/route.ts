@@ -25,6 +25,7 @@ const customerFieldMapSchema = z.object({
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  internalName: z.string().max(200).nullable().optional(),
   description: z.string().max(2000).nullable().optional(),
   schema: z.string().max(200000).optional(), // 既にJSON文字列で渡す
   status: z.enum(['draft', 'published', 'closed']).optional(),
@@ -102,6 +103,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   if (data.sheetWebhookUrl === '') data.sheetWebhookUrl = null
+
+  // 管理用の名前は空なら未設定（＝公開タイトルを表示）に戻す
+  if (typeof data.internalName === 'string') data.internalName = data.internalName.trim() || null
 
   // 顧客自動作成: customerTypes と customerFieldMap は JSON 文字列に直列化
   if ('customerTypes' in data) {

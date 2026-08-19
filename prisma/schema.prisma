@@ -1168,6 +1168,8 @@ model Form {
   id               String           @id @default(cuid())
   slug             String           @unique
   title            String
+  // 管理画面だけで使う名前（公開タイトルとは別。未設定なら title を表示）
+  internalName     String?
   description      String?          @db.Text
   schema           String           @db.Text  // JSON文字列: FormField[]
   status           String           @default("draft") // draft | published | closed

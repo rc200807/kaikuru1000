@@ -5,6 +5,7 @@ import { buildBuckets, fillSeries, rangeDays } from '@/lib/analytics/period'
 import { jstDateKey } from '@/lib/datetime'
 import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import { resolveAnalyticsParams, dateWhere, visitWhere, dealWhere, customerWhere, buildMeta, WON_STATUSES } from '../_lib/params'
+import { formAdminLabel } from '@/lib/forms/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       select: { createdAt: true, inquiryType: true },
     }),
     prisma.formSubmission.groupBy({ by: ['formId'], where: { createdAt: dateWhere(range) }, _count: { _all: true } }),
-    prisma.form.findMany({ select: { id: true, title: true } }),
+    prisma.form.findMany({ select: { id: true, title: true, internalName: true } }),
     prisma.lineUser.count(),
     prisma.lineUser.count({ where: { userId: { not: null } } }),
     prisma.lineMessage.count({ where: { direction: 'inbound', sentAt: dateWhere(range) } }),
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.amount - a.amount)
 
   // フォーム別回答数
-  const formTitleMap = new Map(forms.map(f => [f.id, f.title]))
+  const formTitleMap = new Map(forms.map(f => [f.id, formAdminLabel(f)]))
   const formTop = formSubmissions
     .map(g => ({ name: formTitleMap.get(g.formId) ?? '不明なフォーム', count: g._count._all }))
     .sort((a, b) => b.count - a.count)

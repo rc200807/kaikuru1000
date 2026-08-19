@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') ?? '50', 10) || 50))
 
   const [form, total, submissions] = await Promise.all([
-    prisma.form.findUnique({ where: { id }, select: { id: true, title: true, schema: true, legacyFieldMap: true } }),
+    prisma.form.findUnique({ where: { id }, select: { id: true, title: true, internalName: true, schema: true, legacyFieldMap: true } }),
     prisma.formSubmission.count({ where: { formId: id } }),
     prisma.formSubmission.findMany({
       where: { formId: id },

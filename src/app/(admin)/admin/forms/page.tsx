@@ -7,11 +7,13 @@ import Button from '@/components/Button'
 import Card from '@/components/Card'
 import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { formAdminLabel } from '@/lib/forms/types'
 
 type FormItem = {
   id: string
   slug: string
   title: string
+  internalName: string | null
   status: string
   submissionCount: number
   updatedAt: string
@@ -118,7 +120,7 @@ export default function AdminFormsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left">
-                  <th className="px-4 py-3 text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">タイトル</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">名前</th>
                   <th className="px-4 py-3 text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">ステータス</th>
                   <th className="px-4 py-3 text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">回答数</th>
                   <th className="px-4 py-3 text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">更新日</th>
@@ -136,7 +138,10 @@ export default function AdminFormsPage() {
                       onClick={() => router.push(`/admin/forms/${f.id}`)}
                     >
                       <td className="px-4 py-3">
-                        <span className="font-medium text-[var(--md-sys-color-on-surface)]">{f.title}</span>
+                        <span className="font-medium text-[var(--md-sys-color-on-surface)]">{formAdminLabel(f)}</span>
+                        {f.internalName?.trim() && (
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">公開タイトル: {f.title}</p>
+                        )}
                         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 font-mono">/f/{f.slug}</p>
                       </td>
                       <td className="px-4 py-3">

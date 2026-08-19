@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { formAdminLabel } from '@/lib/forms/types'
 
 type Member = {
   id: string
@@ -20,7 +21,7 @@ type AssignedForm = {
   id: string
   formId: string
   createdAt: string
-  form: { id: string; title: string; slug: string; status: string; _count: { submissions: number } }
+  form: { id: string; title: string; internalName: string | null; slug: string; status: string; _count: { submissions: number } }
 }
 type Detail = {
   id: string
@@ -210,7 +211,7 @@ export default function AdminLinkPartnerDetailPage() {
               {detail.forms.map((f) => (
                 <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--md-sys-color-surface-container-highest)' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.form.title}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formAdminLabel(f.form)}</div>
                     <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>/f/{f.form.slug} ・ 回答 {f.form._count.submissions} 件 ・ {f.form.status}</div>
                   </div>
                   <button onClick={() => { if (confirm('このフォームの共有を解除しますか？')) unassignForm(f.formId) }} style={miniBtn}>解除</button>
@@ -536,7 +537,7 @@ function EditableNote({ current, onSave }: { current: string; onSave: (v: string
 }
 
 function FormPickerModal({ partnerId, onClose, onDone }: { partnerId: string; onClose: () => void; onDone: () => void }) {
-  const [forms, setForms] = useState<{ id: string; title: string; slug: string; status: string; _count: { submissions: number } }[]>([])
+  const [forms, setForms] = useState<{ id: string; title: string; internalName: string | null; slug: string; status: string; _count: { submissions: number } }[]>([])
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -579,7 +580,7 @@ function FormPickerModal({ partnerId, onClose, onDone }: { partnerId: string; on
             <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--md-sys-color-surface-container-highest)', cursor: 'pointer' }}>
               <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggle(f.id)} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.title}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formAdminLabel(f)}</div>
                 <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>/f/{f.slug} ・ 回答 {f._count.submissions} 件 ・ {f.status}</div>
               </div>
             </label>

@@ -11,7 +11,7 @@ import MessageBanner from '@/components/MessageBanner'
 import FormBuilderCanvas from '@/components/forms/FormBuilderCanvas'
 import FieldEditor from '@/components/forms/FieldEditor'
 import FormRenderer from '@/components/forms/FormRenderer'
-import { FIELD_TYPE_LABELS, parseSchema, isInputField, type FormField, type FormSchema, type FormStatus } from '@/lib/forms/types'
+import { FIELD_TYPE_LABELS, parseSchema, isInputField, formAdminLabel, type FormField, type FormSchema, type FormStatus } from '@/lib/forms/types'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 
 type CustomerFieldMap = {
@@ -27,6 +27,7 @@ type FormData = {
   id: string
   slug: string
   title: string
+  internalName: string | null
   description: string | null
   schema: string
   status: FormStatus
@@ -187,6 +188,7 @@ export default function FormEditPage() {
     try {
       const payload: any = {
         title: data.title,
+        internalName: data.internalName,
         description: data.description,
         schema: JSON.stringify(schema),
         status: data.status,
@@ -260,7 +262,7 @@ export default function FormEditPage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             一覧へ戻る
           </Link>
-          <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] mt-1 truncate">{data.title || 'フォーム編集'}</h1>
+          <h1 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] mt-1 truncate">{formAdminLabel(data) || 'フォーム編集'}</h1>
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 font-mono break-all">{publicUrl}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -281,7 +283,8 @@ export default function FormEditPage() {
       <Card variant="elevated" padding="md" className="mb-4">
         <h3 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] mb-4">基本設定</h3>
         <div className="grid md:grid-cols-2 gap-4">
-          <Input label="タイトル" value={data.title} onChange={(v) => setField('title', v)} />
+          <Input label="管理用の名前" value={data.internalName ?? ''} onChange={(v) => setField('internalName', v)} placeholder={data.title} hint="管理画面だけで使う名前。空なら公開タイトルを表示します" />
+          <Input label="タイトル（公開ページに表示）" value={data.title} onChange={(v) => setField('title', v)} />
           <Input label="slug（公開URL末尾）" value={data.slug} onChange={(v) => setField('slug', v)} hint="半角英数とハイフン" />
           <Textarea label="説明文" value={data.description ?? ''} onChange={(v) => setField('description', v)} />
           <Textarea label="送信完了メッセージ" value={data.successMessage ?? ''} onChange={(v) => setField('successMessage', v)} />

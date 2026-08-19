@@ -49,6 +49,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
             select: {
               id: true,
               title: true,
+              internalName: true,
               slug: true,
               status: true,
               _count: { select: { submissions: true } },

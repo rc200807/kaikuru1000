@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}))
   const title = (body?.title ?? '').toString().trim() || '新しいフォーム'
+  const internalName = (body?.internalName ?? '').toString().trim() || null
 
   // slug 衝突回避
   let slug = generateSlug()
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
     data: {
       slug,
       title,
+      internalName,
       schema: '[]',
       status: 'draft',
       createdById: user.id,

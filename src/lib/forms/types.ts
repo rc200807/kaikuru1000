@@ -59,3 +59,12 @@ export function parseSchema(json: string | null | undefined): FormSchema {
     return []
   }
 }
+
+/**
+ * 管理画面でフォームを指すときの表示名。
+ * 管理用の名前（internalName）があればそれを、なければ公開タイトルを使う。
+ * 公開画面（/f/[slug]）や外部向けポータルでは使わないこと。
+ */
+export function formAdminLabel(form: { title: string; internalName?: string | null }): string {
+  return form.internalName?.trim() || form.title
+}

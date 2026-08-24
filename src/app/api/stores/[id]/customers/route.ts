@@ -64,16 +64,19 @@ export async function GET(
   // 最終訪問日（過去のキャンセル以外の訪問のうち最新）をまとめて取得
   const ids = customers.map(c => c.id)
   const now = new Date()
-  const pastVisits = ids.length > 0
-    ? await t.measure('lastVisit', () => prisma.visitSchedule.findMany({
+  // 顧客ごとの最終訪問日は groupBy(_max) でDB側だけで求める。
+  // 以前は該当顧客の過去訪問を全行取ってJS側で先頭を拾っていたため、
+  // 訪問履歴が多い顧客が並ぶと1ページ表示で数百〜数千行を転送していた。
+  const lastVisitRows = ids.length > 0
+    ? await t.measure('lastVisit', () => prisma.visitSchedule.groupBy({
+        by: ['userId'],
         where: { userId: { in: ids }, visitDate: { lt: now }, status: { not: 'cancelled' } },
-        orderBy: { visitDate: 'desc' },
-        select: { userId: true, visitDate: true },
+        _max: { visitDate: true },
       }))
     : []
   const lastVisitByUser = new Map<string, Date>()
-  for (const v of pastVisits) {
-    if (!lastVisitByUser.has(v.userId)) lastVisitByUser.set(v.userId, v.visitDate)
+  for (const row of lastVisitRows) {
+    if (row._max.visitDate) lastVisitByUser.set(row.userId, row._max.visitDate)
   }
   // CSVインポートで引き継いだ最終訪問日は、訪問レコードが無い（または古い）ときに採用する
   const pickLastVisit = (visitDate: Date | null, imported: Date | null): Date | null => {

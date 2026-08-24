@@ -162,7 +162,8 @@ export async function buildStoreCustomerOverview(storeId: string, userId: string
         purchaseItems: { select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true } },
         workItems: { select: { id: true, workName: true, quantity: true, unitPrice: true } },
       },
-      orderBy: { visitDate: 'asc' },
+      orderBy: { visitDate: 'desc' },
+      take: 300,   // 訪問回数が極端に多い顧客でも1画面ぶんの転送量に収める
     }),
     fetchCustomerDocuments(userId, storeId),
     prisma.purchaseMemo.findMany({

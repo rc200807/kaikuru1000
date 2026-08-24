@@ -97,6 +97,13 @@ model User {
   stripeCustomerId  String?   @unique  // アキクル請求用のStripe Customer ID（cus_...）
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  // 顧客一覧（店舗・管理）はほぼ必ず storeId で絞り、統合済み顧客を除外して名前順に並べる。
+  // インデックスが1つも無くテーブル全走査になっていたため、顧客が増えるほど線形に遅くなっていた
+  @@index([storeId, mergedIntoUserId, name])
+  @@index([storeId, createdAt])
+  @@index([storeId, customerType])
+  @@index([lastVisitedAt])
 }
 
 // 店舗
@@ -316,6 +323,9 @@ model VisitSchedule {
   @@index([dealId])
   @@index([dealId, visitDate])  // 案件一覧の「訪問予定」フィルタ（EXISTS）用
   @@index([memberId])
+  @@index([storeId, visitDate])   // スケジュール画面（期間表示）・ダッシュボード
+  @@index([userId, visitDate])    // 顧客詳細・最終訪問日の算出
+  @@index([status, visitDate])    // 「今日の訪問」など横断集計
 }
 
 // 訪問ステータス（管理ポータルから管理）
@@ -500,6 +510,7 @@ model PurchaseMemo {
   updatedAt   DateTime @updatedAt
 
   @@index([inquiryId])
+  @@index([userId, createdAt])    // 顧客ごとの買取希望品（新しい順）
 }
 
 // 宅配買取送付履歴
@@ -684,6 +695,7 @@ model Inquiry {
 
   @@index([storeId])
   @@index([status])
+  @@index([storeId, createdAt])   // 問い合わせ一覧（新しい順）
 }
 
 // 案件（買取案件・商談）
@@ -726,6 +738,8 @@ model Deal {
   @@index([status])
   @@index([category])
   @@index([memberId])
+  @@index([storeId, createdAt])   // 案件一覧の既定並び（新しい順）
+  @@index([storeId, status])      // ステータス絞り込み・件数サマリー
 }
 
 // 案件に紐づく会話録音（音声）。AIで文字起こし＋要約を非同期生成する。
@@ -1685,6 +1699,7 @@ model AccessLog {
   @@index([userType])
   @@index([memberId])
   @@index([userId, createdAt])
+  @@index([userType, createdAt])  // ポータル別のアクセスログ一覧
 }
 
 // 運用コスト（手動入力、コスト推移・内訳用）

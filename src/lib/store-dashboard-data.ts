@@ -25,28 +25,80 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
 
-  // ── 自店舗（選択店舗群）の訪問データ（直近12ヶ月） ──
-  const myVisits = await prisma.visitSchedule.findMany({
-    where: { ...storeFilter, visitDate: { gte: twelveMonthsAgo } },
-    select: { visitDate: true, purchaseAmount: true, status: true, storeId: true },
-  })
+  // ダッシュボードの集計クエリは互いに独立しているので、1回の Promise.all でまとめて投げる。
+  // 以前は11本を直列に await していたため、関数→DBの往復がそのまま11回ぶん積み上がっていた。
+  const [
+    myVisits,
+    storeAmountAgg,
+    totalStores,
+    todayCount,
+    recentDealRows,
+    myDeals,
+    dealStatusAgg,
+    leadAgg,
+    completedByUser,
+    scopeStoreNames,
+  ] = await Promise.all([
+    // 自店舗（選択店舗群）の訪問データ（直近12ヶ月）
+    prisma.visitSchedule.findMany({
+      where: { ...storeFilter, visitDate: { gte: twelveMonthsAgo } },
+      select: { visitDate: true, purchaseAmount: true, status: true, storeId: true },
+    }),
+    // 全店舗の買取金額ランキング（当月）。groupBy + _sum でDB側集計し全行フェッチを回避
+    prisma.visitSchedule.groupBy({
+      by: ['storeId'],
+      where: { status: 'completed', visitDate: { gte: currentMonthStart } },
+      _sum: { purchaseAmount: true },
+      orderBy: { _sum: { purchaseAmount: 'desc' } },
+    }),
+    prisma.store.count({ where: { isActive: true } }),
+    // 本日の訪問件数（KPI用）
+    prisma.visitSchedule.count({
+      where: { ...storeFilter, visitDate: { gte: today, lt: tomorrow } },
+    }),
+    // 直近の案件（発生日の新しい順に最大10件）
+    prisma.deal.findMany({
+      where: storeFilter,
+      orderBy: { occurredAt: 'desc' },
+      take: 10,
+      include: {
+        user: { select: { name: true, address: true } },
+        store: { select: { name: true } },
+      },
+    }),
+    // 自店舗の案件（直近12ヶ月：推移用）
+    prisma.deal.findMany({
+      where: { ...storeFilter, createdAt: { gte: twelveMonthsAgo } },
+      select: { createdAt: true, storeId: true },
+    }),
+    // 案件ステータスの内訳（全期間）
+    prisma.deal.groupBy({
+      by: ['status'],
+      where: storeFilter,
+      _count: { _all: true },
+    }),
+    // 流入経路の内訳（自店舗の顧客）
+    prisma.user.groupBy({
+      by: ['leadSource'],
+      where: storeFilter,
+      _count: { _all: true },
+    }),
+    // リピート率の母数（完了訪問のある顧客ごとの件数）
+    prisma.visitSchedule.groupBy({
+      by: ['userId'],
+      where: { ...storeFilter, status: 'completed' },
+      _count: { _all: true },
+    }),
+    // 複数店舗スコープのときだけ、選択店舗の名前
+    isMulti
+      ? prisma.store.findMany({ where: { id: { in: storeIds } }, select: { id: true, name: true } })
+      : Promise.resolve([] as { id: string; name: string }[]),
+  ])
 
   // ── 自店舗の当月買取金額 ──
   const currentMonthAmount = myVisits
     .filter(v => v.status === 'completed' && v.visitDate >= currentMonthStart)
     .reduce((s, v) => s + (v.purchaseAmount ?? 0), 0)
-
-  // ── 全店舗の買取金額ランキング（当月 TOP10） ──
-  // groupBy + _sum でDB側集計し、全行フェッチを回避
-  const storeAmountAgg = await prisma.visitSchedule.groupBy({
-    by: ['storeId'],
-    where: {
-      status: 'completed',
-      visitDate: { gte: currentMonthStart },
-    },
-    _sum: { purchaseAmount: true },
-    orderBy: { _sum: { purchaseAmount: 'desc' } },
-  })
 
   // storeId → 店舗名の解決（ランキングに載る店舗のみ取得）
   const rankedStoreIds = storeAmountAgg.map(a => a.storeId)
@@ -67,7 +119,6 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
   // 自店舗の順位（複数選択時は合算に順位が定義できないため null。店舗別順位は myStoreRanks で返す）
   const myRankIndex = ranking.findIndex(r => r.storeId === storeId)
   const myRank = isMulti ? null : (myRankIndex >= 0 ? myRankIndex + 1 : null)
-  const totalStores = await prisma.store.count({ where: { isActive: true } })
 
   // TOP10（店舗向けは金額非表示のため amount を返さない。管理向けは revealAmounts で含める）
   const top10 = ranking.slice(0, 10).map((r, i) => ({
@@ -80,9 +131,6 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
   }))
 
   // 複数選択時のみ: 選択店舗ごとの当月ランキング順位
-  const scopeStoreNames = isMulti
-    ? await prisma.store.findMany({ where: { id: { in: storeIds } }, select: { id: true, name: true } })
-    : []
   const scopeNameMap = new Map(scopeStoreNames.map(s => [s.id, s.name]))
   const myStoreRanks = isMulti
     ? storeIds.map(id => {
@@ -116,21 +164,7 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
     count,
   }))
 
-  // ── 本日の訪問件数（KPI用） ──
-  const todayCount = await prisma.visitSchedule.count({
-    where: { ...storeFilter, visitDate: { gte: today, lt: tomorrow } },
-  })
-
   // ── 直近の案件（発生日の新しい順に最大10件） ──
-  const recentDealRows = await prisma.deal.findMany({
-    where: storeFilter,
-    orderBy: { occurredAt: 'desc' },
-    take: 10,
-    include: {
-      user: { select: { name: true, address: true } },
-      store: { select: { name: true } },
-    },
-  })
   const recentDeals = recentDealRows.map(d => ({
     id: d.id,
     customerName: d.user.name,
@@ -153,11 +187,6 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
     .reduce((s, v) => s + (v.purchaseAmount ?? 0), 0)
   const prevMonthVisitCount = myVisits.filter(v => v.visitDate >= prevMonthStart && v.visitDate < currentMonthStart).length
 
-  // ── 自店舗の案件（直近12ヶ月：推移用） ──
-  const myDeals = await prisma.deal.findMany({
-    where: { ...storeFilter, createdAt: { gte: twelveMonthsAgo } },
-    select: { createdAt: true, storeId: true },
-  })
   const monthlyDealMap: Record<string, number> = {}
   for (let i = 11; i >= 0; i--) monthlyDealMap[jstMonthKey(subMonths(now, i))] = 0
   for (const d of myDeals) {
@@ -169,11 +198,6 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
   const prevMonthDealCount = myDeals.filter(d => d.createdAt >= prevMonthStart && d.createdAt < currentMonthStart).length
 
   // ── 案件ステータスの内訳＋契約率（自店舗・全期間） ──
-  const dealStatusAgg = await prisma.deal.groupBy({
-    by: ['status'],
-    where: storeFilter,
-    _count: { _all: true },
-  })
   const dealStatusBreakdown = dealStatusAgg.map(g => ({ status: g.status, count: g._count._all }))
   const totalDeals = dealStatusBreakdown.reduce((s, g) => s + g.count, 0)
   const wonDeals = dealStatusBreakdown
@@ -182,21 +206,11 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
   const contractRate = totalDeals > 0 ? wonDeals / totalDeals : 0
 
   // ── 流入経路の内訳（自店舗の顧客） ──
-  const leadAgg = await prisma.user.groupBy({
-    by: ['leadSource'],
-    where: storeFilter,
-    _count: { _all: true },
-  })
   const leadSourceBreakdown = leadAgg
     .map(g => ({ name: g.leadSource ?? '未設定', count: g._count._all }))
     .sort((a, b) => b.count - a.count)
 
   // ── リピート率（完了訪問が2回以上の顧客 / 完了訪問が1回以上の顧客） ──
-  const completedByUser = await prisma.visitSchedule.groupBy({
-    by: ['userId'],
-    where: { ...storeFilter, status: 'completed' },
-    _count: { _all: true },
-  })
   const customersWithPurchase = completedByUser.length
   const repeatCustomers = completedByUser.filter(g => g._count._all >= 2).length
   const repeatRate = customersWithPurchase > 0 ? repeatCustomers / customersWithPurchase : 0

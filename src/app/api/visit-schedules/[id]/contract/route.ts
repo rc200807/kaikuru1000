@@ -290,6 +290,7 @@ export async function POST(
     emailSent,
     emailErrorReason,
     pdfIncluded: !!effectivePdfBase64,
+    invoicePdfIncluded: !!effectiveInvoicePdfBase64,
     magicLinkUrl,
   })
 }
@@ -317,8 +318,14 @@ export async function GET(
       emailSentAt: true,
       customerEmail: true,
       createdAt: true,
+      // 本文は返さず「PDFが保存されているか」だけを返す（完了パネルのDLボタン表示判定）
+      pdfBase64: true,
+      invoicePdfBase64: true,
     },
   })
 
-  return NextResponse.json(contract ?? null)
+  if (!contract) return NextResponse.json(null)
+
+  const { pdfBase64, invoicePdfBase64, ...rest } = contract
+  return NextResponse.json({ ...rest, hasPdf: !!pdfBase64, hasInvoicePdf: !!invoicePdfBase64 })
 }

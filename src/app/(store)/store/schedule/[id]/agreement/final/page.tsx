@@ -197,6 +197,9 @@ type ExistingContract = {
   agreedAt: string
   emailSentAt: string | null
   customerEmail: string | null
+  /** サーバーに保存済みのPDFがあるか（完了パネルのダウンロードボタン表示判定） */
+  hasPdf?: boolean
+  hasInvoicePdf?: boolean
 }
 
 // アキクル案件のStripe請求情報（振込先＋カード決済ページ）
@@ -363,8 +366,15 @@ export default function FinalAgreementPage() {
   const [generatedPdfs, setGeneratedPdfs] = useState<{ sale: string | null; invoice: string | null }>({ sale: null, invoice: null })
   const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null)
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
-  // 完了モーダル（作成完了と同時にQR・リンクを表示）
+  // 完了モーダル（作成完了と同時にQR・リンク・PDFダウンロードを表示）
   const [showCompletion, setShowCompletion] = useState(false)
+  // 直近の発行結果（メール送信の成否・保存されたPDFの有無）
+  const [submitResult, setSubmitResult] = useState<{
+    emailSent: boolean
+    emailErrorReason: string | null
+    pdfIncluded: boolean
+    invoicePdfIncluded: boolean
+  } | null>(null)
   const [customerEmailInput, setCustomerEmailInput] = useState('')
   const [occupationInput, setOccupationInput] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
@@ -583,6 +593,12 @@ export default function FinalAgreementPage() {
       }
 
       const result = await res.json()
+      setSubmitResult({
+        emailSent: !!result.emailSent,
+        emailErrorReason: result.emailErrorReason ?? null,
+        pdfIncluded: !!result.pdfIncluded,
+        invoicePdfIncluded: !!result.invoicePdfIncluded,
+      })
       await fetchVisit()
 
       // 提出成功 → 署名のセッションストレージをクリア
@@ -633,6 +649,31 @@ export default function FinalAgreementPage() {
       </div>
     )
   }
+
+  // 完了パネル用の派生値 —— PDFは「サーバー保存済み」を正としてダウンロードURLを組む
+  const hasSalePdf = submitResult?.pdfIncluded ?? existingContract?.hasPdf ?? false
+  const hasInvoicePdfSaved = submitResult?.invoicePdfIncluded ?? existingContract?.hasInvoicePdf ?? false
+  const contractDownloads = [
+    ...(hasSalePdf ? [{
+      label: '売買契約書PDF',
+      href: `/api/magic-link/document-pdf?type=contract&visitId=${scheduleId}&kind=sale`,
+      filename: '売買契約書.pdf',
+    }] : []),
+    ...(hasInvoicePdfSaved ? [{
+      label: '請求書PDF',
+      href: `/api/magic-link/document-pdf?type=contract&visitId=${scheduleId}&kind=invoice`,
+      filename: '請求書.pdf',
+    }] : []),
+  ]
+  const completionSubtitle = submitResult
+    ? submitResult.emailSent
+      ? `${visit.user.idName || visit.user.name}様にメールで控えを送信しました。`
+      : submitResult.emailErrorReason === 'no-email'
+        ? '契約書は保存しました。メールアドレスが未登録のため、控えのメールは送っていません。下のQR・リンクでお渡しください。'
+        : '契約書は保存しましたが、控えのメール送信に失敗しました。下のQR・リンクでお渡しください。'
+    : existingContract
+      ? `発行日時: ${format(new Date(existingContract.agreedAt), 'yyyy年M月d日 HH:mm', { locale: ja })}`
+      : undefined
 
   // 契約番号・請求書番号
   const contractNo = `KK-${scheduleId.slice(-8).toUpperCase()}`
@@ -699,9 +740,9 @@ export default function FinalAgreementPage() {
       {/* マジックリンク */}
       {existingContract && (
         <Card variant="elevated" padding="md">
-          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">お客様用 マイページリンク</h2>
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">売買契約書へのリンク（お客様用）</h2>
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
-            このQRコードをお客様に読み取ってもらうと、契約内容をマイページで確認できます
+            このQRコードをお客様に読み取ってもらうと、売買契約書がそのまま開きます（店舗の端末では開かないでください）
           </p>
 
           {magicLinkUrl ? (
@@ -1123,12 +1164,35 @@ export default function FinalAgreementPage() {
         )}
       </Card>
 
-      {/* 作成後のPDF確認 */}
-      {(generatedPdfs.sale || generatedPdfs.invoice) && (
+      {/* 発行済みの控え（完了パネルの再表示・PDFのダウンロード/確認） */}
+      {(existingContract || generatedPdfs.sale || generatedPdfs.invoice) && (
         <Card variant="elevated" padding="md">
-          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">PDFを確認する</h2>
-          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">ボタンを押すと別タブでPDFを開きます。表示画面からダウンロードもできます。</p>
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">発行済みの控え</h2>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
+            QRコード・お客様用リンク・PDFは、下のボタンからいつでも開き直せます。
+          </p>
           <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => {
+                if (!magicLinkUrl && !magicLinkLoading) generateMagicLink()
+                setShowCompletion(true)
+              }}
+            >
+              発行完了パネルを表示
+            </Button>
+            {contractDownloads.map(d => (
+              <a
+                key={d.href}
+                href={d.href}
+                download={d.filename}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80 transition-opacity"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 19.5h16" />
+                </svg>
+                {d.label}をダウンロード
+              </a>
+            ))}
             {generatedPdfs.sale && (
               <Button variant="tonal" onClick={() => openPdfBase64(generatedPdfs.sale!)}>売買契約書PDFを確認する</Button>
             )}
@@ -1161,19 +1225,22 @@ export default function FinalAgreementPage() {
         </Button>
       </div>
 
-      {/* 完了モーダル（QR・リンク・次アクション） */}
+      {/* 完了モーダル（QR・売買契約書へのリンク・PDFダウンロード・次アクション） */}
       <CompletionModal
         open={showCompletion}
         onClose={() => setShowCompletion(false)}
-        title="売買契約書が完成しました"
-        subtitle={message?.type === 'success' ? message.text : undefined}
+        title="売買契約書を発行しました"
+        subtitle={completionSubtitle}
+        status={submitResult && !submitResult.emailSent ? 'warning' : 'success'}
         url={magicLinkUrl}
         urlLoading={magicLinkLoading}
-        linkDescription="お客様のスマホでこのQRコードを読み取ると、マイページで契約書を確認できます。"
-        validityNote="このリンクは72時間有効です。"
+        urlLabel="売買契約書へのリンク（お客様用）"
+        linkDescription="お客様のスマホでこのQRコードを読み取ると、売買契約書がそのまま開きます。リンクをコピーしてLINE・メールで送ることもできます。"
+        validityNote="このリンクは72時間有効です。※店舗の端末では開かないでください（お客様としてログインされます）"
+        downloads={contractDownloads}
         pdfButtons={[
-          ...(generatedPdfs.sale ? [{ label: '売買契約書PDFを確認', onClick: () => openPdfBase64(generatedPdfs.sale!) }] : []),
-          ...(generatedPdfs.invoice ? [{ label: '請求書PDFを確認', onClick: () => openPdfBase64(generatedPdfs.invoice!) }] : []),
+          ...(generatedPdfs.sale ? [{ label: '売買契約書PDF', onClick: () => openPdfBase64(generatedPdfs.sale!) }] : []),
+          ...(generatedPdfs.invoice ? [{ label: '請求書PDF', onClick: () => openPdfBase64(generatedPdfs.invoice!) }] : []),
         ]}
         backLabel={fromDealId ? '案件詳細' : '訪問詳細'}
         onBack={() => {

@@ -39,6 +39,7 @@ export const STORE_NAV_ITEMS: readonly StoreNavItemDef[] = [
   { key: 'line',            href: '/store/line',            label: 'LINEトーク' },
   { key: 'inquiries',       href: '/store/inquiries',       label: '問い合わせ' },
   { key: 'purchase-items',  href: '/store/purchase-items',  label: '買取品目' },
+  { key: 'kobutsu-ledger',  href: '/store/kobutsu-ledger',  label: '古物台帳' },
   { key: 'inventory',       href: '/store/inventory',       label: '在庫' },
   { key: 'training-videos', href: '/store/training-videos', label: '研修動画' },
   { key: 'bug-report',      href: '/store/bug-report',      label: '不具合報告' },

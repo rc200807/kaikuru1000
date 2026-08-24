@@ -368,6 +368,7 @@ model PurchaseItem {
   isAdditionalRequest Boolean @default(false) // 追加依頼品タグ
   notes           String?  @db.Text           // 備考
   inventoryItem   InventoryItem?              // 変換先の在庫（1:1。未変換は null）
+  kobutsuEntry    KobutsuLedgerEntry?         // 古物台帳の補記（1:1。未入力は null）
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -2461,4 +2462,22 @@ model StoreNavOverride {
   note      String?                   // 運用メモ（なぜ特例なのか）
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================
+// 古物台帳（古物営業法16条の帳簿）
+// ============================================================
+
+// 台帳の行そのものは「売買契約書が発行された案件の買取品目」から生成する。
+// このモデルは自動生成では埋まらない法定記載事項の手入力（上書き）だけを保持する。
+model KobutsuLedgerEntry {
+  id              String       @id @default(cuid())
+  purchaseItemId  String       @unique
+  purchaseItem    PurchaseItem @relation(fields: [purchaseItemId], references: [id], onDelete: Cascade)
+  kobutsuCategory String?      // 法定13品目のキー（kobutsu-ledger.ts）。null = 自動推定を使う
+  features        String?      @db.Text  // 古物の特徴（手入力。null = 自動生成を使う）
+  note            String?      @db.Text  // 備考
+  updatedByName   String?      // 最終更新者の表示名（店舗/メンバー）
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }

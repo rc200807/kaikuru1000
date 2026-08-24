@@ -31,7 +31,13 @@ export async function GET(
   const deal = await prisma.deal.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true } },
+      user: {
+        select: {
+          id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true,
+          // 顧客情報セクションに出す属性（生年月日は身分証OCR由来、職業は売買契約書作成時に取得）
+          birthDate: true, idBirthDate: true, idDocumentType: true, occupation: true,
+        },
+      },
       store: {
         select: {
           id: true, name: true, code: true, phone: true, address: true,

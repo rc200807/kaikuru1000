@@ -20,6 +20,7 @@ const ITEMS: SettingItem[] = [
   { href: '/admin/settings/lead-sources', title: '流入経路管理', desc: '顧客の流入経路の選択肢（電話・LINE・紹介 など）', icon: '🧭' },
   { href: '/admin/settings/akiya-items', title: '空き家管理項目', desc: '空き家管理記録の点検項目マスタ（並び順・有効/無効）', icon: '🏠' },
   { href: '/admin/settings/payment', title: '決済カード', desc: '備品発注の決済に使うクレジットカード', icon: '💳' },
+  { href: '/admin/settings/store-menu', title: '店舗メニュー設定', desc: '店舗ポータルのサイドメニューの並び順・表示/非表示（店舗ごとの特例も設定可）', icon: '🧩' },
 ]
 
 export default function AdminSettingsIndexPage() {

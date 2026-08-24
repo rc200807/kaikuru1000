@@ -6,6 +6,7 @@
 //   StoreLink による店舗切替で token.id が変わるとキーも変わり、自動的にリセットされる
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
+import { DEFAULT_STORE_NAV_KEYS, STORE_NAV_KEYS } from '@/lib/store-nav'
 
 export type ScopeStore = {
   id: string
@@ -29,6 +30,8 @@ type StoreScopeValue = {
   operatorName: string | null
   /** セッション店舗の対応サービス（機能ゲート用。例: ['kaikuru','akikuru']） */
   services: string[]
+  /** 表示するサイドメニューのキー（並び順つき。管理ポータルの設定＋店舗特例を解決した結果） */
+  navKeys: string[]
   loading: boolean
 }
 
@@ -43,6 +46,7 @@ const StoreScopeContext = createContext<StoreScopeValue>({
   isOrgAdmin: false,
   operatorName: null,
   services: [],
+  navKeys: [...DEFAULT_STORE_NAV_KEYS],
   loading: true,
 })
 
@@ -52,6 +56,17 @@ export function useStoreScope() {
 
 function storageKey(storeId: string) {
   return `storeScope:${storeId}`
+}
+
+function navStorageKey(storeId: string) {
+  return `storeNavKeys:${storeId}`
+}
+
+/** 未知キーを除いた文字列配列に正規化 */
+function sanitizeNavKeys(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+  const keys = value.filter((k): k is string => typeof k === 'string' && STORE_NAV_KEYS.includes(k))
+  return keys.length > 0 ? keys : null
 }
 
 export function StoreScopeProvider({ children }: { children: React.ReactNode }) {
@@ -64,6 +79,8 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
   const [isOrgAdmin, setIsOrgAdmin] = useState(false)
   const [operatorName, setOperatorName] = useState<string | null>(null)
   const [services, setServices] = useState<string[]>([])
+  // メニュー構成は API 取得までのチラつきを避けるため localStorage のキャッシュ→既定値の順でフォールバックする
+  const [navKeys, setNavKeys] = useState<string[]>([...DEFAULT_STORE_NAV_KEYS])
   const [loading, setLoading] = useState(true)
 
   // 組織情報の取得（セッション店舗が変わるたびに再取得＝StoreLink切替にも追随）
@@ -74,6 +91,12 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
     }
     let cancelled = false
     setLoading(true)
+    // 前回のメニュー構成をキャッシュから即反映（API 応答までの初期表示ズレを抑える）
+    try {
+      const cachedNav = localStorage.getItem(navStorageKey(sessionStoreId))
+      const parsedNav = cachedNav ? sanitizeNavKeys(JSON.parse(cachedNav)) : null
+      if (parsedNav) setNavKeys(parsedNav)
+    } catch { /* ignore */ }
     fetch('/api/store/organization')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
@@ -85,6 +108,11 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
         setIsOrgAdmin(!!data?.isOrgAdmin)
         setOperatorName(data?.operator?.name ?? null)
         setServices(Array.isArray(data?.services) ? data.services : [])
+        const resolvedNav = sanitizeNavKeys(data?.navKeys)
+        if (resolvedNav) {
+          setNavKeys(resolvedNav)
+          try { localStorage.setItem(navStorageKey(sessionStoreId), JSON.stringify(resolvedNav)) } catch { /* ignore */ }
+        }
 
         // localStorage から復元（無効IDを除去し、セッション店舗を必ず含める）
         const validIds = new Set(stores.map(s => s.id))
@@ -146,9 +174,10 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
       isOrgAdmin,
       operatorName,
       services,
+      navKeys,
       loading,
     }
-  }, [availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, loading])
+  }, [availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, navKeys, loading])
 
   return <StoreScopeContext.Provider value={value}>{children}</StoreScopeContext.Provider>
 }

@@ -76,7 +76,23 @@ type Deal = {
   userId: string
   storeId: string | null
   inquiryId: string | null
-  user: { id: string; name: string; furigana: string | null; email: string | null; phone: string | null; address: string | null; customerType: string }
+  user: {
+    id: string
+    name: string
+    furigana: string | null
+    email: string | null
+    phone: string | null
+    address: string | null
+    customerType: string
+    /** 顧客プロフィールの生年月日（身分証OCRから反映されることもある） */
+    birthDate?: string | null
+    /** 身分証OCRで読み取った生年月日 */
+    idBirthDate?: string | null
+    /** 身分証の種別（運転免許証など） */
+    idDocumentType?: string | null
+    /** 職業（売買契約書作成時に取得） */
+    occupation?: string | null
+  }
   store: { id: string; name: string; code: string; phone: string | null; address: string | null; prefecture: string | null; email: string | null; invoiceNumber: string | null; antiquePermitNumber: string | null; supportedServices?: string | null } | null
   inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
   visitSchedules: VisitSchedule[]
@@ -118,6 +134,21 @@ function creatorLabel(d: { createdByName: string | null; createdByType: string |
   if (!d.createdByName && !d.createdByType) return '—'
   const t = d.createdByType ? CREATOR_TYPE_LABEL[d.createdByType] ?? d.createdByType : null
   return d.createdByName ? `${d.createdByName}${t ? `（${t}）` : ''}` : (t ?? '—')
+}
+
+// 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD（満xx歳）"、和暦などのテキストはそのまま返す
+function fmtBirthDate(v?: string | null) {
+  if (!v) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim())
+  if (!m) return v.trim()
+  const [, y, mo, d] = m
+  const birth = new Date(Number(y), Number(mo) - 1, Number(d))
+  if (isNaN(birth.getTime())) return v.trim()
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const before = now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())
+  if (before) age -= 1
+  return `${y}/${mo}/${d}${age >= 0 && age < 130 ? `（満${age}歳）` : ''}`
 }
 
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
@@ -523,6 +554,9 @@ export default function DealDetailView({
   const totalBilling = deal.billingAmount ?? workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const dealContract = deal.dealContract
   const dealEstimate = deal.dealEstimate
+  // 顧客情報の生年月日: プロフィール値 → 身分証OCRの読み取り値の順で採用
+  const birthDateFromId = !deal.user.birthDate && !!deal.user.idBirthDate
+  const birthDateDisplay = fmtBirthDate(deal.user.birthDate || deal.user.idBirthDate)
   const editable = !isAdmin // 品目・事前同意の編集は店舗ポータル（管理は閲覧）
   // 書類作成フローの対象訪問（最新）。フローは案件配下の品目で構成され、結果は案件の書類になる。
   const targetVisitId = deal.visitSchedules[0]?.id ?? null
@@ -679,6 +713,29 @@ export default function DealDetailView({
           </div>
           <Row label="氏名" value={deal.user.name} />
           <Row label="ふりがな" value={deal.user.furigana} />
+          {/* 生年月日はプロフィール値を優先し、無ければ身分証OCRの読み取り値を出す */}
+          <Row
+            label="生年月日"
+            value={birthDateDisplay && (
+              <>
+                {birthDateDisplay}
+                {birthDateFromId && (
+                  <span className="ml-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    身分証読み取り{deal.user.idDocumentType ? `・${deal.user.idDocumentType}` : ''}
+                  </span>
+                )}
+              </>
+            )}
+          />
+          <Row
+            label="職業"
+            value={deal.user.occupation && (
+              <>
+                {deal.user.occupation}
+                <span className="ml-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">売買契約書</span>
+              </>
+            )}
+          />
           <Row label="電話" value={deal.user.phone} />
           <Row label="メール" value={deal.user.email} />
           <Row label="住所" value={deal.user.address} />

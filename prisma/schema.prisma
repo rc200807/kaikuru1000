@@ -179,6 +179,7 @@ model Store {
   inventoryItems InventoryItem[]
   akiyaCases AkiyaCase[]
   akikuruInvoices AkikuruInvoice[]
+  navOverride StoreNavOverride?
   // 運営者（複数店舗を1運営者が運営できる）
   operatorId String?
   operator   Operator? @relation(fields: [operatorId], references: [id], onDelete: SetNull)
@@ -2433,4 +2434,29 @@ model KnowledgeQuery {
 
   @@index([answered, status, createdAt])
   @@index([viewerType, viewerId, createdAt])
+}
+
+// ============================================================
+// 店舗ポータルのサイドメニュー設定（管理ポータルから並び順・表示/非表示を制御）
+// ============================================================
+
+// メニュー項目ごとの共通設定。key は store-nav.ts の STORE_NAV_ITEMS.key と一致する
+model StoreNavSetting {
+  key       String   @id
+  sortOrder Int      @default(0)
+  visible   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 店舗ごとの特例。共通設定より優先される（1店舗1レコード）
+model StoreNavOverride {
+  id        String   @id @default(cuid())
+  storeId   String   @unique
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  showAll   Boolean  @default(false)  // true = 共通設定の非表示を無視して全メニューを表示
+  items     String   @default("{}")   // JSON: { "<key>": true|false } 個別の上書き
+  note      String?                   // 運用メモ（なぜ特例なのか）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

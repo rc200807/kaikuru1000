@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getOperatorStores, isOrgAdmin } from '@/lib/store-scope'
 import { parseStoreServices } from '@/lib/store-services'
+import { resolveStoreNavKeys } from '@/lib/store-nav'
 import { autoSyncOperatorRows, autoSyncStoreRows } from '@/lib/sheet-sync'
 import { OPERATOR_INHERITED_FIELDS, syncStoresForOperator } from '@/lib/operator-store-sync'
 
@@ -19,10 +20,15 @@ export async function GET() {
   }
   const sessionStoreId = user.id as string
 
-  const [{ operator, stores }, orgAdmin, self] = await Promise.all([
+  const [{ operator, stores }, orgAdmin, self, navSettings, navOverride] = await Promise.all([
     getOperatorStores(sessionStoreId),
     isOrgAdmin({ id: sessionStoreId, memberId: user.memberId ?? null }),
     prisma.store.findUnique({ where: { id: sessionStoreId }, select: { supportedServices: true } }),
+    prisma.storeNavSetting.findMany({ select: { key: true, sortOrder: true, visible: true } }),
+    prisma.storeNavOverride.findUnique({
+      where: { storeId: sessionStoreId },
+      select: { showAll: true, items: true },
+    }),
   ])
 
   return NextResponse.json({
@@ -40,6 +46,8 @@ export async function GET() {
     isOrgAdmin: operator ? orgAdmin : false,
     // セッション店舗の対応サービス（機能ゲート用。例: ['kaikuru','akikuru']）
     services: parseStoreServices(self?.supportedServices),
+    // サイドメニューの表示キー（管理ポータルの共通設定＋この店舗の特例を解決済み・並び順つき）
+    navKeys: resolveStoreNavKeys({ settings: navSettings, override: navOverride }),
     sessionStoreId,
   })
 }

@@ -132,10 +132,12 @@ export function verificationMethod(user: {
   return null
 }
 
-/** 台帳1行（買取品目1点） */
+/** 台帳の明細1行（買取品目1点） */
 export type KobutsuLedgerRow = {
   /** 買取品目ID（補記の保存キー） */
   id: string
+  /** 売買契約ID（台帳の1項目＝1案件のキー） */
+  contractId: string
   dealId: string | null
   visitScheduleId: string | null
   /** 取引年月日（売買契約の締結日時。ISO文字列） */
@@ -237,4 +239,110 @@ export function jstDayBoundary(value: string | null | undefined, edge: 'start' |
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
   const d = new Date(`${value}T${edge === 'start' ? '00:00:00.000' : '23:59:59.999'}+09:00`)
   return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * 台帳の1項目（案件単位）。一覧は案件ごとに1行で表示し、明細（品目ごと）は詳細画面で見る。
+ * グループのキーは売買契約ID（1案件=1契約。案件に紐づかない旧データは訪問単位の契約）。
+ */
+export type KobutsuLedgerGroup = {
+  contractId: string
+  dealId: string | null
+  visitScheduleId: string | null
+  tradedAt: string
+  tradeType: '買受け'
+  customer: KobutsuLedgerRow['customer']
+  /** 明細件数（品目の行数） */
+  itemCount: number
+  /** 数量合計 */
+  quantity: number
+  /** 代価合計 */
+  total: number
+  /** 含まれる法定13品目（重複なし・表示順） */
+  categories: KobutsuCategoryKey[]
+  /** 品目未設定の明細があるか */
+  hasUnsetCategory: boolean
+  /** 「ロレックス デイトナ 他2点」のような一覧表示用の要約 */
+  itemSummary: string
+  /** 明細のいずれかで欠けている法定記載事項 */
+  missing: KobutsuMissingField[]
+  /** 明細（詳細画面用。一覧APIでは省略する） */
+  rows?: KobutsuLedgerRow[]
+}
+
+/** 明細行を案件（契約）単位にまとめる。行の並び順（取引年月日の降順）は維持する */
+export function groupLedgerRows(rows: KobutsuLedgerRow[], opts: { includeRows?: boolean } = {}): KobutsuLedgerGroup[] {
+  const order: string[] = []
+  const byContract = new Map<string, KobutsuLedgerRow[]>()
+  for (const row of rows) {
+    const list = byContract.get(row.contractId)
+    if (list) list.push(row)
+    else { byContract.set(row.contractId, [row]); order.push(row.contractId) }
+  }
+
+  return order.map(contractId => {
+    const items = byContract.get(contractId)!
+    const head = items[0]
+    const categories: KobutsuCategoryKey[] = []
+    const missing = new Set<KobutsuMissingField>()
+    for (const item of items) {
+      if (item.categoryKey && !categories.includes(item.categoryKey)) categories.push(item.categoryKey)
+      for (const m of item.missing) missing.add(m)
+    }
+    const quantity = items.reduce((s, i) => s + i.quantity, 0)
+    return {
+      contractId,
+      dealId: head.dealId,
+      visitScheduleId: head.visitScheduleId,
+      tradedAt: head.tradedAt,
+      tradeType: head.tradeType,
+      customer: head.customer,
+      itemCount: items.length,
+      quantity,
+      total: items.reduce((s, i) => s + i.price, 0),
+      categories,
+      hasUnsetCategory: items.some(i => !i.categoryKey),
+      itemSummary: items.length > 1
+        ? `${head.itemName} 他${items.length - 1}件`
+        : head.itemName,
+      missing: [...missing],
+      ...(opts.includeRows ? { rows: items } : {}),
+    }
+  })
+}
+
+/** 案件単位CSVの列（1案件=1行。明細は「品目」「品名」に要約して入れる） */
+export const KOBUTSU_DEAL_CSV_HEADER = [
+  '取引年月日',
+  '区別',
+  '品目（法定13品目）',
+  '品名（要約）',
+  '明細件数',
+  '数量合計',
+  '代価合計',
+  '相手方の住所',
+  '相手方の氏名',
+  '相手方の職業',
+  '相手方の年齢',
+  '確認方法',
+  '案件ID',
+] as const
+
+/** 案件単位1行をCSVのセル配列に変換する */
+export function toDealCsvRow(group: KobutsuLedgerGroup, formatDate: (iso: string) => string): (string | number)[] {
+  return [
+    formatDate(group.tradedAt),
+    group.tradeType,
+    group.categories.map(c => KOBUTSU_CATEGORY_LABEL[c]).join('・'),
+    group.itemSummary,
+    group.itemCount,
+    group.quantity,
+    group.total,
+    group.customer.address ?? '',
+    group.customer.name,
+    group.customer.occupation ?? '',
+    group.customer.age ?? '',
+    group.customer.verification ?? '',
+    group.dealId ?? '',
+  ]
 }

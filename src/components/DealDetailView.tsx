@@ -981,6 +981,12 @@ export default function DealDetailView({
                       {dealContract.hasInvoicePdf && <a href={pdfUrl('contract', dealContract.visitScheduleId, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求書PDF</a>}
                     </div>
                   )}
+                  {/* 契約が発行済み＝古物台帳の記載対象。店舗ポータルから台帳の該当項目へ飛べるようにする */}
+                  {!isAdmin && (
+                    <Link href={`/store/kobutsu-ledger/${dealContract.id}`} className="inline-block text-[11px] mt-2 text-[var(--portal-primary,#374151)] hover:underline">
+                      古物台帳の記載を見る →
+                    </Link>
+                  )}
                 </div>
               )}
               {dealEstimate && (

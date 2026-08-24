@@ -6,20 +6,16 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
-import Modal from '@/components/Modal'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
-import { useToast } from '@/components/Toast'
 import {
-  KOBUTSU_CATEGORIES,
   KOBUTSU_CATEGORY_LABEL,
   KOBUTSU_MISSING_LABEL,
-  type KobutsuCategoryKey,
-  type KobutsuLedgerRow,
+  type KobutsuLedgerGroup,
 } from '@/lib/kobutsu-ledger'
 import { formatJstDate } from '@/lib/datetime'
 
-type Summary = { count: number; quantity: number; total: number; incomplete: number }
+type Summary = { count: number; itemCount: number; quantity: number; total: number; incomplete: number }
 
 const fmtYen = (n: number) => `¥${(n ?? 0).toLocaleString()}`
 const fmtDate = (iso: string) => formatJstDate(iso, { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -54,7 +50,6 @@ function presetRange(kind: 'thisMonth' | 'lastMonth' | 'last3' | 'thisYear'): { 
 export default function KobutsuLedgerPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
-  const { success, error: toastError } = useToast()
 
   const initial = useMemo(() => presetRange('thisMonth'), [])
   const [from, setFrom] = useState(initial.from)
@@ -62,17 +57,10 @@ export default function KobutsuLedgerPage() {
   const [q, setQ] = useState('')
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
 
-  const [rows, setRows] = useState<KobutsuLedgerRow[]>([])
+  const [groups, setGroups] = useState<KobutsuLedgerGroup[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [loading, setLoading] = useState(true)
-
-  // 補記モーダル
-  const [editRow, setEditRow] = useState<KobutsuLedgerRow | null>(null)
-  const [editCategory, setEditCategory] = useState<KobutsuCategoryKey | ''>('')
-  const [editFeatures, setEditFeatures] = useState('')
-  const [editNote, setEditNote] = useState('')
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') router.push('/store/login')
@@ -88,7 +76,7 @@ export default function KobutsuLedgerPage() {
       const res = await fetch(`/api/store/kobutsu-ledger?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
-        setRows(data.rows ?? [])
+        setGroups(data.groups ?? [])
         setSummary(data.summary ?? null)
         setTruncated(!!data.truncated)
       }
@@ -101,51 +89,17 @@ export default function KobutsuLedgerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus, from, to])
 
-  const visibleRows = useMemo(
-    () => (onlyIncomplete ? rows.filter(r => r.missing.length > 0) : rows),
-    [rows, onlyIncomplete],
+  const visible = useMemo(
+    () => (onlyIncomplete ? groups.filter(g => g.missing.length > 0) : groups),
+    [groups, onlyIncomplete],
   )
 
-  function openEdit(row: KobutsuLedgerRow) {
-    setEditRow(row)
-    setEditCategory(row.categoryManual && row.categoryKey ? row.categoryKey : '')
-    setEditFeatures(row.featuresManual ? row.features : '')
-    setEditNote(row.note ?? '')
-  }
-
-  async function saveEdit() {
-    if (!editRow) return
-    setSaving(true)
-    try {
-      const res = await fetch(`/api/store/kobutsu-ledger/${editRow.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kobutsuCategory: editCategory || null,
-          features: editFeatures.trim() || null,
-          note: editNote.trim() || null,
-        }),
-      })
-      if (res.ok) {
-        success('台帳の記載を保存しました')
-        setEditRow(null)
-        load()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        toastError(data.error || '保存に失敗しました')
-      }
-    } catch {
-      toastError('保存に失敗しました')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  function exportCsv() {
+  function exportCsv(unit: 'deal' | 'item') {
     const params = new URLSearchParams()
     if (from) params.set('from', from)
     if (to) params.set('to', to)
     if (q.trim()) params.set('q', q.trim())
+    params.set('unit', unit)
     window.location.href = `/api/store/kobutsu-ledger/export?${params.toString()}`
   }
 
@@ -156,7 +110,12 @@ export default function KobutsuLedgerPage() {
       <AppBar
         title="古物台帳"
         subtitle="売買契約書が発行された買取（買受け）の記録"
-        actions={<Button size="sm" onClick={exportCsv} disabled={loading}>CSV出力</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="tonal" onClick={() => exportCsv('deal')} disabled={loading}>案件単位CSV</Button>
+            <Button size="sm" onClick={() => exportCsv('item')} disabled={loading}>明細CSV</Button>
+          </div>
+        }
       />
 
       <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3">
@@ -219,11 +178,13 @@ export default function KobutsuLedgerPage() {
               <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">
                 {summary.count}<span className="text-base font-semibold">件</span>
               </div>
-              <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">記載件数（品目単位）</div>
+              <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">台帳の項目数（案件単位）</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">{summary.quantity}<span className="text-base font-semibold">点</span></div>
-              <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">数量合計</div>
+              <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">
+                {summary.itemCount}<span className="text-base font-semibold">品目</span>
+              </div>
+              <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">明細件数 / {summary.quantity}点</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">{fmtYen(summary.total)}</div>
@@ -246,10 +207,10 @@ export default function KobutsuLedgerPage() {
           </p>
         )}
 
-        {/* 一覧 */}
+        {/* 一覧（1案件=1項目） */}
         {loading ? (
           <div className="py-16"><LoadingSpinner size="lg" /></div>
-        ) : visibleRows.length === 0 ? (
+        ) : visible.length === 0 ? (
           <EmptyState
             icon={
               <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,57 +222,66 @@ export default function KobutsuLedgerPage() {
           />
         ) : (
           <>
-            {/* PC: 帳簿の様式に沿った表 */}
+            {/* PC: 表 */}
             <div className="hidden md:block overflow-x-auto rounded-xl border border-[var(--md-sys-color-outline-variant)]">
               <table className="w-full text-xs">
                 <thead className="bg-[var(--md-sys-color-surface-container)]">
                   <tr>
-                    {['取引年月日', '区別', '品目', '品名 / 特徴', '数量', '代価', '相手方（住所・氏名・職業・年齢）', '確認方法', '備考', ''].map(h => (
+                    {['取引年月日', '品目', '品名', '明細', '数量', '代価', '相手方（住所・氏名・職業・年齢）', '確認方法', ''].map(h => (
                       <th key={h} className="px-2.5 py-2 text-left font-semibold text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map(r => (
-                    <tr key={r.id} className="border-t border-[var(--md-sys-color-outline-variant)] align-top">
-                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{fmtDate(r.tradedAt)}</td>
-                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">{r.tradeType}</td>
-                      <td className="px-2.5 py-2 whitespace-nowrap">
-                        {r.categoryKey ? (
+                  {visible.map(g => (
+                    <tr key={g.contractId} className="border-t border-[var(--md-sys-color-outline-variant)] align-top hover:bg-[var(--md-sys-color-surface-container-low)]">
+                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{fmtDate(g.tradedAt)}</td>
+                      <td className="px-2.5 py-2 min-w-[130px]">
+                        {g.categories.length > 0 && (
                           <span className="text-[var(--md-sys-color-on-surface)]">
-                            {KOBUTSU_CATEGORY_LABEL[r.categoryKey]}
-                            {!r.categoryManual && <span className="ml-1 text-[10px] text-[var(--md-sys-color-on-surface-faint)]">推定</span>}
+                            {g.categories.map(c => KOBUTSU_CATEGORY_LABEL[c]).join('・')}
                           </span>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-400">未設定</span>
+                        )}
+                        {g.hasUnsetCategory && (
+                          <span className={`${g.categories.length > 0 ? 'ml-1 ' : ''}text-amber-600 dark:text-amber-400`}>
+                            {g.categories.length > 0 ? '＋未設定' : '未設定'}
+                          </span>
                         )}
                       </td>
-                      <td className="px-2.5 py-2 min-w-[220px]">
-                        <div className="font-medium text-[var(--md-sys-color-on-surface)]">{r.itemName}</div>
-                        <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-words">{r.features || '—'}</div>
+                      <td className="px-2.5 py-2 min-w-[180px]">
+                        <Link href={`/store/kobutsu-ledger/${g.contractId}`} className="font-medium text-[var(--store-primary)] hover:underline">
+                          {g.itemSummary}
+                        </Link>
+                        {g.missing.length > 0 ? (
+                          <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                            不足: {g.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-emerald-600 dark:text-emerald-400">記載済み</div>
+                        )}
                       </td>
-                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{r.quantity}</td>
-                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{fmtYen(r.price)}</td>
+                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{g.itemCount}品目</td>
+                      <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{g.quantity}</td>
+                      <td className="px-2.5 py-2 whitespace-nowrap font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(g.total)}</td>
                       <td className="px-2.5 py-2 min-w-[220px]">
-                        <div className="text-[var(--md-sys-color-on-surface)]">{r.customer.name}</div>
+                        <div className="text-[var(--md-sys-color-on-surface)]">{g.customer.name}</div>
                         <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-words">
-                          {r.customer.address || <span className="text-amber-600 dark:text-amber-400">住所なし</span>}
+                          {g.customer.address || <span className="text-amber-600 dark:text-amber-400">住所なし</span>}
                         </div>
                         <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                          {r.customer.occupation || <span className="text-amber-600 dark:text-amber-400">職業なし</span>}
+                          {g.customer.occupation || <span className="text-amber-600 dark:text-amber-400">職業なし</span>}
                           {' ・ '}
-                          {r.customer.age != null ? `${r.customer.age}歳` : <span className="text-amber-600 dark:text-amber-400">年齢なし</span>}
+                          {g.customer.age != null ? `${g.customer.age}歳` : <span className="text-amber-600 dark:text-amber-400">年齢なし</span>}
                         </div>
                       </td>
                       <td className="px-2.5 py-2 whitespace-nowrap">
-                        {r.customer.verification || <span className="text-amber-600 dark:text-amber-400">未確認</span>}
+                        {g.customer.verification || <span className="text-amber-600 dark:text-amber-400">未確認</span>}
                       </td>
-                      <td className="px-2.5 py-2 max-w-[160px] text-[var(--md-sys-color-on-surface-variant)] break-words">{r.note || '—'}</td>
                       <td className="px-2.5 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => openEdit(r)} className="text-[var(--store-primary)] hover:underline">記載</button>
-                          {r.dealId && (
-                            <Link href={`/store/deals/${r.dealId}`} className="text-[var(--md-sys-color-on-surface-variant)] hover:underline">案件</Link>
+                          <Link href={`/store/kobutsu-ledger/${g.contractId}`} className="text-[var(--store-primary)] hover:underline">台帳詳細</Link>
+                          {g.dealId && (
+                            <Link href={`/store/deals/${g.dealId}`} className="text-[var(--md-sys-color-on-surface-variant)] hover:underline">案件</Link>
                           )}
                         </div>
                       </td>
@@ -323,39 +293,42 @@ export default function KobutsuLedgerPage() {
 
             {/* モバイル: カード */}
             <div className="md:hidden flex flex-col gap-2">
-              {visibleRows.map(r => (
-                <div key={r.id} className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3">
+              {visible.map(g => (
+                <Link
+                  key={g.contractId}
+                  href={`/store/kobutsu-ledger/${g.contractId}`}
+                  className="block rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3 active:bg-[var(--md-sys-color-surface-container)]"
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtDate(r.tradedAt)} ・ {r.tradeType}</span>
-                    <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{fmtYen(r.price)}</span>
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtDate(g.tradedAt)} ・ {g.tradeType}</span>
+                    <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{fmtYen(g.total)}</span>
                   </div>
                   <div className="mt-1 text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
-                    {r.itemName} <span className="text-xs font-normal text-[var(--md-sys-color-on-surface-variant)]">×{r.quantity}</span>
+                    {g.itemSummary}
+                    <span className="ml-1.5 text-xs font-normal text-[var(--md-sys-color-on-surface-variant)]">{g.itemCount}品目 / {g.quantity}点</span>
                   </div>
                   <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
-                    品目: {r.categoryKey ? KOBUTSU_CATEGORY_LABEL[r.categoryKey] : '未設定'} / {r.features || '特徴なし'}
+                    品目: {[
+                      ...g.categories.map(c => KOBUTSU_CATEGORY_LABEL[c]),
+                      ...(g.hasUnsetCategory ? ['未設定'] : []),
+                    ].join('・') || '未設定'}
                   </div>
                   <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
-                    {r.customer.name}（{r.customer.occupation || '職業なし'} / {r.customer.age != null ? `${r.customer.age}歳` : '年齢なし'}）
+                    {g.customer.name}（{g.customer.occupation || '職業なし'} / {g.customer.age != null ? `${g.customer.age}歳` : '年齢なし'}）
                   </div>
-                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{r.customer.address || '住所なし'}</div>
-                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">確認方法: {r.customer.verification || '未確認'}</div>
-                  {r.missing.length > 0 && (
+                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{g.customer.address || '住所なし'}</div>
+                  <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">確認方法: {g.customer.verification || '未確認'}</div>
+                  {g.missing.length > 0 && (
                     <div className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
-                      未記載: {r.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
+                      未記載: {g.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
                     </div>
                   )}
-                  <div className="flex items-center gap-3 mt-2">
-                    <button onClick={() => openEdit(r)} className="text-xs text-[var(--store-primary)] font-medium">記載を編集</button>
-                    {r.dealId && <Link href={`/store/deals/${r.dealId}`} className="text-xs text-[var(--md-sys-color-on-surface-variant)]">案件を開く</Link>}
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
 
-            {/* 不備の内訳（PC表では列内に出しているので補足のみ） */}
-            <p className="hidden md:block text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-              「品目」の「推定」は品名・カテゴリからの自動判定です。法定13品目の確定は「記載」から指定してください。
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              1案件（売買契約1件）＝1項目で表示しています。品目ごとの明細・特徴の記載は「台帳詳細」から確認・編集できます。
             </p>
           </>
         )}
@@ -364,84 +337,15 @@ export default function KobutsuLedgerPage() {
           <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-1">この台帳について</p>
           <p>
             古物営業法16条・同施行規則17条（別記様式第15号）の記載事項（取引年月日／品目／数量／特徴／相手方の住所・氏名・職業・年齢／確認方法）に沿って、
-            売買契約書が発行された買取を1品目=1行で表示しています。帳簿は最終記載日から3年間の保存が必要です。
+            売買契約書が発行された買取を記録しています。帳簿は最終記載日から3年間の保存が必要です。
             電子帳簿として運用する場合は、営業所で直ちに書面へ表示できる状態（印刷できる環境）を整えてください。
           </p>
-          <p className="mt-1">表示・出力の対象はログイン中の営業所（店舗）の取引のみです。</p>
+          <p className="mt-1">
+            CSVは「案件単位（1案件=1行）」と「明細（1品目=1行）」の2種類を出力できます。帳簿として提示する場合は明細の方をご利用ください。
+            表示・出力の対象はログイン中の営業所（店舗）の取引のみです。
+          </p>
         </div>
       </div>
-
-      {/* 記載（補記）モーダル */}
-      <Modal
-        open={!!editRow}
-        onClose={() => setEditRow(null)}
-        title="台帳の記載を編集"
-        size="md"
-        footer={
-          <>
-            <Button variant="text" onClick={() => setEditRow(null)}>キャンセル</Button>
-            <Button onClick={saveEdit} loading={saving}>保存</Button>
-          </>
-        }
-      >
-        {editRow && (
-          <div className="space-y-4">
-            <div className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
-              {fmtDate(editRow.tradedAt)} ・ {editRow.itemName} ・ {fmtYen(editRow.price)}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">品目（法定13品目）</label>
-              <select
-                value={editCategory}
-                onChange={e => setEditCategory(e.target.value as KobutsuCategoryKey | '')}
-                className="w-full px-2 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
-              >
-                <option value="">
-                  自動推定に任せる{editRow.categoryKey && !editRow.categoryManual ? `（現在: ${KOBUTSU_CATEGORY_LABEL[editRow.categoryKey]}）` : ''}
-                </option>
-                {KOBUTSU_CATEGORIES.map(c => (
-                  <option key={c.key} value={c.key}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">古物の特徴</label>
-              <textarea
-                value={editFeatures}
-                onChange={e => setEditFeatures(e.target.value)}
-                rows={3}
-                placeholder={`未入力なら自動生成: ${editRow.features || '（生成できる情報がありません）'}`}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] resize-y"
-              />
-              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
-                メーカー名・ブランド名・型番・シリアル番号・色・材質・傷など、品物を特定できる情報を記載します。
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">備考</label>
-              <textarea
-                value={editNote}
-                onChange={e => setEditNote(e.target.value)}
-                rows={2}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] resize-y"
-              />
-            </div>
-
-            {editRow.missing.length > 0 && (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 p-2.5 text-[11px] text-amber-800 dark:text-amber-200">
-                <p className="font-semibold mb-0.5">未記載の項目: {editRow.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}</p>
-                <p>
-                  住所・職業・年齢・確認方法は顧客情報から取り込みます。
-                  {editRow.dealId && <> <Link href={`/store/deals/${editRow.dealId}`} className="underline">案件詳細</Link>から顧客情報を補ってください。</>}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
     </div>
   )
 }

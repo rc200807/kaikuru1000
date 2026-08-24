@@ -6,6 +6,8 @@
  */
 import { prisma } from '@/lib/prisma'
 import {
+  groupLedgerRows,
+  type KobutsuLedgerGroup,
   ageAt,
   buildFeatures,
   findMissingFields,
@@ -140,6 +142,7 @@ export async function fetchKobutsuLedgerRows(
 
       const base = {
         id: item.id,
+        contractId: contract.id,
         dealId: item.dealId,
         visitScheduleId: item.visitScheduleId,
         tradedAt: contract.agreedAt.toISOString(),
@@ -179,6 +182,31 @@ export async function fetchKobutsuLedgerRows(
 
   const truncated = rows.length > limit
   return { rows: truncated ? rows.slice(0, limit) : rows, truncated }
+}
+
+/**
+ * 契約1件分の台帳（明細つき）を取得する。詳細画面用。
+ * 他店舗の契約は null を返す（storeId で絞り込むため）。
+ */
+export async function fetchKobutsuLedgerGroup(
+  contractId: string,
+  storeId: string,
+): Promise<KobutsuLedgerGroup | null> {
+  const contract = await prisma.salesContract.findFirst({
+    where: { id: contractId, OR: [{ deal: { storeId } }, { visitSchedule: { storeId } }] },
+    select: { agreedAt: true },
+  })
+  if (!contract) return null
+
+  // 期間を「その契約の締結日時ちょうど」に絞って共通処理を使い回す
+  const { rows } = await fetchKobutsuLedgerRows({
+    storeId,
+    from: contract.agreedAt,
+    to: contract.agreedAt,
+    limit: 1000,
+  })
+  const groups = groupLedgerRows(rows.filter(r => r.contractId === contractId), { includeRows: true })
+  return groups[0] ?? null
 }
 
 /**

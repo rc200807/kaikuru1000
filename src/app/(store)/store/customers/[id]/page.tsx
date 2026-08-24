@@ -273,7 +273,6 @@ export default function StoreCustomerDetailPage() {
 
   // 訪問履歴
   const [schedules, setSchedules] = useState<VisitSchedule[]>([])
-  const [schedulesLoading, setSchedulesLoading] = useState(false)
   const [schedulesLoaded, setSchedulesLoaded] = useState(false)
   // 発行済み書類（見積書・売買契約書のPDF有無）。scheduleId をキーに保持
   const [docsBySchedule, setDocsBySchedule] = useState<Record<string, IssuedDocs>>({})
@@ -415,17 +414,14 @@ export default function StoreCustomerDetailPage() {
 
   // 買取トライ
   const [memosList, setMemosList] = useState<PurchaseMemo[]>([])
-  const [memosLoading, setMemosLoading] = useState(false)
   const [memosLoaded, setMemosLoaded] = useState(false)
 
   // お問い合わせ履歴
   const [inquiriesList, setInquiriesList] = useState<CustomerInquiry[]>([])
-  const [inquiriesLoading, setInquiriesLoading] = useState(false)
   const [inquiriesLoaded, setInquiriesLoaded] = useState(false)
 
   // 案件
   const [dealsList, setDealsList] = useState<DealItem[]>([])
-  const [dealsLoading, setDealsLoading] = useState(false)
   const [dealsLoaded, setDealsLoaded] = useState(false)
   const [dealsTotal, setDealsTotal] = useState(0)
   const [newDealOpen, setNewDealOpen] = useState(false)
@@ -440,7 +436,6 @@ export default function StoreCustomerDetailPage() {
 
   // 送付履歴
   const [shipmentsList, setShipmentsList] = useState<DeliveryShipment[]>([])
-  const [shipmentsLoading, setShipmentsLoading] = useState(false)
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false)
   const [shipmentEdits, setShipmentEdits] = useState<Record<string, { purchaseAmount: string; storeNote: string; status: string }>>({})
   const [savingShipment, setSavingShipment] = useState<string | null>(null)
@@ -476,43 +471,68 @@ export default function StoreCustomerDetailPage() {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
-  // 顧客データ取得（単票API。以前は一覧のlimit=200から探していたため201件目以降が開けなかった）
+  // 1画面ぶんのデータを1本のAPIでまとめて取得する。
+  // 以前は 顧客／案件／訪問予定／書類／買取希望品／問い合わせ／宅配／日程提案 で
+  // 8本のAPIを並行で叩いていた（往復1本あたり0.3秒前後＋そのぶんの関数起動とDB接続）。
   useEffect(() => {
     if (authStatus !== 'authenticated' || !id) return
-    fetch(`/api/store/customers/${id}`)
-      .then(r => r.ok ? r.json() : null)
+    let cancelled = false
+    fetch(`/api/store/customers/${id}/overview`)
+      .then(r => (r.ok ? r.json() : null))
       .then(data => {
-        if (data?.customer) setCustomer(data.customer)
+        if (cancelled) return
+        if (data?.customer) {
+          setCustomer(data.customer)
+
+          setDealsList(data.deals ?? [])
+          setDealsTotal(data.dealsTotal ?? (data.deals?.length ?? 0))
+          setDealsLoaded(true)
+
+          setSchedules(data.schedules ?? [])
+          setSchedulesLoaded(true)
+
+          const docMap: Record<string, IssuedDocs> = {}
+          for (const d of (data.documents ?? []) as any[]) {
+            docMap[d.scheduleId] = {
+              estimate: d.estimate ? { hasSale: !!d.estimate.hasSale, hasInvoice: !!d.estimate.hasInvoice } : null,
+              contract: d.contract ? { hasSale: !!d.contract.hasSale, hasInvoice: !!d.contract.hasInvoice } : null,
+            }
+          }
+          setDocsBySchedule(docMap)
+
+          const memos: PurchaseMemo[] = data.memos ?? []
+          setMemosList(memos)
+          const notes: Record<string, string> = {}
+          memos.forEach(m => { notes[m.id] = m.storeNote ?? '' })
+          setMemoStoreNotes(notes)
+          setMemosLoaded(true)
+
+          setInquiriesList(data.inquiries ?? [])
+          setInquiriesLoaded(true)
+
+          const shipments: DeliveryShipment[] = data.shipments ?? []
+          setShipmentsList(shipments)
+          const edits: Record<string, { purchaseAmount: string; storeNote: string; status: string }> = {}
+          shipments.forEach(sh => {
+            edits[sh.id] = {
+              purchaseAmount: sh.purchaseAmount !== null ? String(sh.purchaseAmount) : '',
+              storeNote: sh.storeNote ?? '',
+              status: sh.status,
+            }
+          })
+          setShipmentEdits(edits)
+          setShipmentsLoaded(true)
+
+          setStoreProposals(data.proposals ?? [])
+          setStoreProposalsLoaded(true)
+        }
         setLoading(false)
       })
       .catch(() => setLoading(false))
+    return () => { cancelled = true }
   }, [authStatus, id])
 
-  function loadInquiries() {
-    if (!customer) return
-    setInquiriesLoading(true)
-    fetch(`/api/store/customers/${customer.id}/inquiries`)
-      .then(r => r.ok ? r.json() : { inquiries: [] })
-      .then((data: { inquiries: CustomerInquiry[] }) => {
-        setInquiriesList(data.inquiries || [])
-        setInquiriesLoaded(true)
-      })
-      .finally(() => setInquiriesLoading(false))
-  }
 
-  function loadDeals() {
-    if (!customer) return
-    setDealsLoading(true)
-    // 既定の50件だと案件が多い顧客で欠けるため上限まで取得する
-    fetch(`/api/deals?userId=${customer.id}&limit=100`)
-      .then(r => r.ok ? r.json() : { deals: [], total: 0 })
-      .then((data: { deals: DealItem[]; total?: number }) => {
-        setDealsList(data.deals || [])
-        setDealsTotal(data.total ?? (data.deals?.length ?? 0))
-        setDealsLoaded(true)
-      })
-      .finally(() => setDealsLoading(false))
-  }
 
   async function handleCreateDeal() {
     if (!customer) return
@@ -579,34 +599,6 @@ export default function StoreCustomerDetailPage() {
     }
   }
 
-  function loadSchedules() {
-    if (!customer) return
-    setSchedulesLoading(true)
-    fetch(`/api/visit-schedules?userId=${customer.id}`)
-      .then(r => r.json())
-      .then(data => {
-        const list = data?.schedules ?? (Array.isArray(data) ? data : [])
-        setSchedules(list)
-        setSchedulesLoaded(true)
-        setSchedulesLoading(false)
-      })
-      .catch(() => { setSchedulesLoaded(true); setSchedulesLoading(false) })
-    // 発行済み書類（PDF有無）を並行取得
-    fetch(`/api/store/customers/${customer.id}/documents`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data?.documents) return
-        const map: Record<string, IssuedDocs> = {}
-        for (const d of data.documents) {
-          map[d.scheduleId] = {
-            estimate: d.estimate ? { hasSale: !!d.estimate.hasSale, hasInvoice: !!d.estimate.hasInvoice } : null,
-            contract: d.contract ? { hasSale: !!d.contract.hasSale, hasInvoice: !!d.contract.hasInvoice } : null,
-          }
-        }
-        setDocsBySchedule(map)
-      })
-      .catch(() => {})
-  }
 
   // 発行済みPDFをダウンロード（店舗セッションで取得・添付不要）
   function downloadDoc(scheduleId: string, type: 'estimate' | 'contract', kind: 'sale' | 'invoice') {
@@ -614,57 +606,7 @@ export default function StoreCustomerDetailPage() {
     window.open(url, '_blank')
   }
 
-  function loadMemos() {
-    if (!customer) return
-    setMemosLoading(true)
-    fetch(`/api/purchase-memos?userId=${customer.id}`)
-      .then(r => r.json())
-      .then(data => {
-        const list = data?.memos ?? (Array.isArray(data) ? data : [])
-        setMemosList(list)
-        const notes: Record<string, string> = {}
-        list.forEach((m: PurchaseMemo) => { notes[m.id] = m.storeNote ?? '' })
-        setMemoStoreNotes(notes)
-        setMemosLoaded(true)
-        setMemosLoading(false)
-      })
-      .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
-  }
 
-  function loadShipments() {
-    if (!customer) return
-    setShipmentsLoading(true)
-    fetch(`/api/delivery-shipments?userId=${customer.id}`)
-      .then(r => r.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : []
-        setShipmentsList(list)
-        const edits: Record<string, { purchaseAmount: string; storeNote: string; status: string }> = {}
-        list.forEach((s: DeliveryShipment) => {
-          edits[s.id] = {
-            purchaseAmount: s.purchaseAmount !== null ? String(s.purchaseAmount) : '',
-            storeNote: s.storeNote ?? '',
-            status: s.status,
-          }
-        })
-        setShipmentEdits(edits)
-        setShipmentsLoaded(true)
-        setShipmentsLoading(false)
-      })
-      .catch(() => { setShipmentsLoaded(true); setShipmentsLoading(false) })
-  }
-
-  // 1画面で俯瞰する画面構成なので、全セクションのデータを最初にまとめて読み込む
-  useEffect(() => {
-    if (!customer) return
-    if (!dealsLoaded) loadDeals()
-    if (!schedulesLoaded) loadSchedules()
-    if (!memosLoaded) loadMemos()
-    if (!inquiriesLoaded) loadInquiries()
-    if (!shipmentsLoaded) loadShipments()
-    if (!storeProposalsLoaded) loadStoreProposals()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer])
 
   // 旧タブURL（?tab=deals など）で来た場合は該当セクションへスクロールし、パラメータを落とす。
   // 各セクションの高さはデータ到着後に確定するため、読み込みが揃うまで待ってから移動する
@@ -752,18 +694,6 @@ export default function StoreCustomerDetailPage() {
     }
   }
 
-  function loadStoreProposals() {
-    if (!customer) return
-    fetch(`/api/visit-requests?requestedBy=store&userId=${customer.id}`)
-      .then(r => r.json())
-      .then(data => {
-        // Filter to only this customer's proposals (API returns all for store)
-        const list = (data?.requests || []).filter((r: any) => r.userId === customer.id)
-        setStoreProposals(list)
-        setStoreProposalsLoaded(true)
-      })
-      .catch(() => setStoreProposalsLoaded(true))
-  }
 
   async function handleSubmitProposal(e: React.FormEvent) {
     e.preventDefault()
@@ -1220,9 +1150,7 @@ export default function StoreCustomerDetailPage() {
                 </Button>
               </div>
 
-              {dealsLoading && dealsList.length === 0 ? (
-                <div className="flex justify-center py-10"><LoadingSpinner size="md" /></div>
-              ) : dealsList.length === 0 ? (
+              {dealsList.length === 0 ? (
                 <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">この顧客に紐づく案件はありません</p>
               ) : (
                 <div className="divide-y divide-[var(--md-sys-color-outline-variant)]">
@@ -1407,11 +1335,7 @@ export default function StoreCustomerDetailPage() {
               collapsible
               defaultOpen={initialOpen('memos', memosList.length > 0, memosLoaded)}
             >
-              {memosLoading ? (
-                <div className="flex justify-center py-12">
-                  <LoadingSpinner size="md" />
-                </div>
-              ) : memosList.length === 0 ? (
+              {memosList.length === 0 ? (
                 <EmptyState
                   title="買取トライの投稿がありません"
                   description="顧客が買取トライを投稿するとここに表示されます"
@@ -1640,11 +1564,7 @@ export default function StoreCustomerDetailPage() {
               collapsible
               defaultOpen={initialOpen('visits', schedules.length > 0, schedulesLoaded)}
             >
-              {schedulesLoading ? (
-                <div className="flex justify-center py-12">
-                  <LoadingSpinner size="md" />
-                </div>
-              ) : sortedSchedules.length === 0 ? (
+              {sortedSchedules.length === 0 ? (
                 <EmptyState
                   title="訪問スケジュールがありません"
                   description="「スケジュール追加」タブから登録できます"
@@ -1747,11 +1667,7 @@ export default function StoreCustomerDetailPage() {
                 collapsible
                 defaultOpen={initialOpen('shipments', shipmentsList.length > 0, shipmentsLoaded)}
               >
-              {shipmentsLoading ? (
-                <div className="flex justify-center py-12">
-                  <LoadingSpinner size="md" />
-                </div>
-              ) : shipmentsList.length === 0 ? (
+              {shipmentsList.length === 0 ? (
                 <EmptyState title="送付履歴がありません" description="顧客が送付を登録すると表示されます" />
               ) : (
                 <div className="space-y-4">
@@ -2073,9 +1989,7 @@ export default function StoreCustomerDetailPage() {
               collapsible
               defaultOpen={initialOpen('inquiries', inquiriesList.length > 0, inquiriesLoaded)}
             >
-              {inquiriesLoading ? (
-                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] text-center py-12">読み込み中...</p>
-              ) : inquiriesList.length === 0 ? (
+              {inquiriesList.length === 0 ? (
                 <Card className="p-6 text-center">
                   <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">この顧客に紐づくお問い合わせはありません</p>
                 </Card>

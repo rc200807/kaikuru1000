@@ -13,6 +13,8 @@ function resolveOwner(sessionUser: any, portal: string): string | null {
   // 管理ポータルの案件管理一覧
   if (portal === 'admin-deals' && ADMIN_ROLES.includes(sessionUser.role)) return sessionUser.id
   if (portal === 'store' && sessionUser.role === 'store') return sessionUser.id
+  // 店舗ポータルの案件一覧（顧客一覧の 'store' とはビューを分離する）
+  if (portal === 'store-deals' && sessionUser.role === 'store') return sessionUser.id
   return null
 }
 

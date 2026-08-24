@@ -314,6 +314,7 @@ model VisitSchedule {
   updatedAt      DateTime @updatedAt
 
   @@index([dealId])
+  @@index([dealId, visitDate])  // 案件一覧の「訪問予定」フィルタ（EXISTS）用
   @@index([memberId])
 }
 

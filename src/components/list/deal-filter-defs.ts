@@ -7,6 +7,7 @@ import type { ListView } from './ViewTabs'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL } from '@/lib/deal-categories'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL } from '@/lib/customer-types'
+import { DEAL_FILTER_PARAM_KEYS as PARAM_KEYS } from '@/lib/deal-list-query'
 
 export const STATUS_OPTIONS: ChipOption[] = DEAL_STATUS_ORDER.map(s => ({ value: s, label: DEAL_STATUS_LABEL[s] }))
 export const CATEGORY_OPTIONS: ChipOption[] = DEAL_CATEGORIES.map(c => ({ value: c, label: DEAL_CATEGORY_LABEL[c] }))
@@ -96,17 +97,13 @@ export const DEAL_PRESET_VIEWS: ListView[] = [
   { id: 'preset-inquiry', name: '問い合わせ由来', filters: 'source=inquiry', preset: true },
 ]
 
-// daterange チップ（created/occurred）は ${key}From/${key}To の2キーを使うため展開して列挙する
-export const DEAL_FILTER_PARAM_KEYS = [
-  'search', 'statuses', 'categories', 'storeIds', 'customerTypes', 'leadSources',
-  'members', 'createdFrom', 'createdTo', 'occurredFrom', 'occurredTo',
-  'amountMin', 'amountMax', 'hasContract', 'source', 'sort',
-] as const
+// フィルタキーの正は lib 側（サーバーと共有）。ここでは re-export だけして二重定義を避ける
+export { DEAL_FILTER_PARAM_KEYS } from '@/lib/deal-list-query'
 
 export function parseDealFilterString(filters: string): Record<string, string> {
   const sp = new URLSearchParams(filters)
   const out: Record<string, string> = {}
-  for (const k of DEAL_FILTER_PARAM_KEYS) {
+  for (const k of PARAM_KEYS) {
     const v = sp.get(k)
     if (v) out[k] = v
   }

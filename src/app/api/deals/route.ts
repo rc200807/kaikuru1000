@@ -8,7 +8,7 @@ import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { resolveStoreScope } from '@/lib/store-scope'
-import { buildDealFilterConditions, parseDealSort } from '@/lib/deal-list-query'
+import { buildDealFilterConditions, buildStoreDealsWhere, jstTodayStart, parseDealSort } from '@/lib/deal-list-query'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -28,11 +28,12 @@ export async function GET(request: NextRequest) {
   const limit = Math.max(1, Math.min(maxLimit, parseInt(searchParams.get('limit') || '50', 10)))
 
   // ベース条件（店舗スコープ）。管理者は店舗指定をフィルタ条件側で処理する。
-  const baseWhere: any = {}
-  if (isStore) {
-    const scope = await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
-    baseWhere.storeId = scope.isMulti ? { in: scope.storeIds } : sessionUser.id
-  }
+  const scopeStoreIds = isStore
+    ? (await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))).storeIds
+    : []
+  const baseWhere: any = isStore
+    ? { storeId: scopeStoreIds.length > 1 ? { in: scopeStoreIds } : sessionUser.id }
+    : {}
 
   const conditions = buildDealFilterConditions(searchParams, { admin: isAdmin })
   const where: any = { ...baseWhere }
@@ -67,12 +68,26 @@ export async function GET(request: NextRequest) {
   const [deals, total] = await Promise.all([
     prisma.deal.findMany({
       where,
-      include: {
+      // include ではなく select。preConsentSignature（base64署名）や paperContractImages を
+      // 一覧のレスポンスに載せないため。
+      select: {
+        id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
+        detail: true, status: true, category: true,
+        occurredAt: true, createdAt: true, updatedAt: true,
+        purchaseAmount: true, billingAmount: true,
+        memberId: true, preConsentAt: true,
         user: { select: { id: true, name: true, email: true, phone: true, customerType: true, leadSource: true } },
         store: { select: { id: true, name: true, code: true } },
         inquiry: { select: { id: true, inquiryType: true } },
         member: { select: { id: true, name: true } },
         salesContract: { select: { id: true } },
+        // 「次回訪問」列・モバイルカード用に直近の予定を1件だけ
+        visitSchedules: {
+          where: { status: { not: 'cancelled' }, visitDate: { gte: jstTodayStart() } },
+          orderBy: { visitDate: 'asc' },
+          take: 1,
+          select: { id: true, visitDate: true, startTime: true, endTime: true },
+        },
         _count: { select: { visitSchedules: true } },
       },
       orderBy: parseDealSort(searchParams),

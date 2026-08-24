@@ -3,6 +3,15 @@
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory } from '@/lib/deal-categories'
 
+/** JSTの「今日」0時（サーバーTZに依存しない） */
+export function jstTodayStart(): Date {
+  const ymd = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })
+  return new Date(`${ymd}T00:00:00+09:00`)
+}
+
+/** キャンセル済み訪問は「予定」として数えない。この定義を1箇所に固定する */
+const ALIVE_VISIT = { status: { not: 'cancelled' } } as const
+
 /** JSTの日付文字列(YYYY-MM-DD)をその日の開始時刻(JST 00:00)のDateに変換 */
 function jstDayStart(dateStr: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null
@@ -107,6 +116,37 @@ export function buildDealFilterConditions(searchParams: URLSearchParams, opts: D
   const userId = searchParams.get('userId') || ''
   if (userId) and.push({ userId })
 
+  // 訪問予定（相対指定）: today | tomorrow | 7d | overdue | none
+  const DAY = 86400000
+  const visitWithin = searchParams.get('visitWithin') || ''
+  if (visitWithin) {
+    const t0 = jstTodayStart()
+    if (visitWithin === 'today') {
+      and.push({ visitSchedules: { some: { ...ALIVE_VISIT, visitDate: { gte: t0, lt: new Date(t0.getTime() + DAY) } } } })
+    } else if (visitWithin === 'tomorrow') {
+      and.push({ visitSchedules: { some: { ...ALIVE_VISIT, visitDate: { gte: new Date(t0.getTime() + DAY), lt: new Date(t0.getTime() + DAY * 2) } } } })
+    } else if (visitWithin === '7d') {
+      and.push({ visitSchedules: { some: { ...ALIVE_VISIT, visitDate: { gte: t0, lt: new Date(t0.getTime() + DAY * 7) } } } })
+    } else if (visitWithin === 'overdue') {
+      // 予定日を過ぎているのに実施記録が入っていない訪問（記録漏れの検知）
+      and.push({ visitSchedules: { some: { status: { in: ['scheduled', 'rescheduled'] }, visitDate: { lt: t0 } } } })
+    } else if (visitWithin === 'none') {
+      // 今日以降の生存訪問が無い＝次の訪問が決まっていない
+      and.push({ visitSchedules: { none: { ...ALIVE_VISIT, visitDate: { gte: t0 } } } })
+    }
+  }
+
+  // 事前同意の取得状況
+  const hasPreConsent = searchParams.get('hasPreConsent') || ''
+  if (hasPreConsent === 'yes') and.push({ NOT: { preConsentAt: null } })
+  else if (hasPreConsent === 'no') and.push({ preConsentAt: null })
+
+  // 動きがない期間（updatedAt が N日以上前）
+  const staleDays = parseInt(searchParams.get('staleDays') || '', 10)
+  if (!isNaN(staleDays) && staleDays > 0) {
+    and.push({ updatedAt: { lt: new Date(Date.now() - staleDays * DAY) } })
+  }
+
   // 店舗（管理者のみ。unassigned=未割り当て。複数可）
   if (opts.admin) {
     const storeIds = csv(searchParams.get('storeIds'))
@@ -128,12 +168,13 @@ export function buildDealFilterConditions(searchParams: URLSearchParams, opts: D
 const SORTABLE_FIELDS = new Set(['createdAt', 'occurredAt', 'purchaseAmount'])
 const DEFAULT_ORDER = [{ occurredAt: 'desc' }, { createdAt: 'desc' }]
 
-/** sort=field:dir をPrismaのorderByに変換（ホワイトリスト外はdefault） */
+/** sort=field:dir をPrismaのorderByに変換（ホワイトリスト外はdefault）。
+ *  同値行でページ間の重複・欠落が出ないよう id を第2キーに入れる */
 export function parseDealSort(searchParams: URLSearchParams): any {
   const sort = searchParams.get('sort') || ''
   const [field, dir] = sort.split(':')
-  if (!SORTABLE_FIELDS.has(field)) return DEFAULT_ORDER
-  return { [field]: dir === 'desc' ? 'desc' : 'asc' }
+  if (!SORTABLE_FIELDS.has(field)) return [...DEFAULT_ORDER, { id: 'desc' }]
+  return [{ [field]: dir === 'desc' ? 'desc' : 'asc' }, { id: 'desc' }]
 }
 
 /** 管理者向け案件一覧のwhere条件（一覧・CSV・一括で共用） */
@@ -142,9 +183,23 @@ export function buildAdminDealsWhere(searchParams: URLSearchParams): any {
   return and.length > 0 ? { AND: and } : {}
 }
 
+/**
+ * 店舗向け案件一覧のwhere条件（一覧・CSV・一括で共用）。
+ * 店舗スコープ（storeIds）は必ずトップレベルに置き、フィルタ条件では上書きできないようにする。
+ */
+export function buildStoreDealsWhere(storeIds: string[], searchParams: URLSearchParams): any {
+  const and = buildDealFilterConditions(searchParams, { admin: false })
+  const base: any = { storeId: storeIds.length > 1 ? { in: storeIds } : storeIds[0] }
+  return and.length > 0 ? { ...base, AND: and } : base
+}
+
 /** URL・保存ビューで扱うフィルタキー（pageは含めない） */
 export const DEAL_FILTER_PARAM_KEYS = [
   'search', 'statuses', 'categories', 'storeIds', 'customerTypes', 'leadSources',
   'members', 'createdFrom', 'createdTo', 'occurredFrom', 'occurredTo',
   'amountMin', 'amountMax', 'hasContract', 'source', 'sort',
+  'visitWithin', 'hasPreConsent', 'staleDays',
 ] as const
+
+/** 店舗ポータルで扱うフィルタキー（店舗指定 storeIds はスコープ側の責務なので含めない） */
+export const STORE_DEAL_FILTER_PARAM_KEYS = DEAL_FILTER_PARAM_KEYS.filter(k => k !== 'storeIds')

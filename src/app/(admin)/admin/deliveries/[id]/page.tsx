@@ -381,7 +381,7 @@ export default function AdminDeliveryDetailPage() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {shipment.imageUrls.map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={url}
                         alt={`商品写真 ${i + 1}`}
                         className="w-full aspect-square object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]"
@@ -398,7 +398,7 @@ export default function AdminDeliveryDetailPage() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {shipment.trackingImageUrls.map((url, i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={url}
                         alt={`伝票写真 ${i + 1}`}
                         className="w-full aspect-square object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]"

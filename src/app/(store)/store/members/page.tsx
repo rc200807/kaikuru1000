@@ -14,6 +14,7 @@ import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import ImageCropper from '@/components/ImageCropper'
+import { appendImageToFormData } from '@/lib/image-utils'
 
 type Member = {
   id: string
@@ -27,7 +28,7 @@ type Member = {
 function MemberAvatar({ name, avatar, size = 40 }: { name: string; avatar: string | null; size?: number }) {
   if (avatar) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={avatar} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} className="flex-shrink-0" />
+    return <img loading="lazy" decoding="async" src={avatar} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} className="flex-shrink-0" />
   }
   return (
     <div
@@ -120,7 +121,7 @@ export default function StoreMembersPage() {
     if (addAvatarFile) {
       try {
         const fd = new FormData()
-        fd.append('avatar', addAvatarFile)
+        await appendImageToFormData(fd, 'avatar', addAvatarFile, { maxDimension: 1024 })
         const up = await fetch(`/api/store/members/${created.id}`, { method: 'PATCH', body: fd })
         if (up.ok) { const u = await up.json(); avatar = u.avatar ?? avatar }
       } catch { /* 写真アップロード失敗は致命的ではない */ }
@@ -172,7 +173,7 @@ export default function StoreMembersPage() {
     if (editForm.name) fd.append('name', editForm.name)
     if (isOwner && editForm.email) fd.append('email', editForm.email)
     if (editForm.password) fd.append('password', editForm.password)
-    if (editAvatarFile) fd.append('avatar', editAvatarFile)
+    if (editAvatarFile) await appendImageToFormData(fd, 'avatar', editAvatarFile, { maxDimension: 1024 })
 
     const res = await fetch(`/api/store/members/${editTarget.id}`, { method: 'PATCH', body: fd })
     setEditSaving(false)
@@ -324,7 +325,7 @@ export default function StoreMembersPage() {
               <button type="button" onClick={() => addFileRef.current?.click()} className="relative group">
                 {addAvatarPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={addAvatarPreview} className="w-20 h-20 rounded-full object-cover border-4 border-[var(--md-sys-color-surface-container-high)]" alt="顔写真" />
+                  <img loading="lazy" decoding="async" src={addAvatarPreview} className="w-20 h-20 rounded-full object-cover border-4 border-[var(--md-sys-color-surface-container-high)]" alt="顔写真" />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-[var(--md-sys-color-surface-container-high)] border-4 border-[var(--md-sys-color-outline-variant)] flex items-center justify-center">
                     <svg className="w-7 h-7 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -400,7 +401,7 @@ export default function StoreMembersPage() {
             <button type="button" onClick={() => editFileRef.current?.click()} className="relative group">
               {editAvatarPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={editAvatarPreview} className="w-24 h-24 rounded-full object-cover border-4 border-[var(--md-sys-color-surface-container-high)] group-hover:opacity-80 transition-opacity" alt="顔写真" />
+                <img loading="lazy" decoding="async" src={editAvatarPreview} className="w-24 h-24 rounded-full object-cover border-4 border-[var(--md-sys-color-surface-container-high)] group-hover:opacity-80 transition-opacity" alt="顔写真" />
               ) : (
                 <div className="w-24 h-24 rounded-full bg-[var(--md-sys-color-surface-container-high)] border-4 border-[var(--md-sys-color-outline-variant)] flex items-center justify-center">
                   <span className="text-[var(--portal-primary)] text-3xl font-bold">{editForm.name?.[0] ?? '?'}</span>

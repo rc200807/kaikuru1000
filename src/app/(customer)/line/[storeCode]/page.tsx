@@ -138,7 +138,7 @@ export default function LineRegisterPage() {
     <GlassBackground maxWidth="max-w-lg">
       {/* Header */}
       <div className="text-center mb-6">
-        <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
+        <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
         {infoLoading ? (
           <p className="text-sm text-gray-400">読み込み中...</p>
         ) : info ? (

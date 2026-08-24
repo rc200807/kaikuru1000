@@ -38,40 +38,48 @@ export async function createPreviewUrl(file: File): Promise<string> {
   return URL.createObjectURL(converted)
 }
 
-/**
- * FormDataに画像を追加する（HEIC変換付き）
- */
-export async function appendImageToFormData(
-  formData: FormData,
-  fieldName: string,
-  file: File
-): Promise<void> {
-  const converted = await convertToJpegIfNeeded(file)
-  formData.append(fieldName, converted)
-}
-
 type CompressOptions = {
   /** 長辺の最大ピクセル数。これ以下なら拡大しない */
   maxDimension?: number
-  /** JPEG 品質 (0-1) */
+  /** 画質 (0-1) */
   quality?: number
   /** これより小さければ何もしない（バイト） */
   skipIfSmallerThan?: number
 }
 
 /**
- * 画像をクライアント側でリサイズ・再エンコードし、Vercel のリクエスト上限
- * (4.5MB) に収まるサイズに圧縮する。HEIC は先に JPEG へ変換する。
+ * FormDataに画像を追加する（HEIC変換＋リサイズ・WebP圧縮）
+ * アップロード系はこの関数を通すこと（原本をそのまま送らない）
+ */
+export async function appendImageToFormData(
+  formData: FormData,
+  fieldName: string,
+  file: File,
+  options?: CompressOptions,
+): Promise<void> {
+  const prepared = await compressImageIfNeeded(file, options)
+  formData.append(fieldName, prepared)
+}
+
+
+
+/**
+ * 画像をクライアント側でリサイズ・WebP へ再エンコードしてからアップロードする。
  *
- * - 既に十分小さい（既定 1.5MB 以下）場合はそのまま返す
+ * 送信サイズが小さくなるぶん、電波の弱い現場でのアップロード待ちがそのまま短くなる。
+ * サーバー側でも saveImage() が WebP へ正規化するが、そこに届くまでの転送量は
+ * クライアントでしか削れないため両方でやる。
+ *
+ * - 既に十分小さい（既定 300KB 以下）場合はそのまま返す
  * - JPEG/PNG/WEBP/HEIC 画像が対象。それ以外（GIF 等）はそのまま返す
+ * - WebP に変換できないブラウザでは JPEG にフォールバックする
  * - 失敗した場合は元ファイルを返す（呼び出し側でハンドル）
  */
 export async function compressImageIfNeeded(
   file: File,
   options: CompressOptions = {}
 ): Promise<File> {
-  const { maxDimension = 2400, quality = 0.85, skipIfSmallerThan = 1.5 * 1024 * 1024 } = options
+  const { maxDimension = 2000, quality = 0.82, skipIfSmallerThan = 300 * 1024 } = options
 
   // HEIC は JPEG に変換
   const input = await convertToJpegIfNeeded(file)
@@ -96,17 +104,28 @@ export async function compressImageIfNeeded(
         const ctx = canvas.getContext('2d')
         if (!ctx) { reject(new Error('canvas ctx unavailable')); return }
         ctx.drawImage(img, 0, 0, width, height)
+        // WebP を試し、非対応ブラウザ（toBlob が null を返す）では JPEG に落とす
         canvas.toBlob(
-          (b) => b ? resolve(b) : reject(new Error('canvas.toBlob returned null')),
-          'image/jpeg',
+          (webp) => {
+            if (webp) { resolve(webp); return }
+            canvas.toBlob(
+              (jpeg) => jpeg ? resolve(jpeg) : reject(new Error('canvas.toBlob returned null')),
+              'image/jpeg',
+              quality,
+            )
+          },
+          'image/webp',
           quality,
         )
       }
       img.onerror = () => reject(new Error('image decode failed'))
       img.src = URL.createObjectURL(input)
     })
-    const newName = input.name.replace(/\.[^.]+$/, '.jpg') || 'image.jpg'
-    return new File([blob], newName, { type: 'image/jpeg' })
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg'
+    const newName = input.name.replace(/\.[^.]+$/, `.${ext}`) || `image.${ext}`
+    // 変換したのに大きくなった場合（小さなPNGなど）は元のファイルを使う
+    if (blob.size >= input.size) return input
+    return new File([blob], newName, { type: blob.type })
   } catch (e) {
     console.warn('compressImageIfNeeded failed, falling back to original:', e)
     return input

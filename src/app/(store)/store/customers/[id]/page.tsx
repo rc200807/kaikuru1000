@@ -1067,7 +1067,7 @@ export default function StoreCustomerDetailPage() {
                   title="クリックで拡大"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={customer.idDocumentPath} alt="身分証" className="w-full h-32 object-cover" />
+                  <img loading="lazy" decoding="async" src={customer.idDocumentPath} alt="身分証" className="w-full h-32 object-cover" />
                 </button>
               ) : (
                 <p className="text-sm mb-2 text-[var(--status-pending-text)]">身分証は未提出です</p>
@@ -1380,8 +1380,8 @@ export default function StoreCustomerDetailPage() {
                         <div className="flex flex-wrap gap-1.5 mb-3">
                           {memo.imageUrls.map((url, i) => (
                             <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                              <img
-                                src={url}
+                              <img loading="lazy" decoding="async"
+                                src={`${url}?thumb=1`}
                                 alt=""
                                 className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)] hover:opacity-80 transition-opacity"
                               />
@@ -1769,7 +1769,7 @@ export default function StoreCustomerDetailPage() {
                           <div className="flex flex-wrap gap-1.5 mb-3">
                             {s.imageUrls.slice(0, 4).map((url, i) => (
                               <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg hover:opacity-80 transition-opacity" />
+                                <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt="" className="w-16 h-16 object-cover rounded-lg hover:opacity-80 transition-opacity" />
                               </a>
                             ))}
                             {s.imageUrls.length > 4 && (
@@ -2187,7 +2187,7 @@ export default function StoreCustomerDetailPage() {
       <Modal open={idImageOpen} onClose={() => setIdImageOpen(false)} title="身分証" size="xl">
         {customer.idDocumentPath ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={customer.idDocumentPath} alt="身分証" className="w-full h-auto rounded-lg" />
+          <img loading="lazy" decoding="async" src={customer.idDocumentPath} alt="身分証" className="w-full h-auto rounded-lg" />
         ) : (
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">身分証は未提出です</p>
         )}

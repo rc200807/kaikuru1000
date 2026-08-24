@@ -22,7 +22,7 @@ export default function VideoThumbnail({
   const seekedRef = useRef(false)
 
   if (thumbnailUrl) {
-    return <img src={thumbnailUrl} alt="" className={className} />
+    return <img loading="lazy" decoding="async" src={thumbnailUrl} alt="" className={className} />
   }
 
   if (videoUrl) {

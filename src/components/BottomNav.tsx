@@ -131,7 +131,7 @@ export default function BottomNav() {
                       `}
                     >
                       {store.avatar ? (
-                        <img src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
+                        <img loading="lazy" decoding="async" src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                           <span className="text-white text-[10px] font-semibold">{store.name[0]}</span>
@@ -177,7 +177,7 @@ export default function BottomNav() {
                       `}
                     >
                       {store.avatar ? (
-                        <img src={store.avatar} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
+                        <img loading="lazy" decoding="async" src={store.avatar} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                           <span className="text-white text-xs font-semibold">{store.name[0]}</span>
@@ -202,7 +202,7 @@ export default function BottomNav() {
           {/* Current user info */}
           <div className="px-4 pt-3 pb-2 flex items-center gap-3 border-b border-[rgba(0,0,0,0.08)]">
             {user?.avatar ? (
-              <img src={user.avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
+              <img loading="lazy" decoding="async" src={user.avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
             ) : (
               <div className="w-10 h-10 rounded-full bg-[var(--store-primary)] flex items-center justify-center">
                 <span className="text-white text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>

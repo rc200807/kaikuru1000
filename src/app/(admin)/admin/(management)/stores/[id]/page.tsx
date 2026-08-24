@@ -1025,7 +1025,7 @@ export default function StoreDetailPage() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {u.pictureUrl ? (
-                        <img src={u.pictureUrl} alt="" referrerPolicy="no-referrer"
+                        <img loading="lazy" decoding="async" src={u.pictureUrl} alt="" referrerPolicy="no-referrer"
                           style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
                           onError={(e) => { e.currentTarget.style.display = 'none' }}
                         />
@@ -1062,7 +1062,7 @@ export default function StoreDetailPage() {
                 <>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--md-sys-color-outline-variant)', display: 'flex', alignItems: 'center', gap: 10 }}>
                     {selectedUser.pictureUrl ? (
-                      <img src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+                      <img loading="lazy" decoding="async" src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" style={{ width: 32, height: 32, borderRadius: '50%' }} />
                     ) : (
                       <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
                     )}

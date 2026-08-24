@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
+import { appendImageToFormData } from '@/lib/image-utils'
 
 type Comment = {
   id: string
@@ -56,7 +57,8 @@ async function uploadImageFiles(files: File[]): Promise<string[]> {
   const urls: string[] = []
   for (const file of files) {
     const fd = new FormData()
-    fd.append('file', file)
+    // 原本をそのまま送らず、リサイズ＋WebP圧縮してから送る
+    await appendImageToFormData(fd, 'file', file)
     const res = await fetch('/api/upload', { method: 'POST', body: fd })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -304,7 +306,7 @@ function AdminReportDetail({
           {images.map((url, i) => (
             // eslint-disable-next-line @next/next/no-img-element
             <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-              <img src={url} alt={`添付${i + 1}`} style={{ maxWidth: 200, maxHeight: 160, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
+              <img loading="lazy" decoding="async" src={url} alt={`添付${i + 1}`} style={{ maxWidth: 200, maxHeight: 160, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
             </a>
           ))}
         </div>
@@ -329,7 +331,7 @@ function AdminReportDetail({
                     {cImages.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        <img src={url} alt="" style={{ maxWidth: 120, maxHeight: 90, borderRadius: 6, objectFit: 'cover', display: 'block' }} />
+                        <img loading="lazy" decoding="async" src={url} alt="" style={{ maxWidth: 120, maxHeight: 90, borderRadius: 6, objectFit: 'cover', display: 'block' }} />
                       </a>
                     ))}
                   </div>

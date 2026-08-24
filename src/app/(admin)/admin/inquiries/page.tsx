@@ -374,7 +374,7 @@ function DetailPane({ inquiry, onStatusChange }: { inquiry: Inquiry; onStatusCha
                 <div key={memo.id} style={{ background: 'var(--md-sys-color-surface-container-high)', borderRadius: 8, overflow: 'hidden' }}>
                   {urls[0] ? (
                     <a href={urls[0]} target="_blank" rel="noreferrer">
-                      <img src={urls[0]} alt={memo.title} style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
+                      <img loading="lazy" decoding="async" src={urls[0]} alt={memo.title} style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
                     </a>
                   ) : (
                     <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, opacity: 0.4 }}>📷</div>

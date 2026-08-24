@@ -120,7 +120,7 @@ export default function Composer({
               >
                 {p.kind === 'image' && p.url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.url} alt={p.name} style={{ width: 60, height: 60, objectFit: 'cover', display: 'block', opacity: p.uploading ? 0.5 : 1 }} />
+                  <img loading="lazy" decoding="async" src={p.url} alt={p.name} style={{ width: 60, height: 60, objectFit: 'cover', display: 'block', opacity: p.uploading ? 0.5 : 1 }} />
                 ) : (
                   <span style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface)', opacity: p.uploading ? 0.5 : 1 }}>
                     {p.uploading ? 'アップロード中…' : `📎 ${p.name}`}

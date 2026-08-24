@@ -326,7 +326,7 @@ export default function StoreOrganizationPage() {
                 <Card key={s.id} variant="elevated" padding="md">
                   <div className="flex items-start gap-3">
                     {s.avatar ? (
-                      <img src={s.avatar} className="w-11 h-11 rounded-full object-cover shrink-0" alt="" />
+                      <img loading="lazy" decoding="async" src={s.avatar} className="w-11 h-11 rounded-full object-cover shrink-0" alt="" />
                     ) : (
                       <div className="w-11 h-11 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                         <span className="text-white text-sm font-semibold">{s.name[0]}</span>
@@ -381,7 +381,7 @@ export default function StoreOrganizationPage() {
                     {storeMembers.map(m => (
                       <div key={m.id} className="flex items-center gap-3 px-4 py-3 bg-[var(--md-sys-color-surface)]">
                         {m.avatar ? (
-                          <img src={m.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
+                          <img loading="lazy" decoding="async" src={m.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
                         ) : (
                           <div className="w-9 h-9 rounded-full bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center shrink-0">
                             <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)]">{m.name[0]}</span>

@@ -219,7 +219,7 @@ export default function StoreLinePage() {
                     <div className="flex items-center gap-2.5">
                       {u.pictureUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={u.pictureUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        <img loading="lazy" decoding="async" src={u.pictureUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full object-cover shrink-0" />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center shrink-0">👤</div>
                       )}
@@ -272,7 +272,7 @@ export default function StoreLinePage() {
                   </button>
                   {selectedUser.pictureUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                    <img loading="lazy" decoding="async" src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover shrink-0" />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center shrink-0">👤</div>
                   )}
@@ -323,7 +323,7 @@ export default function StoreLinePage() {
                             {msg.messageType === 'image' && msg.imageUrl ? (
                               <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={msg.imageUrl} alt="LINE画像" className="block max-w-[240px] max-h-[320px] rounded-xl object-cover" />
+                                <img loading="lazy" decoding="async" src={msg.imageUrl} alt="LINE画像" className="block max-w-[240px] max-h-[320px] rounded-xl object-cover" />
                               </a>
                             ) : (
                               <p className="whitespace-pre-wrap break-words">

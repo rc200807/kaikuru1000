@@ -11,6 +11,7 @@ import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import PasskeyManager from '@/components/PasskeyManager'
 import DeviceSessionList from '@/components/DeviceSessionList'
+import { appendImageToFormData } from '@/lib/image-utils'
 
 export default function AdminProfilePage() {
   const { data: session, status, update } = useSession()
@@ -61,7 +62,8 @@ export default function AdminProfilePage() {
     if (name)     fd.append('name', name)
     if (email)    fd.append('email', email)
     if (password) fd.append('password', password)
-    if (avatarFile) fd.append('avatar', avatarFile)
+    // アバターは長辺1024pxに縮めてWebPで送る（サーバー側の5MB上限に引っかかるのを防ぐ）
+    if (avatarFile) await appendImageToFormData(fd, 'avatar', avatarFile, { maxDimension: 1024 })
 
     const res = await fetch('/api/admin/profile', { method: 'PATCH', body: fd })
     setSaving(false)
@@ -115,7 +117,7 @@ export default function AdminProfilePage() {
                 className="relative group"
               >
                 {avatarPreview ? (
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={avatarPreview}
                     className="w-24 h-24 rounded-full object-cover border-4 border-[var(--md-sys-color-outline-variant)] group-hover:opacity-80 transition-opacity"
                     alt="アイコン"

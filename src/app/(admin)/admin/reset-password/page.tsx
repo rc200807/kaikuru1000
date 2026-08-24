@@ -143,8 +143,8 @@ export default function AdminResetPasswordPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
-            <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
-            <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
+            <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
+            <img loading="lazy" decoding="async" src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
           </Link>
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">パスワード再設定</p>
         </div>

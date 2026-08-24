@@ -7,7 +7,7 @@ import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
 import MessageBanner from '@/components/MessageBanner'
 import TurnstileWidget from '@/components/TurnstileWidget'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { compressImageIfNeeded } from '@/lib/image-utils'
 import ConversionBeacon from '@/components/tracking/ConversionBeacon'
 
 const INQUIRY_TYPES = [
@@ -147,7 +147,7 @@ export default function InquiryPage() {
   async function handleFileChange(index: number, file: File | null) {
     if (!file) return
     try {
-      const converted = await convertToJpegIfNeeded(file)
+      const converted = await compressImageIfNeeded(file)
       const preview = URL.createObjectURL(converted)
       setItems((prev) =>
         prev.map((item, i) => {
@@ -298,7 +298,7 @@ export default function InquiryPage() {
     <GlassBackground maxWidth="max-w-lg">
       {/* Header */}
       <div className="text-center mb-6">
-        <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
+        <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
         {storeLoading ? (
           <p className="text-sm text-gray-400">読み込み中...</p>
         ) : storeInfo ? (
@@ -465,7 +465,7 @@ export default function InquiryPage() {
                     className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-red-300 transition-colors bg-gray-50/50"
                   >
                     {item.preview ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={item.preview}
                         alt="プレビュー"
                         className="w-full h-full object-cover rounded-lg"

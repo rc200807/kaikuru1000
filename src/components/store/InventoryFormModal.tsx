@@ -241,7 +241,7 @@ export default function InventoryFormModal({ open, onClose, mode, itemId, purcha
               <div className="flex gap-2 flex-wrap">
                 {form.imageUrls.map((url, idx) => (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={idx} src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
+                  <img loading="lazy" decoding="async" key={idx} src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
                 ))}
                 {form.imageUrls.length === 0 && (
                   <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">画像なし</span>
@@ -254,7 +254,7 @@ export default function InventoryFormModal({ open, onClose, mode, itemId, purcha
               {form.imageUrls.map((url, idx) => (
                 <div key={idx} className="relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
+                  <img loading="lazy" decoding="async" src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
                   <button
                     type="button"
                     onClick={() => removeImage(idx)}

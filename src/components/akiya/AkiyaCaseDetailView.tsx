@@ -540,7 +540,7 @@ export default function AkiyaCaseDetailView({
                 <div key={`${url}-${idx}`} className="relative aspect-square">
                   <button type="button" onClick={() => setLightboxUrl(url)} className="w-full h-full">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt={`物件写真 ${idx + 1}`} className="w-full h-full object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
+                    <img loading="lazy" decoding="async" src={url} alt={`物件写真 ${idx + 1}`} className="w-full h-full object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
                   </button>
                   <button
                     type="button"
@@ -648,7 +648,7 @@ export default function AkiyaCaseDetailView({
                                   {itemPhotos.map((url, i) => (
                                     <button key={`${url}-${i}`} type="button" onClick={() => setLightboxUrl(url)}>
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={url} alt={`${item.itemName} ${i + 1}`} className="w-16 h-16 object-cover rounded-md border border-[var(--md-sys-color-outline-variant)]" />
+                                      <img loading="lazy" decoding="async" src={url} alt={`${item.itemName} ${i + 1}`} className="w-16 h-16 object-cover rounded-md border border-[var(--md-sys-color-outline-variant)]" />
                                     </button>
                                   ))}
                                 </div>
@@ -696,7 +696,7 @@ export default function AkiyaCaseDetailView({
           onClick={() => setLightboxUrl(null)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightboxUrl} alt="拡大表示" className="max-w-full max-h-full object-contain rounded-lg" />
+          <img loading="lazy" decoding="async" src={lightboxUrl} alt="拡大表示" className="max-w-full max-h-full object-contain rounded-lg" />
           <button
             type="button"
             onClick={() => setLightboxUrl(null)}

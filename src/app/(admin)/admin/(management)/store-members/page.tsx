@@ -160,7 +160,7 @@ export default function AdminStoreMembersPage() {
                 <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', background: 'var(--md-sys-color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {m.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.avatar} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img loading="lazy" decoding="async" src={m.avatar} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--md-sys-color-on-surface-variant)' }}>
                       {(m.name || '?').charAt(0).toUpperCase()}

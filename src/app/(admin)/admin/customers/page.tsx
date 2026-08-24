@@ -2019,7 +2019,7 @@ export default function AdminCustomersPage() {
                           className="block"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={`/api/users/${detailUser.id}/id-document`}
                             alt="身分証明書（表面）"
                             className="max-w-full max-h-48 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-contain cursor-pointer hover:opacity-80 transition-opacity"
@@ -2038,7 +2038,7 @@ export default function AdminCustomersPage() {
                             className="block"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={`/api/users/${detailUser.id}/id-document/back`}
                               alt="身分証明書（裏面）"
                               className="max-w-full max-h-48 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-contain cursor-pointer hover:opacity-80 transition-opacity"
@@ -2058,7 +2058,7 @@ export default function AdminCustomersPage() {
                             className="block"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={detailUser.idFacePhotoPath}
                               alt="顔写真"
                               className="w-20 h-20 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-cover cursor-pointer hover:opacity-80 transition-opacity"
@@ -2350,7 +2350,7 @@ export default function AdminCustomersPage() {
                             className="block"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={`/api/users/${detailUser.id}/proof-document`}
                               alt="住所証明書類"
                               className="max-w-full max-h-48 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] object-contain cursor-pointer hover:opacity-80 transition-opacity"

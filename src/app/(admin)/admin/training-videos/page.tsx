@@ -633,7 +633,7 @@ export default function AdminTrainingVideosPage() {
                   </p>
                   {videoForm.thumbnailUrl ? (
                     <div className="flex items-start gap-3">
-                      <img src={videoForm.thumbnailUrl} alt="" className="w-40 h-auto rounded-lg object-cover" />
+                      <img loading="lazy" decoding="async" src={videoForm.thumbnailUrl} alt="" className="w-40 h-auto rounded-lg object-cover" />
                       <button
                         type="button"
                         onClick={() => {

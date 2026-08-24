@@ -320,7 +320,7 @@ export default function NavigationDrawer() {
       {/* Header branding */}
       <div className="px-4 pt-5 pb-4">
         <Link href="/admin/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-          <img src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0 brightness-0 invert" />
+          <img loading="lazy" decoding="async" src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0 brightness-0 invert" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[#ededed] truncate">買いクル</p>
             <p className="text-[10px] text-[#666666]">管理ポータル</p>
@@ -415,7 +415,7 @@ export default function NavigationDrawer() {
           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1a1a1a] transition-colors"
         >
           {user?.avatar ? (
-            <img src={user.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
+            <img loading="lazy" decoding="async" src={user.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
           ) : (
             <div className="w-9 h-9 rounded-full bg-[#ffffff] flex items-center justify-center shrink-0">
               <span className="text-[#171717] text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>

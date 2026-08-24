@@ -10,7 +10,7 @@ import Card from '@/components/Card'
 import MessageBanner from '@/components/MessageBanner'
 import Modal from '@/components/Modal'
 import dynamic from 'next/dynamic'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { compressImageIfNeeded } from '@/lib/image-utils'
 import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
 import { isSelectableVisitStatus } from '@/lib/visit-status'
 
@@ -282,7 +282,7 @@ export default function VisitDetailPage() {
     const newUrls = [...purchaseForm.imageUrls]
 
     for (let i = 0; i < Math.min(files.length, remaining); i++) {
-      const converted = await convertToJpegIfNeeded(files[i])
+      const converted = await compressImageIfNeeded(files[i])
       const fd = new FormData()
       fd.append('file', converted)
       const res = await fetch('/api/purchase-items/images', { method: 'POST', body: fd })
@@ -567,7 +567,7 @@ export default function VisitDetailPage() {
           <div className="flex gap-2 mt-1 flex-wrap">
             {purchaseForm.imageUrls.map((url, idx) => (
               <div key={idx} className="relative">
-                <img src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
+                <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
                 <button
                   onClick={() => removeImage(idx)}
                   className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--md-sys-color-error)] text-white text-xs flex items-center justify-center"
@@ -926,7 +926,7 @@ export default function VisitDetailPage() {
                     <div className="flex gap-1 flex-shrink-0">
                       {item.imageUrls.map((url, i) => (
                         <div key={i} className="relative w-12 h-12 overflow-hidden rounded">
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={url}
                             alt=""
                             className={`w-full h-full object-cover border border-[var(--md-sys-color-outline-variant)] rounded ${researchingItemId === item.id ? 'animate-pulse' : ''}`}

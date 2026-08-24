@@ -236,7 +236,7 @@ export default function InventoryListTab() {
                   </td>
                   <td style={{ padding: '8px 16px' }}>
                     {p.imageUrl
-                      ? <img src={p.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />
+                      ? <img loading="lazy" decoding="async" src={p.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />
                       : <div style={{ width: 48, height: 48, borderRadius: 6, background: 'var(--md-sys-color-surface-container)', border: '1px solid var(--md-sys-color-outline-variant)' }} />}
                   </td>
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>{p.name}</td>

@@ -346,7 +346,7 @@ export default function StoreDeliveryDetailPage() {
               <div className="flex flex-wrap gap-2">
                 {shipment.imageUrls.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={url}
                       alt={`荷物写真 ${i + 1}`}
                       className="w-20 h-20 object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)] hover:opacity-80 transition-opacity"
@@ -363,7 +363,7 @@ export default function StoreDeliveryDetailPage() {
               <div className="flex flex-wrap gap-2">
                 {shipment.trackingImageUrls.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={url}
                       alt={`伝票写真 ${i + 1}`}
                       className="w-20 h-20 object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)] hover:opacity-80 transition-opacity"

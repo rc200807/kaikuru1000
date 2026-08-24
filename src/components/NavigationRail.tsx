@@ -60,7 +60,7 @@ export default function NavigationRail() {
       {/* Header branding */}
       <div className="px-4 pt-5 pb-4">
         <Link href="/store/dashboard" className="flex items-center gap-2.5">
-          <img src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0" />
+          <img loading="lazy" decoding="async" src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">買いクル</p>
             <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">店舗ポータル</p>
@@ -138,7 +138,7 @@ export default function NavigationRail() {
                           )}
                         </span>
                         {store.avatar ? (
-                          <img src={store.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
+                          <img loading="lazy" decoding="async" src={store.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                             <span className="text-white text-[9px] font-semibold">{store.name[0]}</span>
@@ -175,7 +175,7 @@ export default function NavigationRail() {
                         } disabled:opacity-70`}
                       >
                         {store.avatar ? (
-                          <img src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
+                          <img loading="lazy" decoding="async" src={store.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" alt="" />
                         ) : (
                           <div className="w-7 h-7 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                             <span className="text-white text-[10px] font-semibold">{store.name[0]}</span>
@@ -253,7 +253,7 @@ export default function NavigationRail() {
           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
         >
           {user?.avatar ? (
-            <img src={user.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
+            <img loading="lazy" decoding="async" src={user.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
           ) : (
             <div className="w-9 h-9 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
               <span className="text-white text-sm font-semibold">{user?.name?.[0] ?? '?'}</span>

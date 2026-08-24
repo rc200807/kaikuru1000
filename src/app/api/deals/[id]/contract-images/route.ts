@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { uploadFile, deleteFile } from '@/lib/storage'
+import { deleteFile } from '@/lib/storage'
+import { saveImage } from '@/lib/image-server'
 import { recordAccessLog } from '@/lib/access-log'
 
 // 紙で作成した売買契約書の写真（案件に紐づく）のアップロード・削除。
@@ -47,8 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!ALLOWED_TYPES.includes(file.type)) return NextResponse.json({ error: 'JPEG/PNG/WebP/HEIC形式のみ対応しています' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const ext = file.type.split('/')[1] || 'jpg'
-  const url = await uploadFile(buffer, `deal-contracts/${id}_${Date.now()}.${ext}`, file.type)
+  const { url } = await saveImage(buffer, `deal-contracts/${id}_${Date.now()}`, file.type)
 
   const list = parseImages(access.deal.paperContractImages)
   list.push(url)

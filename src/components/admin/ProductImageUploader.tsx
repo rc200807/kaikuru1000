@@ -59,7 +59,7 @@ export default function ProductImageUploader({ value, onChange, onError, disable
         }}
       >
         {value
-          ? <img src={value} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img loading="lazy" decoding="async" src={value} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <span style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>未設定</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

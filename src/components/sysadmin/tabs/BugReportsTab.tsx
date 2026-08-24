@@ -158,7 +158,7 @@ export default function BugReportsTab() {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                     {parseImages(detail.report.imageUrls).map((url, i) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        <img src={url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)' }} />
+                        <img loading="lazy" decoding="async" src={url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)' }} />
                       </a>
                     ))}
                   </div>
@@ -179,7 +179,7 @@ export default function BugReportsTab() {
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                             {parseImages(c.imageUrls).map((url, i) => (
                               <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                                <img src={url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />
+                                <img loading="lazy" decoding="async" src={url} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--md-sys-color-outline-variant)' }} />
                               </a>
                             ))}
                           </div>

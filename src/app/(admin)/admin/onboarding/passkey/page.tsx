@@ -88,8 +88,8 @@ export default function AdminPasskeyOnboardingPage() {
     <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
-          <img src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
+          <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-8 mx-auto dark:hidden" />
+          <img loading="lazy" decoding="async" src="/logo-white.svg" alt="買いクル" className="h-8 mx-auto hidden dark:block" />
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">初回セットアップ</p>
         </div>
 

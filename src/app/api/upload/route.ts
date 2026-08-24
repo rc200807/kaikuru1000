@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { uploadFile } from '@/lib/storage'
+import { saveImage } from '@/lib/image-server'
 import { v4 as uuidv4 } from 'uuid'
 
 // 画像アップロード（管理者・店舗から利用）
@@ -25,9 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const ext = file.name.split('.').pop() || 'jpg'
-    const filename = `announcements/${uuidv4()}.${ext}`
-    const url = await uploadFile(buffer, filename, file.type)
+    const { url } = await saveImage(buffer, `announcements/${uuidv4()}`, file.type)
 
     return NextResponse.json({ url })
   } catch (error) {

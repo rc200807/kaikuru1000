@@ -438,7 +438,7 @@ export default function AkiyaRecordForm({
                 {d.photos.map(p => (
                   <div key={p.key} className="relative w-20 h-20">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <img loading="lazy" decoding="async"
                       src={p.previewUrl}
                       alt=""
                       className={`w-20 h-20 object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)] ${p.status !== 'done' ? 'opacity-50' : ''}`}

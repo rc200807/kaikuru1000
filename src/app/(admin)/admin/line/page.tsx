@@ -1282,7 +1282,7 @@ export default function LineManagePage() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     {u.pictureUrl ? (
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={u.pictureUrl}
                         alt=""
                         referrerPolicy="no-referrer"
@@ -1338,7 +1338,7 @@ export default function LineManagePage() {
               <div style={{ ...colStyle.header, flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {selectedUser.pictureUrl ? (
-                    <img src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                    <img loading="lazy" decoding="async" src={selectedUser.pictureUrl} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--md-sys-color-surface-container-high)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
                   )}
@@ -1391,7 +1391,7 @@ export default function LineManagePage() {
                               return (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <a href={src} target="_blank" rel="noopener noreferrer" style={{ display: 'block' }}>
-                                  <img
+                                  <img loading="lazy" decoding="async"
                                     src={src}
                                     alt="LINE画像"
                                     style={{ display: 'block', maxWidth: 240, maxHeight: 320, borderRadius: 12, objectFit: 'cover' }}

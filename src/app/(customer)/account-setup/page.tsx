@@ -126,7 +126,7 @@ export default function AccountSetupPage() {
   return (
     <GlassBackground>
       <div className="text-center mb-6">
-        <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
+        <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
         <p className="text-sm text-gray-500 mt-1">マイページ用パスワードの設定</p>
       </div>
       <Suspense fallback={<div className="text-center py-8 text-gray-500">読み込み中...</div>}>

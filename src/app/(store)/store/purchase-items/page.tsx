@@ -166,7 +166,7 @@ export default function StorePurchaseItemsPage() {
                 <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-[var(--md-sys-color-surface-container)] flex items-center justify-center">
                   {item.images[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.images[0]} alt={item.itemName} className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src={item.images[0]} alt={item.itemName} className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-2xl opacity-30">📦</span>
                   )}

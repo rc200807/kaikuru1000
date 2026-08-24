@@ -14,7 +14,7 @@ import StatusBadge from '@/components/StatusBadge'
 import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import BankSearch from '@/components/customer/BankSearch'
-import { convertToJpegIfNeeded, createPreviewUrl } from '@/lib/image-utils'
+import { convertToJpegIfNeeded, createPreviewUrl, appendImageToFormData } from '@/lib/image-utils'
 import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, customerView, type CustomerType } from '@/lib/customer-types'
 import { calcAge, needsFamilyConsent, isMinorBlockedFromDelivery } from '@/lib/age'
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
@@ -706,7 +706,7 @@ function MyPageContent() {
     if (!file) return
     setUploadingImage(true)
     const formData = new FormData()
-    formData.append('file', file)
+    await appendImageToFormData(formData, 'file', file)
     const res = await fetch('/api/purchase-memos/images', { method: 'POST', body: formData })
     if (res.ok) {
       const data = await res.json()
@@ -868,7 +868,7 @@ function MyPageContent() {
     try {
       // 1. 写真アップロード
       const formData = new FormData()
-      formData.append('file', tryPhoto)
+      await appendImageToFormData(formData, 'file', tryPhoto)
       const uploadRes = await fetch('/api/purchase-memos/images', { method: 'POST', body: formData })
       if (!uploadRes.ok) {
         const d = await uploadRes.json()
@@ -1993,7 +1993,7 @@ function MyPageContent() {
                         <p className="text-xs text-gray-400 mb-5">JPEG・PNG・WebP・HEIC対応</p>
                         {tryPhotoPreview ? (
                           <div className="relative inline-block">
-                            <img src={tryPhotoPreview} alt="プレビュー" className="w-64 h-64 object-cover rounded-2xl shadow-md" />
+                            <img loading="lazy" decoding="async" src={tryPhotoPreview} alt="プレビュー" className="w-64 h-64 object-cover rounded-2xl shadow-md" />
                             <button
                               onClick={() => { setTryPhoto(null); setTryPhotoPreview('') }}
                               className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
@@ -2031,7 +2031,7 @@ function MyPageContent() {
                       <div className="p-6">
                         <p className="font-semibold text-gray-800 mb-1 text-center">アイテム名を入力</p>
                         <p className="text-xs text-gray-400 mb-5 text-center">ブランド名・商品名を入力してください</p>
-                        <img src={tryPhotoPreview} alt="プレビュー" className="w-24 h-24 object-cover rounded-xl mx-auto mb-5 shadow-md" />
+                        <img loading="lazy" decoding="async" src={tryPhotoPreview} alt="プレビュー" className="w-24 h-24 object-cover rounded-xl mx-auto mb-5 shadow-md" />
                         <input
                           value={tryItemName}
                           onChange={e => setTryItemName(e.target.value)}
@@ -2086,7 +2086,7 @@ function MyPageContent() {
                         </div>
 
                         {/* 写真と名前 */}
-                        <img src={tryPhotoPreview} alt="アイテム" className="w-32 h-32 object-cover rounded-xl mx-auto mb-3 shadow-md" />
+                        <img loading="lazy" decoding="async" src={tryPhotoPreview} alt="アイテム" className="w-32 h-32 object-cover rounded-xl mx-auto mb-3 shadow-md" />
                         <p className="text-center font-medium text-gray-800 mb-4">{tryItemName}</p>
 
                         {/* AI結果表示 */}
@@ -2878,7 +2878,7 @@ function MyPageContent() {
                         {proofPreview ? (
                           <div className="flex items-center gap-3">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={proofPreview} alt="プレビュー" className="w-24 h-16 object-cover rounded border border-gray-200" />
+                            <img loading="lazy" decoding="async" src={proofPreview} alt="プレビュー" className="w-24 h-16 object-cover rounded border border-gray-200" />
                             <button
                               onClick={() => { setProofFile(null); setProofPreview('') }}
                               className="text-xs text-red-600 underline"
@@ -2974,7 +2974,7 @@ function MyPageContent() {
                       <div className="flex justify-center">
                         <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-[var(--md-sys-color-outline-variant)] shadow-inner">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={selfiePreview} alt="撮影プレビュー" className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={selfiePreview} alt="撮影プレビュー" className="w-full h-full object-cover" />
                         </div>
                       </div>
                       <div className="flex justify-center gap-3">
@@ -3162,7 +3162,7 @@ function MyPageContent() {
                         <div className="mb-5">
                           <div className="relative inline-block">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={frontPreview}
                               alt="表面プレビュー"
                               className="max-h-48 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] object-contain"
@@ -3240,7 +3240,7 @@ function MyPageContent() {
                         <div className="mb-5">
                           <div className="relative inline-block">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={backPreview}
                               alt="裏面プレビュー"
                               className="max-h-48 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] object-contain"
@@ -3332,7 +3332,7 @@ function MyPageContent() {
                             {frontPreview && (
                               <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface-container)]">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
+                                <img loading="lazy" decoding="async"
                                   src={frontPreview}
                                   alt="表面"
                                   className="w-full max-h-40 object-contain"
@@ -3350,7 +3350,7 @@ function MyPageContent() {
                                 <>
                                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] overflow-hidden bg-[var(--md-sys-color-surface-container)]">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
+                                  <img loading="lazy" decoding="async"
                                     src={backPreview}
                                     alt="裏面"
                                     className="w-full max-h-40 object-contain"
@@ -4188,7 +4188,8 @@ function ShipmentCard({
     if (!file) return
     setUploading(true)
     const formData = new FormData()
-    formData.append('file', file)
+    // 原本をそのまま送らず、リサイズ＋WebP圧縮してから送る（電波の弱い場所での待ち時間対策）
+    await appendImageToFormData(formData, 'file', file)
     const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: formData })
     if (res.ok) {
       const data = await res.json()
@@ -4206,7 +4207,8 @@ function ShipmentCard({
     if (!file) return
     setUploading(true)
     const formData = new FormData()
-    formData.append('file', file)
+    // 原本をそのまま送らず、リサイズ＋WebP圧縮してから送る（電波の弱い場所での待ち時間対策）
+    await appendImageToFormData(formData, 'file', file)
     const res = await fetch('/api/delivery-shipments/images', { method: 'POST', body: formData })
     if (res.ok) {
       const data = await res.json()
@@ -4428,7 +4430,7 @@ function ShipmentCard({
                       <div className="flex flex-wrap gap-2">
                         {boxImages.map((url, i) => (
                           <div key={i} className="relative w-20 h-20">
-                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg" />
+                            <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt="" className="w-20 h-20 object-cover rounded-lg" />
                             <button type="button" onClick={() => setBoxImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">×</button>
                           </div>
                         ))}
@@ -4461,7 +4463,7 @@ function ShipmentCard({
                       <div className="flex flex-wrap gap-2">
                         {slipImages.map((url, i) => (
                           <div key={`slip-edit-${i}`} className="relative w-20 h-20">
-                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg" />
+                            <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt="" className="w-20 h-20 object-cover rounded-lg" />
                             <button type="button" onClick={() => setSlipImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">×</button>
                           </div>
                         ))}
@@ -4510,7 +4512,7 @@ function ShipmentCard({
                       <div className="flex flex-wrap gap-2">
                         {boxImages.map((url, i) => (
                           <div key={i} className="relative w-20 h-20">
-                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                            <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
                             <button
                               type="button"
                               onClick={() => setBoxImages(prev => prev.filter((_, j) => j !== i))}
@@ -4583,7 +4585,7 @@ function ShipmentCard({
                     <div className="rounded-2xl border border-gray-200 bg-white p-3">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">伝票の記入例</p>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/slip-example.svg" alt="伝票の記入例：品名欄に内容物と発送IDを記入" className="w-full rounded-lg" />
+                      <img loading="lazy" decoding="async" src="/slip-example.svg" alt="伝票の記入例：品名欄に内容物と発送IDを記入" className="w-full rounded-lg" />
                       <p className="text-[10px] text-gray-400 mt-1.5 text-center">品名欄に内容物と発送IDを記入してください</p>
                     </div>
 
@@ -4617,7 +4619,7 @@ function ShipmentCard({
                       <div className="flex flex-wrap gap-2">
                         {slipImages.map((url, i) => (
                           <div key={`slip-${i}`} className="relative w-20 h-20">
-                            <img src={url} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
+                            <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt="" className="w-20 h-20 object-cover rounded-[var(--md-sys-shape-small)]" />
                             <button
                               type="button"
                               onClick={() => setSlipImages(prev => prev.filter((_, j) => j !== i))}
@@ -4799,7 +4801,7 @@ function ShipmentCard({
                   onClick={() => setLightboxIndex(i)}
                   className="relative w-24 h-24 rounded-[var(--md-sys-shape-small)] overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]"
                 >
-                  <img src={url} alt={`画像 ${i + 1}`} className="w-full h-full object-cover" />
+                  <img loading="lazy" decoding="async" src={url} alt={`画像 ${i + 1}`} className="w-full h-full object-cover" />
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
                     <svg className="w-6 h-6 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0zm-2 0a4 4 0 10-8 0 4 4 0 008 0z" />
@@ -4850,7 +4852,7 @@ function ShipmentCard({
           </button>
         )}
         <div className="max-w-[90vw] max-h-[85vh] flex items-center justify-center" onClick={e => e.stopPropagation()}>
-          <img
+          <img loading="lazy" decoding="async"
             src={allImages[lightboxIndex]}
             alt={`画像 ${lightboxIndex + 1}`}
             className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
@@ -4969,7 +4971,7 @@ function MemoCard({
                 onClick={() => setLightboxIndex(i)}
                 className="relative w-20 h-20 rounded-lg overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]"
               >
-                <img src={url} alt={`画像 ${i + 1}`} className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={url} alt={`画像 ${i + 1}`} className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
@@ -5121,7 +5123,7 @@ function MemoCard({
             className="max-w-[90vw] max-h-[85vh] flex items-center justify-center"
             onClick={e => e.stopPropagation()}
           >
-            <img
+            <img loading="lazy" decoding="async"
               src={memo.imageUrls[lightboxIndex]}
               alt={`画像 ${lightboxIndex + 1}`}
               className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"

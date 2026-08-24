@@ -6,8 +6,8 @@ export default function Home() {
       <div className="w-full max-w-sm text-center">
         {/* Brand */}
         <h1 className="mb-1">
-          <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto dark:hidden" />
-          <img src="/logo-white.svg" alt="買いクル" className="h-10 mx-auto hidden dark:block" />
+          <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-10 mx-auto dark:hidden" />
+          <img loading="lazy" decoding="async" src="/logo-white.svg" alt="買いクル" className="h-10 mx-auto hidden dark:block" />
         </h1>
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant,#49454F)] mb-10">
           定期訪問サービス

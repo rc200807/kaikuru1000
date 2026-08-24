@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { uploadFile, deleteFile } from '@/lib/storage'
+import { deleteFile } from '@/lib/storage'
+import { saveImage } from '@/lib/image-server'
 import { recordAccessLog } from '@/lib/access-log'
 import { parsePhotoUrls, AKIYA_CASE_PHOTO_LIMIT } from '@/lib/akiya-items'
 import { resolveAkiyaCaseAccess } from '@/lib/akiya-access'
@@ -34,8 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!ALLOWED_TYPES.includes(file.type)) return NextResponse.json({ error: 'JPEG/PNG/WebP/HEIC形式のみ対応しています' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const ext = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
-  const url = await uploadFile(buffer, `akiya-cases/${id}_${Date.now()}.${ext}`, file.type)
+  const { url } = await saveImage(buffer, `akiya-cases/${id}_${Date.now()}`, file.type)
 
   list.push(url)
   await prisma.akiyaCase.update({ where: { id }, data: { photoUrls: JSON.stringify(list) } })

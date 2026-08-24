@@ -55,7 +55,7 @@ export default function SysAdminLoginPage() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#0a0a0a' }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <img src="/icon.svg" alt="買いクル" className="w-12 h-12 mx-auto rounded-xl brightness-0 invert" />
+          <img loading="lazy" decoding="async" src="/icon.svg" alt="買いクル" className="w-12 h-12 mx-auto rounded-xl brightness-0 invert" />
           <p className="text-xs font-medium text-[#666666] tracking-widest uppercase mt-4">System Administrator</p>
           <p className="text-base font-semibold text-[#ededed] mt-1">システム管理者ログイン</p>
         </div>

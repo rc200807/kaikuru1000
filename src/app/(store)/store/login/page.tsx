@@ -64,7 +64,7 @@ export default function StoreLoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
-            <img src="/logo.svg" alt="買いクル" className="h-8 mx-auto" />
+            <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-8 mx-auto" />
           </Link>
           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">店舗スタッフ ログイン</p>
         </div>

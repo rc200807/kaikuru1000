@@ -240,7 +240,7 @@ export default function RegisterPage() {
     <GlassBackground maxWidth="max-w-lg">
       {/* Title */}
       <div className="text-center mb-6">
-        <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
+        <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
         <p className="text-sm text-gray-500 mt-1">新規登録</p>
       </div>
 
@@ -467,7 +467,7 @@ export default function RegisterPage() {
                 {frontFile ? `選択済: ${frontFile.name}` : '画像を選択'}
               </button>
               {frontPreview && (
-                <img src={frontPreview} alt="表面プレビュー" className="mt-2 max-h-40 rounded-md border border-white/60" />
+                <img loading="lazy" decoding="async" src={frontPreview} alt="表面プレビュー" className="mt-2 max-h-40 rounded-md border border-white/60" />
               )}
             </div>
           )}
@@ -493,7 +493,7 @@ export default function RegisterPage() {
                 {backFile ? `選択済: ${backFile.name}` : '画像を選択'}
               </button>
               {backPreview && (
-                <img src={backPreview} alt="裏面プレビュー" className="mt-2 max-h-40 rounded-md border border-white/60" />
+                <img loading="lazy" decoding="async" src={backPreview} alt="裏面プレビュー" className="mt-2 max-h-40 rounded-md border border-white/60" />
               )}
             </div>
           )}

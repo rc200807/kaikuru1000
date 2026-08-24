@@ -428,7 +428,7 @@ function DetailPane({
                 <div key={memo.id} className="bg-[var(--md-sys-color-surface-container)] rounded-lg overflow-hidden">
                   {urls[0] ? (
                     <a href={urls[0]} target="_blank" rel="noreferrer" className="block">
-                      <img src={urls[0]} alt={memo.title} className="w-full h-28 object-cover" />
+                      <img loading="lazy" decoding="async" src={urls[0]} alt={memo.title} className="w-full h-28 object-cover" />
                     </a>
                   ) : (
                     <div className="h-28 flex items-center justify-center text-2xl opacity-40">📷</div>

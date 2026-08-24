@@ -291,7 +291,7 @@ export default function PurchaseItemManager({
                         title={`${item.itemName} の画像を拡大`}
                         aria-label={`${item.itemName} の画像${item.imageUrls.length > 1 ? ` ${i + 1}枚目` : ''}を拡大表示`}
                       >
-                        <img src={url} alt="" className={`w-full h-full object-cover border border-[var(--md-sys-color-outline-variant)] rounded ${researchingItemId === item.id ? 'animate-pulse' : ''}`} />
+                        <img loading="lazy" decoding="async" src={url} alt="" className={`w-full h-full object-cover border border-[var(--md-sys-color-outline-variant)] rounded ${researchingItemId === item.id ? 'animate-pulse' : ''}`} />
                       </button>
                     ))}
                   </div>
@@ -435,7 +435,7 @@ export default function PurchaseItemManager({
             <div className="flex gap-2 mt-1 flex-wrap">
               {form.imageUrls.map((url, idx) => (
                 <div key={idx} className="relative">
-                  <img src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
+                  <img loading="lazy" decoding="async" src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
                   <button onClick={() => removeImage(idx)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--md-sys-color-error)] text-white text-xs flex items-center justify-center">×</button>
                 </div>
               ))}
@@ -507,7 +507,7 @@ export default function PurchaseItemManager({
           aria-modal="true"
           aria-label={`${lightbox.title} の画像`}
         >
-          <img
+          <img loading="lazy" decoding="async"
             src={lightbox.urls[lightbox.index]}
             alt={`${lightbox.title} の拡大画像`}
             className="max-w-full max-h-[75vh] object-contain rounded-lg"

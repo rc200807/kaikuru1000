@@ -1295,7 +1295,7 @@ export default function DealDetailView({
                   <div key={idx} className="relative">
                     <a href={url} target="_blank" rel="noopener noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`紙契約書 ${idx + 1}`} className="w-24 h-24 object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
+                      <img loading="lazy" decoding="async" src={`${url}?thumb=1`} alt={`紙契約書 ${idx + 1}`} className="w-24 h-24 object-cover rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
                     </a>
                     {editable && (
                       <button type="button" onClick={() => deletePaperContract(idx)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--md-sys-color-error)] text-white text-xs flex items-center justify-center shadow">×</button>

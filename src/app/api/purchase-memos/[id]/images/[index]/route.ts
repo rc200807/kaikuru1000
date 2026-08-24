@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { serveImageFromBlob } from '@/lib/image-proxy'
 
 /**
  * 買取相談メモ画像を認証プロキシ経由で配信
@@ -53,24 +54,6 @@ export async function GET(
 
   const blobUrl = blobUrls[index]
 
-  // ローカル開発（/uploads/...）: 静的ファイルにリダイレクト
-  if (!blobUrl.startsWith('https://')) {
-    return NextResponse.redirect(new URL(blobUrl, request.url))
-  }
-
-  // 本番: プロキシ配信（Blob URL をクライアントに露出しない）
-  try {
-    const res = await fetch(blobUrl)
-    if (!res.ok) return NextResponse.json({ error: '画像が見つかりません' }, { status: 404 })
-    const contentType = res.headers.get('content-type') || 'image/jpeg'
-    return new NextResponse(res.body, {
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'private, max-age=3600',
-        'Content-Disposition': 'inline',
-      },
-    })
-  } catch {
-    return NextResponse.json({ error: '画像の取得に失敗しました' }, { status: 500 })
-  }
+  // ?thumb=1 ならサムネを返す（無ければ本体にフォールバック）
+  return serveImageFromBlob(request, blobUrl)
 }

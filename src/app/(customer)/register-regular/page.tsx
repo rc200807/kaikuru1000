@@ -102,7 +102,7 @@ export default function RegisterRegularPage() {
     <GlassBackground maxWidth="max-w-lg">
       {/* Title */}
       <div className="text-center mb-6">
-        <img src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
+        <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-10 mx-auto mb-2" />
         <p className="text-sm text-gray-500 mt-1">通常会員 新規登録</p>
       </div>
 

@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { validateAvatarFile } from '@/lib/file-validation'
-import { uploadFile, deleteFile } from '@/lib/storage'
+import { deleteFile } from '@/lib/storage'
+import { saveImage } from '@/lib/image-server'
 import { revokeAllDeviceSessions } from '@/lib/device-session'
 import { autoSyncStoreRows } from '@/lib/sheet-sync'
 
@@ -60,11 +61,15 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: validation.error }, { status: 400 })
     }
     const bytes = await avatarFile.arrayBuffer()
-    avatarUrl = await uploadFile(
+    // Magic Number 検証済みのタイプで受け取り、WebP に正規化して保存する
+    // （アバターは一覧で何十枚も並ぶので、長辺512px・サムネ128pxに抑える）
+    const saved = await saveImage(
       Buffer.from(bytes),
-      `avatars/store-${Date.now()}.${validation.ext}`,
-      avatarFile.type, // Magic Number 検証済みの MIME タイプ
+      `avatars/store-${Date.now()}`,
+      avatarFile.type,
+      { maxDimension: 512, thumbDimension: 128 },
     )
+    avatarUrl = saved.url
   }
 
   // 店舗アカウント or 店舗メンバーを特定してアップデート

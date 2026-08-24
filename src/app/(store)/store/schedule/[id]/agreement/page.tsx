@@ -370,7 +370,7 @@ function IdDocumentUploadModal({
               className="block w-full text-xs text-[var(--md-sys-color-on-surface-variant)] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--portal-primary)] file:text-white hover:file:opacity-90"
             />
             {frontPreview && (
-              <img src={frontPreview} alt="前面プレビュー" className="mt-2 w-full max-h-56 object-contain rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
+              <img loading="lazy" decoding="async" src={frontPreview} alt="前面プレビュー" className="mt-2 w-full max-h-56 object-contain rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
             )}
           </div>
 
@@ -387,7 +387,7 @@ function IdDocumentUploadModal({
                 className="block w-full text-xs text-[var(--md-sys-color-on-surface-variant)] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[var(--portal-primary)] file:text-white hover:file:opacity-90"
               />
               {backPreview && (
-                <img src={backPreview} alt="裏面プレビュー" className="mt-2 w-full max-h-56 object-contain rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
+                <img loading="lazy" decoding="async" src={backPreview} alt="裏面プレビュー" className="mt-2 w-full max-h-56 object-contain rounded-lg border border-[var(--md-sys-color-outline-variant)]" />
               )}
             </div>
           )}

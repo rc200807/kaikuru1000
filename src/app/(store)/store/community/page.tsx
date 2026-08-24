@@ -10,7 +10,7 @@ import EmptyState from '@/components/EmptyState'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import Modal from '@/components/Modal'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { compressImageIfNeeded } from '@/lib/image-utils'
 
 type StoreInfo = { id: string; name: string; avatar: string | null }
 type Reaction = { emoji: string; count: number; reacted: boolean }
@@ -40,7 +40,7 @@ const PRESET_EMOJI = ['👍', '❤️', '🔥', '💡', '👏', '😊']
 function Avatar({ store, size = 'md' }: { store: StoreInfo; size?: 'sm' | 'md' }) {
   const dim = size === 'sm' ? 'w-8 h-8' : 'w-10 h-10'
   const text = size === 'sm' ? 'text-[10px]' : 'text-xs'
-  if (store.avatar) return <img src={store.avatar} className={`${dim} rounded-full object-cover flex-shrink-0`} alt="" />
+  if (store.avatar) return <img loading="lazy" decoding="async" src={store.avatar} className={`${dim} rounded-full object-cover flex-shrink-0`} alt="" />
   return (
     <div className={`${dim} rounded-full bg-[var(--store-primary)] flex items-center justify-center flex-shrink-0`}>
       <span className={`text-[var(--store-on-primary)] ${text} font-bold`}>{store.name[0]}</span>
@@ -63,7 +63,7 @@ function ImageGrid({ images, onOpen }: { images: string[]; onOpen: (url: string)
             images.length === 3 && i === 0 ? 'row-span-2' : ''
           }`}
         >
-          <img
+          <img loading="lazy" decoding="async"
             src={url}
             alt=""
             className={`w-full object-cover hover:brightness-95 transition ${
@@ -185,7 +185,7 @@ export default function CommunityPage() {
     setUploading(true)
     for (const file of Array.from(files).slice(0, 3 - newImages.length)) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name}: 10MB以下にしてください`); continue }
-      const converted = await convertToJpegIfNeeded(file)
+      const converted = await compressImageIfNeeded(file)
       const fd = new FormData()
       fd.append('file', converted)
       try {
@@ -420,7 +420,7 @@ export default function CommunityPage() {
               <div className="flex gap-2 mb-3 flex-wrap">
                 {newImages.map((url, i) => (
                   <div key={i} className="relative group">
-                    <img src={url} alt="" className="w-20 h-20 rounded-xl object-cover border border-[var(--md-sys-color-outline-variant)]" />
+                    <img loading="lazy" decoding="async" src={url} alt="" className="w-20 h-20 rounded-xl object-cover border border-[var(--md-sys-color-outline-variant)]" />
                     <button
                       type="button"
                       onClick={() => removeImage(i)}
@@ -458,7 +458,7 @@ export default function CommunityPage() {
           <button onClick={() => setLightboxUrl(null)} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
-          <img src={lightboxUrl} alt="" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+          <img loading="lazy" decoding="async" src={lightboxUrl} alt="" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
         </div>
       )}
 

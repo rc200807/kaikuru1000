@@ -324,7 +324,7 @@ export default function AdminPurchaseItemsPage() {
                     <div style={{ position: 'relative', width: 64, height: 64, borderRadius: 8, overflow: 'hidden', background: 'var(--md-sys-color-surface-container-high)', flexShrink: 0 }}>
                       {images[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={images[0]} alt={item.itemName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img loading="lazy" decoding="async" src={images[0]} alt={item.itemName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 10 }}>—</div>
                       )}
@@ -435,7 +435,7 @@ function DetailDrawer({ item, onClose }: { item: PurchaseItem; onClose: () => vo
             {images.map((url, i) => (
               // eslint-disable-next-line @next/next/no-img-element
               <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                <img src={url} alt={`${item.itemName} ${i + 1}`} style={{ maxWidth: 180, maxHeight: 180, borderRadius: 8, objectFit: 'cover', display: 'block', border: '1px solid var(--md-sys-color-outline-variant)' }} />
+                <img loading="lazy" decoding="async" src={url} alt={`${item.itemName} ${i + 1}`} style={{ maxWidth: 180, maxHeight: 180, borderRadius: 8, objectFit: 'cover', display: 'block', border: '1px solid var(--md-sys-color-outline-variant)' }} />
               </a>
             ))}
           </div>

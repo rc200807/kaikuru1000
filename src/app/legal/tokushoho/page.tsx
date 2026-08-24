@@ -117,7 +117,7 @@ export default function TokushohoPage() {
       <div className="mx-auto w-full max-w-3xl">
         <div className="text-center mb-8">
           <Link href="/" className="inline-block">
-            <img src="/logo.svg" alt="買いクル" className="h-7 mx-auto" />
+            <img loading="lazy" decoding="async" src="/logo.svg" alt="買いクル" className="h-7 mx-auto" />
           </Link>
         </div>
 

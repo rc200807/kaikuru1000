@@ -4,7 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { validateAvatarFile } from '@/lib/file-validation'
-import { uploadFile, deleteFile } from '@/lib/storage'
+import { deleteFile } from '@/lib/storage'
+import { saveImage } from '@/lib/image-server'
 import { recordAccessLog } from '@/lib/access-log'
 import { revokeAllDeviceSessions } from '@/lib/device-session'
 
@@ -64,10 +65,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: validation.error }, { status: 400 })
     }
     const bytes = await avatarFile.arrayBuffer()
-    const url = await uploadFile(
+    // アバターは一覧で並ぶので WebP・長辺512px（サムネ128px）に正規化する
+    const { url } = await saveImage(
       Buffer.from(bytes),
-      `avatars/member-${id}-${Date.now()}.${validation.ext}`,
+      `avatars/member-${id}-${Date.now()}`,
       avatarFile.type,
+      { maxDimension: 512, thumbDimension: 128 },
     )
     if (member.avatar) await deleteFile(member.avatar)
     updateData.avatar = url

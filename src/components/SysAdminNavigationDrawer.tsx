@@ -176,7 +176,7 @@ export default function SysAdminNavigationDrawer() {
     <div className="flex flex-col h-full">
       <div className="px-4 pt-5 pb-4">
         <Link href="/sysadmin/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-          <img src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0 brightness-0 invert" />
+          <img loading="lazy" decoding="async" src="/icon.svg" alt="買いクル" className="w-8 h-8 rounded-lg shrink-0 brightness-0 invert" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-[#ededed] truncate">買いクル</p>
             <p className="text-[10px] text-[#666666]">システム管理者</p>

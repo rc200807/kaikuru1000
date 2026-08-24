@@ -17,7 +17,7 @@ export default function ChatAvatar({
   if (avatarUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return (
-      <img
+      <img loading="lazy" decoding="async"
         src={avatarUrl}
         alt={name}
         style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}

@@ -88,7 +88,7 @@ function PreviewModal({ attachment, onClose }: { attachment: ChatAttachment; onC
       >
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={attachment.url} alt={attachment.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
+          <img loading="lazy" decoding="async" src={attachment.url} alt={attachment.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />
         ) : pdf ? (
           <iframe src={attachment.url} title={attachment.name} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, background: '#fff' }} />
         ) : (
@@ -139,7 +139,7 @@ export default function AttachmentView({ attachments }: { attachments: ChatAttac
               style={{ display: 'block', padding: 0, border: 'none', background: 'transparent', cursor: 'zoom-in' }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <img loading="lazy" decoding="async"
                 src={img.url}
                 alt={img.name}
                 style={{

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { uploadFile } from '@/lib/storage'
+import { saveImage } from '@/lib/image-server'
 
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
@@ -29,13 +29,8 @@ export async function POST(request: NextRequest) {
     }
 
     const storeId = sessionUser.storeId || sessionUser.id
-    const ext = file.type.split('/')[1].replace('jpeg', 'jpg')
     const buffer = Buffer.from(await file.arrayBuffer())
-    const url = await uploadFile(
-      buffer,
-      `community/${storeId}_${Date.now()}.${ext}`,
-      file.type,
-    )
+    const { url } = await saveImage(buffer, `community/${storeId}_${Date.now()}`, file.type)
 
     return NextResponse.json({ url })
   } catch (error) {

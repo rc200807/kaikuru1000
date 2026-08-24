@@ -978,7 +978,7 @@ function MyStoreContent() {
                         {linkedStores.map(s => (
                           <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
                             {s.avatar ? (
-                              <img src={s.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
+                              <img loading="lazy" decoding="async" src={s.avatar} className="w-9 h-9 rounded-full object-cover shrink-0" alt="" />
                             ) : (
                               <div className="w-9 h-9 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
                                 <span className="text-[var(--store-on-primary)] text-xs font-semibold">{s.name[0]}</span>

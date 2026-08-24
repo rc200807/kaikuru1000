@@ -406,7 +406,7 @@ function ContractViewContent() {
                 </h2>
                 <div className="border border-white/60 rounded-xl p-4 bg-white/40">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={contract.salesContract.signatureData}
                     alt="顧客署名"
                     className="max-h-24 mx-auto"

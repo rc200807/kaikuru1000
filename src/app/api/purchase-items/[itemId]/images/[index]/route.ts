@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import {
   PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem, customerOwnsPurchaseItem,
 } from '@/lib/purchase-item-access'
+import { serveImageFromBlob } from '@/lib/image-proxy'
 
 /**
  * 買取品目画像を認証プロキシ経由で配信
@@ -49,24 +50,6 @@ export async function GET(
 
   const blobUrl = blobUrls[index]
 
-  // ローカル開発: 静的ファイルにリダイレクト
-  if (!blobUrl.startsWith('https://')) {
-    return NextResponse.redirect(new URL(blobUrl, request.url))
-  }
-
-  // 本番: プロキシ配信
-  try {
-    const res = await fetch(blobUrl)
-    if (!res.ok) return NextResponse.json({ error: '画像が見つかりません' }, { status: 404 })
-    const contentType = res.headers.get('content-type') || 'image/jpeg'
-    return new NextResponse(res.body, {
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'private, max-age=3600',
-        'Content-Disposition': 'inline',
-      },
-    })
-  } catch {
-    return NextResponse.json({ error: '画像の取得に失敗しました' }, { status: 500 })
-  }
+  // ?thumb=1 ならサムネを返す（無ければ本体にフォールバック）
+  return serveImageFromBlob(request, blobUrl)
 }

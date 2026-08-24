@@ -38,7 +38,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   // Prisma をバンドルせず Node.js ネイティブで解決（Vercel ビルド対応）
-  serverExternalPackages: ['@prisma/client', 'prisma'],
+  // sharp はネイティブバイナリを持つのでバンドルせず Node.js 側で解決させる（画像のWebP変換で使用）
+  serverExternalPackages: ['@prisma/client', 'prisma', 'sharp'],
   async redirects() {
     return [
       // kaikuru1000.vercel.app へのアクセスは本番ドメインにリダイレクト

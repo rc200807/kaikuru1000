@@ -135,7 +135,7 @@ export default function ImageCropper({
       >
         {src && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <img loading="lazy" decoding="async"
             src={src}
             alt=""
             onLoad={onImgLoad}

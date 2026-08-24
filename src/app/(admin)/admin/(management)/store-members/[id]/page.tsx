@@ -123,7 +123,7 @@ export default function AdminStoreMemberDetailPage({ params }: { params: Promise
         <div className="w-14 h-14 rounded-full overflow-hidden bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center flex-none">
           {member.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
+            <img loading="lazy" decoding="async" src={member.avatar} alt={member.name} className="w-full h-full object-cover" />
           ) : (
             <span className="text-lg font-bold text-[var(--md-sys-color-on-surface-variant)]">
               {(member.name || '?').charAt(0).toUpperCase()}

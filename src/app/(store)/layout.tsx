@@ -12,6 +12,8 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   const isAgreementPage = /\/store\/schedule\/[^/]+\/agreement/.test(pathname)
   // チャットは自前で全高レイアウトを組むため、main の下部パディングを付けない
   const isChatPage = pathname === '/store/chat'
+  // 案件詳細は下部に追従バー（sticky）を持つため、main の下パディングがあるとバーが浮く
+  const isDealDetail = /^\/store\/deals\/[^/]+$/.test(pathname)
 
   if (isLoginPage) {
     return <div data-portal="store">{children}</div>
@@ -33,7 +35,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       <ToastProvider>
         <StoreScopeProvider>
           <NavigationRail />
-          <main className={`flex-1 min-w-0 ${isChatPage ? '' : 'pb-20 md:pb-4'}`}>
+          <main className={`flex-1 min-w-0 ${isChatPage || isDealDetail ? '' : 'pb-20 md:pb-4'}`}>
             {children}
           </main>
           <BottomNav />

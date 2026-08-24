@@ -14,6 +14,8 @@ import TimeSelect from '@/components/TimeSelect'
 import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import Section, { SECTION_CLS, useOpenLatch } from '@/components/detail/SectionCard'
+import { PropRow, Row } from '@/components/detail/PropRow'
 import { formatDealNumber } from '@/lib/deal-number'
 import {
   KOBUTSU_CATEGORY_LABEL,
@@ -158,90 +160,6 @@ function fmtBirthDate(v?: string | null) {
   return `${y}/${mo}/${d}${age >= 0 && age < 130 ? `（満${age}歳）` : ''}`
 }
 
-/**
- * セクションカード。共通の Card は影を inline style で焼いていて管理ポータル（暗面）では
- * 枠が見えなくなるため、境界を border で描くローカル実装を使う（ChartCard/KpiCard と同じ流儀）。
- * collapsible のときは state を持たない <details> で折りたたむ。
- * 注意: 管理ポータルは globals.css が header に背景を !important で強制するため header は使わない。
- */
-const SECTION_CLS = 'rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)]'
-
-function Section({
-  title,
-  meta,
-  badge,
-  actions,
-  children,
-  collapsible = false,
-  defaultOpen = true,
-  bodyClassName = 'px-4 sm:px-5 pb-4 sm:pb-5',
-  id,
-  className = '',
-}: {
-  title: string
-  meta?: React.ReactNode
-  badge?: React.ReactNode
-  actions?: React.ReactNode
-  children: React.ReactNode
-  collapsible?: boolean
-  defaultOpen?: boolean
-  bodyClassName?: string
-  id?: string
-  className?: string
-}) {
-  const header = (
-    // 狭い幅では actions を次行に折り返す（min-w-0 のままだと見出しが1文字ずつ縦に潰れる）
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
-      <div className="flex items-center gap-2 min-w-0 flex-wrap">
-        <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{title}</h2>
-        {meta && <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{meta}</span>}
-        {badge}
-        {collapsible && (
-          <svg className="w-3.5 h-3.5 text-[var(--md-sys-color-on-surface-variant)] transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        )}
-      </div>
-      {actions && (
-        <div
-          className="flex items-center gap-2 flex-shrink-0"
-          // summary 内のクリックは details をトグルしてしまうので伝播を止める
-          onClick={collapsible ? e => { e.preventDefault(); e.stopPropagation() } : undefined}
-        >
-          {actions}
-        </div>
-      )}
-    </div>
-  )
-  if (!collapsible) {
-    return <div id={id} className={`${SECTION_CLS} ${className}`}>{header}<div className={bodyClassName}>{children}</div></div>
-  }
-  return (
-    <details id={id} open={defaultOpen} className={`${SECTION_CLS} ${className} group`}>
-      <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer">{header}</summary>
-      <div className={bodyClassName}>{children}</div>
-    </details>
-  )
-}
-
-/** 左カラム（狭い）用のプロパティ行。ラベル上・値下の縦積み。右カラムは Row を使う */
-const PropRow = ({ label, value, alert }: { label: string; value: React.ReactNode; alert?: boolean }) => (
-  <div className="py-1.5">
-    <div className="flex items-center gap-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-      {alert && <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-pending-text,#b45309)]" title="古物台帳の記載事項が不足しています" />}
-      {label}
-    </div>
-    <div className="text-sm text-[var(--md-sys-color-on-surface)] break-words">{value || '—'}</div>
-  </div>
-)
-
-const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="flex gap-3 py-1.5 text-sm">
-    <span className="w-24 flex-shrink-0 text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
-    <span className="flex-1 text-[var(--md-sys-color-on-surface)] break-words">{value || '-'}</span>
-  </div>
-)
-
 export default function DealDetailView({
   dealId,
   isAdmin,
@@ -309,12 +227,8 @@ export default function DealDetailView({
   // 折りたたみセクションの見出しからファイル選択を開くための隠し input
   const paperInputRef = useRef<HTMLInputElement>(null)
   const recInputRef = useRef<HTMLInputElement>(null)
-  // 折りたたみの既定開閉。データ到着後に一度だけ確定させ、以降はユーザー操作（DOM）に任せる
-  const openLatch = useRef<Record<string, boolean>>({})
-  const initialOpen = (key: string, value: boolean, ready = true) => {
-    if (ready && !(key in openLatch.current)) openLatch.current[key] = value
-    return openLatch.current[key] ?? value
-  }
+  // 折りたたみの既定開閉（共有フック）
+  const initialOpen = useOpenLatch()
 
   const load = useCallback(async () => {
     setLoading(true)

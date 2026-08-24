@@ -6,24 +6,49 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseCsv, buildCsv } from '@/lib/csv-parser'
-import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType, isCustomerType } from '@/lib/customer-types'
+import { stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { buildUserNameData } from '@/lib/name-utils'
 
-// 新形式テンプレート（姓・名分割）。旧形式「氏名/フリガナ」列のCSVも取込時に受理する（後方互換）
+// テンプレートの列。取込時は旧形式のヘッダー（氏名/フリガナ/メール/電話…）も別名として受理する
 const COLUMNS: { header: string; required?: boolean }[] = [
   { header: '姓',           required: true },
   { header: '名',           required: true },
   { header: '姓フリガナ' },
   { header: '名フリガナ' },
-  { header: 'メール' },
-  { header: '電話',         required: true },
-  { header: '電話2' },
-  { header: '電話3' },
+  { header: 'メールアドレス' },
+  { header: '電話番号1',    required: true },
+  { header: '電話番号2' },
+  { header: '電話番号3' },
   { header: '住所' },
-  { header: '顧客タイプ' },
-  { header: '訪問頻度（月）' },
-  { header: '内部メモ' },
+  { header: '最終訪問日' },
 ]
+
+/** ヘッダーの別名（左が正式名。旧テンプレートのCSVをそのまま取り込めるようにする） */
+const HEADER_ALIASES: Record<string, string[]> = {
+  'メールアドレス': ['メール', 'Email', 'email'],
+  '電話番号1':      ['電話番号', '電話', 'TEL', 'tel'],
+  '電話番号2':      ['電話2'],
+  '電話番号3':      ['電話3'],
+  '最終訪問日':     ['最終訪問', '前回訪問日'],
+}
+
+/** インポートした顧客の顧客タイプは常に「通常買取」にする */
+const IMPORT_CUSTOMER_TYPE: CustomerType = 'regular'
+
+/** "YYYY/MM/DD"（"YYYY-MM-DD" / "YYYY.MM.DD" も可）→ JSTのその日0時。不正値は undefined */
+function parseVisitDate(value: string): Date | null | undefined {
+  const v = value.trim()
+  if (!v) return null // 空欄は「指定なし」
+  const m = /^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/.exec(v)
+  if (!m) return undefined
+  const [, y, mo, d] = m
+  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}T00:00:00.000+09:00`
+  const date = new Date(iso)
+  if (isNaN(date.getTime())) return undefined
+  // 2026-02-31 のような存在しない日付を弾く
+  if (date.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }) !== `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`) return undefined
+  return date
+}
 
 type RowError = { row: number; name?: string; message: string }
 
@@ -44,9 +69,7 @@ export async function GET() {
     '山田', '太郎', 'ヤマダ', 'タロウ', 'yamada@example.com',
     '090-1234-5678', '03-1234-5678', '',
     '東京都渋谷区...',
-    '訪問型',  // 'visit' | 'delivery' | 'regular' | 'akikuru' or 日本語
-    '1',
-    '高齢でゆっくり話す必要あり',
+    '2026/08/01',
   ]
   const csv = buildCsv([headers, sample])
 
@@ -56,25 +79,6 @@ export async function GET() {
       'Content-Disposition': 'attachment; filename="store-customers-template.csv"',
     },
   })
-}
-
-/** 顧客タイプの日本語/英語両対応 */
-function resolveCustomerType(input: string): CustomerType | null {
-  const v = input.trim()
-  if (!v) return null
-  // 英語キーをそのまま
-  if (isCustomerType(v)) return v
-  // 日本語ラベル
-  const map: Record<string, CustomerType> = {
-    '訪問型':   'visit',
-    '宅配型':   'delivery',
-    '通常買取': 'regular',
-    'アキクル': 'akikuru',
-    // 旧表現も互換
-    '定期訪問': 'visit',
-    '定期宅配': 'delivery',
-  }
-  return map[v] ?? null
 }
 
 /** POST: CSV をパースして自店舗の顧客を作成 */
@@ -104,13 +108,19 @@ export async function POST(req: NextRequest) {
   const headerRow = rows[0].map(h => h.trim().replace(/\*+$/, ''))
   const idxOf: Record<string, number> = {}
   for (let i = 0; i < headerRow.length; i++) idxOf[headerRow[i]] = i
+  // 別名ヘッダーを正式名に寄せる（旧テンプレートのCSVをそのまま取り込めるように）
+  for (const [canonical, aliases] of Object.entries(HEADER_ALIASES)) {
+    if (canonical in idxOf) continue
+    const hit = aliases.find(a => a in idxOf)
+    if (hit !== undefined) idxOf[canonical] = idxOf[hit]
+  }
 
   // 氏名列: 新形式「姓」「名」または旧形式「氏名」のどちらかが必要（後方互換）
   const hasSplitCols = '姓' in idxOf && '名' in idxOf
   const hasLegacyName = '氏名' in idxOf
   const missing: string[] = []
   if (!hasSplitCols && !hasLegacyName) missing.push('姓・名（または旧形式の「氏名」）')
-  if (!('電話' in idxOf)) missing.push('電話')
+  if (!('電話番号1' in idxOf)) missing.push('電話番号1')
   if (missing.length > 0) {
     return NextResponse.json({ error: `必須列が見つかりません: ${missing.join(', ')}` }, { status: 400 })
   }
@@ -141,14 +151,13 @@ export async function POST(req: NextRequest) {
     })
     const name      = nameData.name
     const furigana  = nameData.furigana
-    const emailRaw  = get(row, 'メール')
-    const phone     = get(row, '電話').replace(/[-ー\s]/g, '')
-    const phone2Raw = get(row, '電話2').replace(/[-ー\s]/g, '')
-    const phone3Raw = get(row, '電話3').replace(/[-ー\s]/g, '')
+    const emailRaw  = get(row, 'メールアドレス')
+    const phone     = get(row, '電話番号1').replace(/[-ー\s]/g, '')
+    const phone2Raw = get(row, '電話番号2').replace(/[-ー\s]/g, '')
+    const phone3Raw = get(row, '電話番号3').replace(/[-ー\s]/g, '')
     const address   = get(row, '住所')
-    const typeRaw   = get(row, '顧客タイプ')
-    const freqRaw   = get(row, '訪問頻度（月）')
-    const note      = get(row, '内部メモ')
+    const lastVisitRaw = get(row, '最終訪問日')
+    const note      = get(row, '内部メモ') // 旧テンプレートに列があれば取り込む
 
     if (!name)  { errors.push({ row: lineNo, message: '氏名が空です' }); continue }
     if (!phone) { errors.push({ row: lineNo, name, message: '電話番号が空です' }); continue }
@@ -159,13 +168,15 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    const customerType: CustomerType = typeRaw ? (resolveCustomerType(typeRaw) ?? 'visit') : 'visit'
-    const customerTypesJson = stringifyCustomerTypes([customerType], customerType)
+    const lastVisitedAt = parseVisitDate(lastVisitRaw)
+    if (lastVisitedAt === undefined) {
+      errors.push({ row: lineNo, name, message: `最終訪問日の形式が不正: "${lastVisitRaw}"（YYYY/MM/DD で入力）` })
+      continue
+    }
 
-    const visitFrequencyMonths = (() => {
-      const n = parseInt(freqRaw, 10)
-      return isNaN(n) || n < 1 ? 1 : n
-    })()
+    // インポートした顧客は常に「通常買取」
+    const customerType: CustomerType = IMPORT_CUSTOMER_TYPE
+    const customerTypesJson = stringifyCustomerTypes([customerType], customerType)
 
     try {
       // メールが指定されていて自店舗内に既存ユーザがあれば更新、無ければ作成
@@ -189,9 +200,9 @@ export async function POST(req: NextRequest) {
         if (phone2Raw) data.phone2 = phone2Raw
         if (phone3Raw) data.phone3 = phone3Raw
         if (note)      data.internalNote = note
+        if (lastVisitedAt) data.lastVisitedAt = lastVisitedAt
         data.customerType = customerType
         data.customerTypes = customerTypesJson
-        data.visitFrequencyMonths = visitFrequencyMonths
         await prisma.user.update({ where: { id: existingId }, data })
         syncedUserIds.push(existingId)
         updatedCount++
@@ -211,7 +222,7 @@ export async function POST(req: NextRequest) {
             storeId: store.id,
             customerType,
             customerTypes: customerTypesJson,
-            visitFrequencyMonths,
+            lastVisitedAt: lastVisitedAt ?? null,
             internalNote: note || null,
           },
         })

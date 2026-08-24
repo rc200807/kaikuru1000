@@ -36,6 +36,7 @@ export async function GET(
       email: true, phone: true, phone2: true, phone3: true, postalCode: true, address: true,
       internalNote: true,
       idDocumentPath: true, createdAt: true,
+      lastVisitedAt: true,   // CSVインポートで引き継いだ最終訪問日
       // 顧客タイプ
       customerType: true,
       // 身分証OCR抽出フィールド
@@ -72,6 +73,11 @@ export async function GET(
   for (const v of pastVisits) {
     if (!lastVisitByUser.has(v.userId)) lastVisitByUser.set(v.userId, v.visitDate)
   }
+  // CSVインポートで引き継いだ最終訪問日は、訪問レコードが無い（または古い）ときに採用する
+  const pickLastVisit = (visitDate: Date | null, imported: Date | null): Date | null => {
+    if (visitDate && imported) return visitDate > imported ? visitDate : imported
+    return visitDate ?? imported
+  }
 
   // idDocumentPath をプロキシ URL に変換（Blob URL をクライアントに露出しない）
   const result = customers.map(c => {
@@ -80,7 +86,7 @@ export async function GET(
       ...c,
       idDocumentPath: c.idDocumentPath ? `/api/users/${c.id}/id-document` : null,
       // 登録日は createdAt をそのまま利用
-      lastVisitDate: lastVisitByUser.get(c.id) ?? null,
+      lastVisitDate: pickLastVisit(lastVisitByUser.get(c.id) ?? null, c.lastVisitedAt ?? null),
       nextVisit: next ? { visitDate: next.visitDate, startTime: next.startTime ?? null } : null,
     }
   })

@@ -63,7 +63,7 @@ export default function StoreCustomerImportPage() {
         <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-2">1. テンプレートをダウンロード</h2>
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3 leading-relaxed">
           以下の列を含むCSVファイルを準備してください（* は必須）。<br />
-          <code className="text-[10px]">姓* / 名* / 姓フリガナ / 名フリガナ / メール / 電話* / 電話2 / 電話3 / 住所 / 顧客タイプ / 訪問頻度（月） / 内部メモ</code>
+          <code className="text-[10px]">姓* / 名* / 姓フリガナ / 名フリガナ / メールアドレス / 電話番号1* / 電話番号2 / 電話番号3 / 住所 / 最終訪問日</code>
         </p>
         <a
           href="/api/store/customers/import"
@@ -90,9 +90,10 @@ export default function StoreCustomerImportPage() {
           <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-3 leading-relaxed">
             ・新規顧客は自店舗（あなたのアカウント）に紐づきます。仮パスワードが自動生成されます。<br />
             ・メールアドレスが既存顧客と一致した場合は更新（空欄列はスキップ）。<br />
-            ・顧客タイプは「訪問型」「宅配型」「通常買取」「アキクル」（または英語キー <code className="text-[10px]">visit/delivery/regular/akikuru</code>）。<br />
-            ・必須項目（姓・名・電話）が空の行はエラーとして報告されます。<br />
-            ・旧形式の「氏名 / フリガナ」列のCSVもそのまま取り込めます（スペースで姓・名に自動分割）。
+            ・<strong>顧客タイプは「通常買取」で登録されます</strong>（CSVでの指定は不要）。<br />
+            ・最終訪問日は <code className="text-[10px]">YYYY/MM/DD</code> 形式で入力してください（空欄可）。訪問の記録が無い顧客でも一覧の「最終訪問日」に表示されます。<br />
+            ・必須項目（姓・名・電話番号1）が空の行はエラーとして報告されます。<br />
+            ・旧形式の「氏名 / フリガナ」「メール」「電話」列のCSVもそのまま取り込めます（氏名はスペースで姓・名に自動分割）。
           </p>
         </form>
       </Card>

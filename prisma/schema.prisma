@@ -37,6 +37,7 @@ model User {
   postalCode     String?   // 訪問先の郵便番号（住所の自動補完に使用。ハイフンなし7桁）
   address        String
   birthDate      String?             // 生年月日（顧客プロフィール。身分証OCRから選択反映）
+  lastVisitedAt  DateTime?           // 最終訪問日（CSVインポート等で他システムから引き継いだ実績。訪問レコードが無い顧客用）
   internalNote   String?   @db.Text  // 店舗・管理者のみ閲覧可能な内部メモ（顧客には非公開）
   mergedIntoUserId String?           // 顧客統合で吸収された場合の統合先User.id（論理削除の目印）
   mergedAt         DateTime?         // 統合された日時

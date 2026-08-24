@@ -80,11 +80,14 @@ export function buildCustomerFilterConditions(
   // 最終訪問（never=訪問実績なし / over90・over180=指定日数以内に訪問なし）
   const lastVisit = searchParams.get('lastVisit') || ''
   if (lastVisit === 'never') {
+    // 訪問レコードもインポート由来の最終訪問日も無い顧客
     and.push({ visitSchedules: { none: { visitDate: { lt: now }, status: { not: 'cancelled' } } } })
+    and.push({ lastVisitedAt: null })
   } else if (lastVisit === 'over90' || lastVisit === 'over180') {
     const days = lastVisit === 'over90' ? 90 : 180
     const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
     and.push({ visitSchedules: { none: { visitDate: { gte: since, lt: now }, status: { not: 'cancelled' } } } })
+    and.push({ OR: [{ lastVisitedAt: null }, { lastVisitedAt: { lt: since } }] })
   }
 
   // 次回訪問予定（none=なし / has=あり / 7d・30d=期間内にあり）

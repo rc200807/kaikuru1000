@@ -14,6 +14,22 @@ export const PASSWORD_SESSION_MS = 8 * 60 * 60 * 1000 // 8時間（従来どお�
 const LAST_SEEN_THROTTLE_MS = 15 * 60 * 1000 // lastSeenAt 更新は15分に1回
 
 /**
+ * 有効判定の短期キャッシュ。
+ * セッション確認（/api/auth/session）はページ表示のたびに走るため、そのつどDBへ往復すると
+ * 体感速度に直接響く。失効の反映は最大 VALID_CACHE_MS 遅れるが、
+ * 失効操作（revokeDeviceSession / revokeAllDeviceSessions）は同じプロセスのキャッシュを
+ * 即時破棄するので、実運用で問題になるのは他インスタンスの最大30秒だけ。
+ */
+const VALID_CACHE_MS = 30 * 1000
+const validCache = new Map<string, number>() // id → キャッシュした時刻
+
+/** 個別失効など、DBを直接更新した箇所から有効判定キャッシュを捨てるために使う */
+export function invalidateDeviceSessionCache(id?: string) {
+  if (id) validCache.delete(id)
+  else validCache.clear()
+}
+
+/**
  * パスキーログイン成功時にデバイスセッションを作成し、IDを返す
  */
 export async function createDeviceSession(params: {
@@ -46,8 +62,14 @@ export async function createDeviceSession(params: {
  * 有効な場合は lastSeenAt を15分スロットリングで更新する。
  */
 export async function validateDeviceSession(id: string): Promise<boolean> {
+  const cachedAt = validCache.get(id)
+  if (cachedAt && Date.now() - cachedAt < VALID_CACHE_MS) return true
+
   try {
-    const session = await prisma.deviceSession.findUnique({ where: { id } })
+    const session = await prisma.deviceSession.findUnique({
+      where: { id },
+      select: { revokedAt: true, expiresAt: true, lastSeenAt: true },
+    })
     if (!session) return false
     if (session.revokedAt) return false
     if (session.expiresAt < new Date()) return false
@@ -57,6 +79,12 @@ export async function validateDeviceSession(id: string): Promise<boolean> {
         where: { id },
         data: { lastSeenAt: new Date() },
       })
+    }
+    validCache.set(id, Date.now())
+    // 際限なく増えないよう、古いエントリを間引く
+    if (validCache.size > 500) {
+      const cutoff = Date.now() - VALID_CACHE_MS
+      for (const [key, at] of validCache) if (at < cutoff) validCache.delete(key)
     }
     return true
   } catch (e) {
@@ -77,5 +105,7 @@ export async function revokeAllDeviceSessions(
     where: { userType, userId, revokedAt: null },
     data: { revokedAt: new Date() },
   })
+  // 失効を即時反映させるため、このプロセスの有効判定キャッシュは全部捨てる
+  validCache.clear()
   return result.count
 }

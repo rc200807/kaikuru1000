@@ -9,6 +9,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { resolvePasskeyUser } from '@/lib/webauthn'
+import { invalidateDeviceSessionCache } from '@/lib/device-session'
 
 export async function DELETE(
   req: NextRequest,
@@ -35,6 +36,8 @@ export async function DELETE(
   if (revoked.count === 0) {
     return NextResponse.json({ error: 'デバイスセッションが見つかりません' }, { status: 404 })
   }
+  // 有効判定の短期キャッシュを捨てて失効を即時反映する
+  invalidateDeviceSessionCache(id)
 
   await recordAccessLog({
     userType: sessionUser.role || target.userType,

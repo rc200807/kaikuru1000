@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { masterJson } from '@/lib/api-cache'
 
 // GET: 営業時間を取得（顧客は担当店舗、店舗は自店舗）
 export async function GET() {
@@ -46,7 +47,7 @@ export async function GET() {
     return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 })
   }
 
-  return NextResponse.json({
+  return masterJson({
     businessHoursStart: store.businessHoursStart ?? '09:00',
     businessHoursEnd: store.businessHoursEnd ?? '18:00',
     businessDays: store.businessDays ?? '[0,1,2,3,4,5,6]',

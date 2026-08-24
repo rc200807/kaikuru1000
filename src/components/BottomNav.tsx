@@ -5,15 +5,9 @@ import { useSession, signOut } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { useStoreBadges } from '@/components/store/StoreBadgesContext'
 import { storeNavItemsFromKeys, passesStoreNavGate, type StoreNavItemDef } from '@/lib/store-nav'
 import { STORE_NAV_ICONS } from '@/components/store/storeNavIcons'
-
-type LinkedStore = {
-  id: string
-  name: string
-  code: string
-  avatar: string | null
-}
 
 // アカウント関連（メニュー構成の設定対象外。常にハンバーガーメニューの末尾に表示する）
 const accountNavItems: { href: string; label: string; icon: React.ReactNode }[] = [
@@ -45,83 +39,10 @@ export default function BottomNav() {
   const user = session?.user as any
 
   const [menuOpen, setMenuOpen] = useState(false)
-  const [linkedStores, setLinkedStores] = useState<LinkedStore[]>([])
   const [switching, setSwitching] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [chatUnread, setChatUnread] = useState(0)
-  const [releaseUnread, setReleaseUnread] = useState(0)
   const scope = useStoreScope()
-
-  // Fetch unread announcement count
-  useEffect(() => {
-    if (user?.id) {
-      const fetchUnread = () => {
-        fetch('/api/store/announcements/unread-count')
-          .then(r => r.ok ? r.json() : { count: 0 })
-          .then(data => setUnreadCount(data.count || 0))
-          .catch(() => {})
-      }
-      fetchUnread()
-      const onFocus = () => fetchUnread()
-      window.addEventListener('focus', onFocus)
-      return () => window.removeEventListener('focus', onFocus)
-    }
-  }, [user?.id, pathname])
-
-  // Fetch unread release-note count（ダッシュボード閲覧で既読化されるとイベントで更新）
-  useEffect(() => {
-    if (!user?.id) return
-    const fetchReleaseUnread = () => {
-      fetch('/api/store/release-notes/unread-count')
-        .then(r => r.ok ? r.json() : { count: 0 })
-        .then(data => setReleaseUnread(data.count || 0))
-        .catch(() => {})
-    }
-    fetchReleaseUnread()
-    window.addEventListener('focus', fetchReleaseUnread)
-    window.addEventListener('releasenotes:read', fetchReleaseUnread)
-    return () => {
-      window.removeEventListener('focus', fetchReleaseUnread)
-      window.removeEventListener('releasenotes:read', fetchReleaseUnread)
-    }
-  }, [user?.id, pathname])
-
-  // Fetch unread 本部チャット count
-  useEffect(() => {
-    if (!user?.id) return
-    const fetchChatUnread = () => {
-      fetch('/api/store/chat/unread-count')
-        .then(r => r.ok ? r.json() : { count: 0 })
-        .then(data => setChatUnread(data.count || 0))
-        .catch(() => {})
-    }
-    fetchChatUnread()
-    const timer = setInterval(() => { if (!document.hidden) fetchChatUnread() }, 30000)
-    window.addEventListener('focus', fetchChatUnread)
-    window.addEventListener('chat:activity', fetchChatUnread)
-    return () => {
-      clearInterval(timer)
-      window.removeEventListener('focus', fetchChatUnread)
-      window.removeEventListener('chat:activity', fetchChatUnread)
-    }
-  }, [user?.id, pathname])
-
-  // Fetch linked accounts
-  useEffect(() => {
-    if (user?.id) {
-      fetch('/api/store/linked-accounts')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.currentStore && data?.linkedStores?.length > 0) {
-            const all = [data.currentStore, ...data.linkedStores]
-            setLinkedStores(all)
-          } else {
-            setLinkedStores([])
-          }
-        })
-        .catch(() => setLinkedStores([]))
-    }
-  }, [user?.id])
+  // 未読件数・リンク店舗はレイアウトの Provider が1回だけ取得し、NavigationRail と共有する
+  const { announcements: unreadCount, releaseNotes: releaseUnread, chat: chatUnread, storeAccounts: linkedStores } = useStoreBadges()
 
   // Prevent body scroll when menu is open
   useEffect(() => {

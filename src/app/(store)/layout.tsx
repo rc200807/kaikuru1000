@@ -1,46 +1,14 @@
-'use client'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import StoreShell from '@/components/store/StoreShell'
 
-import { usePathname } from 'next/navigation'
-import NavigationRail from '@/components/NavigationRail'
-import BottomNav from '@/components/BottomNav'
-import { ToastProvider } from '@/components/Toast'
-import { StoreScopeProvider } from '@/components/store/StoreScopeContext'
-
-export default function StoreLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const isLoginPage = pathname === '/store/login'
-  const isAgreementPage = /\/store\/schedule\/[^/]+\/agreement/.test(pathname)
-  // チャットは自前で全高レイアウトを組むため、main の下部パディングを付けない
-  const isChatPage = pathname === '/store/chat'
-  // 案件詳細は下部に追従バー（sticky）を持つため、main の下パディングがあるとバーが浮く
-  const isDealDetail = /^\/store\/deals\/[^/]+$/.test(pathname)
-
-  if (isLoginPage) {
-    return <div data-portal="store">{children}</div>
-  }
-
-  // 契約書ページではサイドバー・ボトムナビを非表示
-  if (isAgreementPage) {
-    return (
-      <div data-portal="store" className="min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
-        <main className="min-w-0">
-          {children}
-        </main>
-      </div>
-    )
-  }
-
-  return (
-    <div data-portal="store" className="flex min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
-      <ToastProvider>
-        <StoreScopeProvider>
-          <NavigationRail />
-          <main className={`flex-1 min-w-0 ${isChatPage || isDealDetail ? '' : 'pb-20 md:pb-4'}`}>
-            {children}
-          </main>
-          <BottomNav />
-        </StoreScopeProvider>
-      </ToastProvider>
-    </div>
-  )
+/**
+ * 店舗ポータルの共通レイアウト（サーバーコンポーネント）。
+ * セッションをサーバーで解決して SessionProvider に渡すことで、
+ * クライアントからの /api/auth/session 往復（実測 0.3 秒前後）を1回ぶん削っている。
+ * 認証そのものは middleware（ページ）と各APIの getServerSession が担保する。
+ */
+export default async function StoreLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions)
+  return <StoreShell session={session}>{children}</StoreShell>
 }

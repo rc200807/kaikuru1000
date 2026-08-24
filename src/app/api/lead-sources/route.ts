@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { masterJson } from '@/lib/api-cache'
 
 // 店舗・管理ポータル共通の流入経路選択肢取得
 export async function GET() {
@@ -14,5 +15,5 @@ export async function GET() {
     orderBy: { sortOrder: 'asc' },
   })
 
-  return NextResponse.json(sources)
+  return masterJson(sources)
 }

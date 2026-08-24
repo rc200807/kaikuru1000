@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createTimer } from '@/lib/api-timing'
 
 /**
  * 顧客詳細（店舗ポータル）。
@@ -20,7 +21,8 @@ export async function GET(
   const storeId = sessionUser.id as string
   const { id } = await params
 
-  const customer = await prisma.user.findFirst({
+  const t = createTimer()
+  const customer = await t.measure('customer', () => prisma.user.findFirst({
     // 統合で吸収された顧客は詳細を開かせない（一覧の条件と揃える）
     where: { id, storeId, mergedIntoUserId: null },
     select: {
@@ -45,8 +47,8 @@ export async function GET(
         select: { visitDate: true, status: true },
       },
     },
-  })
+  }))
 
   if (!customer) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
-  return NextResponse.json({ customer })
+  return t.json({ customer })
 }

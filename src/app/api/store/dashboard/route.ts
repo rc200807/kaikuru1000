@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { buildStoreDashboard } from '@/lib/store-dashboard-data'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { createTimer } from '@/lib/api-timing'
 
 // 店舗ダッシュボード（集計ロジックは src/lib/store-dashboard-data.ts に共通化。
 // 管理ポータルの店舗別ダッシュボード /api/admin/stores/[id]/dashboard と共用）
@@ -14,7 +15,8 @@ export async function GET(request: NextRequest) {
   if (user.role !== 'store') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const storeId = user.id as string
-  const scope = await resolveStoreScope(storeId, request.nextUrl.searchParams.get('storeIds'))
-  const data = await buildStoreDashboard(scope.isMulti ? scope.storeIds : storeId)
-  return NextResponse.json(data)
+  const t = createTimer()
+  const scope = await t.measure('scope', () => resolveStoreScope(storeId, request.nextUrl.searchParams.get('storeIds')))
+  const data = await t.measure('aggregate', () => buildStoreDashboard(scope.isMulti ? scope.storeIds : storeId))
+  return t.json(data)
 }

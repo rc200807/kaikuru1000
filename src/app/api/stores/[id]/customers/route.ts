@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildStoreCustomersWhere, parseCustomerSort } from '@/lib/customer-list-query'
+import { createTimer } from '@/lib/api-timing'
 
 export async function GET(
   request: NextRequest,
@@ -27,7 +28,8 @@ export async function GET(
   const where = buildStoreCustomersWhere(id, searchParams)
   const orderBy = parseCustomerSort(searchParams, { name: 'asc' })
 
-  const [customers, total] = await Promise.all([
+  const t = createTimer()
+  const [customers, total] = await t.measure('list', () => Promise.all([
     prisma.user.findMany({
       where,
       select: {
@@ -57,17 +59,17 @@ export async function GET(
     take: limit,
   }),
     prisma.user.count({ where }),
-  ])
+  ]))
 
   // 最終訪問日（過去のキャンセル以外の訪問のうち最新）をまとめて取得
   const ids = customers.map(c => c.id)
   const now = new Date()
   const pastVisits = ids.length > 0
-    ? await prisma.visitSchedule.findMany({
+    ? await t.measure('lastVisit', () => prisma.visitSchedule.findMany({
         where: { userId: { in: ids }, visitDate: { lt: now }, status: { not: 'cancelled' } },
         orderBy: { visitDate: 'desc' },
         select: { userId: true, visitDate: true },
-      })
+      }))
     : []
   const lastVisitByUser = new Map<string, Date>()
   for (const v of pastVisits) {
@@ -91,5 +93,5 @@ export async function GET(
     }
   })
 
-  return NextResponse.json({ customers: result, total, page, limit })
+  return t.json({ customers: result, total, page, limit })
 }

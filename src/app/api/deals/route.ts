@@ -9,6 +9,7 @@ import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categor
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { resolveStoreScope } from '@/lib/store-scope'
 import { buildDealFilterConditions, buildStoreDealsWhere, jstTodayStart, parseDealSort } from '@/lib/deal-list-query'
+import { createTimer } from '@/lib/api-timing'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -65,7 +66,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ stats: { counts, total: statsTotal, won, winRate, filtered: { count, purchaseSum, purchaseAvg } } })
   }
 
-  const [deals, total] = await Promise.all([
+  const t = createTimer()
+  const [deals, total] = await t.measure('list', () => Promise.all([
     prisma.deal.findMany({
       where,
       // include ではなく select。preConsentSignature（base64署名）や paperContractImages を
@@ -95,9 +97,9 @@ export async function GET(request: NextRequest) {
       take: limit,
     }),
     prisma.deal.count({ where }),
-  ])
+  ]))
 
-  return NextResponse.json({ deals, total, page, limit })
+  return t.json({ deals, total, page, limit })
 }
 
 // 案件作成（店舗・管理者のみ）

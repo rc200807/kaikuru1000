@@ -4,6 +4,8 @@ import { Providers } from "./providers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import Script from "next/script";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://kaikuru.jp";
 
@@ -67,6 +69,10 @@ export default function RootLayout({
       </head>
       <body className={`${GeistSans.className} ${GeistMono.variable} antialiased`}>
         <Providers>{children}</Providers>
+        {/* 実ユーザーの表示速度（LCP/INP/TTFB）をルート別に計測する。
+            スクリプト・ビーコンとも同一オリジン（/_vercel/...）なので CSP の 'self' で通る */}
+        <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );

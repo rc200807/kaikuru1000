@@ -16,6 +16,11 @@ import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatDealNumber } from '@/lib/deal-number'
+import {
+  KOBUTSU_CATEGORY_LABEL,
+  KOBUTSU_MISSING_LABEL,
+  type KobutsuLedgerGroup,
+} from '@/lib/kobutsu-ledger'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { formatYen } from '@/lib/currency'
@@ -226,6 +231,9 @@ export default function DealDetailView({
   const [recProgress, setRecProgress] = useState(0)
   const [recError, setRecError] = useState<string | null>(null)
   const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null)
+  // 古物台帳（売買契約が発行されている案件のみ記録がある）
+  const [ledger, setLedger] = useState<KobutsuLedgerGroup | null>(null)
+  const [ledgerLoading, setLedgerLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -272,6 +280,21 @@ export default function DealDetailView({
   }, [dealId])
 
   useEffect(() => { loadRecordings() }, [loadRecordings])
+
+  // 古物台帳の取得（契約が発行されてから記録ができるので、契約の有無で判断）
+  const loadLedger = useCallback(async () => {
+    setLedgerLoading(true)
+    try {
+      const r = await fetch(`/api/deals/${dealId}/kobutsu-ledger`)
+      if (r.ok) { const d = await r.json(); setLedger(d.group ?? null) }
+    } catch { /* ignore */ }
+    finally { setLedgerLoading(false) }
+  }, [dealId])
+
+  useEffect(() => {
+    if (deal?.dealContract) loadLedger()
+    else setLedger(null)
+  }, [deal?.dealContract, loadLedger])
 
   // 解析中の録音があれば8秒ごとにポーリングして更新
   useEffect(() => {
@@ -1033,6 +1056,91 @@ export default function DealDetailView({
             </div>
           )}
         </Card>
+
+        {/* 古物台帳（この案件の記載内容。売買契約が発行されると記録される） */}
+        {dealContract && (
+          <Card variant="outlined" padding="md">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <SectionTitle>古物台帳</SectionTitle>
+              {!isAdmin && (
+                <Link href={`/store/kobutsu-ledger/${dealContract.id}`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline whitespace-nowrap">
+                  台帳詳細を開く →
+                </Link>
+              )}
+            </div>
+
+            {ledgerLoading && !ledger ? (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">読み込み中...</p>
+            ) : !ledger ? (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                この案件に台帳の対象となる買取品目がありません（買取品目を登録すると台帳に記載されます）。
+              </p>
+            ) : (
+              <>
+                {ledger.missing.length > 0 && (
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 px-3 py-2 mb-3 text-[11px] text-amber-800 dark:text-amber-200">
+                    法定記載事項に不足があります: {ledger.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
+                    {!isAdmin && '（品目・特徴は台帳詳細から、住所・職業・年齢・確認方法は顧客情報から補えます）'}
+                  </div>
+                )}
+
+                {/* 台帳の見出し（帳簿の様式順） */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                  <Row label="取引年月日" value={fmtDate(ledger.tradedAt)} />
+                  <Row label="区別" value={ledger.tradeType} />
+                  <Row
+                    label="品目"
+                    value={[
+                      ...ledger.categories.map(c => KOBUTSU_CATEGORY_LABEL[c]),
+                      ...(ledger.hasUnsetCategory ? ['未設定'] : []),
+                    ].join('・') || '—'}
+                  />
+                  <Row label="合計" value={`${ledger.itemCount}品目 / ${ledger.quantity}点 / ${formatYen(ledger.total)}`} />
+                  <Row label="相手方の氏名" value={ledger.customer.name} />
+                  <Row label="相手方の住所" value={ledger.customer.address ?? '未登録'} />
+                  <Row label="相手方の職業" value={ledger.customer.occupation ?? '未登録'} />
+                  <Row label="相手方の年齢" value={ledger.customer.age != null ? `${ledger.customer.age}歳` : '未登録'} />
+                  <Row label="確認方法" value={ledger.customer.verification ?? '未確認'} />
+                </div>
+
+                {/* 明細（品目ごと） */}
+                <div className="mt-3 pt-3 border-t border-[var(--md-sys-color-outline-variant)] overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr>
+                        {['品目', '品名', '特徴', '数量', '代価'].map(h => (
+                          <th key={h} className="px-2 py-1.5 text-left font-semibold text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(ledger.rows ?? []).map(r => (
+                        <tr key={r.id} className="border-t border-[var(--md-sys-color-outline-variant)] align-top">
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            {r.categoryKey ? (
+                              <span className="text-[var(--md-sys-color-on-surface)]">
+                                {KOBUTSU_CATEGORY_LABEL[r.categoryKey]}
+                                {!r.categoryManual && <span className="ml-1 text-[10px] text-[var(--md-sys-color-on-surface-variant)]">推定</span>}
+                              </span>
+                            ) : (
+                              <span className="text-amber-600 dark:text-amber-400">未設定</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface)] min-w-[120px]">{r.itemName}</td>
+                          <td className="px-2 py-1.5 min-w-[200px] text-[var(--md-sys-color-on-surface-variant)] break-words">
+                            {r.features || <span className="text-amber-600 dark:text-amber-400">未記載</span>}
+                          </td>
+                          <td className="px-2 py-1.5 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{r.quantity}</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{formatYen(r.price)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Card>
+        )}
 
         {/* 紙の売買契約書（写真） */}
         <Card variant="outlined" padding="md">

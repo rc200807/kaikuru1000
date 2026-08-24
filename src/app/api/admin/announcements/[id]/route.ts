@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { parseAnnouncementTargets, stringifyAnnouncementTargets, countTargetStores } from '@/lib/announcement-target'
 
 /** お知らせ詳細取得 */
 export async function GET(
@@ -31,7 +32,13 @@ export async function GET(
     return NextResponse.json({ error: 'お知らせが見つかりません' }, { status: 404 })
   }
 
-  return NextResponse.json(announcement)
+  const stores = await prisma.store.findMany({ where: { isActive: true }, select: { supportedServices: true } })
+
+  return NextResponse.json({
+    ...announcement,
+    targetServices: parseAnnouncementTargets(announcement.targetServices),
+    totalStores: countTargetStores(announcement.targetServices, stores),
+  })
 }
 
 /** お知らせ更新 */
@@ -58,6 +65,11 @@ export async function PATCH(
   if (body.content !== undefined) updateData.content = body.content.trim()
   if (body.categoryId !== undefined) updateData.categoryId = body.categoryId || null
   if (body.priority !== undefined) updateData.priority = body.priority
+  if (body.targetServices !== undefined) {
+    updateData.targetServices = stringifyAnnouncementTargets(
+      Array.isArray(body.targetServices) ? body.targetServices : [],
+    )
+  }
 
   if (body.isPublished !== undefined) {
     updateData.isPublished = body.isPublished
@@ -75,7 +87,10 @@ export async function PATCH(
     },
   })
 
-  return NextResponse.json(updated)
+  return NextResponse.json({
+    ...updated,
+    targetServices: parseAnnouncementTargets(updated.targetServices),
+  })
 }
 
 /** お知らせ削除 */

@@ -926,6 +926,8 @@ model Announcement {
   categoryId  String?
   announcementCategory AnnouncementCategory? @relation(fields: [categoryId], references: [id])
   priority    String    @default("normal") // "normal" | "high" | "urgent"
+  // 配信対象の対応サービス（JSON配列）。"[]" = 全店舗。例: '["akikuru"]' = アキクル対応店舗のみ
+  targetServices String @default("[]")
   isPublished Boolean   @default(false)
   publishedAt DateTime?
   adminId     String

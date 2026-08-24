@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { countTargetStores } from '@/lib/announcement-target'
 import { requireAdmin } from '@/lib/admin-auth'
 import { buildBuckets, fillSeries, rangeDays } from '@/lib/analytics/period'
 import { jstDateKey } from '@/lib/datetime'
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     lineUserTotal, lineUserLinked, lineInCount, lineOutCount, lineMessages,
     loginCount, accessLogs, visits,
     usersByLead, dealsWithLead,
-    announcements, announcementReads, activeStoreCount,
+    announcementRows, announcementReads, activeStores,
     trainingPlayTotal, communityCount, questionCount, resolvedQuestionCount, bugAgg, chatCount,
   ] = await Promise.all([
     prisma.inquiry.findMany({
@@ -65,11 +66,15 @@ export async function GET(request: NextRequest) {
       where: dealWhere(range, filters),
       select: { status: true, purchaseAmount: true, user: { select: { leadSource: true } } },
     }),
-    prisma.announcement.count({ where: { isPublished: true, publishedAt: dateWhere(range) } }),
+    // 配信対象（対応サービス）ごとに既読率の母数が変わるため、対象判定用に targetServices を取得
+    prisma.announcement.findMany({
+      where: { isPublished: true, publishedAt: dateWhere(range) },
+      select: { targetServices: true },
+    }),
     prisma.announcementRead.count({
       where: { announcement: { isPublished: true, publishedAt: dateWhere(range) } },
     }),
-    prisma.store.count({ where: { isActive: true } }),
+    prisma.store.findMany({ where: { isActive: true }, select: { supportedServices: true } }),
     prisma.trainingVideoView.aggregate({ _sum: { playCount: true } }),
     prisma.communityThread.count({ where: { createdAt: dateWhere(range) } }),
     prisma.question.count({ where: { createdAt: dateWhere(range) } }),
@@ -160,9 +165,14 @@ export async function GET(request: NextRequest) {
     .slice(0, 10)
   const formTotal = formSubmissions.reduce((s, g) => s + g._count._all, 0)
 
-  // お知らせ既読率（期間内公開分の 既読数 ÷ (公開数 × 稼働店舗数)）
-  const announcementReadRate = announcements > 0 && activeStoreCount > 0
-    ? announcementReads / (announcements * activeStoreCount)
+  // お知らせ既読率（期間内公開分の 既読数 ÷ 配信対象店舗数の合計）
+  // 全店舗向けなら「公開数 × 稼働店舗数」と同じ。サービス限定配信は対象店舗数だけを母数にする
+  const announcementTargetTotal = announcementRows.reduce(
+    (sum, a) => sum + countTargetStores(a.targetServices, activeStores),
+    0,
+  )
+  const announcementReadRate = announcementTargetTotal > 0
+    ? announcementReads / announcementTargetTotal
     : 0
 
   const bugReports = bugAgg

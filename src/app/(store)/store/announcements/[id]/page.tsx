@@ -11,6 +11,7 @@ import ReactionBar from '@/components/store/ReactionBar'
 import CommentSection, { type Comment } from '@/components/store/CommentSection'
 import { ANNOUNCEMENT_EMOJIS } from '@/lib/chiebukuro'
 import { AnnouncementCategoryIcon } from '@/components/announcement/categoryIcons'
+import { announcementTargetLabel, parseAnnouncementTargets } from '@/lib/announcement-target'
 
 type AnnouncementCategory = {
   id: string
@@ -28,6 +29,8 @@ type Announcement = {
   announcementCategory: AnnouncementCategory | null
   publishedAt: string
   admin: { name: string }
+  /** 配信対象の対応サービス（JSON配列文字列）。"[]" = 全店舗 */
+  targetServices?: string | null
   reactions: { emoji: string; count: number; reacted: boolean }[]
   comments: Comment[]
 }
@@ -158,6 +161,13 @@ export default function StoreAnnouncementDetailPage() {
           {announcement.priority === 'high' && (
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
               重要
+            </span>
+          )}
+
+          {/* サービス限定配信のときだけ対象を明示 */}
+          {parseAnnouncementTargets(announcement.targetServices).length > 0 && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              {announcementTargetLabel(announcement.targetServices)}向け
             </span>
           )}
         </div>

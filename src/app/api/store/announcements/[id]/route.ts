@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { groupReactions } from '@/lib/reactions'
+import { announcementVisibilityWhere } from '@/lib/announcement-target'
 
 /** 公開済みお知らせ詳細（店舗用）。リアクション・コメント込み。 */
 export async function GET(
@@ -17,8 +18,13 @@ export async function GET(
   const storeId = user.id as string
 
   const { id } = await params
+  // 配信対象外のお知らせはURL直打ちでも開けないようにする
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { supportedServices: true },
+  })
   const announcement = await prisma.announcement.findFirst({
-    where: { id, isPublished: true },
+    where: { id, isPublished: true, ...announcementVisibilityWhere(store?.supportedServices) },
     select: {
       id: true,
       title: true,
@@ -27,6 +33,7 @@ export async function GET(
       categoryId: true,
       announcementCategory: { select: { id: true, name: true, color: true, icon: true } },
       priority: true,
+      targetServices: true,
       publishedAt: true,
       admin: { select: { name: true } },
       reactions: { select: { emoji: true, storeId: true } },

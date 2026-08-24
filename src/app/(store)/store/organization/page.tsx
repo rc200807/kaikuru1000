@@ -56,6 +56,8 @@ type EngagementData = {
     title: string
     priority?: string
     publishedAt: string | null
+    /** お知らせのみ: 配信対象の店舗ID（既読率の母数）。未指定なら全店舗が対象 */
+    targetStoreIds?: string[]
     cells: Record<string, { readAt?: string; playCount?: number; lastViewedAt?: string } | null>
   }[]
 }
@@ -456,8 +458,11 @@ function EngagementMatrix({ data, loading, type }: { data: EngagementData | null
           </thead>
           <tbody>
             {data.rows.map(row => {
-              const doneCount = data.stores.filter(s => row.cells[s.id]).length
-              const rate = data.stores.length > 0 ? Math.round((doneCount / data.stores.length) * 100) : 0
+              // お知らせは配信対象の店舗だけを母数にする（対象外はセルに「対象外」を出す）
+              const targetIds = row.targetStoreIds ?? data.stores.map(s => s.id)
+              const targetStores = data.stores.filter(s => targetIds.includes(s.id))
+              const doneCount = targetStores.filter(s => row.cells[s.id]).length
+              const rate = targetStores.length > 0 ? Math.round((doneCount / targetStores.length) * 100) : 0
               return (
                 <tr key={row.id} className="border-t border-[var(--md-sys-color-outline-variant)]">
                   <td className="px-3 py-2.5">
@@ -470,9 +475,12 @@ function EngagementMatrix({ data, loading, type }: { data: EngagementData | null
                   </td>
                   {data.stores.map(s => {
                     const cell = row.cells[s.id]
+                    const isTarget = targetIds.includes(s.id)
                     return (
                       <td key={s.id} className="px-2 py-2.5 text-center">
-                        {cell ? (
+                        {!isTarget ? (
+                          <span className="text-[10px] text-[var(--md-sys-color-on-surface-faint)]">対象外</span>
+                        ) : cell ? (
                           type === 'videos' ? (
                             <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400" title={cell.lastViewedAt ? format(new Date(cell.lastViewedAt), 'yyyy/M/d HH:mm', { locale: ja }) : undefined}>
                               ✓<span className="text-[10px] font-normal">{cell.playCount}回</span>

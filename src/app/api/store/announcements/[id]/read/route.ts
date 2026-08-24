@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { announcementVisibilityWhere } from '@/lib/announcement-target'
 
 /** お知らせ既読マーク */
 export async function POST(
@@ -16,6 +17,19 @@ export async function POST(
 
   const { id } = await params
   const storeId = user.id
+
+  // 配信対象外のお知らせは既読にしない（管理側の既読数を汚さないため）
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { supportedServices: true },
+  })
+  const visible = await prisma.announcement.findFirst({
+    where: { id, isPublished: true, ...announcementVisibilityWhere(store?.supportedServices) },
+    select: { id: true },
+  })
+  if (!visible) {
+    return NextResponse.json({ error: 'お知らせが見つかりません' }, { status: 404 })
+  }
 
   await prisma.announcementRead.upsert({
     where: {

@@ -8,6 +8,7 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import { announcementTargetLabel, parseAnnouncementTargets } from '@/lib/announcement-target'
 
 type AnnouncementCategory = {
   id: string
@@ -26,6 +27,8 @@ type Announcement = {
   announcementCategory: AnnouncementCategory | null
   publishedAt: string
   admin: { name: string }
+  /** 配信対象の対応サービス（JSON配列文字列）。"[]" = 全店舗 */
+  targetServices?: string | null
 }
 
 const CATEGORIES: Record<string, { label: string; color: string; icon: string }> = {
@@ -152,6 +155,13 @@ export default function StoreAnnouncementsPage() {
                   {isNew && (
                     <span className="text-xs font-bold text-red-500 dark:text-red-400 animate-pulse">
                       NEW
+                    </span>
+                  )}
+
+                  {/* サービス限定配信のときだけ対象を明示 */}
+                  {parseAnnouncementTargets(a.targetServices).length > 0 && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      {announcementTargetLabel(a.targetServices)}向け
                     </span>
                   )}
 

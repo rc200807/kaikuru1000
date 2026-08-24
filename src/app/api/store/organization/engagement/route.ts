@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { matchesAnnouncementTarget } from '@/lib/announcement-target'
 import { getOperatorStores, isOrgAdmin } from '@/lib/store-scope'
 
 /**
@@ -58,12 +59,20 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  const announcements = await prisma.announcement.findMany({
-    where: { isPublished: true },
-    orderBy: { publishedAt: 'desc' },
-    take: limit,
-    select: { id: true, title: true, priority: true, publishedAt: true },
-  })
+  const [announcements, storeServices] = await Promise.all([
+    prisma.announcement.findMany({
+      where: { isPublished: true },
+      orderBy: { publishedAt: 'desc' },
+      take: limit,
+      select: { id: true, title: true, priority: true, publishedAt: true, targetServices: true },
+    }),
+    // お知らせは対応サービスで配信対象が絞られるため、店舗ごとに対象/対象外を判定する
+    prisma.store.findMany({
+      where: { id: { in: storeIds } },
+      select: { id: true, supportedServices: true },
+    }),
+  ])
+  const serviceMap = new Map(storeServices.map(s => [s.id, s.supportedServices]))
   const reads = await prisma.announcementRead.findMany({
     where: { storeId: { in: storeIds }, announcementId: { in: announcements.map(a => a.id) } },
     select: { announcementId: true, storeId: true, readAt: true },
@@ -72,17 +81,27 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     type,
     stores: storesOut,
-    rows: announcements.map(a => ({
-      id: a.id,
-      title: a.title,
-      priority: a.priority,
-      publishedAt: a.publishedAt,
-      cells: Object.fromEntries(
-        storeIds.map(sid => {
-          const read = readMap.get(`${a.id}:${sid}`)
-          return [sid, read ? { readAt: read.readAt } : null]
-        }),
-      ),
-    })),
+    rows: announcements
+      .map(a => {
+        const targetStoreIds = storeIds.filter(sid =>
+          matchesAnnouncementTarget(a.targetServices, serviceMap.get(sid) ?? null),
+        )
+        return {
+          id: a.id,
+          title: a.title,
+          priority: a.priority,
+          publishedAt: a.publishedAt,
+          // 既読率の母数（配信対象の店舗のみ）。対象外の店舗はUIで「対象外」と表示する
+          targetStoreIds,
+          cells: Object.fromEntries(
+            storeIds.map(sid => {
+              const read = readMap.get(`${a.id}:${sid}`)
+              return [sid, read ? { readAt: read.readAt } : null]
+            }),
+          ),
+        }
+      })
+      // この運営者の店舗が誰も対象でないお知らせは表示しない
+      .filter(row => row.targetStoreIds.length > 0),
   })
 }

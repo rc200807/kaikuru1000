@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { parseAnnouncementTargets, stringifyAnnouncementTargets, countTargetStores } from '@/lib/announcement-target'
 
 /** お知らせ一覧（管理者用 - 下書き含む全件 + 既読状況） */
 export async function GET() {
@@ -11,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const [announcements, totalStores] = await Promise.all([
+  const [announcements, stores] = await Promise.all([
     prisma.announcement.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -20,13 +21,16 @@ export async function GET() {
         _count: { select: { reads: true } },
       },
     }),
-    prisma.store.count({ where: { isActive: true } }),
+    // 配信対象の店舗数を数えるため対応サービスだけ取得（有効店舗のみ・件数が小さいのでJS側で突合）
+    prisma.store.findMany({ where: { isActive: true }, select: { supportedServices: true } }),
   ])
 
   const result = announcements.map(a => ({
     ...a,
     readCount: a._count.reads,
-    totalStores,
+    // 母数は「配信対象の店舗数」。全店舗向けなら有効店舗数と同じ
+    totalStores: countTargetStores(a.targetServices, stores),
+    targetServices: parseAnnouncementTargets(a.targetServices),
     _count: undefined,
   }))
 
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { title, content, categoryId, priority, isPublished } = body
+  const { title, content, categoryId, priority, isPublished, targetServices } = body
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: 'タイトルと本文は必須です' }, { status: 400 })
@@ -55,6 +59,8 @@ export async function POST(request: NextRequest) {
       category: 'general', // レガシー互換
       categoryId: categoryId || null,
       priority: priority || 'normal',
+      // 配信対象（対応サービス）。未指定・空配列は全店舗向け
+      targetServices: stringifyAnnouncementTargets(Array.isArray(targetServices) ? targetServices : []),
       isPublished: !!isPublished,
       publishedAt: isPublished ? new Date() : null,
       adminId: user.id,

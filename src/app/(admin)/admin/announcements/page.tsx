@@ -13,6 +13,11 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
 import { AnnouncementCategoryIcon, ANNOUNCEMENT_ICON_KEYS, DEFAULT_ANNOUNCEMENT_ICON } from '@/components/announcement/categoryIcons'
+import {
+  ANNOUNCEMENT_TARGET_SERVICE_KEYS,
+  ANNOUNCEMENT_TARGET_SERVICE_LABEL,
+  type AnnouncementTargetServiceKey,
+} from '@/lib/announcement-target'
 
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false })
 
@@ -30,6 +35,8 @@ type Announcement = {
   title: string
   content: string
   priority: string
+  /** 配信対象の対応サービス。空配列 = 全店舗 */
+  targetServices: AnnouncementTargetServiceKey[]
   categoryId: string | null
   announcementCategory: { id: string; name: string; color: string; icon: string } | null
   isPublished: boolean
@@ -53,6 +60,12 @@ const DEFAULT_COLORS = [
   '#EC4899', '#06B6D4', '#6B7280',
 ]
 
+/** 配信対象の表示ラベル（空 = 全店舗） */
+function targetLabel(keys: AnnouncementTargetServiceKey[] | undefined) {
+  if (!keys || keys.length === 0) return '全店舗'
+  return `${keys.map(k => ANNOUNCEMENT_TARGET_SERVICE_LABEL[k]).join('・')}対応店舗`
+}
+
 function getPriorityInfo(priority: string) {
   return PRIORITY_OPTIONS.find(p => p.value === priority) || PRIORITY_OPTIONS[0]
 }
@@ -72,7 +85,13 @@ function AdminAnnouncementsContent() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ title: '', content: '', categoryId: '', priority: 'normal' })
+  const [form, setForm] = useState<{
+    title: string
+    content: string
+    categoryId: string
+    priority: string
+    targetServices: AnnouncementTargetServiceKey[]
+  }>({ title: '', content: '', categoryId: '', priority: 'normal', targetServices: [] })
   const [submitting, setSubmitting] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
 
@@ -126,6 +145,7 @@ function AdminAnnouncementsContent() {
           content: form.content,
           categoryId: form.categoryId || null,
           priority: form.priority,
+          targetServices: form.targetServices,
           isPublished: publish,
         }),
       })
@@ -133,7 +153,7 @@ function AdminAnnouncementsContent() {
         setMessage({ type: 'success', text: editingId ? '更新しました' : (publish ? '公開しました' : '下書き保存しました') })
         setShowForm(false)
         setEditingId(null)
-        setForm({ title: '', content: '', categoryId: '', priority: 'normal' })
+        setForm({ title: '', content: '', categoryId: '', priority: 'normal', targetServices: [] })
         fetchAnnouncements()
       } else {
         const data = await res.json()
@@ -175,6 +195,7 @@ function AdminAnnouncementsContent() {
       content: a.content,
       categoryId: a.categoryId || '',
       priority: a.priority || 'normal',
+      targetServices: a.targetServices ?? [],
     })
     setShowForm(true)
     setDetailId(null)
@@ -184,7 +205,7 @@ function AdminAnnouncementsContent() {
   function cancelForm() {
     setShowForm(false)
     setEditingId(null)
-    setForm({ title: '', content: '', categoryId: '', priority: 'normal' })
+    setForm({ title: '', content: '', categoryId: '', priority: 'normal', targetServices: [] })
   }
 
   // === Categories ===
@@ -518,6 +539,53 @@ function AdminAnnouncementsContent() {
                   )}
                 </div>
 
+                {/* 配信対象（対応サービスで絞る） */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
+                    配信対象
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, targetServices: [] })}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                        form.targetServices.length === 0
+                          ? 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] ring-2 ring-offset-1 ring-[var(--admin-primary)]'
+                          : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                      }`}
+                    >
+                      全店舗
+                    </button>
+                    {ANNOUNCEMENT_TARGET_SERVICE_KEYS.map(key => {
+                      const selected = form.targetServices.includes(key)
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setForm({
+                            ...form,
+                            targetServices: selected
+                              ? form.targetServices.filter(k => k !== key)
+                              : [...form.targetServices, key],
+                          })}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                            selected
+                              ? 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] ring-2 ring-offset-1 ring-[var(--admin-primary)]'
+                              : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)]'
+                          }`}
+                        >
+                          {ANNOUNCEMENT_TARGET_SERVICE_LABEL[key]}対応店舗
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1.5">
+                    {form.targetServices.length === 0
+                      ? 'すべての店舗に配信します。'
+                      : `${form.targetServices.map(k => ANNOUNCEMENT_TARGET_SERVICE_LABEL[k]).join('・')}に対応している店舗にのみ配信します（複数選択はいずれかに対応していれば配信）。`}
+                  </p>
+                </div>
+
                 {/* 重要度選択 */}
                 <div>
                   <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">
@@ -608,6 +676,10 @@ function AdminAnnouncementsContent() {
                         下書き
                       </span>
                     )}
+                    {/* 配信対象 */}
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                      配信: {targetLabel(detailAnnouncement.targetServices)}
+                    </span>
                     {/* 既読状況 */}
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
                       既読 {detailAnnouncement.readCount} / {detailAnnouncement.totalStores} 店舗
@@ -694,6 +766,12 @@ function AdminAnnouncementsContent() {
                         <span className="text-xs text-green-600 dark:text-green-400 font-medium">公開中</span>
                       ) : (
                         <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">下書き</span>
+                      )}
+                      {/* 配信対象（全店舗以外は明示） */}
+                      {a.targetServices?.length > 0 && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          {targetLabel(a.targetServices)}
+                        </span>
                       )}
                       {/* 既読状況 */}
                       <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">

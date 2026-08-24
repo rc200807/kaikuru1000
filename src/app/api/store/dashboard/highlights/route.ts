@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { jstDateKey } from '@/lib/datetime'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { announcementVisibilityWhere } from '@/lib/announcement-target'
 
 /**
  * 店舗ダッシュボードのハイライト（新着研修動画・新着お知らせ・直近の訪問）。
@@ -23,6 +24,10 @@ export async function GET(request: NextRequest) {
   // JST の本日0時（直近の訪問の起点）
   const startOfToday = new Date(`${jstDateKey(new Date())}T00:00:00+09:00`)
 
+  // お知らせは対応サービスで配信対象が絞られる
+  const self = await prisma.store.findUnique({ where: { id: storeId }, select: { supportedServices: true } })
+  const announcementWhere = { isPublished: true, ...announcementVisibilityWhere(self?.supportedServices) }
+
   const [videosRaw, announcementsRaw, upcomingRaw, statuses] = await Promise.all([
     // 新着研修動画（公開・新しい順）
     prisma.trainingVideo.findMany({
@@ -41,7 +46,7 @@ export async function GET(request: NextRequest) {
     }),
     // 新着お知らせ（公開・新しい順）
     prisma.announcement.findMany({
-      where: { isPublished: true },
+      where: announcementWhere,
       orderBy: { publishedAt: 'desc' },
       take: 5,
       select: {

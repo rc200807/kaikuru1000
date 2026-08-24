@@ -20,6 +20,8 @@ export default function RichTextEditor({ content, onChange, placeholder = '本�
   const [uploading, setUploading] = useState(false)
 
   const editor = useEditor({
+    // TipTap v3 は SSR を検知すると例外を投げる（Next.js では必須。ChatRichInput と同じ扱い）
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [2, 3] },

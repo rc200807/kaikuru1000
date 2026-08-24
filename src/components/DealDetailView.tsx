@@ -15,6 +15,7 @@ import TimeSelect from '@/components/TimeSelect'
 import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { formatDealNumber } from '@/lib/deal-number'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { formatYen } from '@/lib/currency'
@@ -61,6 +62,8 @@ type DealRecording = {
 
 type Deal = {
   id: string
+  /** 案件番号（例: 20260824001）。旧データは未採番の可能性あり */
+  dealNumber?: string | null
   detail: string | null
   status: string
   category: string | null
@@ -206,6 +209,7 @@ export default function DealDetailView({
   const [showAddWork, setShowAddWork] = useState(false)
   const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1, notes: '' })
   const [showPreview, setShowPreview] = useState(false)
+  const [numberCopied, setNumberCopied] = useState(false)
   const [uploadingContract, setUploadingContract] = useState(false)
   const [savingUplift, setSavingUplift] = useState(false)
   const [savingWork, setSavingWork] = useState(false)
@@ -576,7 +580,7 @@ export default function DealDetailView({
     <div className="min-h-screen bg-[var(--md-sys-color-background)] pb-16">
       <AppBar
         title={deal.user.name}
-        subtitle={`案件 ・ 発生 ${fmtDate(deal.occurredAt ?? deal.createdAt)}`}
+        subtitle={`案件番号 ${formatDealNumber(deal.dealNumber)} ・ 発生 ${fmtDate(deal.occurredAt ?? deal.createdAt)}`}
         actions={<Link href={backHref}><Button variant="text" size="sm">← 一覧</Button></Link>}
       />
 
@@ -593,6 +597,26 @@ export default function DealDetailView({
               <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{ background: catBadge.bg, color: catBadge.fg }}>
                 {DEAL_CATEGORY_LABEL[deal.category ?? 'purchase'] ?? deal.category}
               </span>
+              {/* 案件番号（クリックでコピー） */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!deal.dealNumber) return
+                  navigator.clipboard?.writeText(deal.dealNumber).catch(() => { /* 権限なし等は無視 */ })
+                  setNumberCopied(true)
+                  setTimeout(() => setNumberCopied(false), 1500)
+                }}
+                disabled={!deal.dealNumber}
+                title={deal.dealNumber ? '案件番号をコピー' : undefined}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold tabular-nums bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] disabled:opacity-60"
+              >
+                No. {formatDealNumber(deal.dealNumber)}
+                {deal.dealNumber && (
+                  <span className="text-[10px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
+                    {numberCopied ? 'コピー済' : 'コピー'}
+                  </span>
+                )}
+              </button>
             </div>
             <Button size="sm" variant="outlined" onClick={() => setShowPreview(true)}>契約プレビュー</Button>
           </div>

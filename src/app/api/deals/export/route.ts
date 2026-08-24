@@ -43,8 +43,9 @@ export async function GET(request: NextRequest) {
     take: EXPORT_LIMIT,
   })
 
-  const header = ['作成日', '顧客名', '電話', '店舗', 'ステータス', 'カテゴリー', '買取金額', '流入経路', '顧客種別', '担当', '由来', '契約書']
+  const header = ['案件番号', '作成日', '顧客名', '電話', '店舗', 'ステータス', 'カテゴリー', '買取金額', '流入経路', '顧客種別', '担当', '由来', '契約書']
   const rows = deals.map(d => [
+    d.dealNumber ?? '',
     jstDate(d.createdAt),
     d.user?.name ?? '',
     d.user?.phone ?? '',

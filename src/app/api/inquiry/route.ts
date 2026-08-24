@@ -3,6 +3,7 @@ import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { createDealWithNumber } from '@/lib/deal-number-server'
 import { sendInquiryAutoReply } from '@/lib/mailer'
 import { enqueueEmail } from '@/lib/email-queue'
 import { checkInquiryRateLimit, getClientIp } from '@/lib/inquiry-rate-limit'
@@ -264,7 +265,7 @@ export async function POST(request: NextRequest) {
         itemTitles.length > 0 ? `買取希望品:\n${itemTitles.join('\n')}` : null,
       ].filter(Boolean).join('\n\n')
       try {
-        await prisma.deal.create({
+        await createDealWithNumber({
           data: {
             userId,
             storeId: store.id,

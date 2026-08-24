@@ -35,7 +35,7 @@ const CONTRACT_SELECT = {
   visitScheduleId: true,
   deal: {
     select: {
-      id: true, storeId: true,
+      id: true, storeId: true, dealNumber: true,
       user: {
         select: {
           id: true, name: true, idName: true, address: true, idAddress: true, idBackAddress: true,
@@ -144,6 +144,7 @@ export async function fetchKobutsuLedgerRows(
         id: item.id,
         contractId: contract.id,
         dealId: item.dealId,
+        dealNumber: contract.deal?.dealNumber ?? null,
         visitScheduleId: item.visitScheduleId,
         tradedAt: contract.agreedAt.toISOString(),
         tradeType: '買受け' as const,

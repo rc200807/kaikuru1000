@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createDealWithNumber } from '@/lib/deal-number-server'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
@@ -148,7 +149,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const deal = await prisma.deal.create({
+  // 案件番号（例: 20260824001）を採番して作成する
+  const deal = await createDealWithNumber({
     data: {
       userId,
       storeId: finalStoreId,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ensureDealNumber } from '@/lib/deal-number-server'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory } from '@/lib/deal-categories'
@@ -99,6 +100,9 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // 未採番の案件（トランザクション内で作られた訪問由来など）はここで案件番号を付ける
+  const dealNumber = deal.dealNumber ?? (await ensureDealNumber(deal.id))
+
   // PDF本体・署名base64は返さず有無のbooleanへ。案件直下の書類も同様に整形。
   const { preConsentSignature, salesContract: dealContract, estimate: dealEstimate, ...dealRest } = deal
   const shapeContract = (c: typeof dealContract) => c ? {
@@ -130,6 +134,7 @@ export async function GET(
   try { const a = JSON.parse(deal.paperContractImages || '[]'); if (Array.isArray(a)) paperImages = a } catch { /* ignore */ }
   const shaped = {
     ...dealRest,
+    dealNumber,
     purchaseItems: dealPurchaseItems,
     hasPreConsent: !!preConsentSignature,
     paperContractImages: paperImages.map((_: string, idx: number) => `/api/deals/${deal.id}/contract-images/${idx}`),

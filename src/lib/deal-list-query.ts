@@ -35,6 +35,8 @@ export function buildDealFilterConditions(searchParams: URLSearchParams, opts: D
       { user: { phone: { contains: search } } },
       ...(digits && digits !== search ? [{ user: { phone: { contains: digits } } }] : []),
       { detail: { contains: search, mode: 'insensitive' } },
+      // 案件番号（例: 20260824001）。前方一致で「20260824」でもその日の案件を拾える
+      ...(digits ? [{ dealNumber: { startsWith: digits } }] : []),
     ] })
   }
 

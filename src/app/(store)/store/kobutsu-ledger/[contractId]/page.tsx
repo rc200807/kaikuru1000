@@ -19,6 +19,7 @@ import {
   type KobutsuLedgerRow,
 } from '@/lib/kobutsu-ledger'
 import { formatJstDate, formatJstDateTime } from '@/lib/datetime'
+import { formatDealNumber } from '@/lib/deal-number'
 
 type StoreInfo = { name: string; code: string; antiquePermitNumber: string | null }
 
@@ -144,6 +145,7 @@ export default function KobutsuLedgerDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
             <Row label="取引年月日" value={fmtDate(group.tradedAt)} sub={formatJstDateTime(group.tradedAt)} />
             <Row label="区別" value={group.tradeType} />
+            <Row label="案件番号" value={formatDealNumber(group.dealNumber)} />
             <Row label="営業所" value={store ? `${store.name}（${store.code}）` : '—'} />
             <Row label="古物商許可番号" value={store?.antiquePermitNumber || '（未登録）'} warn={!store?.antiquePermitNumber} />
             <Row label="相手方の氏名" value={group.customer.name} />

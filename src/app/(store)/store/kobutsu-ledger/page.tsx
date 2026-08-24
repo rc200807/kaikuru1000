@@ -14,6 +14,7 @@ import {
   type KobutsuLedgerGroup,
 } from '@/lib/kobutsu-ledger'
 import { formatJstDate } from '@/lib/datetime'
+import { formatDealNumber } from '@/lib/deal-number'
 
 type Summary = { count: number; itemCount: number; quantity: number; total: number; incomplete: number }
 
@@ -227,7 +228,7 @@ export default function KobutsuLedgerPage() {
               <table className="w-full text-xs">
                 <thead className="bg-[var(--md-sys-color-surface-container)]">
                   <tr>
-                    {['取引年月日', '品目', '品名', '明細', '数量', '代価', '相手方（住所・氏名・職業・年齢）', '確認方法', ''].map(h => (
+                    {['取引年月日', '案件番号', '品目', '品名', '明細', '数量', '代価', '相手方（住所・氏名・職業・年齢）', '確認方法', ''].map(h => (
                       <th key={h} className="px-2.5 py-2 text-left font-semibold text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -236,6 +237,7 @@ export default function KobutsuLedgerPage() {
                   {visible.map(g => (
                     <tr key={g.contractId} className="border-t border-[var(--md-sys-color-outline-variant)] align-top hover:bg-[var(--md-sys-color-surface-container-low)]">
                       <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{fmtDate(g.tradedAt)}</td>
+                      <td className="px-2.5 py-2 whitespace-nowrap tabular-nums text-[var(--md-sys-color-on-surface-variant)]">{formatDealNumber(g.dealNumber)}</td>
                       <td className="px-2.5 py-2 min-w-[130px]">
                         {g.categories.length > 0 && (
                           <span className="text-[var(--md-sys-color-on-surface)]">
@@ -300,7 +302,7 @@ export default function KobutsuLedgerPage() {
                   className="block rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3 active:bg-[var(--md-sys-color-surface-container)]"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtDate(g.tradedAt)} ・ {g.tradeType}</span>
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtDate(g.tradedAt)} ・ No.{formatDealNumber(g.dealNumber)}</span>
                     <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{fmtYen(g.total)}</span>
                   </div>
                   <div className="mt-1 text-sm font-semibold text-[var(--md-sys-color-on-surface)]">

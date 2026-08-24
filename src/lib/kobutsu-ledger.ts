@@ -139,6 +139,8 @@ export type KobutsuLedgerRow = {
   /** 売買契約ID（台帳の1項目＝1案件のキー） */
   contractId: string
   dealId: string | null
+  /** 案件番号（例: 20260824001）。案件に紐づかない旧データは null */
+  dealNumber: string | null
   visitScheduleId: string | null
   /** 取引年月日（売買契約の締結日時。ISO文字列） */
   tradedAt: string
@@ -210,6 +212,7 @@ export const KOBUTSU_CSV_HEADER = [
   '確認方法',
   '備考',
   '社内カテゴリ',
+  '案件番号',
   '案件ID',
 ] as const
 
@@ -230,6 +233,7 @@ export function toCsvRow(row: KobutsuLedgerRow, formatDate: (iso: string) => str
     row.customer.verification ?? '',
     row.note ?? '',
     row.internalCategory ?? '',
+    row.dealNumber ?? '',
     row.dealId ?? '',
   ]
 }
@@ -248,6 +252,7 @@ export function jstDayBoundary(value: string | null | undefined, edge: 'start' |
 export type KobutsuLedgerGroup = {
   contractId: string
   dealId: string | null
+  dealNumber: string | null
   visitScheduleId: string | null
   tradedAt: string
   tradeType: '買受け'
@@ -293,6 +298,7 @@ export function groupLedgerRows(rows: KobutsuLedgerRow[], opts: { includeRows?: 
     return {
       contractId,
       dealId: head.dealId,
+      dealNumber: head.dealNumber,
       visitScheduleId: head.visitScheduleId,
       tradedAt: head.tradedAt,
       tradeType: head.tradeType,
@@ -325,6 +331,7 @@ export const KOBUTSU_DEAL_CSV_HEADER = [
   '相手方の職業',
   '相手方の年齢',
   '確認方法',
+  '案件番号',
   '案件ID',
 ] as const
 
@@ -343,6 +350,7 @@ export function toDealCsvRow(group: KobutsuLedgerGroup, formatDate: (iso: string
     group.customer.occupation ?? '',
     group.customer.age ?? '',
     group.customer.verification ?? '',
+    group.dealNumber ?? '',
     group.dealId ?? '',
   ]
 }

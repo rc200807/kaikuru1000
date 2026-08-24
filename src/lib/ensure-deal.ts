@@ -23,6 +23,9 @@ export async function ensureDealForVisit(
   },
 ): Promise<string> {
   if (dealId) return dealId
+  // 案件番号は付けずに作成する。ここはトランザクション内から呼ばれるため、
+  // 番号の一意制約で衝突するとトランザクション全体が壊れる。番号は案件を開いた時に
+  // ensureDealNumber（deal-number.ts）が採番する。
   const deal = await client.deal.create({
     data: {
       userId,

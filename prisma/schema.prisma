@@ -687,6 +687,7 @@ model Inquiry {
 // 案件（買取案件・商談）
 model Deal {
   id          String    @id @default(cuid())
+  dealNumber  String?   @unique            // 案件番号（例: 20260824001 = 案件発生日(JST)+その日の連番）
   userId      String                       // 顧客（必須）
   user        User      @relation(fields: [userId], references: [id])
   storeId     String?                      // 担当店舗（問い合わせ由来は必ず有り／手動作成は任意）

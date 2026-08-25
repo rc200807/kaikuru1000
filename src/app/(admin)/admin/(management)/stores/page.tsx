@@ -86,6 +86,10 @@ const STORE_COLUMN_KEYS = STORE_COLUMN_OPTIONS.map(c => c.key)
 const STORE_DEFAULT_COLS = ['code', 'prefecture', 'serviceAreas', 'customers', 'loginStatus']
 const STORE_COLS_STORAGE_KEY = 'kk-admin-stores-cols'
 
+// 店舗削除のブロッカーのうち、他店舗への移行では解消できないもの
+// （決済記録は月次課金の二重実行防止＋会計上の帰属があるため付け替えない）
+const NON_MIGRATABLE_BLOCKER_LABELS = new Set(['決済記録'])
+
 export default function AdminStoresPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -152,6 +156,10 @@ export default function AdminStoresPage() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteBlockers, setDeleteBlockers] = useState<{ label: string; count: number }[] | null>(null)
   const [deleteHint, setDeleteHint] = useState('')
+
+  // 削除できない場合の「他の店舗へ移行」（決済記録を除く業務データを一括で付け替える）
+  const [migrateTargetId, setMigrateTargetId] = useState('')
+  const [migrateBusy, setMigrateBusy] = useState(false)
 
   // メニューを ESC / スクロール / リサイズで閉じる
   useEffect(() => {
@@ -320,6 +328,7 @@ export default function AdminStoresPage() {
     setRowMenu(null)
     setDeleteBlockers(null)
     setDeleteHint('')
+    setMigrateTargetId('')
     setDeleteTarget(store)
   }
 
@@ -347,6 +356,38 @@ export default function AdminStoresPage() {
       setMessage({ type: 'error', text: '削除に失敗しました' })
     } finally {
       setDeleteBusy(false)
+    }
+  }
+
+  // 削除できなかった店舗のデータを選択した店舗へ移行し、成功したらそのまま削除まで進める
+  // （決済記録は移行対象外。移行後も残る場合は削除できないままブロッカー一覧を更新して案内する）
+  async function handleMigrateAndDelete() {
+    if (!deleteTarget || !migrateTargetId) return
+    setMigrateBusy(true)
+    try {
+      const res = await fetch(`/api/admin/stores/${deleteTarget.id}/migrate-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStoreId: migrateTargetId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || 'データの移行に失敗しました' })
+        return
+      }
+      if ((data.remainingBlockers ?? []).length > 0) {
+        // 決済記録など移行できないデータが残っている → ブロッカー表示を更新して引き続き案内
+        setDeleteBlockers(data.remainingBlockers)
+        setMigrateTargetId('')
+        setMessage({ type: 'success', text: `「${data.targetStoreName}」へデータを移行しました。残りのデータについては下記をご確認ください。` })
+        return
+      }
+      // 移行対象がすべて解消された → そのまま削除する
+      await handleDeleteStore()
+    } catch {
+      setMessage({ type: 'error', text: 'データの移行に失敗しました' })
+    } finally {
+      setMigrateBusy(false)
     }
   }
 
@@ -1296,7 +1337,7 @@ export default function AdminStoresPage() {
       {/* ─── 店舗の削除確認 ─── */}
       <Modal
         open={!!deleteTarget}
-        onClose={() => { if (!deleteBusy) setDeleteTarget(null) }}
+        onClose={() => { if (!deleteBusy && !migrateBusy) setDeleteTarget(null) }}
         title={deleteBlockers ? 'この店舗は削除できません' : '店舗を削除しますか？'}
         size="sm"
       >
@@ -1310,14 +1351,55 @@ export default function AdminStoresPage() {
                 <ul className="rounded-lg bg-[var(--md-sys-color-surface-container-low)] p-3 space-y-1">
                   {deleteBlockers.map(b => (
                     <li key={b.label} className="text-sm flex justify-between">
-                      <span className="text-[var(--md-sys-color-on-surface-variant)]">{b.label}</span>
+                      <span className="text-[var(--md-sys-color-on-surface-variant)]">
+                        {b.label}
+                        {NON_MIGRATABLE_BLOCKER_LABELS.has(b.label) && (
+                          <span className="ml-1.5 text-[10px] text-[var(--md-sys-color-error)]">（移行不可）</span>
+                        )}
+                      </span>
                       <span className="font-semibold text-[var(--md-sys-color-on-surface)]">{b.count}件</span>
                     </li>
                   ))}
                 </ul>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">{deleteHint}</p>
+
+                {deleteBlockers.some(b => !NON_MIGRATABLE_BLOCKER_LABELS.has(b.label)) && (
+                  <div className="rounded-lg border border-[var(--md-sys-color-outline-variant)] p-3 space-y-2">
+                    <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
+                      他の店舗へ移行してから削除する
+                    </p>
+                    <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                      決済記録を除く上記データを選択した店舗へ付け替え、残りが無くなれば続けて削除します。
+                    </p>
+                    <select
+                      value={migrateTargetId}
+                      onChange={e => setMigrateTargetId(e.target.value)}
+                      disabled={migrateBusy}
+                      className="w-full h-9 px-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 disabled:opacity-50"
+                    >
+                      <option value="">移行先の店舗を選択...</option>
+                      {stores
+                        .filter(s => s.id !== deleteTarget.id)
+                        .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+                        .map(s => (
+                          <option key={s.id} value={s.id}>{s.name}（{s.code}）</option>
+                        ))}
+                    </select>
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        onClick={handleMigrateAndDelete}
+                        loading={migrateBusy}
+                        disabled={migrateBusy || !migrateTargetId}
+                      >
+                        移行して削除する
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-end">
-                  <Button onClick={() => setDeleteTarget(null)}>閉じる</Button>
+                  <Button variant="text" onClick={() => setDeleteTarget(null)} disabled={migrateBusy}>閉じる</Button>
                 </div>
               </>
             ) : (

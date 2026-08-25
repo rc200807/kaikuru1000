@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calcAge, isMinorBlockedFromDelivery } from '@/lib/age'
+import { resolveEditedImageUrls } from '@/lib/image-url'
 
 /** imageUrls / trackingImageUrls をプロキシURLに変換して返す */
 function toClientShipment(s: any) {
@@ -110,12 +111,27 @@ export async function POST(request: NextRequest) {
     where: { userId, shipmentMonth },
   })
 
-  // ステップ2: 既存の下書きに送付情報を追加 → registered に昇格
+  // 編集フォームは既存画像を認証プロキシURLのまま保持して送り返してくる。そのまま保存すると
+  // 次回アクセス時に自分自身へリダイレクトし続けて画像が壊れるため、現在の実URLに解決する
+  let currentImageUrls: string[] = []
+  let currentTrackingUrls: string[] = []
+  if (existing) {
+    try { currentImageUrls = JSON.parse(existing.imageUrls || '[]') } catch { /* ignore */ }
+    try { currentTrackingUrls = JSON.parse(existing.trackingImageUrls || '[]') } catch { /* ignore */ }
+  }
+  const resolvedImageUrls = resolveEditedImageUrls(currentImageUrls, imageUrls, `/api/delivery-shipments/${existing?.id}/images`)
+  const resolvedTrackingUrls = resolveEditedImageUrls(currentTrackingUrls, trackingImageUrls, `/api/delivery-shipments/${existing?.id}/tracking-images`)
+
+  // ステップ2: 既存の下書きに送付情報を追加 → registered に昇格。
+  // registered以降の再編集（handleSaveEditedStep）で箱の写真も一緒に送られてくるので、
+  // imageUrls が渡された場合はそれも更新する（従来はtrackingImageUrlsのみ更新し、
+  // 箱の写真の編集が保存されずに無視されていた）
   if (step === 2 && existing) {
     const updated = await prisma.deliveryShipment.update({
       where: { id: existing.id },
       data: {
-        trackingImageUrls: JSON.stringify(Array.isArray(trackingImageUrls) ? trackingImageUrls : []),
+        trackingImageUrls: JSON.stringify(resolvedTrackingUrls),
+        ...(imageUrls !== undefined ? { imageUrls: JSON.stringify(resolvedImageUrls) } : {}),
         status: 'registered',
       },
     })
@@ -133,7 +149,7 @@ export async function POST(request: NextRequest) {
       where: { id: existing.id },
       data: {
         description: description || null,
-        imageUrls: JSON.stringify(Array.isArray(imageUrls) ? imageUrls : []),
+        imageUrls: JSON.stringify(resolvedImageUrls),
       },
     })
     return NextResponse.json(toClientShipment(updated))

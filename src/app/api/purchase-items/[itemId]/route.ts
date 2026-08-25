@@ -4,11 +4,12 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
+import { resolveEditedImageUrls } from '@/lib/image-url'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    select: { id: true, dealId: true, visitScheduleId: true, ...PURCHASE_ITEM_OWNER_SELECT },
+    select: { id: true, dealId: true, visitScheduleId: true, imageUrls: true, ...PURCHASE_ITEM_OWNER_SELECT },
   })
   if (!item) return { error: '品目が見つかりません', status: 404 }
   if (sessionUser.role === 'store' && !storeOwnsPurchaseItem(item, sessionUser.id)) {
@@ -37,7 +38,16 @@ export async function PATCH(
 
   if (body.itemName !== undefined) updateData.itemName = body.itemName
   if (body.category !== undefined) updateData.category = body.category
-  if (body.imageUrls !== undefined) updateData.imageUrls = JSON.stringify(body.imageUrls)
+  if (body.imageUrls !== undefined) {
+    // 編集フォームは既存画像を認証プロキシURL（/api/purchase-items/{id}/images/{index}）のまま
+    // 保持して送り返してくる。そのままDBに書くと次回アクセス時に自分自身へリダイレクトし続けて
+    // 画像が壊れるため、現在の実URLに解決してから保存する
+    let current: string[] = []
+    try { current = JSON.parse(access.item!.imageUrls || '[]') } catch { /* ignore */ }
+    updateData.imageUrls = JSON.stringify(
+      resolveEditedImageUrls(current, body.imageUrls, `/api/purchase-items/${itemId}/images`),
+    )
+  }
   if (body.quantity !== undefined) updateData.quantity = body.quantity
   if (body.purchasePrice !== undefined) updateData.purchasePrice = body.purchasePrice
   if (body.janCode !== undefined) updateData.janCode = body.janCode || null

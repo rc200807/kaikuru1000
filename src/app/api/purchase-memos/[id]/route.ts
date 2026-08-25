@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { resolveEditedImageUrls } from '@/lib/image-url'
 
 const VALID_STATUSES = ['pending', 'reviewed', 'completed']
 
@@ -50,7 +51,12 @@ export async function PATCH(
     if (body.title !== undefined) updateData.title = body.title.trim()
     if (body.description !== undefined) updateData.description = body.description?.trim() || null
     if (body.imageUrls !== undefined) {
-      updateData.imageUrls = JSON.stringify(Array.isArray(body.imageUrls) ? body.imageUrls : [])
+      // 編集フォームは既存画像を認証プロキシURLのまま送り返してくるので実URLに解決してから保存する
+      let current: string[] = []
+      try { current = JSON.parse(memo.imageUrls || '[]') } catch { /* ignore */ }
+      updateData.imageUrls = JSON.stringify(
+        resolveEditedImageUrls(current, body.imageUrls, `/api/purchase-memos/${id}/images`),
+      )
     }
   } else if (sessionUser.role === 'store' || ['admin','superadmin','hr'].includes(sessionUser.role)) {
     // 店舗・管理者はステータスとstoreNoteを更新可

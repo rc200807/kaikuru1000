@@ -107,10 +107,22 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote, supplementaryDocs, dealId } = body
+  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote, supplementaryDocs, dealId, visitDate, startTime, endTime } = body
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
+  }
+
+  // 訪問日時の変更（リスケジュール）。"HH:mm" 形式のみ受け付ける
+  if (visitDate !== undefined && (typeof visitDate !== 'string' || isNaN(new Date(visitDate).getTime()))) {
+    return NextResponse.json({ error: '訪問日が不正です' }, { status: 400 })
+  }
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+  if (startTime !== undefined && startTime !== null && !TIME_RE.test(startTime)) {
+    return NextResponse.json({ error: '開始時間の形式が不正です' }, { status: 400 })
+  }
+  if (endTime !== undefined && endTime !== null && !TIME_RE.test(endTime)) {
+    return NextResponse.json({ error: '終了時間の形式が不正です' }, { status: 400 })
   }
 
   const schedule = await prisma.visitSchedule.findUnique({ where: { id } })
@@ -126,6 +138,10 @@ export async function PATCH(
   const updateData: any = {}
   if (status !== undefined) updateData.status = status
   if (note !== undefined) updateData.note = note
+  // 訪問の新規作成API（POST /api/visit-schedules）と同じ解釈に揃える
+  if (visitDate !== undefined) updateData.visitDate = new Date(visitDate)
+  if (startTime !== undefined) updateData.startTime = startTime || null
+  if (endTime !== undefined) updateData.endTime = endTime || null
   if (purchaseAmount !== undefined) updateData.purchaseAmount = purchaseAmount
   if (billingAmount !== undefined) updateData.billingAmount = billingAmount
   if (preConsentSignature !== undefined) {

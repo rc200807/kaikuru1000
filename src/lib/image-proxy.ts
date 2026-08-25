@@ -13,6 +13,14 @@ export async function serveImageFromBlob(
   request: NextRequest,
   blobUrl: string,
 ): Promise<NextResponse> {
+  // 過去に「編集フォームがプロキシURLをそのまま実URLとして保存してしまう」不具合があり、
+  // DBに `/api/.../images/0` のような自分自身へのパスが実URLとして混入したレコードが存在する。
+  // これをローカルファイル扱いでリダイレクトすると自分自身に戻り続けて無限リダイレクトになる
+  // （ブラウザには壊れた画像として延々ぶら下がる）ため、先に検知して404にする
+  if (blobUrl.startsWith('/api/')) {
+    return NextResponse.json({ error: '画像データが破損しています。再アップロードしてください' }, { status: 404 })
+  }
+
   // ローカル開発（/uploads/...）: 静的ファイルにリダイレクト
   if (!blobUrl.startsWith('https://')) {
     return NextResponse.redirect(new URL(blobUrl, request.url))

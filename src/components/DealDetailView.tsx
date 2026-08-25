@@ -177,6 +177,7 @@ export default function DealDetailView({
   const [error, setError] = useState<string | null>(null)
   const [detailEdit, setDetailEdit] = useState('')
   const [savingDetail, setSavingDetail] = useState(false)
+  const [isEditingDetail, setIsEditingDetail] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
   const [savingCategory, setSavingCategory] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -198,6 +199,11 @@ export default function DealDetailView({
   const [showAddVisit, setShowAddVisit] = useState(false)
   const [addVisit, setAddVisit] = useState({ visitDate: '', startTime: '', endTime: '', staffName: '', note: '' })
   const [addingVisit, setAddingVisit] = useState(false)
+
+  // 訪問日時の変更（リスケジュール）モーダル
+  const [rescheduleTarget, setRescheduleTarget] = useState<VisitSchedule | null>(null)
+  const [rescheduleForm, setRescheduleForm] = useState({ visitDate: '', startTime: '', endTime: '' })
+  const [savingReschedule, setSavingReschedule] = useState(false)
 
   // 買取品目（PurchaseItemManager に委譲）／請求項目の登録（案件キー）
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
@@ -499,6 +505,35 @@ export default function DealDetailView({
     }
   }
 
+  function openReschedule(v: VisitSchedule) {
+    setRescheduleTarget(v)
+    setRescheduleForm({ visitDate: toDateInput(v.visitDate), startTime: v.startTime ?? '', endTime: v.endTime ?? '' })
+  }
+
+  async function handleReschedule() {
+    if (!rescheduleTarget || !rescheduleForm.visitDate) return
+    setSavingReschedule(true)
+    setMsg(null)
+    const res = await fetch(`/api/visit-schedules/${rescheduleTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        visitDate: rescheduleForm.visitDate,
+        startTime: rescheduleForm.startTime || null,
+        endTime: rescheduleForm.endTime || null,
+      }),
+    })
+    setSavingReschedule(false)
+    if (res.ok) {
+      setRescheduleTarget(null)
+      setMsg({ type: 'success', text: '訪問日時を変更しました' })
+      load()
+    } else {
+      const d = await res.json().catch(() => null)
+      setMsg({ type: 'error', text: d?.error || '訪問日時の変更に失敗しました' })
+    }
+  }
+
   async function changeStatus(status: string) {
     if (!deal || status === deal.status) return
     setSavingStatus(true)
@@ -537,8 +572,13 @@ export default function DealDetailView({
       body: JSON.stringify({ detail: detailEdit }),
     })
     setSavingDetail(false)
-    if (res.ok) { setDeal(prev => prev ? { ...prev, detail: detailEdit } : prev); setMsg({ type: 'success', text: '案件内容を保存しました' }) }
-    else setMsg({ type: 'error', text: '保存に失敗しました' })
+    if (res.ok) {
+      setDeal(prev => prev ? { ...prev, detail: detailEdit } : prev)
+      setMsg({ type: 'success', text: '案件内容を保存しました' })
+      setIsEditingDetail(false)
+    } else {
+      setMsg({ type: 'error', text: '保存に失敗しました' })
+    }
   }
 
   async function handleDelete() {
@@ -789,19 +829,47 @@ export default function DealDetailView({
             </div>
                 </div>
                 <div>
-            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">案件内容</label>
-            <textarea
-              value={detailEdit}
-              onChange={e => setDetailEdit(e.target.value)}
-              rows={3}
-              placeholder="買取内容・状況など..."
-              className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-y"
-            />
-            <div className="flex justify-end mt-2">
-              <Button size="sm" onClick={saveDetail} loading={savingDetail} disabled={savingDetail || detailEdit === (deal.detail ?? '')}>
-                保存
-              </Button>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">案件内容</label>
+              {!isEditingDetail && (
+                <button
+                  type="button"
+                  onClick={() => { setDetailEdit(deal.detail ?? ''); setIsEditingDetail(true) }}
+                  className="text-xs text-[var(--portal-primary,#374151)] hover:underline"
+                >
+                  編集
+                </button>
+              )}
             </div>
+            {isEditingDetail ? (
+              <>
+                <textarea
+                  value={detailEdit}
+                  onChange={e => setDetailEdit(e.target.value)}
+                  rows={3}
+                  placeholder="買取内容・状況など..."
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2 resize-y"
+                />
+                <div className="flex justify-end gap-2 mt-2">
+                  <Button
+                    size="sm"
+                    variant="text"
+                    onClick={() => { setDetailEdit(deal.detail ?? ''); setIsEditingDetail(false) }}
+                    disabled={savingDetail}
+                  >
+                    キャンセル
+                  </Button>
+                  <Button size="sm" onClick={saveDetail} loading={savingDetail} disabled={savingDetail || detailEdit === (deal.detail ?? '')}>
+                    保存
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="whitespace-pre-wrap break-words text-sm text-[var(--md-sys-color-on-surface)] min-h-[1.5em]">
+                {deal.detail?.trim() || <span className="text-[var(--md-sys-color-on-surface-variant)]">未入力（「編集」から入力できます）</span>}
+              </p>
+            )}
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">案件発生日</label>
@@ -924,6 +992,7 @@ export default function DealDetailView({
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        <button type="button" onClick={() => openReschedule(v)} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">日時を変更</button>
                         <Link href={`${visitHrefBase}/${v.id}`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">訪問詳細 →</Link>
                       </div>
                     </div>
@@ -1650,6 +1719,36 @@ export default function DealDetailView({
         </div>
       </Modal>
 
+      {/* 訪問日時の変更（リスケジュール） */}
+      <Modal open={!!rescheduleTarget} onClose={() => setRescheduleTarget(null)} title="訪問日時を変更" size="md">
+        {rescheduleTarget && (
+          <div className="space-y-4">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+              現在: {fmtDate(rescheduleTarget.visitDate)}{timeRange(rescheduleTarget.startTime, rescheduleTarget.endTime) ? ` ${timeRange(rescheduleTarget.startTime, rescheduleTarget.endTime)}` : ''}
+            </div>
+            <TextField
+              label="訪問日"
+              type="date"
+              value={rescheduleForm.visitDate}
+              onChange={v => setRescheduleForm(prev => ({ ...prev, visitDate: v }))}
+              required
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <TimeSelect label="開始時間（任意）" value={rescheduleForm.startTime} onChange={v => setRescheduleForm(prev => ({ ...prev, startTime: v }))} />
+              <TimeSelect label="終了時間（任意）" value={rescheduleForm.endTime} onChange={v => setRescheduleForm(prev => ({ ...prev, endTime: v }))} />
+            </div>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              連携済みのGoogleカレンダーの予定も、変更後の日時に更新されます。
+            </p>
+            <div className="flex justify-end gap-3 pt-1">
+              <Button variant="outlined" type="button" onClick={() => setRescheduleTarget(null)} disabled={savingReschedule}>キャンセル</Button>
+              <Button onClick={handleReschedule} loading={savingReschedule} disabled={savingReschedule || !rescheduleForm.visitDate}>
+                変更を保存
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* 請求項目を追加 */}
       <Modal open={showAddWork} onClose={() => setShowAddWork(false)} title="請求項目を追加" size="md">

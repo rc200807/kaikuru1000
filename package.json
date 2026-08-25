@@ -10,7 +10,6 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.1",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
     "@simplewebauthn/browser": "^13.3.0",
@@ -39,10 +38,8 @@
     "geist": "^1.7.0",
     "googleapis": "^171.4.0",
     "heic2any": "^0.0.4",
-    "html2canvas": "^1.4.1",
     "html2canvas-pro": "^2.0.4",
     "html5-qrcode": "^2.3.8",
-    "isomorphic-dompurify": "^3.19.0",
     "jspdf": "^4.2.0",
     "leaflet": "^1.9.4",
     "next": "16.1.6",

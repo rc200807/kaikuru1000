@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, lazy, Suspense } from 'react'
+import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import MessageBanner from '@/components/MessageBanner'
+import GlassOrbsBackground from '@/components/customer/GlassOrbsBackground'
 
-const GlassOrbs3D = lazy(() => import('@/components/GlassOrbs3D'))
 
 export default function CustomerLoginPage() {
   const router = useRouter()
@@ -62,9 +62,7 @@ export default function CustomerLoginPage() {
 
       {/* WebGL 3D Glass Orbs Background (fixed) */}
       <div className="fixed inset-0 z-0">
-        <Suspense fallback={null}>
-          <GlassOrbs3D />
-        </Suspense>
+        <GlassOrbsBackground />
       </div>
 
       {/* Glass login card */}

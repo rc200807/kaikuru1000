@@ -40,6 +40,17 @@ const nextConfig: NextConfig = {
   // Prisma をバンドルせず Node.js ネイティブで解決（Vercel ビルド対応）
   // sharp はネイティブバイナリを持つのでバンドルせず Node.js 側で解決させる（画像のWebP変換で使用）
   serverExternalPackages: ['@prisma/client', 'prisma', 'sharp'],
+  experimental: {
+    // バレルimport（`import { X } from 'recharts'` など）を実際に使う実体だけに解決させる。
+    // 使っていないコンポーネントまでバンドルに入るのを防ぐ
+    optimizePackageImports: [
+      'recharts',
+      'date-fns',
+      '@tiptap/react',
+      '@tiptap/starter-kit',
+      'lucide-react',
+    ],
+  },
   async redirects() {
     return [
       // kaikuru1000.vercel.app へのアクセスは本番ドメインにリダイレクト

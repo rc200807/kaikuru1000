@@ -355,6 +355,24 @@ export default function DealDetailView({
   const recordedChunksRef = useRef<Blob[]>([])
   const recordingStreamRef = useRef<MediaStream | null>(null)
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // フローティング録音ボタン（許可ブロック時の案内パネルを含む）の実際の高さ。
+  // fixed配置なのでコンテンツの流れには影響しないが、逆に言うとページ末尾のコンテンツが
+  // このボタン群の真裏に来て隠れてしまう。実測した高さぶんコンテンツ末尾に空きを作って回避する
+  // 通常のref+マウント時useEffectだと、このページはローディング中に一度描画してから
+  // データ取得後に本描画へ差し替わるため、空配列依存のeffectがローディング中（要素まだ無し）に
+  // 一度だけ走って終わってしまう。コールバックrefにして、要素が実際にアタッチされた時点で
+  // 確実に測るようにする
+  const [floatingRecEl, setFloatingRecEl] = useState<HTMLDivElement | null>(null)
+  const [floatingRecHeight, setFloatingRecHeight] = useState(0)
+
+  useEffect(() => {
+    if (!floatingRecEl || typeof ResizeObserver === 'undefined') return
+    const update = () => setFloatingRecHeight(floatingRecEl.offsetHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(floatingRecEl)
+    return () => ro.disconnect()
+  }, [floatingRecEl])
 
   const recheckMicPermission = useCallback(async () => {
     if (typeof navigator === 'undefined' || !navigator.permissions?.query) return
@@ -1598,6 +1616,11 @@ export default function DealDetailView({
           </div>
         )}
 
+        {/* フローティング録音ボタン（許可ブロック時の案内パネル込み）の実高さ＋余白ぶんの空きを
+             コンテンツ末尾に確保する。fixed要素はドキュメントの流れに影響しないため、これが無いと
+             ページ最後のセクション（会話の録音・AI解析など）がボタン群の真裏に隠れてしまう */}
+        {floatingRecHeight > 0 && <div aria-hidden style={{ height: floatingRecHeight + 24 }} />}
+
         {/* ── 下部追従バー（店舗ポータルのみ） ───────────────────
              fixed ではなくコンテナ最終子の sticky。mt-auto と root の flex flex-col min-h-dvh で
              訪問0件の短い案件でも画面下端に着地する。店舗モバイルは BottomNav(64px) の分を
@@ -1898,7 +1921,7 @@ export default function DealDetailView({
           下部追従の書類作成バー（sticky, z-30。モバイルはさらにBottomNav分のpb-16を内包）の
           実高さぶん浮かせて重ならないようにする（モバイル: バー約117px+セーフエリア、
           デスクトップ: バー約53px）。録音中は赤く点滅させ、経過時間を表示する */}
-      <div className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom,0px))] md:bottom-20 right-4 md:right-8 z-40 flex flex-col items-end gap-2">
+      <div ref={setFloatingRecEl} className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom,0px))] md:bottom-20 right-4 md:right-8 z-40 flex flex-col items-end gap-2">
         {(micUnsupportedMsg || micPermissionState === 'denied') && (
           <div className="max-w-[240px] text-xs px-3 py-2 rounded-lg shadow-lg space-y-1.5" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
             <p>{micUnsupportedMsg ?? 'マイクの使用がブロックされています。ブラウザのアドレスバー付近のサイト設定（鍵マーク等）で「マイク」を許可に変更し、再読み込みしてください。'}</p>

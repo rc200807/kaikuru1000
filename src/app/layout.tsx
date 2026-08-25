@@ -3,7 +3,6 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import Script from "next/script";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -58,15 +57,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <head>
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-TM3EF04Z22" strategy="afterInteractive" />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'G-TM3EF04Z22');`}
-        </Script>
-      </head>
       <body className={`${GeistSans.className} ${GeistMono.variable} antialiased`}>
         <Providers>{children}</Providers>
         {/* 実ユーザーの表示速度（LCP/INP/TTFB）をルート別に計測する。

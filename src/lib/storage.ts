@@ -27,6 +27,10 @@ export async function uploadFile(
     const blob = await put(filename, buffer, {
       access: 'public',
       contentType,
+      // 同じパス名への再アップロードは既定でエラーになる。
+      // 既存画像のWebP化バッチは「変換 → DB更新」の途中で止まると同じ名前を作り直すため、
+      // 上書きを許可しておかないと再実行時にそのレコードだけ永久に失敗する
+      allowOverwrite: true,
     })
     return blob.url
   }

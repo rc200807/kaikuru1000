@@ -13,7 +13,6 @@ type SettingItem = { href: string; title: string; desc: string; icon: string }
 const ITEMS: SettingItem[] = [
   { href: '/admin/settings/google', title: 'Google連携・スプレッドシート', desc: 'Googleアカウント連携、ライセンスキー／お問い合わせシート、同期ログ', icon: '🔗' },
   { href: '/admin/settings/email', title: 'メール通知設定', desc: 'SMTPサーバー設定・テスト送信', icon: '✉️' },
-  { href: '/admin/settings/analytics', title: 'Google Analytics', desc: 'アクセス解析のトラッキングID', icon: '📊' },
   { href: '/admin/settings/rakuten', title: '楽天商品検索API', desc: 'バーコード連携用のアプリケーションID', icon: '🛒' },
   { href: '/admin/settings/visit-statuses', title: '訪問ステータス管理', desc: '訪問スケジュールのステータス', icon: '🏷️' },
   { href: '/admin/settings/purchase-categories', title: '買取カテゴリ管理', desc: '買取品目のカテゴリ', icon: '📦' },
@@ -21,6 +20,7 @@ const ITEMS: SettingItem[] = [
   { href: '/admin/settings/akiya-items', title: '空き家管理項目', desc: '空き家管理記録の点検項目マスタ（並び順・有効/無効）', icon: '🏠' },
   { href: '/admin/settings/payment', title: '決済カード', desc: '備品発注の決済に使うクレジットカード', icon: '💳' },
   { href: '/admin/settings/store-menu', title: '店舗メニュー設定', desc: '店舗ポータルのサイドメニューの並び順・表示/非表示（店舗ごとの特例も設定可）', icon: '🧩' },
+  { href: '/admin/settings/image-optimization', title: '既存画像の最適化', desc: '過去にアップロードされた画像をWebPに作り直して転送量を下げる（スーパー管理者のみ）', icon: '🖼️' },
 ]
 
 export default function AdminSettingsIndexPage() {

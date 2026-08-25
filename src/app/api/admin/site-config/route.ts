@@ -15,7 +15,6 @@ export async function GET() {
   const config = await prisma.siteConfig.findFirst()
 
   return NextResponse.json({
-    gaTrackingId: config?.gaTrackingId ?? '',
     rakutenAppId: config?.rakutenAppId ?? '',
   })
 }
@@ -29,21 +28,10 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { gaTrackingId, rakutenAppId } = body
+  const { rakutenAppId } = body
 
-  // GA バリデーション: G-XXXXXXX or UA-XXXXXXX-X 形式、または空文字
+  // Google Analytics は廃止（自前のアクセス解析に一本化）。gaTrackingId は受け付けない
   const updateData: any = {}
-
-  if (gaTrackingId !== undefined) {
-    const trimmedGa = (gaTrackingId ?? '').trim()
-    if (trimmedGa && !/^(G-[A-Z0-9]+|UA-\d+-\d+)$/.test(trimmedGa)) {
-      return NextResponse.json(
-        { error: 'トラッキングIDの形式が正しくありません（例: G-XXXXXXXXXX）' },
-        { status: 400 }
-      )
-    }
-    updateData.gaTrackingId = trimmedGa || null
-  }
 
   if (rakutenAppId !== undefined) {
     updateData.rakutenAppId = (rakutenAppId ?? '').trim() || null
@@ -66,7 +54,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    gaTrackingId: updated?.gaTrackingId ?? null,
     rakutenAppId: updated?.rakutenAppId ?? null,
   })
 }

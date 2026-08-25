@@ -112,3 +112,24 @@ export async function saveImage(
     originalBytes,
   }
 }
+
+/**
+ * 変換後のサイズだけ測る（保存しない）。
+ * 既存画像の一括変換を「確認モード」で走らせるときに使う。
+ */
+export async function measureWebpSize(
+  buffer: Buffer,
+  options: SaveImageOptions = {},
+): Promise<{ bytes: number; width: number; height: number } | null> {
+  const { maxDimension = 2000, quality = 80 } = options
+  try {
+    const out = await sharp(buffer, { failOn: 'none' })
+      .rotate()
+      .resize({ width: maxDimension, height: maxDimension, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer({ resolveWithObject: true })
+    return { bytes: out.info.size, width: out.info.width, height: out.info.height }
+  } catch {
+    return null
+  }
+}

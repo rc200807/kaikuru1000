@@ -1,5 +1,25 @@
-import sharp from 'sharp'
+import type { Sharp } from 'sharp'
 import { uploadFile } from '@/lib/storage'
+
+type SharpFactory = (input: Buffer, opts?: { failOn?: 'none' }) => Sharp
+
+/**
+ * sharp はネイティブバイナリ（libvips）に依存するため、実行環境によっては読み込めない。
+ * 読み込めなかった場合に画像アップロード自体を落とすと業務が止まるので、
+ * その場合は「変換せず原本を保存する」に倒す（遅くなるだけで、機能は動く）。
+ */
+let sharpFactory: SharpFactory | null | undefined
+async function getSharp(): Promise<SharpFactory | null> {
+  if (sharpFactory !== undefined) return sharpFactory
+  try {
+    const mod = await import('sharp')
+    sharpFactory = (mod.default ?? mod) as unknown as SharpFactory
+  } catch (e) {
+    console.error('[image-server] sharp を読み込めませんでした。画像は変換せず原本のまま保存します', e)
+    sharpFactory = null
+  }
+  return sharpFactory
+}
 
 /**
  * アップロードされた画像をサーバー側で正規化してから保存する。
@@ -60,9 +80,10 @@ export async function saveImage(
 ): Promise<SavedImage> {
   const { maxDimension = 2000, quality = 80, thumbDimension = 400 } = options
   const originalBytes = buffer.byteLength
+  const sharp = await getSharp()
 
-  // 変換対象外（GIF・SVG など）は素通しで保存する
-  if (!isConvertibleImage(contentType)) {
+  // 変換対象外（GIF・SVG など）と、sharp が使えない環境では素通しで保存する
+  if (!sharp || !isConvertibleImage(contentType)) {
     const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin'
     const url = await uploadFile(buffer, `${basePath}.${ext}`, contentType)
     return { url, thumbUrl: url, width: 0, height: 0, bytes: originalBytes, originalBytes }
@@ -122,6 +143,8 @@ export async function measureWebpSize(
   options: SaveImageOptions = {},
 ): Promise<{ bytes: number; width: number; height: number } | null> {
   const { maxDimension = 2000, quality = 80 } = options
+  const sharp = await getSharp()
+  if (!sharp) return null
   try {
     const out = await sharp(buffer, { failOn: 'none' })
       .rotate()

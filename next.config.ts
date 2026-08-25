@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
   // Prisma をバンドルせず Node.js ネイティブで解決（Vercel ビルド対応）
   // sharp はネイティブバイナリを持つのでバンドルせず Node.js 側で解決させる（画像のWebP変換で使用）
   serverExternalPackages: ['@prisma/client', 'prisma', 'sharp'],
+  // sharp 本体は外部化されるが、依存する libvips の .so までは自動で追跡されず、
+  // Lambda に同梱されないことがある（本番で ERR_DLOPEN_FAILED になった）。明示的に含める
+  outputFileTracingIncludes: {
+    '/api/**/*': [
+      './node_modules/@img/sharp-linux-x64/**/*',
+      './node_modules/@img/sharp-libvips-linux-x64/**/*',
+    ],
+  },
   experimental: {
     // バレルimport（`import { X } from 'recharts'` など）を実際に使う実体だけに解決させる。
     // 使っていないコンポーネントまでバンドルに入るのを防ぐ

@@ -333,6 +333,7 @@ const GridRow = memo(function GridRow({
             field={col.key}
             editor={col.editor}
             options={options}
+            searchable={col.key === 'operatorId'}
             value={value}
             dirty={rowDirty ? col.key in rowDirty : false}
             editing={editingField === col.key}

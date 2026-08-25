@@ -9,6 +9,8 @@ type Props = {
   field: string
   editor: CellEditorType
   options?: { value: string; label: string }[]
+  /** select 用: 選択肢が多い列（運営者など）で検索ボックス付きコンボボックスにする */
+  searchable?: boolean
   /** 正規化済みの表示値（dirty があれば dirty、なければ元値。null は '' に寄せる） */
   value: string
   dirty: boolean
@@ -25,7 +27,7 @@ type Props = {
 }
 
 export default function BulkEditCell({
-  storeId, field, editor, options, value, dirty, editing, readOnly, lockHint,
+  storeId, field, editor, options, searchable, value, dirty, editing, readOnly, lockHint,
   onStartEdit, onEndEdit, onCommit, onRevert,
 }: Props) {
   // 編集中の下書き値はセル内ローカル state（タイプごとにグリッド全体を再レンダリングさせない）
@@ -35,18 +37,39 @@ export default function BulkEditCell({
   // postal 補完の多重実行防止
   const lookupBusy = useRef(false)
 
+  // 検索ボックス付きコンボボックス（select + searchable）用の状態。
+  // ドロップダウンはテーブルの overflow-auto に隠れないよう、行アクションメニューと同じく
+  // position:fixed で入力欄の実座標に合わせて表示する（3点リーダーメニューと同じ流儀）
+  const [searchQuery, setSearchQuery] = useState('')
+  const [highlight, setHighlight] = useState(0)
+  const [comboRect, setComboRect] = useState<{ top: number; left: number; width: number } | null>(null)
+  const comboWrapRef = useRef<HTMLDivElement>(null)
+  const comboInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (editing) {
       setDraft(value)
+      setSearchQuery('')
+      setHighlight(0)
       // オートフォーカス（select は開いた直後にフォーカスのみ）
       setTimeout(() => {
         inputRef.current?.focus()
         inputRef.current?.select()
         selectRef.current?.focus()
+        comboInputRef.current?.focus()
       }, 0)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing])
+
+  useEffect(() => {
+    if (editing && searchable && comboWrapRef.current) {
+      const r = comboWrapRef.current.getBoundingClientRect()
+      setComboRect({ top: r.bottom + 2, left: r.left, width: Math.max(r.width, 220) })
+    } else {
+      setComboRect(null)
+    }
+  }, [editing, searchable])
 
   function commitDraft(next?: string) {
     const v = (next ?? draft).trim()
@@ -97,6 +120,69 @@ export default function BulkEditCell({
   if (editing && !readOnly) {
     const baseCls =
       'w-full h-8 px-2 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border-2 border-[var(--portal-primary,#374151)] rounded-[var(--md-sys-shape-extra-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none'
+    if (editor === 'select' && searchable) {
+      const filtered = (options ?? []).filter(o => o.label.toLowerCase().includes(searchQuery.toLowerCase()))
+
+      function handleComboKeyDown(e: React.KeyboardEvent) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          setHighlight(h => Math.min(h + 1, filtered.length - 1))
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          setHighlight(h => Math.max(h - 1, 0))
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          const opt = filtered[highlight] ?? filtered[0]
+          if (opt) commitDraft(opt.value)
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          e.stopPropagation()
+          cancel()
+        }
+      }
+
+      return (
+        <div ref={comboWrapRef} className="relative">
+          <input
+            ref={comboInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setHighlight(0) }}
+            onKeyDown={handleComboKeyDown}
+            placeholder="検索して選択..."
+            className={baseCls}
+          />
+          {comboRect && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={cancel} aria-hidden="true" />
+              <div
+                className="fixed z-50 max-h-56 overflow-y-auto rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] shadow-[var(--md-sys-elevation-2)]"
+                style={{ top: comboRect.top, left: comboRect.left, width: comboRect.width }}
+              >
+                {filtered.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">該当する項目がありません</div>
+                ) : filtered.map((o, i) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => commitDraft(o.value)}
+                    className={`w-full text-left px-3 py-1.5 text-sm truncate flex items-center gap-1.5 ${
+                      i === highlight
+                        ? 'bg-[var(--md-sys-color-surface-container-high)]'
+                        : 'hover:bg-[var(--md-sys-color-surface-container-low)]'
+                    }`}
+                  >
+                    <span className="w-3.5 flex-shrink-0 text-[var(--portal-primary,#374151)]">{o.value === draft ? '✓' : ''}</span>
+                    <span className="truncate">{o.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )
+    }
     if (editor === 'select') {
       return (
         <select

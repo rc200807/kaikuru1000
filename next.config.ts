@@ -43,10 +43,9 @@ const nextConfig: NextConfig = {
   // sharp 本体は外部化されるが、依存する libvips の .so までは自動で追跡されず、
   // Lambda に同梱されないことがある（本番で ERR_DLOPEN_FAILED になった）。明示的に含める
   outputFileTracingIncludes: {
-    '/api/**/*': [
-      './node_modules/@img/sharp-linux-x64/**/*',
-      './node_modules/@img/sharp-libvips-linux-x64/**/*',
-    ],
+    // @img 配下にはプラットフォーム別のバイナリが入る。ビルド環境（Vercel=linux）に
+    // 存在するものだけが対象になるので、まとめて含めても無駄には増えない
+    '/api/**/*': ['./node_modules/@img/**/*'],
   },
   experimental: {
     // バレルimport（`import { X } from 'recharts'` など）を実際に使う実体だけに解決させる。

@@ -44,6 +44,7 @@ export default function ImageOptimizationPage() {
   const allowed = role === 'superadmin' || role === 'sysadmin'
 
   const [targets, setTargets] = useState<Target[]>([])
+  const [sharpOk, setSharpOk] = useState<boolean | null>(null)
   const [running, setRunning] = useState(false)
   const [dryRun, setDryRun] = useState(true)
   const [current, setCurrent] = useState<string | null>(null)
@@ -56,7 +57,10 @@ export default function ImageOptimizationPage() {
     if (!allowed) return
     fetch('/api/admin/maintenance/optimize-images')
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d?.targets) setTargets(d.targets) })
+      .then(d => {
+        if (d?.targets) setTargets(d.targets)
+        if (typeof d?.sharpAvailable === 'boolean') setSharpOk(d.sharpAvailable)
+      })
       .catch(() => {})
   }, [allowed])
 
@@ -138,6 +142,13 @@ export default function ImageOptimizationPage() {
       {message && (
         <MessageBanner severity={message.type} dismissible onDismiss={() => setMessage(null)}>
           {message.text}
+        </MessageBanner>
+      )}
+
+      {sharpOk === false && (
+        <MessageBanner severity="error">
+          画像変換ライブラリ（sharp）がこの環境で利用できません。この状態で実行しても変換されず、
+          アップロードされる画像も原本のまま保存されます。デプロイ設定を確認してください。
         </MessageBanner>
       )}
 

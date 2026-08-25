@@ -156,3 +156,24 @@ export async function measureWebpSize(
     return null
   }
 }
+
+/**
+ * sharp（画像変換）が実行環境で使えるか。
+ * 使えない場合、アップロードは原本のまま保存され、既存画像の一括変換も何もできない。
+ * 運用画面で「効いていないこと」に気づけるようにするための確認用。
+ */
+export async function isSharpAvailable(): Promise<boolean> {
+  const sharp = await getSharp()
+  if (!sharp) return false
+  try {
+    // 1x1 の画像を1枚だけ実際にエンコードして、ネイティブ側まで動くことを確かめる
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    )
+    await sharp(png).webp({ quality: 60 }).toBuffer()
+    return true
+  } catch {
+    return false
+  }
+}

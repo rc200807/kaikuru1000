@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { recordAccessLog } from '@/lib/access-log'
 import { IMAGE_FIELD_TARGETS, optimizeImageBatch } from '@/lib/image-migration'
+import { isSharpAvailable } from '@/lib/image-server'
 
 // 画像の再エンコードはCPUを使うので、1回の呼び出しに余裕を持たせる
 export const maxDuration = 60
@@ -20,6 +21,8 @@ export async function GET() {
   }
   return NextResponse.json({
     targets: IMAGE_FIELD_TARGETS.map(t => ({ key: t.key, label: t.label })),
+    // 画像変換ライブラリが実行環境で使えるか（使えないと変換されず原本のまま保存される）
+    sharpAvailable: await isSharpAvailable(),
   })
 }
 

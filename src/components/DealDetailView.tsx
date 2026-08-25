@@ -104,6 +104,8 @@ type Deal = {
   }
   store: { id: string; name: string; code: string; phone: string | null; address: string | null; prefecture: string | null; email: string | null; invoiceNumber: string | null; antiquePermitNumber: string | null; supportedServices?: string | null } | null
   inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
+  /** 案件の担当メンバー（一覧の「担当」列・一括担当変更と同じ正の値） */
+  member: { id: string; name: string } | null
   visitSchedules: VisitSchedule[]
   // 案件直下（再ペアレント後の正）
   purchaseItems: ManagedPurchaseItem[]
@@ -764,8 +766,12 @@ export default function DealDetailView({
     const staffQuery = docStaff ? `&staff=${encodeURIComponent(docStaff)}` : ''
     router.push(`/store/schedule/${targetVisitId}/agreement?dealId=${deal.id}${staffQuery}`)
   }
-  // 担当者は訪問レコード側が正（Deal に担当者フィールドは無い）。訪問の担当者を集約して表示する
-  const uniqueStaffNames = Array.from(new Set(deal.visitSchedules.map(v => v.staffName).filter((n): n is string => !!n)))
+  // 担当者は「案件の担当メンバー（Deal.memberId・一覧の担当列と同じ）」と
+  // 「訪問ごとの担当者名（VisitSchedule.staffName・書類の担当者欄に使う）」の2系統がある。
+  // どちらか片方にしか入っていないデータがあるため、両方をまとめて表示する
+  const uniqueStaffNames = Array.from(new Set(
+    [deal.member?.name, ...deal.visitSchedules.map(v => v.staffName)].filter((n): n is string => !!n),
+  ))
   // お支払い金額（買取−請求）。契約プレビューと同じ計算を本文にも出す
   const paymentDiff = totalPurchase - totalBilling
   // 請求金額は deal.billingAmount 優先のため明細合計とズレ得る。ズレたときだけ明細合計を併記する

@@ -47,6 +47,8 @@ export async function GET(
         },
       },
       inquiry: { select: { id: true, inquiryType: true, details: true, createdAt: true } },
+      // 案件の担当メンバー（一覧の「担当」列・一括担当変更と同じ正の値）
+      member: { select: { id: true, name: true } },
       visitSchedules: {
         orderBy: { visitDate: 'desc' },
         select: {

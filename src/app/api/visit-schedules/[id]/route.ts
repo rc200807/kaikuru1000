@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 import { recordAccessLog } from '@/lib/access-log'
+import { syncDealAssigneeFromVisit } from '@/lib/deal-assignee'
 
 const VALID_STATUSES = ['scheduled', 'pending', 'completed', 'rescheduled', 'absent', 'cancelled', 'revisit']
 
@@ -169,6 +170,13 @@ export async function PATCH(
       deal: { select: { id: true, status: true } },
     },
   })
+
+  // 担当者は案件単位の正（Deal.memberId）へも伝播する。
+  // 案件詳細の担当者はこの訪問の staffName に保存されるため、これが無いと
+  // 案件一覧の「担当」列・担当フィルター・CSV が「—」のままになる。
+  if (staffName !== undefined) {
+    await syncDealAssigneeFromVisit(schedule.dealId, schedule.storeId, staffName)
+  }
 
   // 事前同意は案件単位の正へ伝播（案件詳細の事前同意状況と一致させる）
   if (preConsentSignature !== undefined && schedule.dealId) {

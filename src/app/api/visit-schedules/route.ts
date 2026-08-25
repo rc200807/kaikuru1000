@@ -7,6 +7,7 @@ import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
 import { ensureDealForVisit } from '@/lib/ensure-deal'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { syncDealAssigneeFromVisit } from '@/lib/deal-assignee'
 
 // 訪問スケジュール一覧
 export async function GET(request: NextRequest) {
@@ -110,6 +111,8 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[Deal] 訪問決定への自動遷移に失敗:', e)
     }
+    // 担当者を指定して訪問を作成したときは、案件の担当者（Deal.memberId）にも反映する
+    await syncDealAssigneeFromVisit(schedule.dealId, schedule.storeId, schedule.staffName)
   }
 
   // Googleカレンダーにイベントを同期（失敗してもスケジュール登録は成功とする）

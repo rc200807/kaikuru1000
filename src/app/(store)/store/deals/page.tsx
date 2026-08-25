@@ -47,6 +47,8 @@ type Deal = {
   store: { id: string; name: string; code: string } | null
   inquiry: { id: string; inquiryType: string } | null
   member: { id: string; name: string } | null
+  /** 担当者名（メンバー名。未設定なら訪問側の担当者名で補完される。API側で解決） */
+  assigneeName?: string | null
   salesContract: { id: string } | null
   visitSchedules?: NextVisit[]
   _count?: { visitSchedules: number }
@@ -349,7 +351,7 @@ function StoreDealsContent() {
       return <Badge label={DEAL_CATEGORY_LABEL[d.category ?? 'purchase'] ?? d.category ?? ''} bg={c.bg} fg={c.fg} />
     } },
     { key: 'amount', header: '買取金額', sortable: true, render: (d: Deal) => <span className="tabular-nums">{yen(d.purchaseAmount)}</span> },
-    { key: 'member', header: '担当', render: (d: Deal) => <span className="text-sm">{d.member?.name ?? '—'}</span> },
+    { key: 'member', header: '担当', render: (d: Deal) => <span className="text-sm">{d.assigneeName ?? d.member?.name ?? '—'}</span> },
     { key: 'occurredAt', header: '案件発生日', sortable: true, render: (d: Deal) => <span className="text-sm tabular-nums">{fmtDate(d.occurredAt)}</span> },
     { key: 'createdAt', header: '作成日', sortable: true, render: (d: Deal) => <span className="text-sm tabular-nums">{fmtDate(d.createdAt)}</span> },
     { key: 'visits', header: '訪問数', render: (d: Deal) => <span className="text-sm tabular-nums">{d._count?.visitSchedules ?? 0}</span> },
@@ -557,7 +559,7 @@ function StoreDealsContent() {
                   <span>
                     次回訪問: {nv ? `${fmtMd(nv.visitDate)}${nv.startTime ? ` ${nv.startTime}` : ''}` : 'なし'}
                   </span>
-                  {d.member?.name && <span>担当 {d.member.name}</span>}
+                  {(d.assigneeName ?? d.member?.name) && <span>担当 {d.assigneeName ?? d.member?.name}</span>}
                   {scope.isMulti && d.store?.name && <span>{d.store.name}</span>}
                   {!d.preConsentAt && <span style={{ color: 'var(--status-pending-text)' }}>事前同意 未取得</span>}
                 </div>

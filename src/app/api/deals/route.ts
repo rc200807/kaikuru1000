@@ -10,6 +10,7 @@ import { storeSupportsAkikuru } from '@/lib/store-services'
 import { resolveStoreScope } from '@/lib/store-scope'
 import { buildDealFilterConditions, buildStoreDealsWhere, jstTodayStart, parseDealSort, parseNextVisitSort } from '@/lib/deal-list-query'
 import { createTimer } from '@/lib/api-timing'
+import { withAssigneeNames } from '@/lib/deal-assignee'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -121,11 +122,12 @@ export async function GET(request: NextRequest) {
       ? await t.measure('list', () => prisma.deal.findMany({ where: { id: { in: pageIds } }, select: dealSelect }))
       : []
     const rowById = new Map(rows.map(r => [r.id, r]))
-    const deals = pageIds.map(id => rowById.get(id)).filter(Boolean)
+    const ordered = pageIds.map(id => rowById.get(id)).filter((d): d is NonNullable<typeof d> => !!d)
+    const deals = await t.measure('list', () => withAssigneeNames(ordered))
     return t.json({ deals, total: idList.length, page, limit })
   }
 
-  const [deals, total] = await t.measure('list', () => Promise.all([
+  const [rows, total] = await t.measure('list', () => Promise.all([
     prisma.deal.findMany({
       where,
       select: dealSelect,
@@ -135,6 +137,9 @@ export async function GET(request: NextRequest) {
     }),
     prisma.deal.count({ where }),
   ]))
+  // 担当者は Deal.memberId が正だが、案件詳細で設定した担当者は訪問側にしか入らない。
+  // メンバー未解決の案件は訪問の担当者名で補完して「担当」列に出す。
+  const deals = await t.measure('list', () => withAssigneeNames(rows))
 
   return t.json({ deals, total, page, limit })
 }

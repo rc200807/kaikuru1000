@@ -35,6 +35,8 @@ type Deal = {
   store: { id: string; name: string; code: string } | null
   inquiry: { id: string; inquiryType: string } | null
   member: { id: string; name: string } | null
+  /** 担当者名（メンバー名。未設定なら訪問側の担当者名で補完される。API側で解決） */
+  assigneeName?: string | null
   salesContract: { id: string } | null
   _count?: { visitSchedules: number }
 }
@@ -284,7 +286,7 @@ export default function AdminDealsPage() {
       { key: 'createdAt', header: '作成日', sortable: true, render: (d: Deal) => <span className="text-sm tabular-nums">{fmtDate(d.createdAt)}</span> },
       { key: 'leadSource', header: '流入経路', render: (d: Deal) => <span className="text-sm">{d.user?.leadSource || '—'}</span> },
       { key: 'customerType', header: '顧客種別', render: (d: Deal) => <span className="text-sm">{d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '—'}</span> },
-      { key: 'member', header: '担当', render: (d: Deal) => <span className="text-sm">{d.member?.name ?? '—'}</span> },
+      { key: 'member', header: '担当', render: (d: Deal) => <span className="text-sm">{d.assigneeName ?? d.member?.name ?? '—'}</span> },
       { key: 'source', header: '由来', render: (d: Deal) => <span className="text-sm">{d.inquiryId ? '問い合わせ' : '手動'}</span> },
       { key: 'visits', header: '訪問数', render: (d: Deal) => <span className="text-sm tabular-nums">{d._count?.visitSchedules ?? 0}</span> },
       { key: 'contract', header: '契約書', render: (d: Deal) => <span className="text-sm">{d.salesContract ? 'あり' : '—'}</span> },

@@ -6,6 +6,7 @@ import { buildAdminDealsWhere, parseDealSort } from '@/lib/deal-list-query'
 import { DEAL_STATUS_LABEL } from '@/lib/deal-status'
 import { DEAL_CATEGORY_LABEL } from '@/lib/deal-categories'
 import { CUSTOMER_TYPE_LABEL } from '@/lib/customer-types'
+import { withAssigneeNames } from '@/lib/deal-assignee'
 
 const EXPORT_LIMIT = 5000
 
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   const ids = (searchParams.get('ids') || '').split(',').map(s => s.trim()).filter(Boolean)
   const where = ids.length > 0 ? { id: { in: ids } } : buildAdminDealsWhere(searchParams)
 
-  const deals = await prisma.deal.findMany({
+  const dealRows = await prisma.deal.findMany({
     where,
     include: {
       user: { select: { name: true, phone: true, customerType: true, leadSource: true } },
@@ -42,6 +43,8 @@ export async function GET(request: NextRequest) {
     orderBy: parseDealSort(searchParams),
     take: EXPORT_LIMIT,
   })
+  // 担当は Deal.memberId が正だが、案件詳細で設定した担当者は訪問側にしか入らないため補完する
+  const deals = await withAssigneeNames(dealRows)
 
   const header = ['案件番号', '作成日', '顧客名', '電話', '店舗', 'ステータス', 'カテゴリー', '買取金額', '流入経路', '顧客種別', '担当', '由来', '契約書']
   const rows = deals.map(d => [
@@ -55,7 +58,7 @@ export async function GET(request: NextRequest) {
     d.purchaseAmount ?? '',
     d.user?.leadSource ?? '',
     d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '',
-    d.member?.name ?? '',
+    d.assigneeName ?? '',
     d.inquiryId ? '問い合わせ由来' : '手動作成',
     d.salesContract ? 'あり' : 'なし',
   ])

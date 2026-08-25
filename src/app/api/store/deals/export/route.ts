@@ -8,6 +8,7 @@ import { DEAL_STATUS_LABEL } from '@/lib/deal-status'
 import { DEAL_CATEGORY_LABEL } from '@/lib/deal-categories'
 import { CUSTOMER_TYPE_LABEL } from '@/lib/customer-types'
 import { formatDealNumber } from '@/lib/deal-number'
+import { withAssigneeNames } from '@/lib/deal-assignee'
 
 const EXPORT_LIMIT = 2000
 
@@ -41,11 +42,12 @@ export async function GET(request: NextRequest) {
     ? { id: { in: ids }, storeId: { in: scope.storeIds } }
     : buildStoreDealsWhere(scope.storeIds, searchParams)
 
-  const deals = await prisma.deal.findMany({
+  const dealRows = await prisma.deal.findMany({
     where,
     orderBy: parseDealSort(searchParams),
     take: EXPORT_LIMIT,
     select: {
+      id: true, memberId: true,
       dealNumber: true, createdAt: true, occurredAt: true, status: true, category: true,
       purchaseAmount: true, billingAmount: true, preConsentAt: true, inquiryId: true,
       user: { select: { name: true, phone: true, customerType: true, leadSource: true } },
@@ -60,6 +62,8 @@ export async function GET(request: NextRequest) {
       _count: { select: { visitSchedules: true } },
     },
   })
+  // 担当は Deal.memberId が正だが、案件詳細で設定した担当者は訪問側にしか入らないため補完する
+  const deals = await withAssigneeNames(dealRows)
 
   const withStore = scope.isMulti
   const header = [
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest) {
     d._count.visitSchedules,
     d.user?.leadSource ?? '',
     d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '',
-    d.member?.name ?? '',
+    d.assigneeName ?? '',
     d.inquiryId ? '問い合わせ由来' : '手動作成',
   ])
 

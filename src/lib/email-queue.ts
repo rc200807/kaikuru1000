@@ -10,14 +10,26 @@ import {
   sendInquiryAutoReply,
   sendStoreInquiryNotification,
   sendBugReportNotification,
+  sendContractEmail,
+  sendContractCreatedNotification,
 } from './mailer'
 
 const MAX_ATTEMPTS = 3
+
+/**
+ * 売買契約書メールの payload。
+ * PDFは数MBになるためキューには載せず、送信時に SalesContract から読み直す
+ * （キュー行が肥大化するのを避ける）。
+ */
+type ContractEmailParams =
+  Omit<Parameters<typeof sendContractEmail>[0], 'pdfBase64' | 'invoicePdfBase64'> & { contractId: string }
 
 type QueueablePayload =
   | { type: 'inquiryAutoReply'; params: Parameters<typeof sendInquiryAutoReply>[0] }
   | { type: 'storeInquiryNotification'; params: Parameters<typeof sendStoreInquiryNotification>[0] }
   | { type: 'bugReportNotification'; params: Parameters<typeof sendBugReportNotification>[0] }
+  | { type: 'contractEmail'; params: ContractEmailParams }
+  | { type: 'contractCreatedNotification'; params: Parameters<typeof sendContractCreatedNotification>[0] }
 
 /** メールをキューに登録（非同期） */
 export async function enqueueEmail(payload: QueueablePayload): Promise<void> {
@@ -47,6 +59,33 @@ async function sendImmediately(type: string, params: any): Promise<boolean> {
         params.createdAt = new Date(params.createdAt)
       }
       return await sendBugReportNotification(params)
+    case 'contractEmail': {
+      const { contractId, ...rest } = params
+      // PDFはキューに載せていないので保存済みの契約書から読み直す
+      const saved = await prisma.salesContract.findUnique({
+        where: { id: contractId },
+        select: { pdfBase64: true, invoicePdfBase64: true },
+      })
+      const ok = await sendContractEmail({
+        ...rest,
+        visitDate: new Date(rest.visitDate),
+        pdfBase64: saved?.pdfBase64 ?? '',
+        invoicePdfBase64: saved?.invoicePdfBase64 ?? '',
+      })
+      // 送信できたときだけ契約書に送信日時を記録する
+      if (ok) {
+        await prisma.salesContract.update({
+          where: { id: contractId },
+          data: { emailSentAt: new Date() },
+        }).catch(e => console.error('[email-queue] emailSentAt の記録に失敗:', e))
+      }
+      return ok
+    }
+    case 'contractCreatedNotification':
+      if (params.visitDate && typeof params.visitDate === 'string') {
+        params.visitDate = new Date(params.visitDate)
+      }
+      return await sendContractCreatedNotification(params)
     default:
       throw new Error(`Unknown email type: ${type}`)
   }

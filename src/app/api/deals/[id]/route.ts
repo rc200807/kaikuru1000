@@ -54,6 +54,8 @@ export async function GET(
         select: {
           id: true, visitDate: true, startTime: true, endTime: true, status: true, note: true,
           staffName: true, purchaseAmount: true, billingAmount: true,
+          // 後日引取（売買契約書の作成時に登録される。訪問行そのものに持つ設計）
+          revisitDate: true, revisitStart: true, revisitEnd: true, revisitNote: true,
           purchaseItems: {
             select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
           },

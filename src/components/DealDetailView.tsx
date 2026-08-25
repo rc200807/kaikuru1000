@@ -41,6 +41,11 @@ type VisitSchedule = {
   status: string
   note: string | null
   staffName: string | null
+  /** 後日引取（売買契約書の作成時に登録される。訪問行そのものに保持される） */
+  revisitDate: string | null
+  revisitStart: string | null
+  revisitEnd: string | null
+  revisitNote: string | null
   purchaseAmount: number | null
   billingAmount: number | null
   purchaseItems: PurchaseItem[]
@@ -749,6 +754,9 @@ export default function DealDetailView({
   const timeline: { label: string; at: string; sub?: string }[] = [
     { label: '案件発生', at: deal.occurredAt ?? deal.createdAt },
     ...deal.visitSchedules.map(v => ({ label: '訪問', at: v.visitDate, sub: v.staffName ? `担当 ${v.staffName}` : undefined })),
+    ...deal.visitSchedules
+      .filter(v => !!v.revisitDate)
+      .map(v => ({ label: '後日引取', at: v.revisitDate as string, sub: v.revisitNote ?? undefined })),
     ...(dealEstimate ? [{ label: '見積作成', at: dealEstimate.validUntil, sub: `有効期限 ${fmtDate(dealEstimate.validUntil)}` }] : []),
     ...(dealContract ? [{ label: '契約締結', at: dealContract.agreedAt }] : []),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
@@ -766,6 +774,8 @@ export default function DealDetailView({
     const staffQuery = docStaff ? `&staff=${encodeURIComponent(docStaff)}` : ''
     router.push(`/store/schedule/${targetVisitId}/agreement?dealId=${deal.id}${staffQuery}`)
   }
+  // 後日引取は訪問行の revisit* に入るため、訪問件数とは別に数えて見出しに出す
+  const revisitCount = deal.visitSchedules.filter(v => !!v.revisitDate).length
   // 担当者は「案件の担当メンバー（Deal.memberId・一覧の担当列と同じ）」と
   // 「訪問ごとの担当者名（VisitSchedule.staffName・書類の担当者欄に使う）」の2系統がある。
   // どちらか片方にしか入っていないデータがあるため、両方をまとめて表示する
@@ -1091,7 +1101,7 @@ export default function DealDetailView({
               id="deal-visits"
               className="scroll-mt-20"
               title="訪問スケジュール"
-              meta={`${deal.visitSchedules.length}件`}
+              meta={`${deal.visitSchedules.length}件${revisitCount > 0 ? ` ・ 後日引取 ${revisitCount}件` : ''}`}
               actions={
                 <>
               {deal.store ? (
@@ -1145,6 +1155,22 @@ export default function DealDetailView({
                       <span>請求: {formatYen(v.billingAmount)}</span>
                     </div>
                     {v.note && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">{v.note}</p>}
+                    {/* 後日引取（売買契約書の作成時に登録される。訪問行のrevisit*に入るため
+                        別の訪問レコードにはならないが、案件からも予定として見えるようにする） */}
+                    {v.revisitDate && (
+                      <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
+                            後日引取
+                          </span>
+                          <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{fmtDate(v.revisitDate)}</span>
+                          {(v.revisitStart || v.revisitEnd) && (
+                            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{timeRange(v.revisitStart, v.revisitEnd)}</span>
+                          )}
+                        </div>
+                        {v.revisitNote && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">{v.revisitNote}</p>}
+                      </div>
+                    )}
                     {/* 契約/見積DL */}
                     {(v.salesContract || v.estimate) && (
                       <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">

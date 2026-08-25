@@ -335,8 +335,9 @@ export default function StoreCustomerDetailPage() {
 
   async function saveCustomerEdit() {
     if (!customer) return
-    if (!editDraft.lastName.trim() || !editDraft.firstName.trim() || !editDraft.lastNameKana.trim() || !editDraft.firstNameKana.trim()) {
-      setMsg({ type: 'error', text: '姓・名とふりがなは必須です' })
+    // 「名」は任意（姓しか聞けていない顧客をそのまま編集できるようにする）
+    if (!editDraft.lastName.trim() || !editDraft.lastNameKana.trim()) {
+      setMsg({ type: 'error', text: '姓とせい（ふりがな）は必須です' })
       return
     }
     setSavingEdit(true)
@@ -2217,11 +2218,11 @@ export default function StoreCustomerDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="grid grid-cols-2 gap-3">
               <TextField label="姓" value={editDraft.lastName} onChange={v => setEditDraft(d => ({ ...d, lastName: v }))} required autoComplete="off" name="kk-edit-last-name" />
-              <TextField label="名" value={editDraft.firstName} onChange={v => setEditDraft(d => ({ ...d, firstName: v }))} required autoComplete="off" name="kk-edit-first-name" />
+              <TextField label="名（任意）" value={editDraft.firstName} onChange={v => setEditDraft(d => ({ ...d, firstName: v }))} autoComplete="off" name="kk-edit-first-name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <TextField label="せい（ふりがな）" value={editDraft.lastNameKana} onChange={v => setEditDraft(d => ({ ...d, lastNameKana: v }))} required autoComplete="off" name="kk-edit-last-kana" />
-              <TextField label="めい（ふりがな）" value={editDraft.firstNameKana} onChange={v => setEditDraft(d => ({ ...d, firstNameKana: v }))} required autoComplete="off" name="kk-edit-first-kana" />
+              <TextField label="めい（ふりがな・任意）" value={editDraft.firstNameKana} onChange={v => setEditDraft(d => ({ ...d, firstNameKana: v }))} autoComplete="off" name="kk-edit-first-kana" />
             </div>
             <TextField label="メールアドレス（任意）" type="email" value={editDraft.email} onChange={v => setEditDraft(d => ({ ...d, email: v }))} autoComplete="off" name="kk-edit-email" />
             <TextField label="電話番号（任意）" type="tel" value={editDraft.phone} onChange={v => setEditDraft(d => ({ ...d, phone: v }))} autoComplete="off" name="kk-edit-phone" />

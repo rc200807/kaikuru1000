@@ -370,7 +370,8 @@ export default function FinalAgreementPage() {
   const [showCompletion, setShowCompletion] = useState(false)
   // 直近の発行結果（メール送信の成否・保存されたPDFの有無）
   const [submitResult, setSubmitResult] = useState<{
-    emailSent: boolean
+    /** メールの送信受付が済んだか（実際の送信はキュー経由の非同期） */
+    emailQueued: boolean
     emailErrorReason: string | null
     pdfIncluded: boolean
     invoicePdfIncluded: boolean
@@ -559,7 +560,12 @@ export default function FinalAgreementPage() {
         const { billing } = await billingRes.json()
         // 同期コミット＋描画1フレーム待ちで、QRコード（canvas）をPDF化前に確実に描画する
         flushSync(() => setStripeBilling(billing))
-        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+        // タブが裏に回る・画面がロックされると requestAnimationFrame は発火しなくなり、
+        // ここで永久に止まってボタンが回り続けるため、タイムアウトで必ず先へ進める
+        await new Promise<void>(resolve => {
+          const timer = setTimeout(resolve, 1000)
+          requestAnimationFrame(() => requestAnimationFrame(() => { clearTimeout(timer); resolve() }))
+        })
       }
 
       let pdfBase64: string | null = null
@@ -594,29 +600,26 @@ export default function FinalAgreementPage() {
 
       const result = await res.json()
       setSubmitResult({
-        emailSent: !!result.emailSent,
+        emailQueued: !!result.emailQueued,
         emailErrorReason: result.emailErrorReason ?? null,
         pdfIncluded: !!result.pdfIncluded,
         invoicePdfIncluded: !!result.invoicePdfIncluded,
       })
-      await fetchVisit()
+      // 完了表示を止めないよう、最新状態の取り込みは待たない（失敗しても発行自体は成功）
+      void fetchVisit().catch(() => {})
 
       // 提出成功 → 署名のセッションストレージをクリア
       sessionStorage.removeItem(`sig_sale_${scheduleId}`)
       sessionStorage.removeItem(`sig_invoice_${scheduleId}`)
 
-      if (result.emailSent) {
+      if (result.emailQueued) {
         const pdfNote = result.pdfIncluded ? 'PDFを添付して' : 'マイページへのリンクを記載して'
-        setMessage({ type: 'success', text: `契約書を保存し、${pdfNote}${visit.user.idName || visit.user.name}様にメールで送信しました。` })
+        setMessage({ type: 'success', text: `契約書を保存しました。${pdfNote}${visit.user.idName || visit.user.name}様へ順次メールで送信します。` })
       } else {
-        const reasonText = result.emailErrorReason === 'smtp-error'
-          ? 'メール送信中にエラーが発生しました'
-          : result.emailErrorReason === 'smtp-disabled'
-          ? 'メール設定が未構成のためメール送信はスキップされました'
-          : result.emailErrorReason === 'no-email'
-          ? '送信先メールアドレスが指定されていません'
-          : 'メール送信に失敗しました'
-        setMessage({ type: 'error', text: `契約書は保存しましたが、${reasonText}。再提出を試してください。` })
+        const reasonText = result.emailErrorReason === 'no-email'
+          ? '送信先メールアドレスが未登録のため、控えのメールは送信しません'
+          : '控えメールの送信受付に失敗しました'
+        setMessage({ type: 'error', text: `契約書は保存しました。ただし${reasonText}。下のQR・リンクでお渡しください。` })
       }
 
       generateMagicLink()
@@ -666,11 +669,11 @@ export default function FinalAgreementPage() {
     }] : []),
   ]
   const completionSubtitle = submitResult
-    ? submitResult.emailSent
-      ? `${visit.user.idName || visit.user.name}様にメールで控えを送信しました。`
+    ? submitResult.emailQueued
+      ? `契約書を保存しました。${visit.user.idName || visit.user.name}様へ控えを順次メールで送信します。`
       : submitResult.emailErrorReason === 'no-email'
         ? '契約書は保存しました。メールアドレスが未登録のため、控えのメールは送っていません。下のQR・リンクでお渡しください。'
-        : '契約書は保存しましたが、控えのメール送信に失敗しました。下のQR・リンクでお渡しください。'
+        : '契約書は保存しました。控えメールの送信受付に失敗したため、下のQR・リンクでお渡しください。'
     : existingContract
       ? `発行日時: ${format(new Date(existingContract.agreedAt), 'yyyy年M月d日 HH:mm', { locale: ja })}`
       : undefined
@@ -1231,7 +1234,7 @@ export default function FinalAgreementPage() {
         onClose={() => setShowCompletion(false)}
         title="売買契約書を発行しました"
         subtitle={completionSubtitle}
-        status={submitResult && !submitResult.emailSent ? 'warning' : 'success'}
+        status={submitResult && !submitResult.emailQueued ? 'warning' : 'success'}
         url={magicLinkUrl}
         urlLoading={magicLinkLoading}
         urlLabel="売買契約書へのリンク（お客様用）"

@@ -1763,10 +1763,9 @@ export default function AdminCustomersPage() {
                         required
                       />
                       <TextField
-                        label="名"
+                        label="名（任意）"
                         value={editForm.firstName}
                         onChange={v => setEditForm(prev => ({ ...prev, firstName: v }))}
-                        required
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -1777,10 +1776,9 @@ export default function AdminCustomersPage() {
                         required
                       />
                       <TextField
-                        label="めい（ふりがな）"
+                        label="めい（ふりがな・任意）"
                         value={editForm.firstNameKana}
                         onChange={v => setEditForm(prev => ({ ...prev, firstNameKana: v }))}
-                        required
                       />
                     </div>
                     <TextField
@@ -1913,7 +1911,7 @@ export default function AdminCustomersPage() {
                       </Button>
                       <Button
                         onClick={handleSaveCustomer}
-                        disabled={editSubmitting || !editForm.lastName || !editForm.firstName || !editForm.lastNameKana || !editForm.firstNameKana || !editForm.phone}
+                        disabled={editSubmitting || !editForm.lastName || !editForm.lastNameKana || !editForm.phone}
                         loading={editSubmitting}
                       >
                         {editSubmitting ? '保存中...' : '保存'}
@@ -2775,10 +2773,9 @@ export default function AdminCustomersPage() {
                 name="kk-cust-last-name"
               />
               <TextField
-                label="名"
+                label="名（任意）"
                 value={addForm.firstName}
                 onChange={v => setAddForm(prev => ({ ...prev, firstName: v }))}
-                required
                 placeholder="太郎"
                 autoComplete="off"
                 name="kk-cust-first-name"
@@ -2795,10 +2792,9 @@ export default function AdminCustomersPage() {
                 name="kk-cust-last-kana"
               />
               <TextField
-                label="めい（ふりがな）"
+                label="めい（ふりがな・任意）"
                 value={addForm.firstNameKana}
                 onChange={v => setAddForm(prev => ({ ...prev, firstNameKana: v }))}
-                required
                 placeholder="たろう"
                 autoComplete="off"
                 name="kk-cust-first-kana"
@@ -3018,7 +3014,7 @@ export default function AdminCustomersPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={addSubmitting || !addForm.lastName || !addForm.firstName || !addForm.lastNameKana || !addForm.firstNameKana}
+                disabled={addSubmitting || !addForm.lastName || !addForm.lastNameKana}
                 loading={addSubmitting}
               >
                 {addSubmitting ? '登録中...' : '登録して次へ →'}

@@ -86,11 +86,24 @@ export default function PurchaseItemManager({
 
   const msg = (m: { type: 'success' | 'error'; text: string }) => onMessage?.(m)
 
+  /** 入力内容ごと破棄して閉じる（保存後・明示的な「キャンセル」時のみ） */
   function resetForm() {
     setForm({ itemName: '', category: '', quantity: 1, purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null, isAdditionalRequest: false, notes: '' })
     setEditingId(null)
     setShowForm(false)
     setJanLookupError(null)
+  }
+
+  /**
+   * 入力内容を残したまま閉じる。
+   * ✕・Escape・端末の戻る・背景クリックはうっかり閉じてしまうことがあるため、
+   * ここで入力を破棄しない（再度「品目を追加」を押すと続きから入力できる）。
+   * バーコード読み取り中は、閉じる操作をスキャナのクローズとして扱う。
+   */
+  function dismissForm() {
+    if (saving) return
+    if (showScanner) { setShowScanner(false); return }
+    setShowForm(false)
   }
 
   function startEdit(item: ManagedPurchaseItem) {
@@ -148,7 +161,8 @@ export default function PurchaseItemManager({
       const res = await fetch('/api/purchase-items/images', { method: 'POST', body: fd })
       if (res.ok) { const { url } = await res.json(); newUrls.push(url) }
     }
-    setForm({ ...form, imageUrls: newUrls })
+    // await をまたぐので、アップロード中に編集された他の項目を巻き戻さないよう関数形式で更新する
+    setForm(prev => ({ ...prev, imageUrls: newUrls }))
     setUploading(false)
     e.target.value = ''
   }
@@ -260,7 +274,8 @@ export default function PurchaseItemManager({
       {/* 操作バー */}
       {editable && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <Button size="sm" variant="outlined" onClick={() => { resetForm(); setShowForm(true) }}>＋ 品目を追加</Button>
+          {/* 新規入力の途中で閉じた場合は続きから再開する（編集中だった場合は新規として開き直す） */}
+          <Button size="sm" variant="outlined" onClick={() => { if (editingId !== null) resetForm(); setShowForm(true) }}>＋ 品目を追加</Button>
           <button
             onClick={addThousandYenBox}
             disabled={saving}
@@ -378,7 +393,7 @@ export default function PurchaseItemManager({
       )}
 
       {/* 追加・編集モーダル */}
-      <Modal open={showForm} onClose={() => { if (!saving) resetForm() }} title={editingId ? '品目を編集' : '品目を追加'} size="lg">
+      <Modal open={showForm} onClose={dismissForm} title={editingId ? '品目を編集' : '品目を追加'} size="lg">
         <div className="space-y-3">
           {form.janCode && (
             <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
@@ -475,13 +490,15 @@ export default function PurchaseItemManager({
               <Button size="sm" onClick={savePurchaseItem} disabled={saving} loading={saving}>{saving ? '保存中...' : '保存'}</Button>
             </div>
           </div>
+
+          {/* バーコードスキャナ。<Modal> は dialog.showModal() でトップレイヤーに載るため、
+              モーダルの外に置くと背後に隠れて ✕ を押せない（＝戻れずに入力が消えた原因）。
+              モーダルの内側に置くことでスキャナも同じトップレイヤーに入り、操作できる。 */}
+          {showScanner && (
+            <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setShowScanner(false)} />
+          )}
         </div>
       </Modal>
-
-      {/* バーコードスキャナ */}
-      {showScanner && (
-        <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setShowScanner(false)} />
-      )}
 
       {/* 在庫化 */}
       {convertItem && (

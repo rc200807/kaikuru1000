@@ -31,8 +31,9 @@ const registerSchema = z.object({
   leadSource:   z.string().max(100).optional(), // 流入経路
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
-  .refine(d => (d.lastName?.trim() && d.firstName?.trim()) || d.name?.trim(), { message: '氏名は必須です' })
-  .refine(d => (d.lastNameKana?.trim() && d.firstNameKana?.trim()) || d.furigana?.trim(), { message: 'ふりがなは必須です' })
+  // 「名」は任意。問い合わせの時点で姓しか聞けていないことが多いため、姓（せい）だけで登録できる
+  .refine(d => d.lastName?.trim() || d.name?.trim(), { message: '姓は必須です' })
+  .refine(d => d.lastNameKana?.trim() || d.furigana?.trim(), { message: 'せい（ふりがな）は必須です' })
 
 // 顧客登録（ライセンスキー必須 or 通常買取はキー不要）
 export async function POST(request: NextRequest) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendContractEmail, sendContractCreatedNotification } from '@/lib/mailer'
+import { enqueueEmail } from '@/lib/email-queue'
 import { buildContractBodyHtml, buildContractBodyText } from '@/lib/contract-email-template'
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
@@ -225,37 +225,34 @@ export async function POST(
   const contractBodyHtml = buildContractBodyHtml(contractTemplateParams)
   const contractBodyText = buildContractBodyText(contractTemplateParams)
 
-  // メール送信（PDFは任意。PDFが無くてもマジックリンクと本文だけは送る）
-  let emailSent = false
+  // メールはキューに積み、SMTPの完了を待たずに応答する。
+  // 数MBのPDFを添付したSMTP送信を2通ぶんリクエスト内で待っていたため、
+  // 契約書の保存自体は終わっているのに画面が進まない（ボタンが回り続ける）状態になっていた。
+  // 送信は cron（process-email-queue・2分ごと）が引き取り、失敗時は最大3回リトライされる。
+  let emailQueued = false
   let emailErrorReason: string | null = null
   if (!customerEmail) {
     emailErrorReason = 'no-email'
     console.warn('[contract POST] メール送信スキップ: customerEmail が空です')
   } else {
     try {
-      emailSent = await sendContractEmail({
-        customerEmail,
-        customerName: schedule.user.idName || schedule.user.name,
-        storeName: schedule.store.name,
-        visitDate: schedule.visitDate,
-        pdfBase64: effectivePdfBase64 ?? '',
-        invoicePdfBase64: effectiveInvoicePdfBase64 ?? '',
-        magicLinkUrl,
-        contractBodyHtml,
-        contractBodyText,
+      await enqueueEmail({
+        type: 'contractEmail',
+        params: {
+          contractId: contract.id,
+          customerEmail,
+          customerName: schedule.user.idName || schedule.user.name,
+          storeName: schedule.store.name,
+          visitDate: schedule.visitDate,
+          magicLinkUrl,
+          contractBodyHtml,
+          contractBodyText,
+        },
       })
-      if (emailSent) {
-        await prisma.salesContract.update({
-          where: { id: contract.id },
-          data: { emailSentAt: new Date() },
-        })
-      } else {
-        emailErrorReason = 'smtp-disabled'
-        console.warn('[contract POST] メール送信失敗: SMTP未構成またはトランスポーターnull')
-      }
+      emailQueued = true
     } catch (e) {
-      emailErrorReason = 'smtp-error'
-      console.error('[contract POST] 契約書メール送信失敗:', e)
+      emailErrorReason = 'queue-error'
+      console.error('[contract POST] 契約書メールのキュー登録に失敗:', e)
     }
   }
 
@@ -268,7 +265,7 @@ export async function POST(
       const upliftPct = dealId ? (await prisma.deal.findUnique({ where: { id: dealId }, select: { purchaseUpliftPercent: true } }))?.purchaseUpliftPercent ?? 0 : 0
       const purchaseTotal = purchaseBase + Math.round(purchaseBase * upliftPct / 100)
       const billingTotal = workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)
-      await sendContractCreatedNotification({
+      await enqueueEmail({ type: 'contractCreatedNotification', params: {
         to: notifyTo,
         storeName: schedule.store.name,
         customerName: schedule.user.idName || schedule.user.name,
@@ -277,17 +274,18 @@ export async function POST(
         purchaseAmount: purchaseTotal,
         billingAmount: billingTotal,
         contractUrl: `${baseUrl}/store/schedule/${id}`,
-      })
+      } })
     }
   } catch (e) {
-    console.error('[contract POST] 店舗通知メール送信失敗:', e)
+    console.error('[contract POST] 店舗通知メールのキュー登録に失敗:', e)
   }
 
   await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: '売買契約書を作成', req: request })
   return NextResponse.json({
     success: true,
     contractId: contract.id,
-    emailSent,
+    // メールはキュー経由の非同期送信になったため、この時点では「受け付けたか」だけを返す
+    emailQueued,
     emailErrorReason,
     pdfIncluded: !!effectivePdfBase64,
     invoicePdfIncluded: !!effectiveInvoicePdfBase64,
@@ -310,22 +308,19 @@ export async function GET(
 
   // 契約は案件に1通。該当訪問の案件IDで照会し、無ければ従来の訪問基準。
   const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true } })
-  const contract = await prisma.salesContract.findUnique({
-    where: sched?.dealId ? { dealId: sched.dealId } : { visitScheduleId: id },
-    select: {
-      id: true,
-      agreedAt: true,
-      emailSentAt: true,
-      customerEmail: true,
-      createdAt: true,
-      // 本文は返さず「PDFが保存されているか」だけを返す（完了パネルのDLボタン表示判定）
-      pdfBase64: true,
-      invoicePdfBase64: true,
-    },
-  })
+  const where = sched?.dealId ? { dealId: sched.dealId } : { visitScheduleId: id }
+  // PDFは数MBあるため本文は取得しない。「保存されているか」だけが必要なので
+  // count で存在判定する（以前は base64 を丸ごとDBから引いて捨てていた）。
+  const [contract, pdfCount, invoicePdfCount] = await Promise.all([
+    prisma.salesContract.findUnique({
+      where,
+      select: { id: true, agreedAt: true, emailSentAt: true, customerEmail: true, createdAt: true },
+    }),
+    prisma.salesContract.count({ where: { ...where, NOT: { pdfBase64: null } } }),
+    prisma.salesContract.count({ where: { ...where, NOT: { invoicePdfBase64: null } } }),
+  ])
 
   if (!contract) return NextResponse.json(null)
 
-  const { pdfBase64, invoicePdfBase64, ...rest } = contract
-  return NextResponse.json({ ...rest, hasPdf: !!pdfBase64, hasInvoicePdf: !!invoicePdfBase64 })
+  return NextResponse.json({ ...contract, hasPdf: pdfCount > 0, hasInvoicePdf: invoicePdfCount > 0 })
 }

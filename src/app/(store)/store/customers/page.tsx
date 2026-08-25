@@ -716,11 +716,11 @@ export default function StoreCustomersPage() {
             <input type="password" name="prevent-autofill-pw" autoComplete="new-password" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
             <div className="grid grid-cols-2 gap-3">
               <TextField label="姓" value={addCustomerForm.lastName} onChange={v => setAddCustomerForm(f => ({ ...f, lastName: v }))} required placeholder="山田" autoComplete="off" name="kk-cust-last-name" />
-              <TextField label="名" value={addCustomerForm.firstName} onChange={v => setAddCustomerForm(f => ({ ...f, firstName: v }))} required placeholder="太郎" autoComplete="off" name="kk-cust-first-name" />
+              <TextField label="名（任意）" value={addCustomerForm.firstName} onChange={v => setAddCustomerForm(f => ({ ...f, firstName: v }))} placeholder="太郎" autoComplete="off" name="kk-cust-first-name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <TextField label="せい（ふりがな）" value={addCustomerForm.lastNameKana} onChange={v => setAddCustomerForm(f => ({ ...f, lastNameKana: v }))} required placeholder="やまだ" autoComplete="off" name="kk-cust-last-kana" />
-              <TextField label="めい（ふりがな）" value={addCustomerForm.firstNameKana} onChange={v => setAddCustomerForm(f => ({ ...f, firstNameKana: v }))} required placeholder="たろう" autoComplete="off" name="kk-cust-first-kana" />
+              <TextField label="めい（ふりがな・任意）" value={addCustomerForm.firstNameKana} onChange={v => setAddCustomerForm(f => ({ ...f, firstNameKana: v }))} placeholder="たろう" autoComplete="off" name="kk-cust-first-kana" />
             </div>
             <TextField label="メールアドレス（任意）" type="email" value={addCustomerForm.email} onChange={v => setAddCustomerForm(f => ({ ...f, email: v }))} placeholder="taro@example.com" autoComplete="off" name="kk-cust-email" />
             <TextField label="電話番号（任意）" type="tel" value={addCustomerForm.phone} onChange={v => setAddCustomerForm(f => ({ ...f, phone: v }))} placeholder="090-1234-5678" autoComplete="off" name="kk-cust-phone" />
@@ -763,7 +763,7 @@ export default function StoreCustomersPage() {
               ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
             </p>
             <div className="flex gap-3 pt-2">
-              <Button type="submit" variant="filled" loading={addCustomerSubmitting} disabled={addCustomerSubmitting || !addCustomerForm.lastName || !addCustomerForm.firstName || !addCustomerForm.lastNameKana || !addCustomerForm.firstNameKana} fullWidth>
+              <Button type="submit" variant="filled" loading={addCustomerSubmitting} disabled={addCustomerSubmitting || !addCustomerForm.lastName || !addCustomerForm.lastNameKana} fullWidth>
                 {addCustomerSubmitting ? '登録中...' : '次へ（顧客を登録）'}
               </Button>
             </div>

@@ -20,6 +20,7 @@ const ITEMS: SettingItem[] = [
   { href: '/admin/settings/akiya-items', title: '空き家管理項目', desc: '空き家管理記録の点検項目マスタ（並び順・有効/無効）', icon: '🏠' },
   { href: '/admin/settings/payment', title: '決済カード', desc: '備品発注の決済に使うクレジットカード', icon: '💳' },
   { href: '/admin/settings/store-menu', title: '店舗メニュー設定', desc: '店舗ポータルのサイドメニューの並び順・表示/非表示（店舗ごとの特例も設定可）', icon: '🧩' },
+  { href: '/admin/settings/calendar-share', title: 'カレンダー連携の共有内容', desc: '訪問予定をGoogleカレンダーに登録する際に、住所・メモ・案件内容などをどこまで共有するか', icon: '📅' },
   { href: '/admin/settings/image-optimization', title: '既存画像の最適化', desc: '過去にアップロードされた画像をWebPに作り直して転送量を下げる（スーパー管理者のみ）', icon: '🖼️' },
 ]
 

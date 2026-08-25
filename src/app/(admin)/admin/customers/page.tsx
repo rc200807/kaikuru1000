@@ -1345,7 +1345,7 @@ export default function AdminCustomersPage() {
               const c = CUSTOMER_TYPE_BADGE[t as keyof typeof CUSTOMER_TYPE_BADGE]
               const label = CUSTOMER_TYPE_LABEL[t as keyof typeof CUSTOMER_TYPE_LABEL] ?? t
               return (
-                <span key={t} className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: c?.bg, color: c?.fg }}>
+                <span key={t} className="text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: c?.bg, color: c?.fg }}>
                   {label}
                 </span>
               )

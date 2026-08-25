@@ -457,7 +457,7 @@ export default function StoreCustomersPage() {
           visit:    { label: '訪問型', cls: 'bg-green-100 text-green-700' },
         }
         const t = typeMap[c.customerType] ?? typeMap.visit
-        return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.cls}`}>{t.label}</span>
+        return <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${t.cls}`}>{t.label}</span>
       },
     },
     {

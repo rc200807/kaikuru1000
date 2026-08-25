@@ -177,6 +177,19 @@ export function parseDealSort(searchParams: URLSearchParams): any {
   return [{ [field]: dir === 'desc' ? 'desc' : 'asc' }, { id: 'desc' }]
 }
 
+/**
+ * 「次回訪問」順のソート指定か（sort=nextVisit:asc|desc）。
+ * 次回訪問は「未来かつキャンセル以外の直近1件」というフィルタ済み関連の最小値であり、
+ * Prismaの通常のorderByでは表現できない（to-many関連の集計orderByはフィルタを掛けられない）ため、
+ * ルート側で「対象ID一覧→VisitScheduleを別途集計→JSで並べ替え」という専用の経路を使う。
+ */
+export function parseNextVisitSort(searchParams: URLSearchParams): 'asc' | 'desc' | null {
+  const sort = searchParams.get('sort') || ''
+  const [field, dir] = sort.split(':')
+  if (field !== 'nextVisit') return null
+  return dir === 'desc' ? 'desc' : 'asc'
+}
+
 /** 管理者向け案件一覧のwhere条件（一覧・CSV・一括で共用） */
 export function buildAdminDealsWhere(searchParams: URLSearchParams): any {
   const and = buildDealFilterConditions(searchParams, { admin: true })

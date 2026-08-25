@@ -83,8 +83,8 @@ const BASE_COLUMN_OPTIONS = [
 const DEFAULT_COLS = ['nextVisit', 'dealNumber', 'category', 'amount', 'member']
 
 // テーブル列キー → サーバーソートフィールド
-const SORT_FIELD_BY_COL: Record<string, string> = { createdAt: 'createdAt', occurredAt: 'occurredAt', amount: 'purchaseAmount' }
-const COL_BY_SORT_FIELD: Record<string, string> = { createdAt: 'createdAt', occurredAt: 'occurredAt', purchaseAmount: 'amount' }
+const SORT_FIELD_BY_COL: Record<string, string> = { createdAt: 'createdAt', occurredAt: 'occurredAt', amount: 'purchaseAmount', nextVisit: 'nextVisit' }
+const COL_BY_SORT_FIELD: Record<string, string> = { createdAt: 'createdAt', occurredAt: 'occurredAt', purchaseAmount: 'amount', nextVisit: 'nextVisit' }
 
 const yen = (n: number | null | undefined) => (n == null ? '—' : '¥' + n.toLocaleString())
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('ja-JP', { year: '2-digit', month: '2-digit', day: '2-digit' })
@@ -333,7 +333,7 @@ function StoreDealsContent() {
       const c = DEAL_STATUS_BADGE[d.status as DealStatus] ?? DEAL_STATUS_BADGE.inquiry
       return <Badge label={DEAL_STATUS_LABEL[d.status as DealStatus] ?? d.status} bg={c.bg} fg={c.fg} />
     } },
-    { key: 'nextVisit', header: '次回訪問', render: (d: Deal) => {
+    { key: 'nextVisit', header: '次回訪問', sortable: true, render: (d: Deal) => {
       const v = d.visitSchedules?.[0]
       if (!v) return <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">—</span>
       return (

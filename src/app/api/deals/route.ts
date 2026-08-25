@@ -8,7 +8,7 @@ import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { resolveStoreScope } from '@/lib/store-scope'
-import { buildDealFilterConditions, buildStoreDealsWhere, jstTodayStart, parseDealSort } from '@/lib/deal-list-query'
+import { buildDealFilterConditions, buildStoreDealsWhere, jstTodayStart, parseDealSort, parseNextVisitSort } from '@/lib/deal-list-query'
 import { createTimer } from '@/lib/api-timing'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
@@ -66,32 +66,69 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ stats: { counts, total: statsTotal, won, winRate, filtered: { count, purchaseSum, purchaseAvg } } })
   }
 
+  // include ではなく select。preConsentSignature（base64署名）や paperContractImages を
+  // 一覧のレスポンスに載せないため。
+  const dealSelect = {
+    id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
+    detail: true, status: true, category: true,
+    occurredAt: true, createdAt: true, updatedAt: true,
+    purchaseAmount: true, billingAmount: true,
+    memberId: true, preConsentAt: true,
+    user: { select: { id: true, name: true, email: true, phone: true, customerType: true, leadSource: true } },
+    store: { select: { id: true, name: true, code: true } },
+    inquiry: { select: { id: true, inquiryType: true } },
+    member: { select: { id: true, name: true } },
+    salesContract: { select: { id: true } },
+    // 「次回訪問」列・モバイルカード用に直近の予定を1件だけ
+    visitSchedules: {
+      where: { status: { not: 'cancelled' }, visitDate: { gte: jstTodayStart() } },
+      orderBy: { visitDate: 'asc' as const },
+      take: 1,
+      select: { id: true, visitDate: true, startTime: true, endTime: true },
+    },
+    _count: { select: { visitSchedules: true } },
+  } as const
+
   const t = createTimer()
+
+  // 「次回訪問」順は、対象ID一覧→VisitScheduleを別途集計→JSで並べ替え、という専用経路を使う
+  // （フィルタ済みto-many関連の最小値では通常のorderByが表現できないため）。
+  const nextVisitDir = parseNextVisitSort(searchParams)
+  if (nextVisitDir) {
+    const matched = await t.measure('list', () => prisma.deal.findMany({ where, select: { id: true } }))
+    const idList = matched.map(d => d.id)
+    const nextVisitAgg = idList.length > 0
+      ? await t.measure('list', () => prisma.visitSchedule.groupBy({
+          by: ['dealId'],
+          where: { dealId: { in: idList }, status: { not: 'cancelled' }, visitDate: { gte: jstTodayStart() } },
+          _min: { visitDate: true },
+        }))
+      : []
+    const nextVisitMap = new Map(
+      nextVisitAgg.filter((a): a is typeof a & { dealId: string } => !!a.dealId).map(a => [a.dealId, a._min.visitDate as Date]),
+    )
+    // 次回訪問の予定が無い案件は、昇順・降順どちらでも常に末尾に寄せる
+    const sortedIds = [...idList].sort((a, b) => {
+      const da = nextVisitMap.get(a)
+      const db = nextVisitMap.get(b)
+      if (!da && !db) return 0
+      if (!da) return 1
+      if (!db) return -1
+      return nextVisitDir === 'desc' ? db.getTime() - da.getTime() : da.getTime() - db.getTime()
+    })
+    const pageIds = sortedIds.slice((page - 1) * limit, (page - 1) * limit + limit)
+    const rows = pageIds.length > 0
+      ? await t.measure('list', () => prisma.deal.findMany({ where: { id: { in: pageIds } }, select: dealSelect }))
+      : []
+    const rowById = new Map(rows.map(r => [r.id, r]))
+    const deals = pageIds.map(id => rowById.get(id)).filter(Boolean)
+    return t.json({ deals, total: idList.length, page, limit })
+  }
+
   const [deals, total] = await t.measure('list', () => Promise.all([
     prisma.deal.findMany({
       where,
-      // include ではなく select。preConsentSignature（base64署名）や paperContractImages を
-      // 一覧のレスポンスに載せないため。
-      select: {
-        id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
-        detail: true, status: true, category: true,
-        occurredAt: true, createdAt: true, updatedAt: true,
-        purchaseAmount: true, billingAmount: true,
-        memberId: true, preConsentAt: true,
-        user: { select: { id: true, name: true, email: true, phone: true, customerType: true, leadSource: true } },
-        store: { select: { id: true, name: true, code: true } },
-        inquiry: { select: { id: true, inquiryType: true } },
-        member: { select: { id: true, name: true } },
-        salesContract: { select: { id: true } },
-        // 「次回訪問」列・モバイルカード用に直近の予定を1件だけ
-        visitSchedules: {
-          where: { status: { not: 'cancelled' }, visitDate: { gte: jstTodayStart() } },
-          orderBy: { visitDate: 'asc' },
-          take: 1,
-          select: { id: true, visitDate: true, startTime: true, endTime: true },
-        },
-        _count: { select: { visitSchedules: true } },
-      },
+      select: dealSelect,
       orderBy: parseDealSort(searchParams),
       skip: (page - 1) * limit,
       take: limit,

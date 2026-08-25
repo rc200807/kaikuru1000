@@ -486,8 +486,17 @@ model GoogleSheetsConfig {
 // サイト全体設定（Google Analytics、楽天APIなど）
 model SiteConfig {
   id               String   @id @default(cuid())
-  gaTrackingId     String?              // Google Analytics トラッキングID (G-XXXXXXX)
+  gaTrackingId     String?              // Google Analytics トラッキングID (G-XXXXXXX、現在は未使用)
   rakutenAppId     String?              // 楽天商品検索API アプリケーションID
+
+  // 訪問スケジュールをGoogleカレンダー（店舗連携カレンダー・本部office@rcinc.jpからの招待）に
+  // 登録する際、説明欄・場所欄に何を含めるか。既定値は変更前の挙動（全て含む）に合わせてある
+  calendarShareAddress      Boolean @default(true)  // 住所（説明欄の「住所:」＋イベントの場所）
+  calendarShareVisitNote    Boolean @default(true)  // 訪問メモ
+  calendarShareDealDetail   Boolean @default(true)  // 案件内容（本部への招待のみ）
+  calendarShareInternalNote Boolean @default(true)  // 顧客の内部メモ（本部への招待のみ。店舗・管理者限定の情報）
+  calendarShareLinks        Boolean @default(true)  // 顧客情報・訪問詳細への内部リンク（本部への招待のみ）
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }

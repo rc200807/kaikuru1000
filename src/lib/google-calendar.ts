@@ -6,6 +6,47 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? ''
 const OFFICE_GOOGLE_REFRESH_TOKEN = process.env.OFFICE_GOOGLE_REFRESH_TOKEN ?? ''
 
+export type CalendarShareSettings = {
+  address: boolean
+  visitNote: boolean
+  dealDetail: boolean
+  internalNote: boolean
+  links: boolean
+}
+
+const DEFAULT_CALENDAR_SHARE: CalendarShareSettings = {
+  address: true,
+  visitNote: true,
+  dealDetail: true,
+  internalNote: true,
+  links: true,
+}
+
+/**
+ * 訪問スケジュールをGoogleカレンダーに登録する際、説明欄・場所欄に何を含めるかの設定。
+ * 管理ポータル（設定 > カレンダー連携の共有内容）から編集できる。SiteConfigが未作成の場合は
+ * 既定値（変更前の挙動＝すべて含む）を返す
+ */
+export async function getCalendarShareSettings(): Promise<CalendarShareSettings> {
+  const config = await prisma.siteConfig.findFirst({
+    select: {
+      calendarShareAddress: true,
+      calendarShareVisitNote: true,
+      calendarShareDealDetail: true,
+      calendarShareInternalNote: true,
+      calendarShareLinks: true,
+    },
+  })
+  if (!config) return DEFAULT_CALENDAR_SHARE
+  return {
+    address: config.calendarShareAddress,
+    visitNote: config.calendarShareVisitNote,
+    dealDetail: config.calendarShareDealDetail,
+    internalNote: config.calendarShareInternalNote,
+    links: config.calendarShareLinks,
+  }
+}
+
 /**
  * 店舗のGoogleカレンダー連携用 OAuth2 クライアントを取得
  * トークンが期限切れの場合は自動リフレッシュしてDBを更新する
@@ -85,9 +126,10 @@ export async function createCalendarEvent(
     const oauth2Client = await getOAuth2Client(storeId)
     if (!oauth2Client) return null
 
-    const config = await prisma.storeGoogleCalendar.findUnique({
-      where: { storeId },
-    })
+    const [config, share] = await Promise.all([
+      prisma.storeGoogleCalendar.findUnique({ where: { storeId } }),
+      getCalendarShareSettings(),
+    ])
     const calendarId = config?.calendarId ?? 'primary'
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
@@ -123,10 +165,10 @@ export async function createCalendarEvent(
       const timePart = [visitSchedule.startTime, visitSchedule.endTime].filter(Boolean).join(' 〜 ')
       descriptionParts.push(`時間: ${timePart}`)
     }
-    if (visitSchedule.note) {
+    if (share.visitNote && visitSchedule.note) {
       descriptionParts.push(visitSchedule.note)
     }
-    if (visitSchedule.user.address) {
+    if (share.address && visitSchedule.user.address) {
       descriptionParts.push(`住所: ${visitSchedule.user.address}`)
     }
 
@@ -143,7 +185,7 @@ export async function createCalendarEvent(
           dateTime: endDateTime.toISOString(),
           timeZone: 'Asia/Tokyo',
         },
-        location: visitSchedule.user.address || undefined,
+        location: (share.address && visitSchedule.user.address) || undefined,
       },
     })
 
@@ -177,9 +219,10 @@ export async function updateCalendarEvent(
     const oauth2Client = await getOAuth2Client(storeId)
     if (!oauth2Client) return
 
-    const config = await prisma.storeGoogleCalendar.findUnique({
-      where: { storeId },
-    })
+    const [config, share] = await Promise.all([
+      prisma.storeGoogleCalendar.findUnique({ where: { storeId } }),
+      getCalendarShareSettings(),
+    ])
     const calendarId = config?.calendarId ?? 'primary'
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
@@ -192,10 +235,10 @@ export async function updateCalendarEvent(
       : '訪問型'
 
     const descriptionParts: string[] = []
-    if (visitSchedule.note) {
+    if (share.visitNote && visitSchedule.note) {
       descriptionParts.push(visitSchedule.note)
     }
-    if (visitSchedule.user.address) {
+    if (share.address && visitSchedule.user.address) {
       descriptionParts.push(`住所: ${visitSchedule.user.address}`)
     }
 
@@ -213,7 +256,7 @@ export async function updateCalendarEvent(
           dateTime: endTime.toISOString(),
           timeZone: 'Asia/Tokyo',
         },
-        location: visitSchedule.user.address || undefined,
+        location: (share.address && visitSchedule.user.address) || undefined,
       },
     })
   } catch (error) {
@@ -314,6 +357,7 @@ export async function createCalendarInvitation(params: {
     const oauth2Client = await getOfficeOAuth2Client()
     if (!oauth2Client) return null
 
+    const share = await getCalendarShareSettings()
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
 
     const dateStr = params.visitDate.toISOString().split('T')[0]
@@ -339,27 +383,31 @@ export async function createCalendarInvitation(params: {
     const lines: string[] = [
       `お客様名: ${params.user.name}`,
       `電話番号: ${params.user.phone || '（未登録）'}`,
-      `住所: ${params.user.address || '（未登録）'}`,
     ]
+    if (share.address) {
+      lines.push(`住所: ${params.user.address || '（未登録）'}`)
+    }
 
-    if (params.deal?.detail) {
+    if (share.dealDetail && params.deal?.detail) {
       lines.push('', '■ 案件内容', params.deal.detail)
     }
 
-    if (params.note) {
+    if (share.visitNote && params.note) {
       lines.push('', '■ 訪問メモ', params.note)
     }
 
-    if (params.user.internalNote) {
+    if (share.internalNote && params.user.internalNote) {
       lines.push('', '■ 顧客内部メモ', params.user.internalNote)
     }
 
-    lines.push(
-      '',
-      '■ 関連リンク',
-      `顧客情報: ${base}/store/customers/${params.user.id}`,
-      `訪問詳細: ${base}/store/schedule/${params.visitScheduleId}`,
-    )
+    if (share.links) {
+      lines.push(
+        '',
+        '■ 関連リンク',
+        `顧客情報: ${base}/store/customers/${params.user.id}`,
+        `訪問詳細: ${base}/store/schedule/${params.visitScheduleId}`,
+      )
+    }
 
     const event = await calendar.events.insert({
       calendarId: 'primary',
@@ -367,7 +415,7 @@ export async function createCalendarInvitation(params: {
       requestBody: {
         summary: `【買いクル】${params.user.name}様 訪問予定`,
         description: lines.join('\n'),
-        location: params.user.address || undefined,
+        location: (share.address && params.user.address) || undefined,
         start: { dateTime: startDateTime.toISOString(), timeZone: 'Asia/Tokyo' },
         end: { dateTime: endDateTime.toISOString(), timeZone: 'Asia/Tokyo' },
         attendees: [{ email: params.inviteEmail }],

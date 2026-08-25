@@ -305,10 +305,9 @@ export default function DealDetailView({
     return () => clearInterval(t)
   }, [recordings, loadRecordings])
 
-  async function handleUploadRecording(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  // ファイル選択・マイク録音の両方から呼ばれる共通アップロード処理。
+  // DealRecording は案件に対してhasMany（複数件登録可能）なので、呼ぶたびに新しい1件として追加される
+  async function uploadRecordingFile(file: File) {
     if (file.size > 200 * 1024 * 1024) { setRecError('音声ファイルは200MB以下にしてください'); return }
     setRecError(null)
     setRecUploading(true)
@@ -336,6 +335,75 @@ export default function DealDetailView({
       setRecProgress(0)
     }
   }
+
+  async function handleUploadRecording(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await uploadRecordingFile(file)
+  }
+
+  // ── マイク録音（MediaRecorder） ──
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [micUnsupportedMsg, setMicUnsupportedMsg] = useState<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const recordingStreamRef = useRef<MediaStream | null>(null)
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  function stopMicStream() {
+    recordingStreamRef.current?.getTracks().forEach(t => t.stop())
+    recordingStreamRef.current = null
+    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
+  }
+
+  async function startMicRecording() {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setMicUnsupportedMsg('この端末・ブラウザではマイク録音に対応していません（HTTPS接続が必要な場合があります）')
+      return
+    }
+    setMicUnsupportedMsg(null)
+    setRecError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      recordingStreamRef.current = stream
+      // ブラウザが対応する形式を優先順に試す（Safari は webm 非対応で mp4 のみ扱えることが多い）
+      const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) ?? ''
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      recordedChunksRef.current = []
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+      recorder.onstop = async () => {
+        stopMicStream()
+        const blobType = recorder.mimeType || 'audio/webm'
+        const audioBlob = new Blob(recordedChunksRef.current, { type: blobType })
+        recordedChunksRef.current = []
+        if (audioBlob.size === 0) { setRecError('録音データが空でした。もう一度お試しください'); return }
+        const ext = blobType.includes('mp4') ? '.m4a' : blobType.includes('ogg') ? '.ogg' : '.webm'
+        const fileName = `録音_${new Date().toISOString().replace(/[:.]/g, '-')}${ext}`
+        await uploadRecordingFile(new File([audioBlob], fileName, { type: blobType }))
+      }
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setIsRecording(true)
+      setRecordingSeconds(0)
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
+    } catch {
+      setMicUnsupportedMsg('マイクへのアクセスが許可されませんでした。ブラウザの設定を確認してください')
+      stopMicStream()
+    }
+  }
+
+  function stopMicRecording() {
+    mediaRecorderRef.current?.stop()
+    setIsRecording(false)
+  }
+
+  // ページを離れるときに録音中なら止める（マイクを掴んだままにしない）
+  useEffect(() => () => {
+    mediaRecorderRef.current?.stop()
+    stopMicStream()
+  }, [])
 
   async function handleDeleteRecording(recId: string) {
     if (!confirm('この録音を削除しますか？（文字起こし・要約も削除されます）')) return
@@ -1399,7 +1467,8 @@ export default function DealDetailView({
             >
               <input ref={recInputRef} type="file" accept="audio/*" className="hidden" onChange={handleUploadRecording} disabled={recUploading} />
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
-              顧客との会話を録音した音声をアップロードすると、AIが自動で文字起こしと要約（顧客の要望・重要事項・次アクション）を作成します。解析には数分かかる場合があります。
+              顧客との会話は、画面右下の録音ボタンからその場でマイク録音するか、既存の音声ファイルをアップロードして登録できます（複数件登録可）。
+              AIが自動で文字起こしと要約（顧客の要望・重要事項・次アクション）を作成します。解析には数分かかる場合があります。
             </p>
             {recError && <p className="text-sm text-[var(--md-sys-color-error)] mb-2">{recError}</p>}
             {recordings.length === 0 ? (
@@ -1791,6 +1860,39 @@ export default function DealDetailView({
           </div>
         </div>
       </Modal>
+
+      {/* マイク録音のフローティングボタン。案件詳細のどこにスクロールしていても押せるようにする。
+          bottom-24 は下部追従の書類作成バー（sticky, z-30）・BottomNav（fixed, z-40）と
+          重ならない高さ。録音中は赤く点滅させ、経過時間を表示する */}
+      <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] md:bottom-8 right-4 md:right-8 z-40 flex flex-col items-end gap-2">
+        {micUnsupportedMsg && (
+          <div className="max-w-[220px] text-xs px-3 py-2 rounded-lg shadow-lg" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
+            {micUnsupportedMsg}
+          </div>
+        )}
+        {isRecording && (
+          <div className="text-xs font-medium px-3 py-1.5 rounded-full shadow-lg bg-[var(--md-sys-color-error,#B3261E)] text-white tabular-nums">
+            録音中 {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={isRecording ? stopMicRecording : startMicRecording}
+          disabled={recUploading}
+          title={isRecording ? '録音を停止してアップロード' : '会話の録音を開始'}
+          className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-colors disabled:opacity-50 ${
+            isRecording ? 'bg-[var(--md-sys-color-error,#B3261E)] animate-pulse' : 'bg-[var(--portal-primary)]'
+          }`}
+        >
+          {isRecording ? (
+            <span className="w-4 h-4 rounded-sm bg-white" />
+          ) : (
+            <svg className="w-6 h-6" style={{ color: 'var(--portal-on-primary,#fff)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   )
 }

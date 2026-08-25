@@ -258,51 +258,39 @@ export default function NavigationDrawer() {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const user = session?.user as any
 
-  // 店舗チャットの未読ルーム数（フォーカス時・定期・遷移時に更新）
+  // ナビのバッジ（チャット未読ルーム数・未読リリースノート数）は1本のAPIでまとめて取る。
+  // 以前は2本を別々に、しかもページ遷移のたびに叩いていた（往復1本0.3秒前後）。
   useEffect(() => {
     if (!user?.role) return
     let cancelled = false
+    let lastLoadedAt = 0
     const load = async () => {
       try {
-        const res = await fetch('/api/admin/chat/unread-count')
+        const res = await fetch('/api/admin/badges')
         if (!res.ok) return
         const data = await res.json()
-        if (!cancelled) setChatUnread(data.count ?? 0)
-      } catch { /* noop */ }
+        if (cancelled) return
+        setChatUnread(data.chat ?? 0)
+        setReleaseUnread(data.releaseNotes ?? 0)
+        lastLoadedAt = Date.now()
+      } catch { /* バッジの取得失敗で画面を壊さない */ }
     }
+    const onFocus = () => { if (Date.now() - lastLoadedAt > 15_000) load() }
     load()
-    const timer = setInterval(() => { if (!document.hidden) load() }, 30000)
-    window.addEventListener('focus', load)
+    const timer = setInterval(() => { if (!document.hidden) load() }, 60_000)
+    window.addEventListener('focus', onFocus)
     window.addEventListener('chat:activity', load)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      window.removeEventListener('focus', load)
-      window.removeEventListener('chat:activity', load)
-    }
-  }, [user?.role, pathname])
-
-  // 未読リリースノート数（ダッシュボード閲覧で既読化されるとイベントで更新）
-  useEffect(() => {
-    if (!user?.role) return
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch('/api/admin/release-notes/unread-count')
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled) setReleaseUnread(data.count ?? 0)
-      } catch { /* noop */ }
-    }
-    load()
-    window.addEventListener('focus', load)
     window.addEventListener('releasenotes:read', load)
     return () => {
       cancelled = true
-      window.removeEventListener('focus', load)
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('chat:activity', load)
       window.removeEventListener('releasenotes:read', load)
     }
-  }, [user?.role, pathname])
+    // ページ遷移では取り直さない（バッジのために毎回往復するのは割に合わない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role])
 
   // Close user menu on outside click
   useEffect(() => {

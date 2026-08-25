@@ -347,10 +347,36 @@ export default function DealDetailView({
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [micUnsupportedMsg, setMicUnsupportedMsg] = useState<string | null>(null)
+  // ブラウザの許可状況（Permissions APIが使える場合のみ判定できる。Safari等は 'unknown' のまま）。
+  // 'denied' の場合、ブラウザ設定を画面から直接開くAPIは無いため、手順を案内し「再確認」で
+  // 変更後の状態を拾えるようにする（設定変更後に自動で消えるよう onchange も購読する）。
+  const [micPermissionState, setMicPermissionState] = useState<'unknown' | 'granted' | 'denied' | 'prompt'>('unknown')
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const recordingStreamRef = useRef<MediaStream | null>(null)
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const recheckMicPermission = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return
+    try {
+      const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+      setMicPermissionState(status.state as 'granted' | 'denied' | 'prompt')
+      if (status.state !== 'denied') setMicUnsupportedMsg(null)
+    } catch {
+      // Permissions APIでマイクを問い合わせられない環境（Safari等）。録音を試みた際のエラーで判定する
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return
+    let status: PermissionStatus | null = null
+    navigator.permissions.query({ name: 'microphone' as PermissionName }).then(s => {
+      status = s
+      setMicPermissionState(s.state as 'granted' | 'denied' | 'prompt')
+      s.onchange = () => setMicPermissionState(s.state as 'granted' | 'denied' | 'prompt')
+    }).catch(() => { /* 非対応ブラウザは 'unknown' のまま録音時のエラーで検知する */ })
+    return () => { if (status) status.onchange = null }
+  }, [])
 
   function stopMicStream() {
     recordingStreamRef.current?.getTracks().forEach(t => t.stop())
@@ -388,9 +414,16 @@ export default function DealDetailView({
       setIsRecording(true)
       setRecordingSeconds(0)
       recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
-    } catch {
-      setMicUnsupportedMsg('マイクへのアクセスが許可されませんでした。ブラウザの設定を確認してください')
+    } catch (err: any) {
       stopMicStream()
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
+        setMicPermissionState('denied')
+        setMicUnsupportedMsg('マイクの使用がブロックされています。ブラウザのアドレスバー付近のサイト設定（鍵マーク等）で「マイク」を許可に変更し、再読み込みしてください。')
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        setMicUnsupportedMsg('マイクが見つかりませんでした。端末にマイクが接続・有効になっているか確認してください')
+      } else {
+        setMicUnsupportedMsg('マイクへのアクセスに失敗しました。ブラウザの設定を確認してください')
+      }
     }
   }
 
@@ -1862,12 +1895,20 @@ export default function DealDetailView({
       </Modal>
 
       {/* マイク録音のフローティングボタン。案件詳細のどこにスクロールしていても押せるようにする。
-          bottom-24 は下部追従の書類作成バー（sticky, z-30）・BottomNav（fixed, z-40）と
-          重ならない高さ。録音中は赤く点滅させ、経過時間を表示する */}
-      <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] md:bottom-8 right-4 md:right-8 z-40 flex flex-col items-end gap-2">
-        {micUnsupportedMsg && (
-          <div className="max-w-[220px] text-xs px-3 py-2 rounded-lg shadow-lg" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
-            {micUnsupportedMsg}
+          下部追従の書類作成バー（sticky, z-30。モバイルはさらにBottomNav分のpb-16を内包）の
+          実高さぶん浮かせて重ならないようにする（モバイル: バー約117px+セーフエリア、
+          デスクトップ: バー約53px）。録音中は赤く点滅させ、経過時間を表示する */}
+      <div className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom,0px))] md:bottom-20 right-4 md:right-8 z-40 flex flex-col items-end gap-2">
+        {(micUnsupportedMsg || micPermissionState === 'denied') && (
+          <div className="max-w-[240px] text-xs px-3 py-2 rounded-lg shadow-lg space-y-1.5" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
+            <p>{micUnsupportedMsg ?? 'マイクの使用がブロックされています。ブラウザのアドレスバー付近のサイト設定（鍵マーク等）で「マイク」を許可に変更し、再読み込みしてください。'}</p>
+            <button
+              type="button"
+              onClick={recheckMicPermission}
+              className="text-[11px] font-semibold underline underline-offset-2"
+            >
+              許可状況を再確認
+            </button>
           </div>
         )}
         {isRecording && (

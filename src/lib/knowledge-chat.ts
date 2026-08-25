@@ -15,6 +15,10 @@ import type { KnowledgeViewer } from './knowledge-api'
 const FAQ_CONTEXT_BUDGET = 60_000
 /** 1件のFAQ本文の上限（極端に長い回答が全体を食い潰さないように） */
 const FAQ_ANSWER_MAX_CHARS = 4_000
+/** 1件の資料（PDF等）から使う抽出テキストの上限。FAQより長く許容する */
+const DOCUMENT_TEXT_MAX_CHARS = 20_000
+/** 資料のFAQ_IDに付ける接頭辞。実在するFaqのcuidと衝突しない固定文字列 */
+const DOCUMENT_ID_PREFIX = 'doc:'
 /** プロンプトに載せる会話履歴のメッセージ数 */
 const HISTORY_LIMIT = 16
 /** 1利用者あたり1日の質問回数上限（コストの防波堤） */
@@ -108,31 +112,80 @@ export async function loadFaqsForViewer(viewer: KnowledgeViewer): Promise<FaqFor
   }))
 }
 
+/** 資料のIDを "doc:xxx" 形式にする / 判定する。Faqのcuidと衝突しない前提の固定接頭辞 */
+export function isDocumentContextId(id: string): boolean {
+  return id.startsWith(DOCUMENT_ID_PREFIX)
+}
+export function documentIdFromContextId(id: string): string {
+  return id.slice(DOCUMENT_ID_PREFIX.length)
+}
+export function contextIdForDocument(id: string): string {
+  return `${DOCUMENT_ID_PREFIX}${id}`
+}
+
+/**
+ * DBから参照可能な資料（PDF等）を取得し、FAQと同じ FaqForContext 形状で返す。
+ * こうすると selectFaqContext / buildPrompt / 引用IDの検証をそのまま資料にも使い回せる
+ * （質問=資料タイトル、回答=抽出テキスト、IDに "doc:" を付けてFAQと区別する）。
+ * 抽出がまだ済んでいない（status!=='ready'）資料は情報源にできないため除外する。
+ */
+export async function loadDocumentsForViewer(viewer: KnowledgeViewer): Promise<FaqForContext[]> {
+  const docs = await prisma.knowledgeDocument.findMany({
+    where: {
+      status: 'ready',
+      extractedText: { not: null },
+      ...(viewer.canSeeAdminOnly ? {} : { visibility: 'all' }),
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, title: true, extractedText: true },
+  })
+
+  return docs
+    .filter(d => !!d.extractedText)
+    .map(d => ({
+      id: `${DOCUMENT_ID_PREFIX}${d.id}`,
+      question: d.title,
+      answer: (d.extractedText as string).slice(0, DOCUMENT_TEXT_MAX_CHARS),
+      categoryName: '資料',
+    }))
+}
+
+/** チャットの情報源（FAQ＋資料）をまとめて取得する */
+export async function loadKnowledgeContext(viewer: KnowledgeViewer): Promise<FaqForContext[]> {
+  const [faqs, docs] = await Promise.all([loadFaqsForViewer(viewer), loadDocumentsForViewer(viewer)])
+  return [...faqs, ...docs]
+}
+
 // ─── Gemini への問い合わせ ───────────────────────────────
 
-function buildPrompt(question: string, faqs: FaqForContext[], history: KnowledgeChatMessage[]): string {
-  const knowledge = faqs.length === 0
-    ? '（ナレッジベースにFAQがまだ登録されていません）'
-    : faqs.map(f => [
-        `### FAQ_ID: ${f.id}`,
-        f.categoryName ? `カテゴリー: ${f.categoryName}` : null,
-        `質問: ${f.question}`,
-        `回答: ${f.answer}`,
-      ].filter(Boolean).join('\n')).join('\n\n')
+function buildPrompt(question: string, items: FaqForContext[], history: KnowledgeChatMessage[]): string {
+  const knowledge = items.length === 0
+    ? '（ナレッジベースにFAQ・資料がまだ登録されていません）'
+    : items.map(f => {
+        const isDoc = isDocumentContextId(f.id)
+        return [
+          `### SOURCE_ID: ${f.id}`,
+          `種別: ${isDoc ? '資料（アップロードされた文書）' : 'FAQ'}`,
+          f.categoryName && !isDoc ? `カテゴリー: ${f.categoryName}` : null,
+          isDoc ? `タイトル: ${f.question}` : `質問: ${f.question}`,
+          isDoc ? `内容:\n${f.answer}` : `回答: ${f.answer}`,
+        ].filter(Boolean).join('\n')
+      }).join('\n\n')
 
   const historyText = history.length === 0
     ? '（なし）'
     : history.slice(-HISTORY_LIMIT).map(m => `${m.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${m.content}`).join('\n')
 
   return `あなたは買取サービス「買いクル」社内のナレッジベース担当アシスタントです。
-以下の【ナレッジベース】に登録されたFAQだけを根拠に、日本語で簡潔に回答してください。
+以下の【ナレッジベース】に登録されたFAQ・資料（アップロードされたPDF等）だけを根拠に、日本語で簡潔に回答してください。
 
 厳守事項:
 - ナレッジベースに書かれていないことは絶対に推測で答えないこと。
 - 根拠が見つからない場合は answered を false にし、answer には「ナレッジベースに該当する情報が見つかりませんでした」旨と、担当者に確認するよう案内する文章を入れること。
-- 回答の根拠にしたFAQの FAQ_ID を usedFaqIds に必ず列挙すること（根拠がない場合は空配列）。
+- 回答の根拠にしたFAQ・資料の SOURCE_ID を usedFaqIds に必ず列挙すること（根拠がない場合は空配列）。
+- 資料（種別が「資料」のもの）は分量が多いことがあるので、質問に関係する箇所だけを根拠に使ってよい。
 - 回答は Markdown 記法を使わず、読みやすい平文で書くこと。箇条書きが必要なら「・」を使うこと。
-- 挨拶や相談のような、FAQを引く必要がない発話には自然に応じてよい。その場合 answered は true、usedFaqIds は空配列にすること。
+- 挨拶や相談のような、FAQ・資料を引く必要がない発話には自然に応じてよい。その場合 answered は true、usedFaqIds は空配列にすること。
 
 【これまでの会話】
 ${historyText}
@@ -144,7 +197,7 @@ ${knowledge}
 ${question}
 
 次のJSON形式のみで出力してください:
-{"answer": "回答文", "usedFaqIds": ["FAQ_ID", ...], "answered": true または false}`
+{"answer": "回答文", "usedFaqIds": ["SOURCE_ID", ...], "answered": true または false}`
 }
 
 /** Geminiに問い合わせ、AI出力を検証して返す。FAQ_IDは実在するものだけに絞る */

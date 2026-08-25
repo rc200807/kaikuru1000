@@ -19,6 +19,19 @@ export const FAQ_VISIBILITY_COLOR: Record<FaqVisibility, { bg: string; fg: strin
   admin: { bg: 'rgba(251,191,36,0.15)',  fg: '#fbbf24' },
 }
 
+/** ナレッジベースの資料（PDF等）の処理状況 */
+export const KNOWLEDGE_DOCUMENT_STATUSES = [
+  { value: 'pending',    label: '待機中' },
+  { value: 'processing', label: '解析中' },
+  { value: 'ready',      label: '準備完了' },
+  { value: 'error',      label: '失敗' },
+] as const
+export type KnowledgeDocumentStatus = typeof KNOWLEDGE_DOCUMENT_STATUSES[number]['value']
+
+export function knowledgeDocumentStatusLabel(value: string | null | undefined): string {
+  return KNOWLEDGE_DOCUMENT_STATUSES.find(s => s.value === value)?.label ?? (value ?? '')
+}
+
 /** 未回答の質問（KnowledgeQuery）の対応状況 */
 export const KNOWLEDGE_QUERY_STATUSES = [
   { value: 'open',     label: '未対応' },

@@ -12,6 +12,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import DataTable, { type Column } from '@/components/DataTable'
 import TextField from '@/components/TextField'
 import KnowledgeChat from '@/components/knowledge/KnowledgeChat'
+import KnowledgeDocuments from '@/components/knowledge/KnowledgeDocuments'
 import { faqHtmlToText } from '@/lib/faq-sanitize'
 import {
   FAQ_VISIBILITIES, FAQ_VISIBILITY_COLOR, faqVisibilityLabel,
@@ -22,7 +23,7 @@ import {
 // RichTextEditor は SSR 不可（announcements と同じ読み込み方）
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), { ssr: false })
 
-type Tab = 'faqs' | 'categories' | 'gaps' | 'chat'
+type Tab = 'faqs' | 'categories' | 'documents' | 'gaps' | 'chat'
 
 type Category = {
   id: string
@@ -129,7 +130,7 @@ export default function KnowledgePage() {
   // URLの ?tab= と表示タブを同期（announcements と同じ流儀）
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'categories' || t === 'gaps' || t === 'chat') setTab(t)
+    if (t === 'categories' || t === 'documents' || t === 'gaps' || t === 'chat') setTab(t)
   }, [])
 
   function switchTab(next: Tab) {
@@ -375,6 +376,7 @@ export default function KnowledgePage() {
   const TABS: { key: Tab; label: string; badge?: number }[] = [
     { key: 'faqs', label: `FAQ（${faqs.length}）` },
     { key: 'categories', label: `カテゴリー（${categories.length}）` },
+    { key: 'documents', label: '資料' },
     { key: 'gaps', label: '未回答の質問', badge: openGapCount },
     { key: 'chat', label: 'AIに聞く' },
   ]
@@ -585,6 +587,9 @@ export default function KnowledgePage() {
             </form>
           </div>
         )}
+
+        {/* ─── 資料 タブ ─── */}
+        {tab === 'documents' && <KnowledgeDocuments />}
 
         {/* ─── 未回答の質問 タブ ─── */}
         {tab === 'gaps' && (

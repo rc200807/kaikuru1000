@@ -431,6 +431,7 @@ model Admin {
   complaintsAsSecondary Complaint[] @relation("ComplaintSecondaryHandler")
   complaintsAsFinal     Complaint[] @relation("ComplaintFinalHandler")
   faqsCreated           Faq[]       @relation("FaqCreatedBy")
+  knowledgeDocumentsUploaded KnowledgeDocument[]
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -2435,6 +2436,31 @@ model Faq {
 
   @@index([categoryId])
   @@index([isPublished, visibility])
+}
+
+// ナレッジベースの資料（PDFなど）。FAQと同じくAIチャットの情報源として扱う。
+// アップロード時はGemini Files APIでテキストを抽出し、抽出済みテキストをFAQと同じ
+// プロンプト組み立てロジックに乗せる（selectFaqContext を参照）。抽出は非同期
+// （cron: process-knowledge-documents）で行うため、アップロード直後は status=pending。
+model KnowledgeDocument {
+  id            String   @id @default(cuid())
+  title         String                              // 表示名（既定はファイル名）
+  fileUrl       String   @db.Text                    // 保存先URL（Vercel Blob）
+  fileName      String
+  mimeType      String
+  fileSize      Int
+  visibility    String   @default("all")             // "all"=店舗にも公開 | "admin"=管理者のみ（Faqと同じ値）
+  status        String   @default("pending")         // pending | processing | ready | error
+  extractedText String?  @db.Text                    // Geminiで抽出したテキスト（チャットの情報源）
+  errorMessage  String?
+  attempts      Int      @default(0)
+  uploadedById  String?
+  uploadedBy    Admin?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([visibility])
 }
 
 // AIチャットの直近の会話（1ユーザー1件。新しい会話を始めると上書き）

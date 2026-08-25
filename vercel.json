@@ -21,6 +21,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/process-knowledge-documents",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/sync-sheets",
       "schedule": "0 * * * *"
     },

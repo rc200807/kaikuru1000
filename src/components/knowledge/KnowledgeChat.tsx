@@ -132,7 +132,7 @@ export default function KnowledgeChat({
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--md-sys-color-outline-variant)]">
         <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">ナレッジベースに質問</span>
         <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-          登録されたFAQを元に回答します
+          登録されたFAQ・資料を元に回答します
         </span>
         {messages.length > 0 && (
           <button
@@ -179,7 +179,7 @@ export default function KnowledgeChat({
               {m.content}
               {m.role === 'assistant' && (m.usedFaqs?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
-                  <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] w-full">参照したFAQ</span>
+                  <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] w-full">参照した情報源</span>
                   {m.usedFaqs!.map(f => (
                     <span
                       key={f.id}

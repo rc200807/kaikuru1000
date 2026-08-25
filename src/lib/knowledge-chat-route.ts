@@ -6,8 +6,8 @@ import { GeminiError } from './gemini'
 import { resolveKnowledgeViewer, chatAskSchema } from './knowledge-api'
 import type { KnowledgeChatMessage } from './knowledge'
 import {
-  loadFaqsForViewer, askKnowledgeBase, loadSession, saveSession, clearSession,
-  logQuery, checkDailyLimit,
+  loadKnowledgeContext, askKnowledgeBase, loadSession, saveSession, clearSession,
+  logQuery, checkDailyLimit, isDocumentContextId, documentIdFromContextId, contextIdForDocument,
 } from './knowledge-chat'
 
 type Portal = 'admin' | 'store'
@@ -23,22 +23,37 @@ export async function handleChatGet(portal: Portal) {
 
   const messages = await loadSession(viewer)
 
-  // 保存しているのはFAQのIDだけなので、表示用の質問文を引き直す。
+  // 保存しているのはFAQ・資料のIDだけなので、表示用のタイトルを引き直す。
   // 参照時点から公開範囲が変わっている可能性があるため、いまの閲覧権限で再度絞る
-  // （店舗に公開しなくなったFAQが、過去の会話から見え続けないようにする）。
+  // （店舗に公開しなくなったFAQ・資料が、過去の会話から見え続けないようにする）。
   const ids = [...new Set(messages.flatMap(m => m.faqIds ?? []))]
+  const faqIds = ids.filter(id => !isDocumentContextId(id))
+  const docIds = ids.filter(isDocumentContextId).map(documentIdFromContextId)
   const faqTitleById = new Map<string, string>()
-  if (ids.length > 0) {
-    const faqs = await prisma.faq.findMany({
-      where: {
-        id: { in: ids },
-        isPublished: true,
-        ...(viewer.canSeeAdminOnly ? {} : { visibility: 'all' }),
-      },
-      select: { id: true, question: true },
-    })
-    for (const f of faqs) faqTitleById.set(f.id, f.question)
-  }
+  const [faqs, docs] = await Promise.all([
+    faqIds.length > 0
+      ? prisma.faq.findMany({
+          where: {
+            id: { in: faqIds },
+            isPublished: true,
+            ...(viewer.canSeeAdminOnly ? {} : { visibility: 'all' }),
+          },
+          select: { id: true, question: true },
+        })
+      : Promise.resolve([]),
+    docIds.length > 0
+      ? prisma.knowledgeDocument.findMany({
+          where: {
+            id: { in: docIds },
+            status: 'ready',
+            ...(viewer.canSeeAdminOnly ? {} : { visibility: 'all' }),
+          },
+          select: { id: true, title: true },
+        })
+      : Promise.resolve([]),
+  ])
+  for (const f of faqs) faqTitleById.set(f.id, f.question)
+  for (const d of docs) faqTitleById.set(contextIdForDocument(d.id), d.title)
 
   return NextResponse.json({
     messages: messages.map(m => ({
@@ -74,7 +89,7 @@ export async function handleChatPost(portal: Portal, req: NextRequest) {
   const history = await loadSession(viewer)
 
   try {
-    const faqs = await loadFaqsForViewer(viewer)
+    const faqs = await loadKnowledgeContext(viewer)
     const result = await askKnowledgeBase({ question, faqs, history })
 
     const now = new Date().toISOString()

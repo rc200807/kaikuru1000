@@ -86,3 +86,17 @@ export const queryStatusSchema = z.object({
 export const chatAskSchema = z.object({
   question: z.string().trim().min(1, '質問を入力してください').max(2000),
 })
+
+export const knowledgeDocumentCreateSchema = z.object({
+  fileUrl:  z.string().trim().url('アップロードURLが不正です'),
+  fileName: z.string().trim().min(1).max(200),
+  mimeType: z.string().trim().min(1).max(100),
+  fileSize: z.number().int().positive(),
+  title:      z.string().trim().max(200).optional(),
+  visibility: z.enum(FAQ_VISIBILITY_VALUES as [string, ...string[]]).optional(),
+})
+
+export const knowledgeDocumentUpdateSchema = z.object({
+  title:      z.string().trim().min(1, 'タイトルは必須です').max(200).optional(),
+  visibility: z.enum(FAQ_VISIBILITY_VALUES as [string, ...string[]], { message: '公開範囲を選択してください' }).optional(),
+})

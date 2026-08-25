@@ -454,3 +454,57 @@ export async function transcribeAndSummarizeAudio(buffer: Buffer, mimeType: stri
     try { await unlink(tmpPath) } catch { /* ignore */ }
   }
 }
+
+/**
+ * ナレッジベースに登録されたPDF等の資料からテキストを抽出する。
+ * OCRが必要なスキャンPDFにも対応するため、テキストレイヤーを読むのではなく
+ * Gemini Files API に文書そのものを渡して書き出させる（音声の文字起こしと同じ方式）。
+ *
+ * 長大な文書は1回の応答に収まりきらず末尾が欠けることがある（モデルの出力上限）。
+ * 数十ページ程度の資料・マニュアルを想定しており、数百ページ級の全文保証はしない。
+ */
+export async function extractTextFromPdf(buffer: Buffer, mimeType: string, displayName = 'document'): Promise<string> {
+  const apiKey = getApiKey()
+  const fm = new GoogleAIFileManager(apiKey)
+  const ext = mimeType.includes('pdf') ? 'pdf' : 'bin'
+  const tmpPath = path.join(os.tmpdir(), `kb-doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
+  let uploadedName: string | undefined
+  try {
+    await writeFile(tmpPath, buffer)
+    const uploaded = await fm.uploadFile(tmpPath, { mimeType, displayName })
+    uploadedName = uploaded.file.name
+
+    // ACTIVE になるまでポーリング（最大 ~45秒）
+    let file = uploaded.file
+    for (let i = 0; i < 30 && file.state === FileState.PROCESSING; i++) {
+      await new Promise(r => setTimeout(r, 1500))
+      file = await fm.getFile(uploaded.file.name)
+    }
+    if (file.state !== FileState.ACTIVE) {
+      throw new GeminiError('api-error', `資料ファイルの前処理に失敗しました (state=${file.state})`)
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: MODEL_ID })
+    const prompt = `この文書の内容を、日本語のプレーンテキストとして全文書き出してください。
+見出し・箇条書き・表はできるだけ元の構造がわかる文章や箇条書きに変換してください。
+文書に無い情報を追加したり、要約して内容を省略したりしないでください。
+前置きや後書き（「以下が抽出した内容です」等）は付けず、本文だけを出力してください。`
+
+    const result = await model.generateContent([
+      { fileData: { fileUri: file.uri, mimeType } },
+      prompt,
+    ])
+    const text = result.response.text().trim()
+    if (!text) throw new GeminiError('api-error', '資料からテキストを抽出できませんでした')
+    return text
+  } catch (err: any) {
+    if (err instanceof GeminiError) throw err
+    const detail = err?.message ?? String(err)
+    console.error('[gemini] 資料のテキスト抽出失敗:', detail)
+    throw new GeminiError('api-error', `資料の解析エラー: ${detail}`, detail)
+  } finally {
+    if (uploadedName) { try { await fm.deleteFile(uploadedName) } catch { /* ignore */ } }
+    try { await unlink(tmpPath) } catch { /* ignore */ }
+  }
+}

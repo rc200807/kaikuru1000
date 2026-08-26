@@ -104,6 +104,18 @@ export function buildFeatures(item: {
   return parts.join(' / ')
 }
 
+/**
+ * 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD" に、
+ * 和暦テキスト等はそのまま返す（idBirthDate は和暦の可能性がある）。
+ */
+export function formatBirthDate(birthDate: string | null | undefined): string | null {
+  const v = (birthDate ?? '').trim()
+  if (!v) return null
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v)
+  if (!m) return v
+  return `${m[1]}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}`
+}
+
 /** 取引日時点の年齢。生年月日が "YYYY-MM-DD" 形式でないときは null */
 export function ageAt(birthDate: string | null | undefined, at: Date): number | null {
   if (!birthDate) return null
@@ -166,6 +178,8 @@ export type KobutsuLedgerRow = {
     name: string
     address: string | null
     occupation: string | null
+    /** 生年月日。age と同じ値から取るので、表示上ズレない */
+    birthDate: string | null
     age: number | null
     verification: string | null
   }
@@ -208,6 +222,7 @@ export const KOBUTSU_CSV_HEADER = [
   '相手方の住所',
   '相手方の氏名',
   '相手方の職業',
+  '相手方の生年月日',
   '相手方の年齢',
   '確認方法',
   '備考',
@@ -229,6 +244,7 @@ export function toCsvRow(row: KobutsuLedgerRow, formatDate: (iso: string) => str
     row.customer.address ?? '',
     row.customer.name,
     row.customer.occupation ?? '',
+    formatBirthDate(row.customer.birthDate) ?? '',
     row.customer.age ?? '',
     row.customer.verification ?? '',
     row.note ?? '',
@@ -329,6 +345,7 @@ export const KOBUTSU_DEAL_CSV_HEADER = [
   '相手方の住所',
   '相手方の氏名',
   '相手方の職業',
+  '相手方の生年月日',
   '相手方の年齢',
   '確認方法',
   '案件番号',
@@ -348,6 +365,7 @@ export function toDealCsvRow(group: KobutsuLedgerGroup, formatDate: (iso: string
     group.customer.address ?? '',
     group.customer.name,
     group.customer.occupation ?? '',
+    formatBirthDate(group.customer.birthDate) ?? '',
     group.customer.age ?? '',
     group.customer.verification ?? '',
     group.dealNumber ?? '',

@@ -20,6 +20,7 @@ import { formatDealNumber } from '@/lib/deal-number'
 import {
   KOBUTSU_CATEGORY_LABEL,
   KOBUTSU_MISSING_LABEL,
+  formatBirthDate,
   type KobutsuLedgerGroup,
 } from '@/lib/kobutsu-ledger'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
@@ -1444,6 +1445,7 @@ export default function DealDetailView({
                     <Row label="相手方の氏名" value={ledger.customer.name} />
                     <Row label="相手方の住所" value={ledger.customer.address ?? '未登録'} />
                     <Row label="相手方の職業" value={ledger.customer.occupation ?? '未登録'} />
+                    <Row label="相手方の生年月日" value={formatBirthDate(ledger.customer.birthDate) ?? '未登録'} />
                     <Row label="相手方の年齢" value={ledger.customer.age != null ? `${ledger.customer.age}歳` : '未登録'} />
                     <Row label="確認方法" value={ledger.customer.verification ?? '未確認'} />
                   </div>

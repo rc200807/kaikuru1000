@@ -14,6 +14,7 @@ import {
   KOBUTSU_CATEGORIES,
   KOBUTSU_CATEGORY_LABEL,
   KOBUTSU_MISSING_LABEL,
+  formatBirthDate,
   type KobutsuCategoryKey,
   type KobutsuLedgerGroup,
   type KobutsuLedgerRow,
@@ -151,6 +152,11 @@ export default function KobutsuLedgerDetailPage() {
             <Row label="相手方の氏名" value={group.customer.name} />
             <Row label="相手方の住所" value={group.customer.address || '未登録'} warn={!group.customer.address} />
             <Row label="相手方の職業" value={group.customer.occupation || '未登録'} warn={!group.customer.occupation} />
+            <Row
+              label="相手方の生年月日"
+              value={formatBirthDate(group.customer.birthDate) || '未登録'}
+              warn={!group.customer.birthDate}
+            />
             <Row
               label="相手方の年齢"
               value={group.customer.age != null ? `${group.customer.age}歳` : '未登録'}

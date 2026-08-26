@@ -164,6 +164,8 @@ export async function fetchKobutsuLedgerRows(
           name: user.idName || user.name,
           address: user.idBackAddress || user.idAddress || user.address || null,
           occupation: user.occupation || null,
+          // 生年月日と年齢は必ず同じ値から導く（表示が食い違わないように）
+          birthDate: user.birthDate || user.idBirthDate || null,
           age: ageAt(user.birthDate || user.idBirthDate, contract.agreedAt),
           verification: verificationMethod(user),
         },

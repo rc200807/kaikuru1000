@@ -59,13 +59,20 @@ export async function middleware(request: NextRequest) {
 
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
 
-  // 絶対有効期限の検証（パスワード=8時間 / パスキー=30日。旧トークンは iat+8時間）
+  // 有効期限の検証。auth.ts の jwt コールバックと同じ判定にする
+  // （無操作期限 sessionExpiresAt ＋ ログインからの絶対上限 sessionStartedAt）。
+  // sessionExpiresAt はセッション取得のたびに延長されるので、使い続けている間は切れない。
   const PASSWORD_SESSION_MS = 8 * 60 * 60 * 1000
-  const absoluteExpiry = token
-    ? ((token.sessionExpiresAt as number | undefined) ??
-       (((token.iat as number | undefined) ?? 0) * 1000 + PASSWORD_SESSION_MS))
-    : 0
-  const isExpired = token ? Date.now() > absoluteExpiry : false
+  const ABSOLUTE_MS = { password: 60 * 24 * 60 * 60 * 1000, passkey: 90 * 24 * 60 * 60 * 1000 }
+  let isExpired = false
+  if (token) {
+    const now = Date.now()
+    const iatMs = ((token.iat as number | undefined) ?? 0) * 1000
+    const idleExpiry = (token.sessionExpiresAt as number | undefined) ?? (iatMs + PASSWORD_SESSION_MS)
+    const startedAt = (token.sessionStartedAt as number | undefined) ?? iatMs
+    const method = token.loginMethod === 'passkey' ? 'passkey' : 'password'
+    isExpired = now > idleExpiry || now > startedAt + ABSOLUTE_MS[method]
+  }
 
   // 未認証・期限切れ → 各ポータルのログインページへ
   if (!token?.role || !token?.id || isExpired) {

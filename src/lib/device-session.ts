@@ -9,7 +9,26 @@
 import { prisma } from './prisma'
 
 export const PASSKEY_SESSION_MS = 30 * 24 * 60 * 60 * 1000 // 30日
-export const PASSWORD_SESSION_MS = 8 * 60 * 60 * 1000 // 8時間（従来どおり）
+export const PASSWORD_SESSION_MS = 8 * 60 * 60 * 1000 // 8時間（DeviceSession 初期TTL・以後は活動で延長）
+
+/**
+ * 無操作でログアウトするまでの猶予（スライディング）。
+ * 使い続けている限りログアウトさせない、という運用要件のためログイン時刻からの
+ * 固定期限ではなく「最後に使ってから」で判定する。
+ */
+export const IDLE_SESSION_MS = {
+  password: 7 * 24 * 60 * 60 * 1000,  // 7日（毎日使う店舗・管理はまず切れない）
+  passkey: 30 * 24 * 60 * 60 * 1000,  // 30日
+} as const
+
+/**
+ * スライディングでも無限に延びないための絶対上限（ログイン時刻から）。
+ * 盗まれたトークンが延命され続けるのを防ぐ。
+ */
+export const ABSOLUTE_SESSION_MS = {
+  password: 60 * 24 * 60 * 60 * 1000, // 60日
+  passkey: 90 * 24 * 60 * 60 * 1000,  // 90日
+} as const
 
 const LAST_SEEN_THROTTLE_MS = 15 * 60 * 1000 // lastSeenAt 更新は15分に1回
 
@@ -41,7 +60,8 @@ export async function createDeviceSession(params: {
   ip?: string | null
   userAgent?: string | null
 }): Promise<string> {
-  const ttl = params.loginMethod === 'passkey' ? PASSKEY_SESSION_MS : PASSWORD_SESSION_MS
+  // JWT側の無操作期限と揃える（ここが短いと、JWTを延ばしてもDB照合で落ちてログアウトになる）
+  const ttl = IDLE_SESSION_MS[params.loginMethod]
   const session = await prisma.deviceSession.create({
     data: {
       userType: params.userType,
@@ -68,16 +88,24 @@ export async function validateDeviceSession(id: string): Promise<boolean> {
   try {
     const session = await prisma.deviceSession.findUnique({
       where: { id },
-      select: { revokedAt: true, expiresAt: true, lastSeenAt: true },
+        select: { revokedAt: true, expiresAt: true, lastSeenAt: true, createdAt: true, loginMethod: true },
     })
     if (!session) return false
     if (session.revokedAt) return false
     if (session.expiresAt < new Date()) return false
 
     if (Date.now() - session.lastSeenAt.getTime() > LAST_SEEN_THROTTLE_MS) {
+      // 使い続けている間は無操作期限も延ばす（JWT側の sessionExpiresAt と同じ考え方）。
+      // ただしログインからの絶対上限は超えない。
+      const method = session.loginMethod === 'passkey' ? 'passkey' : 'password'
+      const hardExpiry = session.createdAt.getTime() + ABSOLUTE_SESSION_MS[method]
+      const nextExpiry = new Date(Math.min(Date.now() + IDLE_SESSION_MS[method], hardExpiry))
       await prisma.deviceSession.update({
         where: { id },
-        data: { lastSeenAt: new Date() },
+        data: {
+          lastSeenAt: new Date(),
+          ...(nextExpiry > session.expiresAt ? { expiresAt: nextExpiry } : {}),
+        },
       })
     }
     validCache.set(id, Date.now())

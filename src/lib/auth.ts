@@ -8,10 +8,34 @@ import { recordLinkPartnerActivity } from './link-partner-activity'
 import { hashLoginToken } from './webauthn'
 import {
   createDeviceSession,
+  IDLE_SESSION_MS,
+  ABSOLUTE_SESSION_MS,
   validateDeviceSession,
   PASSKEY_SESSION_MS,
   PASSWORD_SESSION_MS,
 } from './device-session'
+
+/**
+ * DeviceSession の userType / userId をトークンから決める。
+ * 失効側（revokeAllDeviceSessions）の呼び出しと同じ組み合わせにすること。
+ *   店舗オーナー: ('store', storeId) / 店舗メンバー: ('storeMember', memberId)
+ *   管理・システム管理: ('admin', adminId)
+ */
+function deviceSessionTargetFor(token: any): { userType: string; userId: string; memberId: string | null } | null {
+  const id = token.id as string | undefined
+  if (!id) return null
+  if (token.role === 'store') {
+    const memberId = (token.memberId as string | null) ?? null
+    return memberId
+      ? { userType: 'storeMember', userId: memberId, memberId }
+      : { userType: 'store', userId: id, memberId: null }
+  }
+  if (['admin', 'superadmin', 'hr', 'sysadmin'].includes(token.role as string)) {
+    return { userType: 'admin', userId: id, memberId: null }
+  }
+  // 顧客・パートナー・連携パートナーは失効導線が無いので発行しない（従来どおり）
+  return null
+}
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -550,22 +574,51 @@ export const authOptions: NextAuthOptions = {
         token.linkPartnerId = (user as any).linkPartnerId ?? null
         token.partnerRole = (user as any).partnerRole ?? null
         token.mustChangePassword = (user as any).mustChangePassword ?? false
-        // ログイン方法別の絶対有効期限（パスキー=30日 / それ以外=8時間）
+        // セッションはスライディング（無操作で切れる）方式。
+        // ログイン時刻を固定の期限にすると、使い続けていても時間で強制ログアウトされてしまう。
         const loginMethod = (user as any).loginMethod === 'passkey' ? 'passkey' : 'password'
         token.loginMethod = loginMethod
         token.deviceSessionId = (user as any).deviceSessionId ?? null
-        token.sessionExpiresAt =
-          Date.now() + (loginMethod === 'passkey' ? PASSKEY_SESSION_MS : PASSWORD_SESSION_MS)
+        token.sessionStartedAt = Date.now()
+        token.sessionExpiresAt = Date.now() + IDLE_SESSION_MS[loginMethod]
+
+        // パスワードログインにもデバイスセッションを発行する。
+        // セッションを無操作7日まで延ばした以上、パスワード変更・端末失効で他端末を
+        // 切れないと危険なため（従来はパスキーのみ発行で、パスワードは失効不能だった）。
+        // 各プロバイダに散らさずここで一括して作る。失敗してもログインは通す（従来どおり）。
+        if (loginMethod === 'password' && !token.deviceSessionId) {
+          const target = deviceSessionTargetFor(token)
+          if (target) {
+            token.deviceSessionId = await createDeviceSession({
+              userType: target.userType,
+              userId: target.userId,
+              memberId: target.memberId,
+              loginMethod: 'password',
+            }).catch(e => {
+              console.error('[auth] デバイスセッションの作成に失敗:', e)
+              return null
+            })
+          }
+        }
       }
 
-      // 絶対有効期限の検証。sessionExpiresAt を持たない旧トークンは iat+8時間（従来挙動）
-      const absoluteExpiry =
+      const method: 'password' | 'passkey' = token.loginMethod === 'passkey' ? 'passkey' : 'password'
+      const now = Date.now()
+      // 無操作期限。sessionExpiresAt を持たない旧トークンは iat+8時間（従来挙動のまま失効させる）
+      const idleExpiry =
         (token.sessionExpiresAt as number | undefined) ??
         ((token.iat as number | undefined ?? 0) * 1000 + PASSWORD_SESSION_MS)
-      if (Date.now() > absoluteExpiry) {
+      // ログインからの絶対上限（スライディングでも無限には延ばさない）
+      const startedAt = (token.sessionStartedAt as number | undefined)
+        ?? ((token.iat as number | undefined ?? 0) * 1000)
+      const hardExpiry = startedAt + ABSOLUTE_SESSION_MS[method]
+      if (now > idleExpiry || now > hardExpiry) {
         // role/id を落として無効化（middleware・API の認可チェックが全て弾く）
         return { ...token, role: undefined, id: undefined, expired: true }
       }
+      // 生きているセッションは、この呼び出し（＝利用があった証跡）で無操作期限を延ばす。
+      // このコールバックは /api/auth/session の取得ごとに走り、トークンが再発行される。
+      token.sessionExpiresAt = Math.min(now + IDLE_SESSION_MS[method], hardExpiry)
       // クライアントから update() が呼ばれたときにトークンを更新
       if (trigger === 'update' && updatedSession) {
         // 店舗切り替え
@@ -593,24 +646,24 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      // 絶対有効期限切れ → 空セッションを返す（クライアントは未認証扱いになる）
+      // セッション無効時は「キーの無いオブジェクト」を返すこと。
+      // next-auth v4 は返り値のキーが1つでもあれば認証済みとして扱うため
+      // （client/_utils.js の Object.keys(data).length > 0 ? data : null、
+      //   next/index.js の Object.keys(body).length 判定）、
+      // 以前の { user: {}, expires: epoch } は status='authenticated' のまま
+      // user.role だけ undefined になり、各画面のロール判定に落ちて
+      // トップページ（顧客向け）へ飛ばされていた。
+      // 空オブジェクトなら useSession は 'unauthenticated'、getServerSession は null になり、
+      // middleware と同じくポータルごとのログイン画面へ誘導される。
       if ((token as any).expired || !token.role || !token.id) {
-        return {
-          ...session,
-          user: {},
-          expires: new Date(0).toISOString(),
-        } as any
+        return {} as any
       }
-      // パスキー長期セッションのみデバイス失効をDB照合（失効済みなら即無効化）
-      if (token.loginMethod === 'passkey' && token.deviceSessionId) {
+      // デバイス失効をDB照合（失効済みなら即無効化）。パスワードログインも対象。
+      // deviceSessionId を持たない旧トークン・発行に失敗したセッションは従来どおり素通しにして、
+      // 今回の変更で既存ログインが一斉に切れないようにする。
+      if (token.deviceSessionId) {
         const valid = await validateDeviceSession(token.deviceSessionId as string)
-        if (!valid) {
-          return {
-            ...session,
-            user: {},
-            expires: new Date(0).toISOString(),
-          } as any
-        }
+        if (!valid) return {} as any
       }
       // 連携パートナー: パスワードセッション（DeviceSessionなし）のため、メンバー/組織の無効化を
       // 即時反映するよう毎回 isActive を DB 照合する（indexed findUnique 1回/req）。
@@ -621,13 +674,7 @@ export const authOptions: NextAuthOptions = {
               select: { isActive: true, role: true, linkPartner: { select: { isActive: true } } },
             })
           : null
-        if (!member || !member.isActive || !member.linkPartner?.isActive) {
-          return {
-            ...session,
-            user: {},
-            expires: new Date(0).toISOString(),
-          } as any
-        }
+        if (!member || !member.isActive || !member.linkPartner?.isActive) return {} as any
         // 権限（partner_admin/member）の変更を即時反映
         ;(token as any).partnerRole = member.role
       }

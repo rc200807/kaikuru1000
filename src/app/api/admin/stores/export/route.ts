@@ -22,7 +22,9 @@ export async function GET() {
     orderBy: { code: 'asc' },
     select: {
       code: true, name: true, storeStatus: true, isActive: true,
-      postalCode: true, prefecture: true, address: true, phone: true, email: true,
+      postalCode: true, prefecture: true, address: true,
+      warehousePostalCode: true, warehouseAddress: true,
+      phone: true, email: true,
       contractNotifyEmail: true, calendarInviteEmail: true,
       openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true,

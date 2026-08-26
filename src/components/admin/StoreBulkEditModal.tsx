@@ -19,6 +19,8 @@ export type BulkStore = {
   postalCode: string | null
   prefecture: string | null
   address: string | null
+  warehousePostalCode: string | null
+  warehouseAddress: string | null
   phone: string | null
   email: string | null
   openingDate: string | null
@@ -53,6 +55,8 @@ type ColumnDef = {
   options?: { value: string; label: string }[]
   width: number
   readOnly?: boolean
+  /** postal 列の補完先（省略時は店舗住所の3項目） */
+  postalTargets?: { postalCode: string; prefecture?: string; address: string }
 }
 
 // 列定義。key は PATCH /api/admin/stores/[id] updateDetails のホワイトリストと一致させること
@@ -73,7 +77,13 @@ const COLUMNS: ColumnDef[] = [
       ...PREFECTURES.map(p => ({ value: p, label: p })),
     ],
   },
-  { key: 'address', label: '住所', editor: 'text', width: 260 },
+  { key: 'address', label: '店舗住所', editor: 'text', width: 260 },
+  {
+    key: 'warehousePostalCode', label: 'メイン倉庫郵便番号', editor: 'postal', width: 140,
+    // 都道府県は店舗住所のものを正とするため、倉庫の郵便番号では上書きしない
+    postalTargets: { postalCode: 'warehousePostalCode', address: 'warehouseAddress' },
+  },
+  { key: 'warehouseAddress', label: 'メイン倉庫住所', editor: 'text', width: 260 },
   // 対応エリアは専用エディタ（都道府県＋市区町村）で編集するため GridRow で特別扱いする
   { key: 'serviceAreas', label: '対応エリア', editor: 'text', width: 200 },
   // 対応サービスはセル内トグルチップで編集するため GridRow で特別扱いする
@@ -120,7 +130,9 @@ function normalize(key: string, raw: unknown): string {
 function makeDraftRow(id: string): BulkStore {
   return {
     id, code: '', name: '', storeStatus: 'active',
-    postalCode: null, prefecture: null, address: null, phone: null, email: null,
+    postalCode: null, prefecture: null, address: null,
+    warehousePostalCode: null, warehouseAddress: null,
+    phone: null, email: null,
     openingDate: null, closingDate: null,
     googleBusinessUrl: null, oikuraPageUrl: null, lineAddFriendUrl: null,
     bankName: null, branchName: null, accountType: null, accountNumber: null, accountHolder: null,
@@ -135,7 +147,9 @@ function toBulkStore(s: Record<string, any>): BulkStore {
     id: s.id, code: s.code ?? '', name: s.name ?? '',
     storeStatus: s.storeStatus ?? null,
     postalCode: s.postalCode ?? null, prefecture: s.prefecture ?? null,
-    address: s.address ?? null, phone: s.phone ?? null, email: s.email ?? null,
+    address: s.address ?? null,
+    warehousePostalCode: s.warehousePostalCode ?? null, warehouseAddress: s.warehouseAddress ?? null,
+    phone: s.phone ?? null, email: s.email ?? null,
     openingDate: s.openingDate ?? null, closingDate: s.closingDate ?? null,
     googleBusinessUrl: s.googleBusinessUrl ?? null, oikuraPageUrl: s.oikuraPageUrl ?? null,
     lineAddFriendUrl: s.lineAddFriendUrl ?? null,
@@ -334,6 +348,7 @@ const GridRow = memo(function GridRow({
             editor={col.editor}
             options={options}
             searchable={col.key === 'operatorId'}
+            postalTargets={col.postalTargets}
             value={value}
             dirty={rowDirty ? col.key in rowDirty : false}
             editing={editingField === col.key}

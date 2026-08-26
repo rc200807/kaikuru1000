@@ -10,7 +10,8 @@
 import { STORE_STATUSES } from './store-status'
 
 export type StoreCsvColumnKind = 'key' | 'field' | 'status' | 'date' | 'services' | 'ref'
-export type StoreCsvColumn = { key: string; header: string; kind: StoreCsvColumnKind }
+// aliases: 旧見出し（列名を変更した際の後方互換。取込時のみ参照する）
+export type StoreCsvColumn = { key: string; header: string; kind: StoreCsvColumnKind; aliases?: string[] }
 
 export const STORE_CSV_COLUMNS: StoreCsvColumn[] = [
   { key: 'code',                header: '店舗コード',            kind: 'key' },
@@ -18,7 +19,10 @@ export const STORE_CSV_COLUMNS: StoreCsvColumn[] = [
   { key: 'storeStatus',         header: 'ステータス',            kind: 'status' },
   { key: 'postalCode',          header: '郵便番号',              kind: 'field' },
   { key: 'prefecture',          header: '都道府県',              kind: 'field' },
-  { key: 'address',             header: '住所',                  kind: 'field' },
+  // 「住所」は 店舗住所 / メイン倉庫住所 の2種類に分割した（旧見出し「住所」は取込時のみ受理）
+  { key: 'address',             header: '店舗住所',              kind: 'field', aliases: ['住所'] },
+  { key: 'warehousePostalCode', header: 'メイン倉庫郵便番号',    kind: 'field' },
+  { key: 'warehouseAddress',    header: 'メイン倉庫住所',        kind: 'field' },
   { key: 'phone',               header: '電話番号',              kind: 'field' },
   { key: 'email',               header: 'メール',                kind: 'field' },
   { key: 'contractNotifyEmail', header: '契約通知メール',        kind: 'field' },
@@ -62,9 +66,26 @@ export const STORE_SHEET_COLUMNS: StoreCsvColumn[] = STORE_CSV_COLUMNS.filter(
  * かつてシートに出力していたが、現在は同期対象から外した列の見出し。
  * 「シートへ出力」時にこの列をシートから削除して、古い値が残らないようにする。
  */
-export const STORE_SHEET_REMOVED_HEADERS: string[] = STORE_CSV_COLUMNS
-  .filter(c => (STORE_SHEET_EXCLUDED_KEYS as readonly string[]).includes(c.key))
-  .map(c => c.header)
+export const STORE_SHEET_REMOVED_HEADERS: string[] = [
+  ...STORE_CSV_COLUMNS
+    .filter(c => (STORE_SHEET_EXCLUDED_KEYS as readonly string[]).includes(c.key))
+    .map(c => c.header),
+  // 見出しを変更した列の旧見出し。残しておくと同じ内容の列が2つ並ぶため出力時に削除する
+  ...STORE_CSV_COLUMNS.flatMap(c => c.aliases ?? []),
+]
+
+/**
+ * CSV / シートの見出し行から、この列に対応する見出しを解決する。
+ * 正式な見出しが無ければ旧見出し（aliases）を順に探す。どれも無ければ undefined
+ * （＝その列はファイルに存在しない＝取込時は値を変更しない）。
+ */
+export function resolveStoreCsvHeader(
+  col: StoreCsvColumn,
+  has: (header: string) => boolean,
+): string | undefined {
+  if (has(col.header)) return col.header
+  return (col.aliases ?? []).find(has)
+}
 
 const LABEL_TO_VALUE: Record<string, string> = Object.fromEntries(STORE_STATUSES.map(s => [s.label, s.value]))
 const VALID_VALUES = new Set(STORE_STATUSES.map(s => s.value))

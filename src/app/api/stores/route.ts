@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
     where: { isActive: true },
     select: {
       id: true, name: true, code: true,
-      prefecture: true, postalCode: true, address: true, phone: true, email: true,
+      prefecture: true, postalCode: true, address: true,
+      warehousePostalCode: true, warehouseAddress: true,
+      phone: true, email: true,
       storeStatus: true, openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
       contractNotifyEmail: true, calendarInviteEmail: true,
@@ -52,6 +54,7 @@ export async function GET(request: NextRequest) {
     ...s,
     prefecture: cleanVal(s.prefecture),
     address: cleanVal(s.address),
+    warehouseAddress: cleanVal(s.warehouseAddress),
     phone: cleanVal(s.phone),
     hasLoggedIn: loginMap.has(s.id),
     lastLoginAt: loginMap.get(s.id) ?? null,

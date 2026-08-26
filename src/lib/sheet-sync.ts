@@ -16,7 +16,7 @@ import { randomBytes } from 'crypto'
 import { prisma } from './prisma'
 import {
   STORE_SHEET_COLUMNS, STORE_SHEET_REMOVED_HEADERS,
-  storeStatusValueFromCell,
+  resolveStoreCsvHeader, storeStatusValueFromCell,
 } from './store-csv'
 import { storeStatusLabel } from './store-status'
 import { storeServicesLabel, storeServicesValueFromCell } from './store-services'
@@ -327,7 +327,9 @@ async function getStoreSheetTarget(): Promise<{ spreadsheetId: string; sheetName
 
 const STORE_SELECT = {
   code: true, name: true, storeStatus: true, isActive: true,
-  postalCode: true, prefecture: true, address: true, phone: true, email: true,
+  postalCode: true, prefecture: true, address: true,
+  warehousePostalCode: true, warehouseAddress: true,
+  phone: true, email: true,
   contractNotifyEmail: true, calendarInviteEmail: true,
   openingDate: true, closingDate: true,
   googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true,
@@ -477,9 +479,10 @@ export async function importStoresFromSheet(): Promise<ImportResult> {
     const data: Record<string, unknown> = {}
     let rowError: string | null = null
     for (const col of fieldCols) {
-      // シートに存在しない列は変更しない
-      if (!(col.header in headerIdx)) continue
-      const raw = get(row, col.header)
+      // シートに存在しない列は変更しない（旧見出しの列があればそちらを使う）
+      const header = resolveStoreCsvHeader(col, h => h in headerIdx)
+      if (!header) continue
+      const raw = get(row, header)
       if (col.kind === 'status') {
         const v = storeStatusValueFromCell(raw)
         if (v === undefined) { rowError = `不明なステータス「${raw}」`; break }
@@ -489,7 +492,7 @@ export async function importStoresFromSheet(): Promise<ImportResult> {
       } else if (col.kind === 'date') {
         if (!raw) { data[col.key] = null; continue }
         const d = new Date(raw)
-        if (isNaN(d.getTime())) { rowError = `${col.header}の日付形式が不正「${raw}」`; break }
+        if (isNaN(d.getTime())) { rowError = `${header}の日付形式が不正「${raw}」`; break }
         data[col.key] = d
       } else if (col.key === 'serviceAreas') {
         if (!raw) { data.serviceAreas = null; continue }
@@ -1049,7 +1052,8 @@ export function alignRowToHeader(
 
 /**
  * 指定レコードの行だけを更新する（シートに無いキーは末尾に追加）。
- * シートが未初期化（ヘッダー無し）の場合は needsFullExport を返す。
+ * シートが未初期化（ヘッダー無し）の場合と、システム列がシートに揃っていない場合は
+ * needsFullExport を返す（呼び出し側で全件出力してヘッダーを作り直す）。
  */
 async function syncRecordRowsToSheet(params: {
   spreadsheetId: string
@@ -1069,6 +1073,13 @@ async function syncRecordRowsToSheet(params: {
   const values = await readAllValues(sheets, spreadsheetId, sheetName)
   const layout = readLayout(values, keyHeader)
   if (!layout.hasHeader) return { needsFullExport: true, updated: 0, appended: 0 }
+
+  // 行単位同期は列を増やさないので、システム列がシートに無いとその項目だけ永久に古いままになる。
+  // 列が増えた（見出しを変えた）直後はここで全件出力に切り替えてヘッダーごと作り直す。
+  const headerSet = new Set(layout.headerNorm)
+  if (columns.some(c => !headerSet.has(c.header))) {
+    return { needsFullExport: true, updated: 0, appended: 0 }
+  }
 
   const lastCol = idxToCol(layout.headerNorm.length - 1)
   const updates: sheets_v4.Schema$ValueRange[] = []

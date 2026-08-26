@@ -35,6 +35,8 @@ const createSchema = z.object({
   prefecture: z.string().max(10).optional(),
   postalCode: z.string().max(10).optional(),
   address:    z.string().max(200).optional(),
+  warehousePostalCode: z.string().max(10).optional(),
+  warehouseAddress:    z.string().max(200).optional(),
   // 一括編集グリッドの「行追加」で全カラムを保存できるよう、詳細フィールドも受け付ける
   storeStatus:         z.string().optional(),
   openingDate:         z.string().optional().or(z.literal('')),
@@ -59,6 +61,7 @@ const createSchema = z.object({
 const STORE_DETAIL_SELECT = {
   id: true, code: true, name: true,
   email: true, phone: true, prefecture: true, postalCode: true, address: true,
+  warehousePostalCode: true, warehouseAddress: true,
   storeStatus: true, openingDate: true, closingDate: true,
   googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
   bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
@@ -82,6 +85,7 @@ export async function POST(request: NextRequest) {
 
   const {
     name, email, phone, prefecture, postalCode, address,
+    warehousePostalCode, warehouseAddress,
     storeStatus, openingDate, closingDate,
     googleBusinessUrl, oikuraPageUrl, lineAddFriendUrl,
     bankName, branchName, accountType, accountNumber, accountHolder,
@@ -130,6 +134,8 @@ export async function POST(request: NextRequest) {
       prefecture: prefecture || null,
       postalCode: postalCode || null,
       address:    address    || null,
+      warehousePostalCode: warehousePostalCode || null,
+      warehouseAddress:    warehouseAddress    || null,
       password:   hashedPassword,
       storeStatus:         storeStatus         || null,
       openingDate:         openingDate  ? new Date(openingDate)  : null,

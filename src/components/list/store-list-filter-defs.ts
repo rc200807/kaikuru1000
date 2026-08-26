@@ -63,7 +63,7 @@ export function storeListChips(): ChipDef[] {
 /** 詳細フィルター項目 */
 export function storeListAdvFields(operators: { id: string; name: string }[]): AdvField[] {
   return [
-    { key: 'search', label: 'フリーテキスト', type: 'text', placeholder: '店舗名・コード・住所・メールなど' },
+    { key: 'search', label: 'フリーテキスト', type: 'text', placeholder: '店舗名・コード・住所（店舗/倉庫）・メールなど' },
     { key: 'storeStatus', label: 'ステータス', type: 'single', options: STORE_STATUS_OPTIONS },
     { key: 'login', label: 'ログイン状態', type: 'single', options: LOGIN_OPTIONS },
     { key: 'prefecture', label: '所在都道府県', type: 'multi', options: STORE_PREFECTURE_OPTIONS },
@@ -120,6 +120,7 @@ export type FilterableStore = {
   prefecture: string | null
   postalCode: string | null
   address: string | null
+  warehouseAddress?: string | null
   phone: string | null
   email: string | null
   storeStatus: string | null
@@ -259,7 +260,7 @@ export function applyStoreFilters<T extends FilterableStore>(
     if (!inDateRange(ymd(s.createdAt), params.createdFrom, params.createdTo)) return false
     if (!inDateRange(ymd(s.openingDate), params.openedFrom, params.openedTo)) return false
 
-    // フリーテキスト検索（name/code/都道府県/メール/電話/住所/対応エリア）
+    // フリーテキスト検索（name/code/都道府県/メール/電話/店舗住所/メイン倉庫住所/対応エリア）
     if (q) {
       const areaText = parseServiceAreas(s.serviceAreas)
         .flatMap(a => [a.prefecture, ...a.cities])
@@ -272,6 +273,7 @@ export function applyStoreFilters<T extends FilterableStore>(
         (s.email || '').toLowerCase().includes(q) ||
         (s.phone || '').includes(q) ||
         (s.address || '').toLowerCase().includes(q) ||
+        (s.warehouseAddress || '').toLowerCase().includes(q) ||
         areaText.includes(q)
       if (!hit) return false
     }

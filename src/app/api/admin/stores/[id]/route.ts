@@ -73,6 +73,7 @@ export async function PATCH(
   if (body.updateDetails) {
     const allowedFields = [
       'name', 'email', 'phone', 'address', 'postalCode', 'prefecture',
+      'warehouseAddress', 'warehousePostalCode',
       'storeStatus', 'openingDate', 'closingDate',
       'googleBusinessUrl', 'oikuraPageUrl', 'lineAddFriendUrl', 'bankInfo',
       'bankName', 'branchName', 'accountType', 'accountNumber', 'accountHolder',
@@ -125,6 +126,7 @@ export async function PATCH(
       select: {
         id: true, code: true, name: true,
         email: true, phone: true, prefecture: true, postalCode: true, address: true,
+        warehousePostalCode: true, warehouseAddress: true,
         storeStatus: true, openingDate: true, closingDate: true,
         googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
         bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
@@ -157,6 +159,7 @@ export async function GET(
     select: {
       id: true, code: true, name: true,
       email: true, phone: true, prefecture: true, postalCode: true, address: true,
+      warehousePostalCode: true, warehouseAddress: true,
       storeStatus: true, openingDate: true, closingDate: true,
       googleBusinessUrl: true, oikuraPageUrl: true, lineAddFriendUrl: true, bankInfo: true,
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,

@@ -21,6 +21,7 @@ export async function GET(
     select: {
       id: true, name: true, code: true,
       phone: true, address: true, prefecture: true,
+      postalCode: true, warehousePostalCode: true, warehouseAddress: true,
       email: true, isActive: true, createdAt: true,
       _count: { select: { customers: true, visitSchedules: true } },
     },

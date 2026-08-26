@@ -39,6 +39,8 @@ type Store = {
   prefecture: string | null
   postalCode: string | null
   address: string | null
+  warehousePostalCode: string | null
+  warehouseAddress: string | null
   phone: string | null
   email: string | null
   storeStatus: string | null
@@ -120,6 +122,7 @@ export default function AdminStoresPage() {
   const [allMatching, setAllMatching] = useState(false)
   const [createForm, setCreateForm] = useState({
     code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '',
+    warehousePostalCode: '', warehouseAddress: '',
   })
   const [creating, setCreating] = useState(false)
 
@@ -135,6 +138,21 @@ export default function AdminStoresPage() {
       if (!data.prefecture) return
       const addr = data.address || `${data.prefecture}${data.city || ''}${data.town || ''}`
       setCreateForm(prev => ({ ...prev, prefecture: data.prefecture, address: addr }))
+    } catch { /* ignore */ }
+  }
+
+  // メイン倉庫の郵便番号→住所の自動入力（都道府県は店舗住所のものを正とするので上書きしない）
+  async function handleCreateWarehousePostal(v: string) {
+    setCreateForm(prev => ({ ...prev, warehousePostalCode: v }))
+    const digits = v.replace(/[^0-9]/g, '')
+    if (digits.length !== 7) return
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data.prefecture) return
+      const addr = data.address || `${data.prefecture}${data.city || ''}${data.town || ''}`
+      setCreateForm(prev => ({ ...prev, warehouseAddress: addr }))
     } catch { /* ignore */ }
   }
 
@@ -265,6 +283,8 @@ export default function AdminStoresPage() {
         prefecture: createForm.prefecture.trim() || undefined,
         postalCode: createForm.postalCode.trim() || undefined,
         address:    createForm.address.trim() || undefined,
+        warehousePostalCode: createForm.warehousePostalCode.trim() || undefined,
+        warehouseAddress:    createForm.warehouseAddress.trim() || undefined,
       }),
     })
     const data = await res.json()
@@ -272,7 +292,7 @@ export default function AdminStoresPage() {
 
     if (res.ok) {
       setShowCreateModal(false)
-      setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '' })
+      setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '', warehousePostalCode: '', warehouseAddress: '' })
       setPasswordModal({ storeName: createForm.name.trim(), password: data.password, storeId: data.store.id, storeEmail: data.store.email ?? null })
       refreshStores()
     } else {
@@ -436,6 +456,8 @@ export default function AdminStoresPage() {
       email: store.email || '',
       phone: store.phone || '',
       address: store.address || '',
+      warehousePostalCode: store.warehousePostalCode || '',
+      warehouseAddress: store.warehouseAddress || '',
       prefecture: store.prefecture || '',
       storeStatus: store.storeStatus || 'active',
       openingDate: store.openingDate ? store.openingDate.slice(0, 10) : '',
@@ -1126,7 +1148,7 @@ export default function AdminStoresPage() {
           </p>
 
           <TextField
-            label="郵便番号（入力で住所を自動補完）"
+            label="郵便番号（入力で店舗住所を自動補完）"
             value={createForm.postalCode}
             onChange={handleCreatePostal}
             placeholder="123-4567"
@@ -1164,10 +1186,24 @@ export default function AdminStoresPage() {
           />
 
           <TextField
-            label="住所"
+            label="店舗住所"
             value={createForm.address}
             onChange={v => setCreateForm({ ...createForm, address: v })}
             placeholder="東京都渋谷区..."
+          />
+
+          <TextField
+            label="メイン倉庫 郵便番号（入力で倉庫住所を自動補完）"
+            value={createForm.warehousePostalCode}
+            onChange={handleCreateWarehousePostal}
+            placeholder="123-4567"
+          />
+
+          <TextField
+            label="メイン倉庫住所"
+            value={createForm.warehouseAddress}
+            onChange={v => setCreateForm({ ...createForm, warehouseAddress: v })}
+            placeholder="東京都足立区..."
           />
 
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
@@ -1507,7 +1543,9 @@ export default function AdminStoresPage() {
                         </div>
                       </div>
                       <TextField label="郵便番号" value={editForm.postalCode || ''} onChange={v => setEditForm({...editForm, postalCode: v})} placeholder="123-4567" />
-                      <TextField label="住所" value={editForm.address || ''} onChange={v => setEditForm({...editForm, address: v})} />
+                      <TextField label="店舗住所" value={editForm.address || ''} onChange={v => setEditForm({...editForm, address: v})} />
+                      <TextField label="メイン倉庫 郵便番号" value={editForm.warehousePostalCode || ''} onChange={v => setEditForm({...editForm, warehousePostalCode: v})} placeholder="123-4567" />
+                      <TextField label="メイン倉庫住所" value={editForm.warehouseAddress || ''} onChange={v => setEditForm({...editForm, warehouseAddress: v})} />
                       <TextField label="電話番号" value={editForm.phone || ''} onChange={v => setEditForm({...editForm, phone: v})} />
                       <TextField label="メールアドレス" type="email" value={editForm.email || ''} onChange={v => setEditForm({...editForm, email: v})} />
                     </div>
@@ -1572,7 +1610,9 @@ export default function AdminStoresPage() {
                         { label: '対応サービス', value: storeServicesLabel(detailStore.supportedServices) || null },
                         { label: '都道府県', value: detailStore.prefecture },
                         { label: '郵便番号', value: detailStore.postalCode ? `〒${detailStore.postalCode}` : null },
-                        { label: '住所', value: detailStore.address },
+                        { label: '店舗住所', value: detailStore.address },
+                        { label: 'メイン倉庫郵便番号', value: detailStore.warehousePostalCode ? `〒${detailStore.warehousePostalCode}` : null },
+                        { label: 'メイン倉庫住所', value: detailStore.warehouseAddress },
                         { label: '電話番号', value: detailStore.phone },
                         { label: 'メール', value: detailStore.email },
                         { label: '担当顧客数', value: `${detailStore._count.customers} 名` },
@@ -1795,10 +1835,17 @@ export default function AdminStoresPage() {
                     <span className="text-sm text-[var(--md-sys-color-on-surface)]">{selectedStore.prefecture || '—'}</span>
                   </div>
                   <div className="px-4 py-2.5 flex">
-                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">住所</span>
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">店舗住所</span>
                     <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">
                       {selectedStore.postalCode && <>〒{selectedStore.postalCode}<br /></>}
                       {selectedStore.address || '—'}
+                    </span>
+                  </div>
+                  <div className="px-4 py-2.5 flex">
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] w-24 flex-shrink-0">メイン倉庫住所</span>
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)] break-all">
+                      {selectedStore.warehousePostalCode && <>〒{selectedStore.warehousePostalCode}<br /></>}
+                      {selectedStore.warehouseAddress || '—'}
                     </span>
                   </div>
                   <div className="px-4 py-2.5 flex">

@@ -20,6 +20,8 @@ type Props = {
   lockHint?: boolean
   onStartEdit: (storeId: string, field: string) => void
   onEndEdit: () => void
+  /** postal 用: 補完先のフィールド名（省略時は店舗住所の3項目） */
+  postalTargets?: { postalCode: string; prefecture?: string; address: string }
   /** 変更確定。postal は複数フィールドを一度に積むことがある */
   onCommit: (storeId: string, changes: Record<string, string>) => void
   /** dirty セルの個別取り消し */
@@ -27,7 +29,7 @@ type Props = {
 }
 
 export default function BulkEditCell({
-  storeId, field, editor, options, searchable, value, dirty, editing, readOnly, lockHint,
+  storeId, field, editor, options, searchable, postalTargets, value, dirty, editing, readOnly, lockHint,
   onStartEdit, onEndEdit, onCommit, onRevert,
 }: Props) {
   // 編集中の下書き値はセル内ローカル state（タイプごとにグリッド全体を再レンダリングさせない）
@@ -96,7 +98,10 @@ export default function BulkEditCell({
       if (!data.prefecture) return
       const addr = data.address || `${data.prefecture}${data.city || ''}${data.town || ''}`
       // 郵便番号 + 都道府県 + 住所 をまとめて dirty に積んで編集終了
-      onCommit(storeId, { postalCode: cleanedInput, prefecture: data.prefecture, address: addr })
+      const t = postalTargets ?? { postalCode: 'postalCode', prefecture: 'prefecture', address: 'address' }
+      const changes: Record<string, string> = { [t.postalCode]: cleanedInput, [t.address]: addr }
+      if (t.prefecture) changes[t.prefecture] = data.prefecture
+      onCommit(storeId, changes)
       onEndEdit()
     } catch {
       /* 失敗時は編集継続（blur/Enter で郵便番号のみコミット） */

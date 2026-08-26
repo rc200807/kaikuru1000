@@ -31,6 +31,8 @@ type Store = {
   prefecture?: string | null
   postalCode?: string | null
   address?: string | null
+  warehousePostalCode?: string | null
+  warehouseAddress?: string | null
   lineAddFriendUrl?: string | null
   storeStatus?: string | null
   openingDate?: string | null
@@ -365,6 +367,8 @@ export default function StoreDetailPage() {
       phone: store.phone || '',
       postalCode: store.postalCode || '',
       address: store.address || '',
+      warehousePostalCode: store.warehousePostalCode || '',
+      warehouseAddress: store.warehouseAddress || '',
       prefecture: store.prefecture || '',
       lineAddFriendUrl: store.lineAddFriendUrl || '',
       storeStatus: store.storeStatus || 'active',
@@ -398,7 +402,24 @@ export default function StoreDetailPage() {
     setEditForm(prev => ({ ...prev, address: v, serviceAreas: seedServiceAreas(v, prev.serviceAreas || '[]') }))
   }
 
-  /* 郵便番号→住所の自動入力（7桁で zipcloud を照会） */
+  /* メイン倉庫の郵便番号→住所の自動入力（都道府県・対応エリアは店舗住所を正とするので触らない） */
+  async function handleWarehousePostalChange(v: string) {
+    setEditForm(prev => ({ ...prev, warehousePostalCode: v }))
+    const digits = v.replace(/[^0-9]/g, '')
+    if (digits.length !== 7) return
+    try {
+      const res = await fetch(`/api/postal-lookup?zipcode=${digits}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data.prefecture) return
+      setEditForm(prev => ({
+        ...prev,
+        warehouseAddress: data.address || `${data.prefecture}${data.city || ''}${data.town || ''}`,
+      }))
+    } catch { /* ignore */ }
+  }
+
+  /* 郵便番号→店舗住所の自動入力（7桁で zipcloud を照会） */
   async function handlePostalChange(v: string) {
     setEditForm(prev => ({ ...prev, postalCode: v }))
     const digits = v.replace(/[^0-9]/g, '')
@@ -629,9 +650,11 @@ export default function StoreDetailPage() {
               <EditSelect label="ステータス" value={editForm.storeStatus} onChange={v => setEditForm({ ...editForm, storeStatus: v })} options={STORE_STATUSES.map(s => ({ value: s.value, label: s.label }))} />
               <EditField label="電話番号" value={editForm.phone} onChange={v => setEditForm({ ...editForm, phone: v })} />
               <EditField label="メールアドレス" type="email" value={editForm.email} onChange={v => setEditForm({ ...editForm, email: v })} />
-              <EditField label="郵便番号（入力で住所を自動補完）" value={editForm.postalCode} onChange={handlePostalChange} placeholder="123-4567" />
+              <EditField label="郵便番号（入力で店舗住所を自動補完）" value={editForm.postalCode} onChange={handlePostalChange} placeholder="123-4567" />
               <EditField label="都道府県" value={editForm.prefecture} onChange={v => setEditForm({ ...editForm, prefecture: v })} />
-              <EditField label="住所" value={editForm.address} onChange={handleAddressChange} />
+              <EditField label="店舗住所" value={editForm.address} onChange={handleAddressChange} />
+              <EditField label="メイン倉庫 郵便番号（入力で倉庫住所を自動補完）" value={editForm.warehousePostalCode} onChange={handleWarehousePostalChange} placeholder="123-4567" />
+              <EditField label="メイン倉庫住所" value={editForm.warehouseAddress} onChange={v => setEditForm({ ...editForm, warehouseAddress: v })} />
               <EditField label="開業日" type="date" value={editForm.openingDate} onChange={v => setEditForm({ ...editForm, openingDate: v })} />
               <EditField label="閉店日" type="date" value={editForm.closingDate} onChange={v => setEditForm({ ...editForm, closingDate: v })} />
               <EditField label="GoogleビジネスURL" value={editForm.googleBusinessUrl} onChange={v => setEditForm({ ...editForm, googleBusinessUrl: v })} />
@@ -735,7 +758,9 @@ export default function StoreDetailPage() {
             ['メール', store.email],
             ['郵便番号', store.postalCode ? `〒${store.postalCode}` : null],
             ['都道府県', store.prefecture],
-            ['住所', store.address],
+            ['店舗住所', store.address],
+            ['メイン倉庫郵便番号', store.warehousePostalCode ? `〒${store.warehousePostalCode}` : null],
+            ['メイン倉庫住所', store.warehouseAddress],
             ['Googleビジネス', store.googleBusinessUrl ? <a href={store.googleBusinessUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
             ['おいくらページ', store.oikuraPageUrl ? <a href={store.oikuraPageUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],
             ['LINE友達登録リンク', store.lineAddFriendUrl ? <a href={store.lineAddFriendUrl} target="_blank" rel="noreferrer" style={{ color: '#4f8ef7' }}>開く</a> : null],

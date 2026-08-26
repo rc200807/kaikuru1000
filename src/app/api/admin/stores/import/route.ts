@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { parseCsv } from '@/lib/csv-parser'
-import { STORE_CSV_COLUMNS, storeStatusValueFromCell } from '@/lib/store-csv'
+import { STORE_CSV_COLUMNS, resolveStoreCsvHeader, storeStatusValueFromCell } from '@/lib/store-csv'
 import { storeServicesValueFromCell } from '@/lib/store-services'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
 import { recordAccessLog } from '@/lib/access-log'
@@ -110,8 +110,10 @@ export async function POST(req: NextRequest) {
     let rowError: string | null = null
     for (const col of fieldCols) {
       // CSVに存在しない列は変更しない（旧フォーマットのCSVで既存値を消さない）
-      if (!(col.header in idxOf)) continue
-      const raw = get(row, col.header)
+      // 見出しを変更した列は旧見出し（aliases）でも受け付ける
+      const header = resolveStoreCsvHeader(col, h => h in idxOf)
+      if (!header) continue
+      const raw = get(row, header)
       if (col.kind === 'status') {
         const v = storeStatusValueFromCell(raw)
         if (v === undefined) { rowError = `不明なステータス「${raw}」`; break }
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
       } else if (col.kind === 'date') {
         if (!raw) { data[col.key] = null; continue }
         const d = new Date(raw)
-        if (isNaN(d.getTime())) { rowError = `${col.header}の日付形式が不正「${raw}」`; break }
+        if (isNaN(d.getTime())) { rowError = `${header}の日付形式が不正「${raw}」`; break }
         data[col.key] = d
       } else if (col.key === 'serviceAreas') {
         if (!raw) { data.serviceAreas = null; continue }

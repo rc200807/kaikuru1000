@@ -19,6 +19,9 @@ type StoreInfo = {
   code: string
   phone: string | null
   address: string | null
+  postalCode?: string | null
+  warehousePostalCode?: string | null
+  warehouseAddress?: string | null
   prefecture: string | null
   email: string | null
   isActive: boolean
@@ -415,7 +418,8 @@ function MyStoreContent() {
                   { label: '店舗名', value: store.name, mono: false },
                   { label: '店舗コード', value: store.code, mono: true },
                   { label: '都道府県', value: store.prefecture || '—', mono: false },
-                  { label: '住所', value: store.address || '—', mono: false },
+                  { label: '店舗住所', value: store.address || '—', mono: false },
+                  { label: 'メイン倉庫住所', value: store.warehouseAddress || '—', mono: false },
                   { label: '電話番号', value: store.phone || '—', mono: false },
                   { label: 'メール', value: store.email || '—', mono: false },
                   { label: '登録日', value: store.createdAt ? format(new Date(store.createdAt), 'yyyy年M月d日', { locale: ja }) : '—', mono: false },

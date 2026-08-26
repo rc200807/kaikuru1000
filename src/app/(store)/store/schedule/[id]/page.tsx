@@ -203,11 +203,22 @@ export default function VisitDetailPage() {
   }, [])
 
   /* ─── 買取品目 ─── */
+  /** 入力内容ごと破棄して閉じる（保存後・明示的な「キャンセル」時のみ） */
   function resetPurchaseForm() {
     setPurchaseForm({ itemName: '', category: '', quantity: 1, purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null })
     setEditingPurchase(null)
     setShowPurchaseForm(false)
     setJanLookupError(null)
+  }
+
+  /**
+   * 入力内容を残したまま閉じる。
+   * ✕・Escape・端末の戻る・背景クリックはうっかり閉じてしまうことがあるため、
+   * ここで入力を破棄しない（再度「品目を追加」で続きから入力できる）。
+   */
+  function dismissPurchaseForm() {
+    if (savingPurchase) return
+    setShowPurchaseForm(false)
   }
 
   function startEditPurchase(item: PurchaseItem) {
@@ -292,7 +303,8 @@ export default function VisitDetailPage() {
       }
     }
 
-    setPurchaseForm({ ...purchaseForm, imageUrls: newUrls })
+    // await をまたぐので、アップロード中に編集された他の項目を巻き戻さないよう関数形式で更新する
+    setPurchaseForm(prev => ({ ...prev, imageUrls: newUrls }))
     setUploading(false)
     e.target.value = ''
   }
@@ -905,7 +917,8 @@ export default function VisitDetailPage() {
                 </svg>
                 1000円ボックスで買取
               </button>
-              <Button size="sm" onClick={() => { resetPurchaseForm(); setShowPurchaseForm(true) }}>
+              {/* 新規入力の途中で閉じた場合は続きから再開する（編集中だった場合は新規として開き直す） */}
+              <Button size="sm" onClick={() => { if (editingPurchase !== null) resetPurchaseForm(); setShowPurchaseForm(true) }}>
                 <span className="flex items-center gap-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                   品目を追加
@@ -1136,7 +1149,7 @@ export default function VisitDetailPage() {
       {/* 品目追加/編集モーダル */}
       <Modal
         open={showPurchaseForm}
-        onClose={() => { if (!savingPurchase) resetPurchaseForm() }}
+        onClose={dismissPurchaseForm}
         title={editingPurchase ? '品目を編集' : '品目を追加'}
         size="lg"
       >

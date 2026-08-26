@@ -14,7 +14,14 @@ export default function PartnerLoginPage() {
 
   useEffect(() => {
     if (status === 'authenticated' && (session?.user as any)?.role === 'partner') {
-      router.push('/partner/license-keys')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/partner/license-keys')
     }
   }, [status, session, router])
 
@@ -27,7 +34,14 @@ export default function PartnerLoginPage() {
     if (result?.error) {
       setError(result.error === 'CredentialsSignin' ? 'メールまたはパスワードが正しくありません' : result.error)
     } else if (result?.ok) {
-      router.push('/partner/license-keys')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/partner/license-keys')
     }
   }
 

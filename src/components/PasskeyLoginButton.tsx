@@ -11,7 +11,6 @@
 
 import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/browser'
 import Button from '@/components/Button'
 
@@ -71,7 +70,6 @@ type Props = {
 }
 
 export default function PasskeyLoginButton({ portal, callbackUrl, onError }: Props) {
-  const router = useRouter()
   const [supported, setSupported] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -86,7 +84,14 @@ export default function PasskeyLoginButton({ portal, callbackUrl, onError }: Pro
     const result = await loginWithPasskey(portal)
     setLoading(false)
     if (result.ok) {
-      router.push(callbackUrl)
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign(callbackUrl)
     } else if (!result.cancelled) {
       onError?.(result.error || 'パスキーログインに失敗しました')
     }

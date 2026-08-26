@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
@@ -12,7 +11,6 @@ import PasskeyLoginButton from '@/components/PasskeyLoginButton'
 import LoginFooter from '@/components/LoginFooter'
 
 export default function AdminLoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -33,7 +31,14 @@ export default function AdminLoginPage() {
     if (result?.error) {
       setError('メールアドレスまたはパスワードが間違っています')
     } else {
-      router.push('/admin/dashboard')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/admin/dashboard')
     }
   }
 

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Card from '@/components/Card'
 import TextField from '@/components/TextField'
@@ -12,7 +11,6 @@ import PasskeyLoginButton from '@/components/PasskeyLoginButton'
 import LoginFooter from '@/components/LoginFooter'
 
 export default function StoreLoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -40,6 +38,16 @@ export default function StoreLoginPage() {
     }
   }
 
+  /**
+   * ログイン後の遷移先。middleware が付けた ?callbackUrl= があればそこへ戻す
+   * （自動ログアウト前に見ていた画面に復帰できる）。
+   * 外部サイトへ飛ばされないよう /store/ 配下だけを許可する。
+   */
+  function loginDestination(): string {
+    const cb = new URLSearchParams(window.location.search).get('callbackUrl')
+    return cb && cb.startsWith('/store/') && !cb.startsWith('/store/login') ? cb : '/store/dashboard'
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -55,7 +63,14 @@ export default function StoreLoginPage() {
     if (result?.error) {
       setError('メールアドレスまたはパスワードが間違っています')
     } else {
-      router.push('/store/dashboard')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と StoreShell で入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign(loginDestination())
     }
   }
 

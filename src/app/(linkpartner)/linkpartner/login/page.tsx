@@ -14,7 +14,14 @@ export default function LinkPartnerLoginPage() {
 
   useEffect(() => {
     if (status === 'authenticated' && (session?.user as any)?.role === 'linkpartner') {
-      router.push('/linkpartner/dashboard')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/linkpartner/dashboard')
     }
   }, [status, session, router])
 
@@ -28,7 +35,14 @@ export default function LinkPartnerLoginPage() {
       setError(result.error === 'CredentialsSignin' ? 'メールまたはパスワードが正しくありません' : result.error)
     } else if (result?.ok) {
       // mustChangePassword の場合は middleware が onboarding へ誘導する
-      router.push('/linkpartner/dashboard')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/linkpartner/dashboard')
     }
   }
 

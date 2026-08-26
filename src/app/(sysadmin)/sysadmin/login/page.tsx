@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import { browserSupportsWebAuthn } from '@simplewebauthn/browser'
 import { loginWithPasskey } from '@/components/PasskeyLoginButton'
 
 export default function SysAdminLoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,7 +23,14 @@ export default function SysAdminLoginPage() {
     const result = await loginWithPasskey('sysadmin')
     setPasskeyLoading(false)
     if (result.ok) {
-      router.push('/sysadmin/dashboard')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/sysadmin/dashboard')
     } else if (!result.cancelled) {
       setError(result.error || 'パスキーログインに失敗しました')
     }
@@ -47,7 +52,14 @@ export default function SysAdminLoginPage() {
     if (result?.error) {
       setError('メールアドレスまたはパスワードが間違っています')
     } else {
-      router.push('/sysadmin/dashboard')
+      // ログイン直後はハード遷移する。
+      // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、
+      // next-auth の signIn が更新するのは片方だけ（__NEXTAUTH._getSession はモジュール変数で
+      // 後からマウントした側に上書きされる）。画面が読むのはサーバー描画時のセッション＝
+      // ログイン画面表示時点の null のままなので、router.push だと遷移先が未ログイン扱いになり
+      // ログイン画面へ戻されていた（2回目で入れるのはその間にレイアウトが再取得されるため）。
+      // ハード遷移ならサーバーが新しいCookieでレイアウトごと描き直すので確実に入れる。
+      window.location.assign('/sysadmin/dashboard')
     }
   }
 

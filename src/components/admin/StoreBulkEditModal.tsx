@@ -178,6 +178,36 @@ function serviceAreaSummary(json: string | null | undefined): string {
   }
 }
 
+// ─────────────────────────────────────────────
+// 行の状態（未入力あり / 閉店）
+// ─────────────────────────────────────────────
+
+// この項目のどれかが未入力なら行に色を付ける（銀行口座など運営者から継承される項目は対象外）
+const REQUIRED_KEYS = [
+  'name', 'storeStatus', 'operatorId', 'postalCode', 'prefecture', 'address',
+  'warehousePostalCode', 'warehouseAddress', 'serviceAreas', 'supportedServices',
+  'phone', 'email', 'openingDate',
+] as const
+
+const COLUMN_LABEL: Record<string, string> = Object.fromEntries(COLUMNS.map(c => [c.key, c.label]))
+
+/**
+ * 未入力の項目ラベル一覧。未保存の変更があればそちらを優先するので、
+ * 入力した時点で行の色が消える。対応エリア・対応サービスは空配列も未入力扱い。
+ */
+function missingLabels(store: BulkStore, rowDirty: Record<string, string> | undefined): string[] {
+  const labels: string[] = []
+  for (const key of REQUIRED_KEYS) {
+    const value = (rowDirty?.[key] ?? normalize(key, store[key])).trim()
+    const empty =
+      key === 'serviceAreas' ? !serviceAreaSummary(value)
+      : key === 'supportedServices' ? parseStoreServices(value).length === 0
+      : value === ''
+    if (empty) labels.push(COLUMN_LABEL[key] ?? key)
+  }
+  return labels
+}
+
 type DirtyMap = Record<string, Record<string, string>>
 type PresenceEntry = { adminId: string; adminName: string; storeId: string | null }
 type RowFlash = 'saved' | 'error'
@@ -275,8 +305,20 @@ const GridRow = memo(function GridRow({
   const operatorIdValue = rowDirty?.operatorId ?? normalize('operatorId', store.operatorId)
   const hasOperator = operatorIdValue !== ''
 
+  // 未入力あり（ドラフト行はこれから入力するので対象外）→ 行に警告色 + 店舗名セルに赤いバー。
+  // 閉店した店舗は行ごと薄く表示して、営業中の店舗と見分けられるようにする
+  const missing = draft ? [] : missingLabels(store, rowDirty)
+  const closed = (rowDirty?.storeStatus ?? normalize('storeStatus', store.storeStatus)) === 'closed'
+  const missingTitle = missing.length > 0 ? `未入力: ${missing.join('、')}` : undefined
+
   return (
-    <tr className={`border-b border-[var(--md-sys-color-outline-variant)] ${draft ? 'bg-[var(--md-sys-color-primary-container,#e0e7ff)]/30' : ''}`}>
+    <tr
+      className={`border-b border-[var(--md-sys-color-outline-variant)] ${
+        draft ? 'bg-[var(--md-sys-color-primary-container,#e0e7ff)]/30'
+        : missing.length > 0 ? 'bg-[var(--md-sys-color-error-container)]/25'
+        : ''
+      } ${closed ? 'opacity-55' : ''}`}
+    >
       {COLUMNS.map(col => {
         const original = normalize(col.key, store[col.key])
         const value = rowDirty?.[col.key] ?? original
@@ -362,9 +404,14 @@ const GridRow = memo(function GridRow({
         )
         if (col.key === 'name') {
           return (
+            // 横スクロールしても未入力の行が分かるよう、固定列の左端に警告バーを出す
+            // （固定列は背景を透かせないので、行の警告色ではなくボーダーで示す）
             <td
               key={col.key}
-              className={`sticky left-0 z-10 px-1 py-1 border-r border-[var(--md-sys-color-outline-variant)] ${draft ? 'bg-[var(--md-sys-color-primary-container,#eef2ff)]' : 'bg-[var(--md-sys-color-surface-container-lowest,#fff)]'}`}
+              title={missingTitle}
+              className={`sticky left-0 z-10 px-1 py-1 border-r border-[var(--md-sys-color-outline-variant)] ${
+                missing.length > 0 ? 'border-l-[3px] border-l-[var(--md-sys-color-error)]' : ''
+              } ${draft ? 'bg-[var(--md-sys-color-primary-container,#eef2ff)]' : 'bg-[var(--md-sys-color-surface-container-lowest,#fff)]'}`}
             >
               <div className="flex items-center gap-1">
                 {draft && (
@@ -921,6 +968,10 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
 
   const draftCount = rows.filter(r => isDraft(r.id)).length
   const savedCount = rows.length - draftCount
+  // 未入力の項目がある店舗数（未保存の変更を反映した状態で数える）
+  const missingRowCount = rows.filter(
+    r => !isDraft(r.id) && missingLabels(r, dirty[r.id]).length > 0,
+  ).length
   const totalWidth = COLUMNS.reduce((sum, c) => sum + c.width, 0) + 280 * 3 + 240 // +公開フォームURL3列 +アクション列
 
   return (
@@ -937,6 +988,16 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
             </h2>
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] hidden sm:block">
               セルをダブルクリックで編集 → 行ごとに「変更を保存」で反映。運営者を割り当てると銀行口座・古物許可番号・インボイス番号は運営者情報から自動反映されます（🔒 は編集不可）
+            </p>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] hidden lg:flex items-center gap-3 whitespace-nowrap">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm border-l-[3px] border-l-[var(--md-sys-color-error)] bg-[var(--md-sys-color-error-container)]/40" />
+                未入力あり
+              </span>
+              <span className="inline-flex items-center gap-1.5 opacity-55">
+                <span className="w-3 h-3 rounded-sm bg-[var(--md-sys-color-on-surface-variant)]" />
+                閉店
+              </span>
             </p>
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -1070,6 +1131,11 @@ export default function StoreBulkEditModal({ open, stores, operators, onClose }:
             {draftCount > 0 && (
               <span className="ml-3 font-medium text-[var(--portal-primary,#374151)]">
                 新規追加行 {draftCount}件（未作成）
+              </span>
+            )}
+            {missingRowCount > 0 && (
+              <span className="ml-3 font-medium text-[var(--md-sys-color-error)]">
+                未入力あり {missingRowCount}件
               </span>
             )}
             {dirtyStoreCount > 0 && (

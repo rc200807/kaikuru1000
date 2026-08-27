@@ -35,6 +35,25 @@ const STATUS_META: Record<AdminStatus, { label: string; cls: string }> = {
   pending_approval: { label: '承認待ち', cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
 }
 
+type ImportCreatedRow = {
+  row: number
+  name: string
+  role: AdminRole
+  authMethod: 'email' | 'idpass'
+  email: string | null
+  loginId: string | null
+  password: string
+  emailSent: boolean
+}
+
+type ImportResult = {
+  created: number
+  totalRows: number
+  results: ImportCreatedRow[]
+  errors: { row: number; message: string }[]
+  emailRequested: boolean
+}
+
 const ROLE_LABEL: Record<AdminRole, string> = {
   superadmin: 'Super Admin',
   hr: 'HR（人事）',
@@ -71,6 +90,14 @@ export default function AdminMembersPage() {
 
   // 削除確認モーダル
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+
+  // CSVインポート
+  const [importOpen, setImportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importSendEmail, setImportSendEmail] = useState(true)
+  const [importError, setImportError] = useState('')
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [importListCopied, setImportListCopied] = useState(false)
 
   // ロール変更
   const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null)
@@ -188,6 +215,54 @@ export default function AdminMembersPage() {
     setTimeout(() => setPwCopied(false), 2000)
   }
 
+  function openImport() {
+    setImportError('')
+    setImportResult(null)
+    setImportListCopied(false)
+    setImportOpen(true)
+  }
+
+  function refreshMembers() {
+    fetch('/api/admin/members')
+      .then(r => (r.ok ? r.json() : []))
+      .then(data => setMembers(Array.isArray(data) ? data : []))
+      .catch(() => { /* 一覧の再取得失敗は致命ではない */ })
+  }
+
+  async function handleImport(file: File) {
+    setImporting(true)
+    setImportError('')
+    setImportResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('sendEmail', importSendEmail ? 'true' : 'false')
+      const res = await fetch('/api/admin/members/import', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setImportError(data.error || 'インポートに失敗しました')
+        return
+      }
+      setImportResult(data as ImportResult)
+      if (data.created > 0) refreshMembers()
+    } catch {
+      setImportError('インポートに失敗しました')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  /** 発行したログイン情報をまとめてコピー（氏名／ID・メール／初期パスワードのタブ区切り） */
+  function copyImportedCredentials() {
+    if (!importResult) return
+    const text = importResult.results
+      .map(r => [r.name, r.email ?? r.loginId ?? '', r.password].join('\t'))
+      .join('\n')
+    navigator.clipboard.writeText(text)
+    setImportListCopied(true)
+    setTimeout(() => setImportListCopied(false), 2000)
+  }
+
   async function handleDelete(id: string, name: string) {
     setDeletingId(id)
     setDeleteTarget(null)
@@ -239,18 +314,32 @@ export default function AdminMembersPage() {
         subtitle="管理ポータル"
         actions={
           canManageRoles ? (
-            <Button
-              variant="filled"
-              size="sm"
-              onClick={() => { setShowForm(true); setMessage(null) }}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              }
-            >
-              メンバー追加
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outlined"
+                size="sm"
+                onClick={openImport}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16" />
+                  </svg>
+                }
+              >
+                CSVインポート
+              </Button>
+              <Button
+                variant="filled"
+                size="sm"
+                onClick={() => { setShowForm(true); setMessage(null) }}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                }
+              >
+                メンバー追加
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -393,6 +482,161 @@ export default function AdminMembersPage() {
           )}
         </Card>
       </div>
+
+      {/* CSVインポートモーダル */}
+      <Modal
+        open={importOpen}
+        onClose={() => { if (!importing) setImportOpen(false) }}
+        title="メンバーをCSVインポート"
+        size="lg"
+        footer={
+          <>
+            {importResult && (
+              <Button variant="text" onClick={() => { setImportResult(null); setImportError('') }}>
+                続けてインポート
+              </Button>
+            )}
+            <Button variant="filled" disabled={importing} onClick={() => setImportOpen(false)}>
+              閉じる
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+            CSVファイルから管理者メンバーを一括で登録できます。
+            <strong className="text-[var(--md-sys-color-on-surface)]">メールアドレス</strong>を入れた行はメール招待、
+            <strong className="text-[var(--md-sys-color-on-surface)]">ログインID</strong>を入れた行はID＋パスワード方式で作成されます。
+          </p>
+
+          <a
+            href="/api/admin/members/import"
+            download="admin-members-import-template.csv"
+            className="inline-flex items-center gap-1.5 text-sm font-medium px-3.5 h-9 rounded-full border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
+            </svg>
+            サンプルCSVをダウンロード
+          </a>
+
+          <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3 text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed space-y-1">
+            <p className="font-semibold text-[var(--md-sys-color-on-surface)]">CSVの列</p>
+            <p>・<strong>氏名</strong>（必須）</p>
+            <p>・<strong>メールアドレス</strong> または <strong>ログインID</strong>（どちらか一方を入力。両方入れた行はエラー）</p>
+            <p>・<strong>ロール</strong>（空欄は「管理者」。管理者 / Super Admin / HR（人事））</p>
+            <p className="pt-1">ログインID方式は 4〜50文字の半角英数字と <code>. _ -</code>。Super Admin は指定できません（本人のパスキー登録＋superadminの承認が必要）。</p>
+            <p>初期パスワードは行ごとに自動生成し、この画面で一度だけ表示します。すでに登録済みのメール・ログインIDの行はスキップします。</p>
+          </div>
+
+          {!importResult && (
+            <>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importSendEmail}
+                  onChange={e => setImportSendEmail(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[var(--portal-primary,#374151)]"
+                />
+                <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                  招待メールを送信する
+                  <span className="block text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                    メールアドレスの行に、ログイン情報を記載した招待メールを送ります。オフにすると送信せず、初期パスワードをこの画面から手渡せます。
+                  </span>
+                </span>
+              </label>
+
+              <label
+                className={`flex items-center justify-center gap-2 py-6 px-4 rounded-xl border-2 border-dashed border-[var(--md-sys-color-outline-variant)] text-sm text-[var(--md-sys-color-on-surface-variant)] transition-colors ${
+                  importing ? 'opacity-60 cursor-wait' : 'cursor-pointer hover:bg-[var(--md-sys-color-surface-container-low)]'
+                }`}
+              >
+                {importing ? 'インポート中…' : 'CSVファイルを選択'}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  hidden
+                  disabled={importing}
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ''
+                    if (f) handleImport(f)
+                  }}
+                />
+              </label>
+            </>
+          )}
+
+          {importError && (
+            <MessageBanner severity="error" autoHideSeconds={0}>{importError}</MessageBanner>
+          )}
+
+          {importResult && (
+            <div className="space-y-3">
+              <MessageBanner severity={importResult.created > 0 ? 'success' : 'warning'} autoHideSeconds={0}>
+                {importResult.created}件のメンバーを登録しました
+                {importResult.errors.length > 0 && `（${importResult.errors.length}件はエラーでスキップ）`}
+              </MessageBanner>
+
+              {importResult.results.length > 0 && (
+                <div className="border border-[var(--md-sys-color-outline-variant)] rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between gap-3 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)]">
+                    <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
+                      発行したログイン情報（この画面を閉じると再表示できません）
+                    </p>
+                    <button
+                      type="button"
+                      onClick={copyImportedCredentials}
+                      className="text-xs font-medium px-2.5 py-1 rounded-full border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors whitespace-nowrap"
+                    >
+                      {importListCopied ? 'コピーしました' : '一覧をコピー'}
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-[var(--md-sys-color-on-surface-variant)]">
+                          <th className="text-left font-medium px-3 py-1.5">氏名</th>
+                          <th className="text-left font-medium px-3 py-1.5">メール / ID</th>
+                          <th className="text-left font-medium px-3 py-1.5">ロール</th>
+                          <th className="text-left font-medium px-3 py-1.5">初期パスワード</th>
+                          <th className="text-left font-medium px-3 py-1.5">メール</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResult.results.map(r => (
+                          <tr key={r.row} className="border-t border-[var(--md-sys-color-outline-variant)]">
+                            <td className="px-3 py-1.5 text-[var(--md-sys-color-on-surface)]">{r.name}</td>
+                            <td className="px-3 py-1.5 font-mono text-[var(--md-sys-color-on-surface-variant)] break-all">
+                              {r.email ?? r.loginId}
+                            </td>
+                            <td className="px-3 py-1.5 text-[var(--md-sys-color-on-surface-variant)]">{ROLE_LABEL[r.role]}</td>
+                            <td className="px-3 py-1.5 font-mono text-[var(--md-sys-color-on-surface)] break-all">{r.password}</td>
+                            <td className="px-3 py-1.5 text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
+                              {r.authMethod === 'idpass' ? '—' : r.emailSent ? '送信済み' : '未送信'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importResult.errors.length > 0 && (
+                <div className="border border-[var(--md-sys-color-outline-variant)] rounded-lg p-3 max-h-48 overflow-y-auto space-y-1">
+                  <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">エラー詳細</p>
+                  {importResult.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-[var(--md-sys-color-error)]">
+                      {e.row}行目: {e.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* メンバー追加モーダル */}
       <Modal

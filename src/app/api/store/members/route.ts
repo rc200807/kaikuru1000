@@ -61,12 +61,28 @@ export async function POST(request: NextRequest) {
 
   const { name, email } = parsed.data
 
-  // 同一店舗内でのメール重複チェック
+  // メールアドレスの重複は「この店舗の中だけ」で見る。
+  // 他店舗で使われているアドレスはスタッフとして追加できる（店舗専用ログイン画面から
+  // 入るので、どの店舗のアカウントとして認証するかは店舗コードで確定する）。
   const existingMember = await prisma.storeMember.findFirst({
     where: { storeId: sessionUser.id, email },
   })
   if (existingMember) {
     return NextResponse.json({ error: 'この店舗内で同じメールアドレスが既に使用されています' }, { status: 409 })
+  }
+
+  // この店舗のオーナー（店舗アカウント）と同じアドレスは不可。
+  // 同一店舗にオーナーとスタッフで同じアドレスがあると、店舗を確定させてもなお
+  // どちらのアカウントでログインするのかが決まらなくなる。
+  const ownStore = await prisma.store.findUnique({
+    where: { id: sessionUser.id },
+    select: { email: true },
+  })
+  if (ownStore?.email && ownStore.email.toLowerCase() === email.toLowerCase()) {
+    return NextResponse.json(
+      { error: 'この店舗のオーナーアカウントと同じメールアドレスです。別のアドレスを指定してください' },
+      { status: 409 },
+    )
   }
 
   // パスワード未指定なら自動生成し、平文を一度だけ返す

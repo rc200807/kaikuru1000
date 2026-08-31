@@ -596,9 +596,14 @@ model PasswordResetToken {
   token     String    @unique
   email     String
   userType  String    // "store" | "customer"
+  // 店舗ポータル用。同じメールアドレスが複数店舗で使われうる（スタッフは店舗内でのみ一意）ため、
+  // どの店舗のアカウントに対するリセットかをここで確定させる。未設定は従来どおり全店舗が対象。
+  storeId   String?
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+
+  @@index([storeId])
 }
 
 // マジックリンク（顧客契約書閲覧用）

@@ -560,6 +560,9 @@ export default function StoreDetailPage() {
 
   // 店舗専用の公開フォームURL（すべて店舗コード直結）
   const publicOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+  // 店舗専用ログインURL。この画面から入ると、この店舗のアカウントだけが照合対象になる
+  // （メールアドレスは店舗内でのみ一意なので、店舗を確定させないとログイン先が曖昧になる）
+  const storeLoginUrl = `${publicOrigin}/store/login/${store.code}`
   const publicFormUrls = [
     { key: 'inquiry', label: 'お問い合わせフォーム', url: `${publicOrigin}/inquiry/${store.code}` },
     { key: 'tel', label: '電話問い合わせフォーム', url: `${publicOrigin}/tel/${store.code}` },
@@ -866,6 +869,38 @@ export default function StoreDetailPage() {
             )}
           </div>
         )}
+      </Section>
+
+      {/* 店舗スタッフ向けのログインURL（お客様向けフォームとは別物なので節を分ける） */}
+      <Section title="店舗専用ログインURL">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.7 }}>
+            この店舗のスタッフがログインするURLです。ここから入ると、この店舗のアカウントとして認証されます。
+            店舗にブックマークしてもらってください。
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              readOnly
+              value={storeLoginUrl}
+              onFocus={e => e.currentTarget.select()}
+              style={{ flex: 1, minWidth: 240, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', background: 'var(--md-sys-color-surface-container-high)', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontFamily: 'monospace' }}
+            />
+            <button
+              onClick={() => handleCopyPublicUrl('storeLogin', storeLoginUrl)}
+              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: copiedUrlKey === 'storeLogin' ? '#4ade80' : '#4f8ef7', color: '#fff', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+            >
+              {copiedUrlKey === 'storeLogin' ? 'コピー済' : 'URLをコピー'}
+            </button>
+            <a
+              href={storeLoginUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--md-sys-color-outline)', background: 'transparent', color: 'var(--md-sys-color-on-surface)', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              開く
+            </a>
+          </div>
+        </div>
       </Section>
 
       {/* 公開フォームURL（お問い合わせ・電話問い合わせ・LINE登録） */}

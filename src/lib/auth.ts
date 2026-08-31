@@ -135,20 +135,35 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'メールアドレス', type: 'email' },
         password: { label: 'パスワード', type: 'password' },
+        // 店舗専用ログイン画面（/store/login/[storeCode]）から渡す店舗コード。
+        // 指定されるとその店舗のアカウントだけを照合対象にする。
+        storeCode: { label: '店舗コード', type: 'text' },
       },
       async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null
 
-        const key = `store:${credentials.email}`
+        // 店舗コードが指定されていれば、その店舗に閉じてログインさせる。
+        // 同じメールアドレスが複数店舗で使われうる（スタッフは店舗内でのみ一意）ため、
+        // 店舗が確定していないと「どの店舗に入るのか」が曖昧になる。
+        const storeCode = (credentials.storeCode || '').trim()
+        let scopedStoreId: string | null = null
+        if (storeCode) {
+          const scoped = await prisma.store.findUnique({ where: { code: storeCode }, select: { id: true, isActive: true } })
+          if (!scoped || !scoped.isActive) return null
+          scopedStoreId = scoped.id
+        }
+
+        // ブロックの単位も店舗ごとに分ける（1店舗の連続失敗で他店舗まで巻き込まないため）
+        const key = scopedStoreId ? `store:${scopedStoreId}:${credentials.email}` : `store:${credentials.email}`
         const { blocked, remainingMs } = await isLoginBlocked(key)
         if (blocked) {
           const mins = Math.ceil((remainingMs ?? 0) / 60000)
           throw new Error(`ログインがブロックされています。${mins}分後に再試行してください`)
         }
 
-        // 店舗アカウントを確認（同一メールで複数店舗の場合、パスワードが一致する店舗にログイン）
+        // 店舗アカウント（オーナー）を確認。店舗コード指定時はその1店舗だけが対象。
         const stores = await prisma.store.findMany({
-          where: { email: credentials.email },
+          where: scopedStoreId ? { id: scopedStoreId, email: credentials.email } : { email: credentials.email },
         })
         for (const store of stores) {
           const isValid = await bcrypt.compare(credentials.password, store.password)
@@ -164,15 +179,12 @@ export const authOptions: NextAuthOptions = {
             }
           }
         }
-        if (stores.length > 0) {
-          // メールは見つかったがパスワードが一致しない
-          await recordLoginFailure(key)
-          return null
-        }
-
+        // ここで打ち切らないこと。オーナー用メールと同じアドレスを他店舗のスタッフとして
+        // 登録できる（メールは店舗内でのみ一意）ため、オーナーで一致しなくても
+        // スタッフアカウントの照合まで進める必要がある。
         // 店舗メンバーアカウントを確認（同一メールで複数店舗のメンバーの場合あり）
         const members = await prisma.storeMember.findMany({
-          where: { email: credentials.email },
+          where: scopedStoreId ? { storeId: scopedStoreId, email: credentials.email } : { email: credentials.email },
           include: { store: true },
         })
         for (const member of members) {

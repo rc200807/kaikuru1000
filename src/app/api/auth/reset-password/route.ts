@@ -66,24 +66,36 @@ export async function POST(req: Request) {
       // パスワード変更 → 全デバイスの長期セッションを失効
       await revokeAllDeviceSessions('admin', admin.id)
     } else if (resetToken.userType === 'store') {
-      // 同一メールの全店舗のパスワードを更新
-      const stores = await prisma.store.findMany({
-        where: { email: resetToken.email, isActive: true },
-        select: { id: true },
-      })
-      if (stores.length === 0) {
-        return NextResponse.json(
-          { error: 'アカウントが見つかりません' },
-          { status: 400 }
-        )
-      }
-      await prisma.store.updateMany({
-        where: { email: resetToken.email, isActive: true },
-        data: { password: hashedPassword },
-      })
-      // パスワード変更 → 全デバイスの長期セッションを失効
-      for (const store of stores) {
-        await revokeAllDeviceSessions('store', store.id)
+      // 対象店舗が記録されていればその店舗だけを更新する。
+      // 同じメールアドレスが複数店舗で使われうるため、店舗を絞らずに更新すると
+      // 無関係な店舗のパスワードまで変わってしまう。
+      // storeId が無いのは店舗専用ログイン画面より前に発行された古いトークンで、
+      // その頃は同一メールの全店舗を更新する挙動だったため従来どおりに扱う。
+      const storeWhere = resetToken.storeId
+        ? { id: resetToken.storeId, email: resetToken.email, isActive: true }
+        : { email: resetToken.email, isActive: true }
+      const stores = await prisma.store.findMany({ where: storeWhere, select: { id: true } })
+
+      if (stores.length > 0) {
+        await prisma.store.updateMany({ where: storeWhere, data: { password: hashedPassword } })
+        // パスワード変更 → 全デバイスの長期セッションを失効
+        for (const store of stores) {
+          await revokeAllDeviceSessions('store', store.id)
+        }
+      } else if (resetToken.storeId) {
+        // オーナーではなくスタッフアカウントのリセット
+        // （スタッフのメールは店舗内でのみ一意なので、店舗が決まっていれば1件に決まる）
+        const member = await prisma.storeMember.findUnique({
+          where: { storeId_email: { storeId: resetToken.storeId, email: resetToken.email } },
+          select: { id: true },
+        })
+        if (!member) {
+          return NextResponse.json({ error: 'アカウントが見つかりません' }, { status: 400 })
+        }
+        await prisma.storeMember.update({ where: { id: member.id }, data: { password: hashedPassword } })
+        await revokeAllDeviceSessions('storeMember', member.id)
+      } else {
+        return NextResponse.json({ error: 'アカウントが見つかりません' }, { status: 400 })
       }
     } else {
       const user = await prisma.user.findFirst({

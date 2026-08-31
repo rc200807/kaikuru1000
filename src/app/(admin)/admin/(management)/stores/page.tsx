@@ -157,7 +157,8 @@ export default function AdminStoresPage() {
   }
 
   // パスワード表示モーダル
-  const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string; storeId: string; storeEmail: string | null } | null>(null)
+  const [passwordModal, setPasswordModal] = useState<{ storeName: string; password: string; storeId: string; storeEmail: string | null; storeCode: string } | null>(null)
+  const [copiedUrl, setCopiedUrl] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copiedEmail, setCopiedEmail] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
@@ -293,7 +294,7 @@ export default function AdminStoresPage() {
     if (res.ok) {
       setShowCreateModal(false)
       setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '', warehousePostalCode: '', warehouseAddress: '' })
-      setPasswordModal({ storeName: createForm.name.trim(), password: data.password, storeId: data.store.id, storeEmail: data.store.email ?? null })
+      setPasswordModal({ storeName: createForm.name.trim(), password: data.password, storeId: data.store.id, storeEmail: data.store.email ?? null, storeCode: data.store.code })
       refreshStores()
     } else {
       setMessage({ type: 'error', text: data.error || '店舗の作成に失敗しました' })
@@ -313,7 +314,7 @@ export default function AdminStoresPage() {
     setResettingId(null)
 
     if (res.ok) {
-      setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null })
+      setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null, storeCode: store.code })
     } else {
       setMessage({ type: 'error', text: data.error || 'パスワードの再発行に失敗しました' })
     }
@@ -337,7 +338,7 @@ export default function AdminStoresPage() {
     setResettingId(null)
 
     if (res.ok) {
-      setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null })
+      setPasswordModal({ storeName: store.name, password: data.password, storeId: store.id, storeEmail: store.email ?? null, storeCode: store.code })
     } else {
       setMessage({ type: 'error', text: data.error || '初期ログイン情報の取得に失敗しました' })
     }
@@ -423,6 +424,19 @@ export default function AdminStoresPage() {
     navigator.clipboard.writeText(passwordModal.storeEmail)
     setCopiedEmail(true)
     setTimeout(() => setCopiedEmail(false), 2000)
+  }
+
+  /** 店舗専用ログインURL。この店舗のアカウントだけを照合する画面 */
+  function storeLoginUrl(code: string): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    return `${origin}/store/login/${encodeURIComponent(code)}`
+  }
+
+  function handleCopyLoginUrl() {
+    if (!passwordModal) return
+    navigator.clipboard.writeText(storeLoginUrl(passwordModal.storeCode))
+    setCopiedUrl(true)
+    setTimeout(() => setCopiedUrl(false), 2000)
   }
 
   async function handleSendPasswordEmail() {
@@ -1240,6 +1254,34 @@ export default function AdminStoresPage() {
         {passwordModal && (
           <>
             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-4">{passwordModal.storeName}</p>
+
+            {/* 店舗専用ログインURL（この店舗のアカウントだけを照合する画面） */}
+            <div className="bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] p-4 mb-3">
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">店舗専用ログインURL</p>
+              <div className="flex items-center gap-3">
+                <code className="text-sm font-medium text-[var(--md-sys-color-on-surface)] flex-1 break-all">
+                  {storeLoginUrl(passwordModal.storeCode)}
+                </code>
+                <button
+                  onClick={handleCopyLoginUrl}
+                  className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors p-1 flex-shrink-0"
+                  title="コピー"
+                >
+                  {copiedUrl ? (
+                    <svg className="w-5 h-5 text-[var(--status-completed-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-2">
+                このURLからログインすると、この店舗のアカウントとして認証されます。店舗にブックマークしてもらってください。
+              </p>
+            </div>
 
             {/* メールアドレス */}
             <div className="bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] p-4 mb-3">

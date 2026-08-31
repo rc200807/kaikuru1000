@@ -23,7 +23,8 @@ export default function StoreShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  const isLoginPage = pathname === '/store/login'
+  // 店舗専用ログイン（/store/login/[storeCode]）も同じくシェル無しで表示する
+  const isLoginPage = pathname === '/store/login' || pathname.startsWith('/store/login/')
   const isAgreementPage = /\/store\/schedule\/[^/]+\/agreement/.test(pathname)
   // チャットは自前で全高レイアウトを組むため、main の下部パディングを付けない
   const isChatPage = pathname === '/store/chat'

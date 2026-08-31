@@ -49,7 +49,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'パスワードが指定されていません' }, { status: 400 })
     }
     try {
-      const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login`
+      // 店舗専用ログインURLを案内する（この店舗のアカウントだけを照合する画面）
+      const loginUrl = `${process.env.NEXTAUTH_URL ?? ''}/store/login/${encodeURIComponent(store.code)}`
       const sent = await sendStorePasswordResetNotification({
         storeEmail: store.email,
         storeName: store.name,

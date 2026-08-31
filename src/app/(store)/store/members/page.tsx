@@ -204,7 +204,7 @@ export default function StoreMembersPage() {
         title="メンバー管理"
         subtitle="店舗ポータルにログインできるアカウント"
         actions={
-          isOwner ? (
+          (
             <Button onClick={() => { setShowForm(true); setMessage(null) }} size="sm">
               <span className="flex items-center gap-1.5">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -213,7 +213,7 @@ export default function StoreMembersPage() {
                 メンバー追加
               </span>
             </Button>
-          ) : undefined
+          )
         }
       />
 
@@ -226,7 +226,7 @@ export default function StoreMembersPage() {
 
         {!isOwner && (
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-4">
-            ご自身の顔写真・氏名・パスワードを編集できます。メンバーの追加・削除はオーナーのみ可能です。
+            メンバーの追加はどなたでも行えます。編集できるのはご自身の顔写真・氏名・パスワードのみで、メンバーの削除と他のメンバーの編集はオーナーのみ可能です。
           </p>
         )}
 
@@ -291,7 +291,7 @@ export default function StoreMembersPage() {
           {members.length === 0 && (
             <EmptyState
               title="追加メンバーはいません"
-              description={isOwner ? '「メンバー追加」からアカウントを発行できます' : 'メンバーはまだ登録されていません'}
+              description="「メンバー追加」からアカウントを発行できます"
             />
           )}
         </Card>

@@ -47,10 +47,10 @@ export async function POST(request: NextRequest) {
   if (!session || sessionUser.role !== 'store') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  // メンバーの追加はオーナー（店舗アカウント）のみ
-  if (sessionUser.memberId) {
-    return NextResponse.json({ error: 'メンバーの追加はオーナーのみ可能です' }, { status: 403 })
-  }
+  // メンバーの追加は、オーナー（店舗アカウント）でもメンバーでも行える。
+  // 現場でスタッフが増えたときにオーナーの手を借りずにアカウントを発行できるようにするため。
+  // 追加先は必ずログイン中の店舗（sessionUser.id）に固定するので、他店舗には追加できない。
+  // 削除だけは引き続きオーナー限定（[id]/route.ts の DELETE）。
 
   const body = await request.json()
   const parsed = createMemberSchema.safeParse(body)
@@ -60,11 +60,6 @@ export async function POST(request: NextRequest) {
   }
 
   const { name, email } = parsed.data
-
-  // メンバーの追加はオーナー（店舗アカウント）のみ
-  if (sessionUser.memberId) {
-    return NextResponse.json({ error: 'メンバーの追加はオーナーのみ可能です' }, { status: 403 })
-  }
 
   // 同一店舗内でのメール重複チェック
   const existingMember = await prisma.storeMember.findFirst({

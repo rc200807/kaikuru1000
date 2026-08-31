@@ -8,6 +8,7 @@ import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory } from '@/lib/deal-categories'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { deleteCalendarEvent } from '@/lib/google-calendar'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
@@ -263,7 +264,7 @@ export async function PATCH(
   return NextResponse.json(updated)
 }
 
-// 案件の物理削除（管理者のみ。紐づく訪問予定は削除せずリンク解除）
+// 案件の物理削除（管理者のみ。紐づく訪問予定・その配下の書類や品目もまとめて削除する）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -277,17 +278,47 @@ export async function DELETE(
   const deal = await prisma.deal.findUnique({ where: { id } })
   if (!deal) return NextResponse.json({ error: '案件が見つかりません' }, { status: 404 })
 
-  // 全訪問は必ず案件に属する不変条件を守るため、訪問が紐づく案件は削除不可。
-  // （削除で dealId を null 化すると訪問が再び孤立し、契約書/見積が案件から辿れなくなる）
-  const linkedVisits = await prisma.visitSchedule.count({ where: { dealId: id } })
-  if (linkedVisits > 0) {
-    return NextResponse.json(
-      { error: `訪問予定が紐づく案件は削除できません（紐づく訪問: ${linkedVisits}件）。先に訪問予定を削除または別案件へ付け替えてください。` },
-      { status: 400 },
-    )
-  }
-  await prisma.deal.delete({ where: { id } })
+  // 紐づく訪問予定ごと削除する。
+  // 「全訪問は必ず案件に属する」不変条件があるため、訪問のリンクだけ外すと訪問が孤立し、
+  // その配下の契約書・見積がどの案件からも辿れなくなる。かといって訪問を残したまま
+  // 案件だけ消すこともできない（訪問の単体削除APIは存在しない）ので、
+  // 案件を消すときは配下の訪問とその書類・品目もまとめて消す。
+  // 案件に直接ぶら下がるもの（買取品目・請求項目・売買契約書・見積・録音・アキクル請求）は
+  // FK の onDelete: Cascade で落ちる。ここで明示的に消すのは、再ペアレント前の古いデータで
+  // 「訪問にだけ」ぶら下がっている行。
+  const visits = await prisma.visitSchedule.findMany({
+    where: { dealId: id },
+    select: { id: true, storeId: true, googleCalendarEventId: true },
+  })
+  const visitIds = visits.map(v => v.id)
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `案件を削除`, req: request })
-  return NextResponse.json({ success: true })
+  const removed = await prisma.$transaction(async (tx) => {
+    let contracts = 0, estimates = 0, purchaseItems = 0, workItems = 0
+    if (visitIds.length > 0) {
+      contracts     = (await tx.salesContract.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
+      estimates     = (await tx.estimate.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
+      purchaseItems = (await tx.purchaseItem.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
+      workItems     = (await tx.workItem.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
+      await tx.visitSchedule.deleteMany({ where: { dealId: id } })
+    }
+    await tx.deal.delete({ where: { id } })
+    return { visits: visitIds.length, contracts, estimates, purchaseItems, workItems }
+  })
+
+  // Googleカレンダーの予定も消す（失敗しても案件の削除自体は成功扱い）
+  for (const v of visits) {
+    if (!v.googleCalendarEventId) continue
+    try {
+      await deleteCalendarEvent(v.storeId, v.googleCalendarEventId)
+    } catch (e) {
+      console.error('[Deal DELETE] カレンダー予定の削除に失敗:', e)
+    }
+  }
+
+  await recordAccessLog({
+    userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name,
+    memberId: sessionUser.memberId ?? null,
+    action: `案件を削除（訪問${removed.visits}件を含む）`, req: request,
+  })
+  return NextResponse.json({ success: true, removed })
 }

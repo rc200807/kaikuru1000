@@ -713,7 +713,21 @@ export default function DealDetailView({
   }
 
   async function handleDelete() {
-    if (!confirm('この案件を削除しますか？（紐づく訪問予定は削除されず、リンクのみ解除されます）')) return
+    // 何が一緒に消えるのかを具体的に出す。訪問・書類・品目は案件と一緒に物理削除されるため、
+    // 「案件だけ消えるつもりだった」という誤操作を防ぐ
+    const d = deal
+    const parts = [
+      d && d.visitSchedules.length > 0 ? `訪問予定 ${d.visitSchedules.length}件` : null,
+      purchaseItems.length > 0 ? `買取品目 ${purchaseItems.length}件` : null,
+      workItems.length > 0 ? `請求項目 ${workItems.length}件` : null,
+      d?.dealContract ? '売買契約書' : null,
+      d?.dealEstimate ? '見積書' : null,
+      recordings.length > 0 ? `会話の録音 ${recordings.length}件` : null,
+    ].filter(Boolean)
+    const detail = parts.length > 0
+      ? `\n\n次の情報も一緒に削除されます:\n・${parts.join('\n・')}\n\nこの操作は取り消せません。`
+      : '\n\nこの操作は取り消せません。'
+    if (!confirm(`この案件を削除しますか？${detail}`)) return
     setDeleting(true)
     const res = await fetch(`/api/deals/${dealId}`, { method: 'DELETE' })
     setDeleting(false)

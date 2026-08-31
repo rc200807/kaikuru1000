@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // 店舗を検索して選択できるコンボボックス（管理ポータルのフィルタ用）。
 // 店舗数が多いため、プルダウン内の検索ボックスで絞り込める。
@@ -33,29 +33,52 @@ export default function StoreFilterSelect({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  // 開いたとき、モーダル等のスクロール領域内でコントロールを上部へ寄せ、
-  // 下に開く候補リストが見切れないようにする。
-  useEffect(() => {
-    if (!open) return
+  // 候補リストの表示位置。position:absolute のままだとモーダル本体（overflow-y:auto）に
+  // 切られて数件しか見えないため、fixed + 実座標で置いて画面いっぱいまで使えるようにする。
+  // fixed はスクロール祖先の overflow に切られない（transform 等を持つ祖先が無い限り）。
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number; maxH: number } | null>(null)
+
+  const place = useCallback(() => {
     const el = ref.current
     if (!el) return
-    const t = setTimeout(() => {
-      // 直近のスクロール可能な祖先を探す
-      let p: HTMLElement | null = el.parentElement
-      while (p) {
-        const s = getComputedStyle(p)
-        if (/(auto|scroll)/.test(s.overflowY) && p.scrollHeight > p.clientHeight + 4) break
-        p = p.parentElement
-      }
-      if (!p) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return }
-      const pr = p.getBoundingClientRect()
-      const er = el.getBoundingClientRect()
-      // コントロールをスクロール領域上端の少し下へ移動（下に候補表示スペースを確保）
-      const delta = (er.top - pr.top) - 12
-      if (delta > 0) p.scrollBy({ top: delta, behavior: 'smooth' })
-    }, 0)
-    return () => clearTimeout(t)
-  }, [open])
+    const r = el.getBoundingClientRect()
+    const GAP = 4
+    const MARGIN = 12 // 画面端との余白
+    const MAX_H = 440
+    // 非表示のタブなどでは innerHeight が 0 になることがある。その場合は判定材料が無いので
+    // 従来どおり下向きに開く（上向きにすると画面外へ飛ぶ）
+    const vh = window.innerHeight || document.documentElement.clientHeight
+    if (!vh) {
+      setPos({ left: r.left, width: r.width, top: r.bottom + GAP, maxH: MAX_H })
+      return
+    }
+    const below = vh - r.bottom - MARGIN
+    const above = r.top - MARGIN
+    // 下に十分な高さが無く、上のほうが広いなら上向きに開く
+    const openUp = below < 220 && above > below
+    const space = (openUp ? above : below) - GAP
+    setPos({
+      left: r.left,
+      width: r.width,
+      top: openUp ? undefined : r.bottom + GAP,
+      bottom: openUp ? vh - r.top + GAP : undefined,
+      // 極端に狭いときでも最低限は開く（120px 未満しか無いのは画面自体が小さい場合）
+      maxH: Math.min(MAX_H, Math.max(120, space)),
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open) { setPos(null); return }
+    place()
+    // モーダル本体や画面のスクロール・リサイズに追従させる（capture でネストした要素も拾う）
+    const onScroll = () => place()
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onScroll)
+    }
+  }, [open, place])
 
   const selected = stores.find(s => s.id === value)
   const filtered = useMemo(() => {
@@ -89,10 +112,12 @@ export default function StoreFilterSelect({
         <span style={{ opacity: 0.6, flexShrink: 0 }}>▾</span>
       </button>
 
-      {open && (
+      {open && pos && (
         <div style={{
-          position: 'absolute', zIndex: 50, top: 'calc(100% + 4px)', left: 0, minWidth: '100%', width: 'max-content', maxWidth: 320,
-          maxHeight: 300, overflowY: 'auto', background: 'var(--md-sys-color-surface-container-highest)',
+          position: 'fixed', zIndex: 1000,
+          left: pos.left, top: pos.top, bottom: pos.bottom,
+          minWidth: pos.width, width: 'max-content', maxWidth: Math.max(pos.width, 360),
+          maxHeight: pos.maxH, overflowY: 'auto', background: 'var(--md-sys-color-surface-container-highest)',
           border: '1px solid var(--md-sys-color-outline-variant)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
         }}>
           <div style={{ position: 'sticky', top: 0, padding: 6, background: 'var(--md-sys-color-surface-container-highest)', borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>

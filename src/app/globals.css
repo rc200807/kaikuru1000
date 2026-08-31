@@ -74,6 +74,13 @@
   --status-cancelled-bg:    #f5f5f5;
   --status-cancelled-text:  #737373;
 
+  /* ── 訪問時の作業ステップ（案件詳細のセクション色分け） ──
+     ポータルの主色（店舗=赤／管理=白）と衝突しない別系統の色にして、
+     「訪問時に手を動かすセクション」を一目で見分けられるようにする */
+  --step-accent:   #0068d6;
+  --step-surface:  #f2f8ff;
+  --step-on-badge: #ffffff;
+
   /* ── Elevation (shadow-as-border, Vercel-style) ─────── */
   --md-sys-elevation-0: none;
   --md-sys-elevation-1: rgba(0,0,0,0.08) 0px 0px 0px 1px;
@@ -168,6 +175,11 @@ body {
   --status-absent-text:     #fca5a5;
   --status-cancelled-bg:    #1a1a1a;
   --status-cancelled-text:  #a3a3a3;
+
+  /* ── 作業ステップ（暗面） ─────────────────────────── */
+  --step-accent:   #60a5fa;
+  --step-surface:  #101a2b;
+  --step-on-badge: #0a0a0a;
 
   /* ── Vercel dark elevation ────────────────────────── */
   --md-sys-elevation-1: rgba(255,255,255,0.06) 0px 0px 0px 1px;

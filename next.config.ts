@@ -36,6 +36,16 @@ const securityHeaders = [
   },
 ]
 
+// 書類PDF配信API専用のヘッダー。プレビュー用の iframe を通すため、
+// クリックジャッキング対策を「同一オリジンのみ許可」に緩める（他のパスは DENY のまま）
+const pdfPreviewHeaders = securityHeaders.map((h) =>
+  h.key === 'X-Frame-Options'
+    ? { ...h, value: 'SAMEORIGIN' }
+    : h.key === 'Content-Security-Policy'
+      ? { ...h, value: h.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") }
+      : h,
+)
+
 const nextConfig: NextConfig = {
   // Prisma をバンドルせず Node.js ネイティブで解決（Vercel ビルド対応）
   // sharp はネイティブバイナリを持つのでバンドルせず Node.js 側で解決させる（画像のWebP変換で使用）
@@ -70,7 +80,12 @@ const nextConfig: NextConfig = {
     ]
   },
   async headers() {
-    return [{ source: '/(.*)', headers: securityHeaders }]
+    return [
+      { source: '/(.*)', headers: securityHeaders },
+      // 書類PDFはアプリ内のモーダル（iframe）でプレビューする。全体は frame 埋め込み禁止のままにし、
+      // この配信APIのレスポンスだけ「同一オリジンからの埋め込み」を許可する
+      { source: '/api/magic-link/document-pdf', headers: pdfPreviewHeaders },
+    ]
   },
   images: {
     remotePatterns: [

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -40,6 +41,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params
   const access = await resolveDeal(id, sessionUser)
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
+
+  // 売買契約書の発行後は取引内容を凍結する
+  if (await isDealContracted(id)) return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
 
   const body = await request.json()
   const { workName, unitPrice, quantity, notes } = body

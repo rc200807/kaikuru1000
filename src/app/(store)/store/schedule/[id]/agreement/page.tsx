@@ -212,6 +212,9 @@ function IdDocumentUploadModal({
   const [ocrWarning, setOcrWarning] = useState('')
   // 顧客情報へ反映する項目（氏名/生年月日/住所）を個別に選択
   const [apply, setApply] = useState({ name: true, birthDate: true, address: true })
+  // 読み取れた住所の候補（運転免許証の住所変更欄など、旧住所と新住所が両方載る書類がある）。
+  // 2件以上あるときだけ確認ステップで選択させる
+  const [addressChoices, setAddressChoices] = useState<{ value: string; note: string | null }[]>([])
 
   const needsBack = DOC_TYPES_REQUIRING_BACK.includes(docType)
 
@@ -224,6 +227,7 @@ function IdDocumentUploadModal({
       setError(''); setOcrWarning('')
       setEdit({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
       setApply({ name: true, birthDate: true, address: true })
+      setAddressChoices([])
     }
   }, [open, initialDocType])
 
@@ -269,17 +273,38 @@ function IdDocumentUploadModal({
       }
       const data = await res.json()
 
+      // 裏面（住所変更欄）は新住所が載ることがあるので、読み取り結果を候補に加える
+      let backAddress: string | null = null
       if (backFile && needsBack) {
         const backFd = new FormData()
         backFd.append('file', backFile)
         backFd.append('documentType', docType)
-        await fetch(`/api/users/${userId}/id-document/back`, { method: 'POST', body: backFd })
+        const backRes = await fetch(`/api/users/${userId}/id-document/back`, { method: 'POST', body: backFd })
+        if (backRes.ok) {
+          const backData = await backRes.json().catch(() => null)
+          const v = typeof backData?.backAddress === 'string' ? backData.backAddress.trim() : ''
+          backAddress = v || null
+        }
       }
+
+      // 候補リスト: 表面の読み取り候補 → 裏面の新住所。重複は落とす
+      const choices: { value: string; note: string | null }[] = []
+      const pushChoice = (value: unknown, note: string | null) => {
+        const v = typeof value === 'string' ? value.trim() : ''
+        if (!v || choices.some(c => c.value === v)) return
+        choices.push({ value: v, note })
+      }
+      const frontCandidates = Array.isArray(data?.ocr?.idAddressCandidates) ? data.ocr.idAddressCandidates : []
+      for (const c of frontCandidates) pushChoice(c?.value, typeof c?.note === 'string' ? c.note : '表面の記載')
+      pushChoice(data?.ocr?.idAddress, '表面の記載')
+      pushChoice(backAddress, '裏面の住所変更欄（新住所）')
+      setAddressChoices(choices)
 
       setEdit({
         documentType: data?.documentType ?? data?.ocr?.idDocumentType ?? docType,
         name:         data?.ocr?.idName ?? '',
-        address:      data?.ocr?.idAddress ?? '',
+        // 裏面に新住所があればそちらが最新なので初期選択にする
+        address:      backAddress ?? data?.ocr?.idAddress ?? '',
         birthDate:    data?.ocr?.idBirthDate ?? '',
         licenseNumber: data?.ocr?.idLicenseNumber ?? '',
       })
@@ -472,6 +497,34 @@ function IdDocumentUploadModal({
               氏名を顧客情報に反映
             </label>
           </div>
+
+          {addressChoices.length > 1 && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-300">
+              <p className="text-xs font-bold text-amber-800 mb-2">
+                住所が{addressChoices.length}件読み取れました。契約に使う住所を選んでください
+              </p>
+              <div className="space-y-1.5">
+                {addressChoices.map((c) => (
+                  <label key={c.value} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="id-address-choice"
+                      checked={edit.address.trim() === c.value}
+                      onChange={() => setEdit((prev) => ({ ...prev, address: c.value }))}
+                      className="mt-0.5 w-3.5 h-3.5 accent-[var(--portal-primary)]"
+                    />
+                    <span className="text-xs text-amber-900 leading-relaxed">
+                      <span className="block">{c.value}</span>
+                      {c.note && <span className="block text-[10px] opacity-80">{c.note}</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-[10px] text-amber-800 mt-2">
+                選ぶと下の「住所」欄が置き換わります。どちらとも異なる場合は住所欄を直接修正してください。
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
@@ -804,6 +857,28 @@ export default function AgreementPage() {
 
       {message && <MessageBanner severity={message.type}>{message.text}</MessageBanner>}
 
+      {/* ──── この画面の役割（お客様と一緒に見る画面であることを明示） ──── */}
+      <div className="rounded-xl border-2 border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--portal-primary)] text-white whitespace-nowrap">お客様へ</span>
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">この画面の内容をご確認ください</h2>
+        </div>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2 leading-relaxed">
+          売買契約書を作成する前の、取引内容の確認画面です。担当者と一緒に、以下の項目にお間違いがないかご確認ください。
+        </p>
+        <ol className="text-xs text-[var(--md-sys-color-on-surface)] space-y-1 list-decimal list-inside leading-relaxed">
+          <li><strong>買取品目</strong> … お売りいただく品物と買取金額</li>
+          <li><strong>作業品目</strong> … 片付け・搬出などの作業内容と請求金額</li>
+          <li><strong>再訪問日</strong> … 後日お引き取りの予定がある場合の日時</li>
+          <li><strong>身分証明証</strong> … 法令に基づく本人確認のため、ご提示をお願いします</li>
+          <li><strong>お客様情報・送付先</strong> … ご職業・お電話番号・契約書をお送りするメールアドレス</li>
+        </ol>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2 leading-relaxed">
+          ご確認いただけましたら、画面下の「最終契約書へ進む」から署名のお願いに進みます。
+          内容の訂正が必要な場合は、この画面で担当者にお申し付けください。
+        </p>
+      </div>
+
       {/* ──── 日付・店舗情報 ──── */}
       <Card variant="elevated" padding="md">
         <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] space-y-3">
@@ -823,7 +898,10 @@ export default function AgreementPage() {
 
       {/* ──── 買取品目 ──── */}
       <Card variant="elevated" padding="md">
-        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">買取品目</h2>
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">買取品目</h2>
+        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+          お売りいただく品物と買取金額です。品名・数量・金額にお間違いがないかご確認ください。
+        </p>
         {visit.purchaseItems.length > 0 ? (
           <table className="w-full text-xs">
             <thead>
@@ -860,7 +938,10 @@ export default function AgreementPage() {
 
       {/* ──── 作業品目 ──── */}
       <Card variant="elevated" padding="md">
-        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">作業品目</h2>
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">作業品目</h2>
+        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+          片付け・搬出などの作業と、その請求金額です。作業内容と金額をご確認ください。
+        </p>
         {visit.workItems.length > 0 ? (
           <table className="w-full text-xs">
             <thead>
@@ -947,7 +1028,10 @@ export default function AgreementPage() {
 
       {/* ──── 身分証明証 ──── */}
       <Card variant="elevated" padding="md">
-        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">お客様の身分証明証</h2>
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様の身分証明証</h2>
+        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+          古物営業法に基づく本人確認のため、お客様の身分証明証を確認・撮影させていただきます。
+        </p>
         {hasIdDocument ? (
           <div className="p-3 rounded-lg bg-green-50 border border-green-300 flex items-start gap-3">
             <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

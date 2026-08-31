@@ -7,6 +7,7 @@ import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory } from '@/lib/deal-categories'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
@@ -202,6 +203,12 @@ export async function PATCH(
   if (!deal) return NextResponse.json({ error: '案件が見つかりません' }, { status: 404 })
   if (isStore && deal.storeId !== sessionUser.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // 売買契約書の発行後は取引内容（上乗せ率・事前同意）を凍結する。
+  // ステータス・カテゴリー・案件内容・担当店舗は契約後も運用上変更が要るため対象外。
+  if ((purchaseUpliftPercent !== undefined || preConsentSignature !== undefined) && await isDealContracted(id)) {
+    return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
   }
 
   const updateData: any = {}

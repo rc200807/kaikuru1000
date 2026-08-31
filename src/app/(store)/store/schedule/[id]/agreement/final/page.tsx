@@ -13,6 +13,7 @@ import MessageBanner from '@/components/MessageBanner'
 import CompletionModal from '@/components/store/CompletionModal'
 import LineSendCard from '@/components/store/LineSendCard'
 import { formalName, storeContractName } from '@/lib/operator-utils'
+import { formatBirthDate } from '@/lib/kobutsu-ledger'
 
 // base64 PDF を新規タブで開く（ブラウザのPDFビューアで確認・ダウンロードできる）
 function openPdfBase64(base64: string) {
@@ -160,6 +161,7 @@ type VisitUser = {
   idDocumentPath?: string | null
   idDocumentBackPath?: string | null
   idBirthDate?: string | null
+  birthDate?: string | null
 }
 
 type VisitDetail = {
@@ -177,6 +179,8 @@ type VisitDetail = {
     name: string
     address?: string | null
     phone?: string | null
+    /** 古物営業許可番号（店舗の値は運営者から継承される） */
+    antiquePermitNumber?: string | null
     operator?: {
       id: string
       entityType: string | null
@@ -184,6 +188,7 @@ type VisitDetail = {
       name: string
       address: string | null
       representativeName: string
+      antiquePermitNumber?: string | null
     } | null
   }
   purchaseItems: PurchaseItem[]
@@ -687,6 +692,10 @@ export default function FinalAgreementPage() {
   // 身分証OCR後の氏名・住所を優先表示
   const customerName = visit.user.idName || visit.user.name
   const customerAddress = visit.user.idAddress || visit.user.address
+  // 生年月日は顧客プロフィールが正。未登録なら身分証OCRの値を使う
+  const customerBirthDate = formatBirthDate(visit.user.birthDate || visit.user.idBirthDate) ?? ''
+  // 古物営業許可番号は店舗に継承済みの値が正。未設定なら運営者の登録値を見る
+  const antiquePermitNumber = visit.store.antiquePermitNumber || visit.store.operator?.antiquePermitNumber || ''
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
@@ -722,6 +731,26 @@ export default function FinalAgreementPage() {
             ロック解除
           </button>
         )}
+      </div>
+
+      {/* ──── この画面の役割（お客様に署名いただく画面であることを明示） ──── */}
+      <div className="rounded-xl border-2 border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest,#fff)] p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--portal-primary)] text-white whitespace-nowrap">お客様へ</span>
+          <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">内容をお読みのうえ、ご署名をお願いします</h2>
+        </div>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2 leading-relaxed">
+          この画面が、お客様と当社が取り交わす正式な書面です。次の順にご確認いただき、それぞれに署名をお願いします。
+        </p>
+        <ol className="text-xs text-[var(--md-sys-color-on-surface)] space-y-1 list-decimal list-inside leading-relaxed">
+          <li><strong>売買契約書</strong> … 買取品目と買取金額、当社（買主）とお客様（売主）の情報</li>
+          <li><strong>特定商取引法に基づく書面</strong> … クーリング・オフ、個人情報の取り扱いなど重要事項</li>
+          <li><strong>請求書</strong> … 作業内容と請求金額（作業がある場合のみ）</li>
+        </ol>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-2 leading-relaxed">
+          ご署名いただくと、この内容の控え（PDF）をご登録のメールアドレスへお送りします。
+          記載内容に相違がある場合は、署名せずに担当者へお申し付けください。
+        </p>
       </div>
 
       {existingContract && (
@@ -824,6 +853,8 @@ export default function FinalAgreementPage() {
                 <div><span className="font-medium">氏名:</span> {customerName}</div>
                 <div><span className="font-medium">住所:</span> {customerAddress}</div>
                 <div><span className="font-medium">電話:</span> {phoneInput || visit.user.phone}</div>
+                <div><span className="font-medium">生年月日:</span> {customerBirthDate || '—'}</div>
+                <div><span className="font-medium">ご職業:</span> {occupationInput || visit.user.occupation || '—'}</div>
                 {visit.user.idDocumentType && (
                   <div className="text-[10px] text-green-700 mt-1">本人確認: {visit.user.idDocumentType}</div>
                 )}
@@ -833,6 +864,7 @@ export default function FinalAgreementPage() {
                 <div><span className="font-medium">店舗名:</span> {storeContractName(visit.store.name)}</div>
                 {visit.store.address && <div><span className="font-medium">住所:</span> {visit.store.address}</div>}
                 {visit.store.phone && <div><span className="font-medium">電話:</span> {visit.store.phone}</div>}
+                <div><span className="font-medium">古物営業許可番号:</span> {antiquePermitNumber || '—'}</div>
                 {staffName && <div><span className="font-medium">担当者:</span> {staffName}</div>}
               </div>
             </div>

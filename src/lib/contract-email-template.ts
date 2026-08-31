@@ -32,9 +32,15 @@ export type ContractEmailParams = {
   customerAddress: string
   customerPhone: string
   customerIdType?: string | null
+  /** 生年月日（"YYYY-MM-DD" 想定。古物営業法の記録事項として契約書に記載する） */
+  customerBirthDate?: string | null
+  /** ご職業（取引内容の確認画面で聞き取り、契約書に記載する） */
+  customerOccupation?: string | null
   storeName: string
   storeAddress?: string | null
   storePhone?: string | null
+  /** 買取を行う店舗（＝紐づく運営者）の古物営業許可番号 */
+  antiquePermitNumber?: string | null
   operator: ContractEmailOperator
   staffName?: string
   visitDate: Date
@@ -60,6 +66,14 @@ function escape(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/** 生年月日を "YYYY/MM/DD" に整える（"YYYY-MM-DD" 以外はそのまま返す） */
+function fmtBirth(v: string | null | undefined): string {
+  const s = (v ?? '').trim()
+  if (!s) return ''
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s)
+  return m ? `${m[1]}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}` : s
 }
 
 function fmtDate(d: Date): string {
@@ -125,6 +139,8 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
             <div><strong>氏名:</strong> ${escape(p.customerName)}</div>
             <div><strong>住所:</strong> ${escape(p.customerAddress)}</div>
             <div><strong>電話:</strong> ${escape(p.customerPhone)}</div>
+            <div><strong>生年月日:</strong> ${escape(fmtBirth(p.customerBirthDate) || '—')}</div>
+            <div><strong>ご職業:</strong> ${escape(p.customerOccupation || '—')}</div>
             ${p.customerIdType ? `<div style="margin-top:4px;color:#047857;font-size:10px;">本人確認: ${escape(p.customerIdType)}</div>` : ''}
           </div>
         </td>
@@ -134,6 +150,7 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
             <div><strong>店舗名:</strong> ${escape(storeContractName(p.storeName))}</div>
             ${p.storeAddress ? `<div><strong>住所:</strong> ${escape(p.storeAddress)}</div>` : ''}
             ${p.storePhone ? `<div><strong>電話:</strong> ${escape(p.storePhone)}</div>` : ''}
+            <div><strong>古物営業許可番号:</strong> ${escape(p.antiquePermitNumber || '—')}</div>
             ${p.staffName ? `<div><strong>担当者:</strong> ${escape(p.staffName)}</div>` : ''}
           </div>
         </td>
@@ -347,12 +364,15 @@ export function buildContractBodyText(p: ContractEmailParams): string {
   lines.push(`氏名: ${p.customerName}`)
   lines.push(`住所: ${p.customerAddress}`)
   lines.push(`電話: ${p.customerPhone}`)
+  lines.push(`生年月日: ${fmtBirth(p.customerBirthDate) || '—'}`)
+  lines.push(`ご職業: ${p.customerOccupation || '—'}`)
   if (p.customerIdType) lines.push(`本人確認: ${p.customerIdType}`)
   lines.push('')
   lines.push('【買取業者情報（買主）】')
   lines.push(`店舗名: ${storeContractName(p.storeName)}`)
   if (p.storeAddress) lines.push(`住所: ${p.storeAddress}`)
   if (p.storePhone) lines.push(`電話: ${p.storePhone}`)
+  lines.push(`古物営業許可番号: ${p.antiquePermitNumber || '—'}`)
   if (p.staffName) lines.push(`担当者: ${p.staffName}`)
   lines.push('')
   // 再訪問日（後日引取）

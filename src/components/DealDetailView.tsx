@@ -13,6 +13,7 @@ import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
 import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
+import DocumentPdfPreview from '@/components/DocumentPdfPreview'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import Section, { SECTION_CLS, useOpenLatch } from '@/components/detail/SectionCard'
 import { PropRow, Row } from '@/components/detail/PropRow'
@@ -206,6 +207,8 @@ export default function DealDetailView({
   // 「この案件に訪問を追加」モーダル
   const [showAddVisit, setShowAddVisit] = useState(false)
   const [addVisit, setAddVisit] = useState({ visitDate: '', startTime: '', endTime: '', staffName: '', note: '' })
+  // 発行済みPDFのプレビュー（押した瞬間にダウンロードが始まらないよう、まず画面内で開く）
+  const [pdfPreview, setPdfPreview] = useState<{ title: string; url: string } | null>(null)
   const [addingVisit, setAddingVisit] = useState(false)
 
   // 訪問日時の変更（リスケジュール）モーダル
@@ -749,6 +752,11 @@ export default function DealDetailView({
   const birthDateFromId = !deal.user.birthDate && !!deal.user.idBirthDate
   const birthDateDisplay = fmtBirthDate(deal.user.birthDate || deal.user.idBirthDate)
   const editable = !isAdmin // 品目・事前同意の編集は店舗ポータル（管理は閲覧）
+  // 売買契約書はお客様の署名つきで発行される確定書類。発行後に品目や金額が変わると
+  // 書類とDBがずれるため、取引内容（事前同意・買取品目・請求項目・上乗せ率）を凍結する。
+  // 在庫化・AI調査・古物台帳・紙契約書の写真・録音は契約後に行う後続作業なので触れるままにする。
+  const contractIssued = !!deal.dealContract
+  const workEditable = editable && !contractIssued
   // 書類作成フローの対象訪問（最新）。フローは案件配下の品目で構成され、結果は案件の書類になる。
   const targetVisitId = deal.visitSchedules[0]?.id ?? null
 
@@ -770,6 +778,10 @@ export default function DealDetailView({
   // staff= は売買契約書側だけに渡す: 契約書は未指定だと「担当者」欄が空になるため訪問の担当者を引き継ぐ。
   // 見積書は未指定ならログイン中ユーザー名が入る既存挙動なので、上書きしない。
   const docStaff = deal.visitSchedules[0]?.staffName ?? ''
+  // PDF配信APIは訪問IDをキーにするため、プレビューを開く前に const へ退避する
+  // （プロパティ参照のままだとクロージャ内で null 絞り込みが外れる）
+  const contractVisitId = dealContract?.visitScheduleId ?? null
+  const estimateVisitId = dealEstimate?.visitScheduleId ?? null
   const goEstimate = () => { if (targetVisitId) router.push(`/store/schedule/${targetVisitId}/estimate?dealId=${deal.id}`) }
   const goAgreement = () => {
     if (!targetVisitId) return
@@ -1177,16 +1189,16 @@ export default function DealDetailView({
                     {(v.salesContract || v.estimate) && (
                       <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
                         {v.salesContract?.hasPdf && (
-                          <a href={pdfUrl('contract', v.id, 'sale')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">売買契約書PDF</a>
+                          <button type="button" onClick={() => setPdfPreview({ title: '売買契約書PDF', url: pdfUrl('contract', v.id, 'sale') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">売買契約書PDF</button>
                         )}
                         {v.salesContract?.hasInvoicePdf && (
-                          <a href={pdfUrl('contract', v.id, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求書PDF</a>
+                          <button type="button" onClick={() => setPdfPreview({ title: '請求書PDF', url: pdfUrl('contract', v.id, 'invoice') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求書PDF</button>
                         )}
                         {v.estimate?.hasPdf && (
-                          <a href={pdfUrl('estimate', v.id, 'sale')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">買取見積PDF</a>
+                          <button type="button" onClick={() => setPdfPreview({ title: '買取見積PDF', url: pdfUrl('estimate', v.id, 'sale') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">買取見積PDF</button>
                         )}
                         {v.estimate?.hasInvoicePdf && (
-                          <a href={pdfUrl('estimate', v.id, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求見積PDF</a>
+                          <button type="button" onClick={() => setPdfPreview({ title: '請求見積PDF', url: pdfUrl('estimate', v.id, 'invoice') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求見積PDF</button>
                         )}
                       </div>
                     )}
@@ -1196,8 +1208,31 @@ export default function DealDetailView({
             )}
             </Section>
 
+            {/* 訪問時の作業レーンの入口。Step1〜4 がこの順に並ぶことを明示する */}
+            <div className="rounded-xl border border-[var(--step-accent)] bg-[var(--step-surface)] px-4 py-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full" style={{ background: 'var(--step-accent)', color: 'var(--step-on-badge)' }}>
+                  訪問時の作業
+                </span>
+                <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
+                  STEP 1 事前同意 → 2 買取品目 → 3 請求項目 → 4 書類を作成
+                </span>
+              </div>
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1.5">
+                色帯の付いた4つのセクションが、お客様のお宅で上から順に操作する項目です。
+                その下のセクション（売買契約書・見積／紙の売買契約書／会話の録音）は、作業の結果が残る記録です。
+              </p>
+              {contractIssued && (
+                <p className="text-[11px] font-medium mt-2 px-2 py-1.5 rounded-lg" style={{ background: 'var(--status-completed-bg)', color: 'var(--status-completed-text)' }}>
+                  売買契約書が発行済みです。STEP 1〜3（事前同意・買取品目・請求項目）は確定したため編集できません。
+                </p>
+              )}
+            </div>
+
             {/* R2 事前同意（見出し行に状態と操作を収めて1行に圧縮） */}
             <Section
+              step={1}
+              tone="work"
               title="事前同意"
               badge={
                 <span
@@ -1210,7 +1245,7 @@ export default function DealDetailView({
                   {deal.hasPreConsent ? `取得済み ${fmtDateTime(deal.preConsentAt)}` : '未取得'}
                 </span>
               }
-              actions={editable ? (
+              actions={workEditable ? (
                 <>
                   <Button variant="outlined" size="sm" onClick={() => { setConsentDraft(null); setShowConsentModal(true) }}>
                     {deal.hasPreConsent ? '署名し直す' : '署名して同意取得'}
@@ -1227,6 +1262,8 @@ export default function DealDetailView({
 
             {/* R3 買取品目 */}
             <Section
+              step={2}
+              tone="work"
               title="買取品目"
               meta={`${purchaseItems.length}件`}
               actions={
@@ -1239,7 +1276,7 @@ export default function DealDetailView({
               }
             >
             {/* 買取金額の上乗せ（10%/15%・排他トグル） */}
-            {editable && (
+            {workEditable && (
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">買取金額の上乗せ:</span>
                 {[10, 15].map(pct => {
@@ -1268,6 +1305,7 @@ export default function DealDetailView({
               items={purchaseItems}
               categories={categories}
               editable={editable}
+              frozen={contractIssued}
               onChanged={load}
               onMessage={setMsg}
             />
@@ -1275,9 +1313,11 @@ export default function DealDetailView({
 
             {/* R4 請求項目＋お支払い金額 */}
             <Section
+              step={3}
+              tone="work"
               title="請求項目"
               meta={`${workItems.length}件`}
-              actions={editable ? <Button size="sm" variant="outlined" onClick={() => setShowAddWork(true)}>＋ 追加</Button> : undefined}
+              actions={workEditable ? <Button size="sm" variant="outlined" onClick={() => setShowAddWork(true)}>＋ 追加</Button> : undefined}
             >
             {workItems.length === 0 ? (
               <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">請求項目はありません</p>
@@ -1292,7 +1332,7 @@ export default function DealDetailView({
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <span className="font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(wi.unitPrice * wi.quantity)}</span>
-                      {editable && <button type="button" onClick={() => deleteItem('work', wi.id)} disabled={deletingItemId === wi.id} className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50">削除</button>}
+                      {workEditable && <button type="button" onClick={() => deleteItem('work', wi.id)} disabled={deletingItemId === wi.id} className="text-[11px] text-[var(--md-sys-color-error,#B3261E)] hover:underline disabled:opacity-50">削除</button>}
                     </div>
                   </div>
                 ))}
@@ -1320,7 +1360,7 @@ export default function DealDetailView({
 
             {/* R5 書類を作成（主役は下部の追従バー。ここは対象訪問の明示と説明を担う） */}
             {editable && (
-              <Section title="書類を作成">
+              <Section step={4} tone="work" title="書類を作成">
                 {targetVisitId ? (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1349,6 +1389,7 @@ export default function DealDetailView({
 
             {/* R6 売買契約書・見積 */}
             <Section
+              tone="record"
               title="売買契約書・見積"
               meta={`見積 ${dealEstimate ? 1 : 0} / 契約 ${dealContract ? 1 : 0}`}
             >
@@ -1363,10 +1404,10 @@ export default function DealDetailView({
                     <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
                       メール: {dealContract.emailSentAt ? `${fmtDateTime(dealContract.emailSentAt)}（${dealContract.customerEmail ?? '-'}）` : '未送信'}
                     </div>
-                    {dealContract.visitScheduleId && (dealContract.hasPdf || dealContract.hasInvoicePdf) && (
+                    {contractVisitId && (dealContract.hasPdf || dealContract.hasInvoicePdf) && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {dealContract.hasPdf && <a href={pdfUrl('contract', dealContract.visitScheduleId, 'sale')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">売買契約書PDF</a>}
-                        {dealContract.hasInvoicePdf && <a href={pdfUrl('contract', dealContract.visitScheduleId, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求書PDF</a>}
+                        {dealContract.hasPdf && <button type="button" onClick={() => setPdfPreview({ title: '売買契約書PDF', url: pdfUrl('contract', contractVisitId, 'sale') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">売買契約書PDF</button>}
+                        {dealContract.hasInvoicePdf && <button type="button" onClick={() => setPdfPreview({ title: '請求書PDF', url: pdfUrl('contract', contractVisitId, 'invoice') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求書PDF</button>}
                       </div>
                     )}
                     {/* 契約が発行済み＝古物台帳の記載対象。店舗ポータルから台帳の該当項目へ飛べるようにする */}
@@ -1386,10 +1427,10 @@ export default function DealDetailView({
                     <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
                       メール: {dealEstimate.emailSentAt ? `${fmtDateTime(dealEstimate.emailSentAt)}（${dealEstimate.customerEmail ?? '-'}）` : '未送信'}
                     </div>
-                    {dealEstimate.visitScheduleId && (dealEstimate.hasPdf || dealEstimate.hasInvoicePdf) && (
+                    {estimateVisitId && (dealEstimate.hasPdf || dealEstimate.hasInvoicePdf) && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
-                        {dealEstimate.hasPdf && <a href={pdfUrl('estimate', dealEstimate.visitScheduleId, 'sale')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">買取見積PDF</a>}
-                        {dealEstimate.hasInvoicePdf && <a href={pdfUrl('estimate', dealEstimate.visitScheduleId, 'invoice')} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求見積PDF</a>}
+                        {dealEstimate.hasPdf && <button type="button" onClick={() => setPdfPreview({ title: '買取見積PDF', url: pdfUrl('estimate', estimateVisitId, 'sale') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">買取見積PDF</button>}
+                        {dealEstimate.hasInvoicePdf && <button type="button" onClick={() => setPdfPreview({ title: '請求見積PDF', url: pdfUrl('estimate', estimateVisitId, 'invoice') })} className="text-[11px] px-2 py-1 rounded-lg bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] hover:opacity-80">請求見積PDF</button>}
                       </div>
                     )}
                   </div>
@@ -1492,6 +1533,7 @@ export default function DealDetailView({
 
             {/* R8 紙の売買契約書（写真） */}
             <Section
+              tone="record"
               title="紙の売買契約書（写真）"
               meta={`${deal.paperContractImages.length}枚`}
               collapsible
@@ -1531,6 +1573,7 @@ export default function DealDetailView({
 
             {/* R9 会話の録音・AI解析 */}
             <Section
+              tone="record"
               title="会話の録音・AI解析"
               meta={`${recordings.length}件`}
               badge={recordingBusy > 0 ? (
@@ -1703,6 +1746,14 @@ export default function DealDetailView({
         )}
       </div>
 
+
+      {/* 発行済みPDFのプレビュー（ダウンロードはモーダル内のボタンから） */}
+      <DocumentPdfPreview
+        open={!!pdfPreview}
+        title={pdfPreview?.title ?? ''}
+        url={pdfPreview?.url ?? null}
+        onClose={() => setPdfPreview(null)}
+      />
 
       {/* 担当者候補（店舗メンバー） */}
       <datalist id="deal-staff-options">

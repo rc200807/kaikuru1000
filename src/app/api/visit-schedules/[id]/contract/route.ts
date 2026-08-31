@@ -27,11 +27,15 @@ export async function POST(
         select: {
           id: true, name: true, email: true, address: true, phone: true,
           idName: true, idAddress: true, idDocumentType: true,
+          // 売買契約書の記載事項（生年月日・職業）
+          birthDate: true, occupation: true, idBirthDate: true,
         },
       },
       store: {
         select: {
           id: true, name: true, address: true, phone: true, email: true, contractNotifyEmail: true,
+          // 売買契約書に記載する古物営業許可番号（店舗の値は運営者から継承される）
+          antiquePermitNumber: true,
           operator: {
             select: {
               entityType: true,
@@ -39,6 +43,7 @@ export async function POST(
               name: true,
               address: true,
               representativeName: true,
+              antiquePermitNumber: true,
             },
           },
         },
@@ -196,9 +201,14 @@ export async function POST(
     customerAddress: schedule.user.idAddress || schedule.user.address || '',
     customerPhone: effectivePhone,
     customerIdType: schedule.user.idDocumentType,
+    // 生年月日は顧客プロフィールが正。未登録なら身分証OCRの値を使う
+    customerBirthDate: schedule.user.birthDate || schedule.user.idBirthDate,
+    // 職業はこのリクエストで受け取った値を優先（既存値は上で更新済み）
+    customerOccupation: (typeof occupation === 'string' && occupation.trim()) ? occupation.trim() : schedule.user.occupation,
     storeName: schedule.store.name,
     storeAddress: schedule.store.address,
     storePhone: schedule.store.phone,
+    antiquePermitNumber: schedule.store.antiquePermitNumber || schedule.store.operator?.antiquePermitNumber || null,
     operator: schedule.store.operator || null,
     staffName: schedule.staffName || undefined,
     visitDate: schedule.visitDate,

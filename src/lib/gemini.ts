@@ -86,6 +86,12 @@ export type IdDocumentOcrResult = {
   idAddress:       string | null
   idLicenseNumber: string | null
   idExpiryDate:    string | null
+  /**
+   * 読み取れた住所の候補。運転免許証の住所変更欄など、1枚に旧住所と新住所が
+   * 両方載っている書類があるため、採用する住所を人が選べるように全件返す。
+   * note は「表面の住所」「住所変更欄の新住所」など、どこに書かれていたかの手がかり。
+   */
+  idAddressCandidates: { value: string; note: string | null }[]
 }
 
 const ID_DOCUMENT_PROMPT = `この画像は日本の身分証明書です。以下の情報を正確に読み取り、JSON形式で返してください。
@@ -94,13 +100,14 @@ const ID_DOCUMENT_PROMPT = `この画像は日本の身分証明書です。以�
 - documentType: 書類の種類（「運転免許証」「パスポート」「マイナンバーカード」「健康保険証」「在留カード」など）
 - name: 氏名（漢字フルネーム）
 - birthDate: 生年月日（「YYYY-MM-DD」形式。和暦は西暦に変換。例: 昭和45年3月15日→1970-03-15）
-- address: 住所（記載の通りに）
+- address: 住所（記載の通りに。旧住所と新住所の両方があるときは、最新と判断できる住所）
+- addresses: 記載されている住所をすべて列挙した配列。1つしか無ければ1件だけ返す。旧住所と新住所（住所変更欄・裏面の記載など）の両方があれば両方を返す。各要素は {"value": 住所, "note": どこに書かれていたか（例: "表面の住所", "住所変更欄の新住所", "抹消された旧住所"）}
 - idNumber: 免許番号/旅券番号/証明書番号など（書類の種類に応じた番号）
 - expiryDate: 有効期限（「YYYY-MM-DD」形式。和暦は西暦に変換）
 
 読み取れない・該当しない項目はnullにしてください。
 マイナンバー（12桁の個人番号）は絶対に含めないでください。
-例: {"documentType":"運転免許証","name":"山田太郎","birthDate":"1985-06-20","address":"東京都新宿区西新宿1-1-1","idNumber":"123456789012","expiryDate":"2028-06-20"}`
+例: {"documentType":"運転免許証","name":"山田太郎","birthDate":"1985-06-20","address":"東京都新宿区西新宿1-1-1","addresses":[{"value":"東京都新宿区西新宿1-1-1","note":"表面の住所"}],"idNumber":"123456789012","expiryDate":"2028-06-20"}`
 
 export async function extractIdDocumentInfo(
   imageBuffer: Buffer,
@@ -118,7 +125,33 @@ export async function extractIdDocumentInfo(
     idAddress:       (parsed.address       as string) ?? null,
     idLicenseNumber: (parsed.idNumber      as string) ?? null,
     idExpiryDate:    (parsed.expiryDate    as string) ?? null,
+    idAddressCandidates: parseAddressCandidates(parsed.addresses, (parsed.address as string) ?? null),
   }
+}
+
+/**
+ * addresses の揺れ（文字列配列 / オブジェクト配列 / 未返却）を吸収して候補リストに正規化する。
+ * address 単体しか返らなかった場合もそれを1件目として拾う。
+ */
+function parseAddressCandidates(raw: unknown, primary: string | null): { value: string; note: string | null }[] {
+  const out: { value: string; note: string | null }[] = []
+  const push = (value: unknown, note: unknown) => {
+    const v = typeof value === 'string' ? value.trim() : ''
+    if (!v) return
+    if (out.some(o => o.value === v)) return
+    out.push({ value: v, note: typeof note === 'string' && note.trim() ? note.trim() : null })
+  }
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (typeof entry === 'string') push(entry, null)
+      else if (entry && typeof entry === 'object') {
+        const o = entry as Record<string, unknown>
+        push(o.value ?? o.address, o.note ?? o.label ?? o.type)
+      }
+    }
+  }
+  push(primary, null)
+  return out
 }
 
 const BACK_ADDRESS_PROMPT = `この身分証明書の裏面画像から、新住所（住所変更記載）を読み取ってください。新住所の記載がない場合はnullを返してください。JSON形式で {"newAddress": string | null} を返してください。`

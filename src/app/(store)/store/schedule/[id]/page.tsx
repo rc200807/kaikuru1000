@@ -79,6 +79,8 @@ type VisitDetail = {
   store: { id: string; name: string; address?: string; phone?: string }
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
+  /** 売買契約書が発行済みか。発行後は取引内容（品目・作業）を凍結する */
+  hasSalesContract?: boolean
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -635,6 +637,9 @@ export default function VisitDetailPage() {
 
   const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
+  // 売買契約書はお客様の署名つきの確定書類。発行後は品目・作業の編集を閉じる
+  // （在庫化・AI調査は契約後の後続作業なので残す）
+  const contractIssued = !!visit?.hasSalesContract
 
   /* ─── 事前同意キャンバス ─── */
   function getConsentPos(e: React.TouchEvent | React.MouseEvent) {
@@ -811,7 +816,7 @@ export default function VisitDetailPage() {
       {/* ────────── 事前同意ボタン ────────── */}
       <Card variant="elevated" padding="md">
         <button
-          onClick={() => { if (!visit.preConsentAt) { consentHasDrawnRef.current = false; setShowConsentModal(true) } }}
+          onClick={() => { if (!visit.preConsentAt && !contractIssued) { consentHasDrawnRef.current = false; setShowConsentModal(true) } }}
           className={`
             w-full flex items-center justify-center gap-3 px-6 py-5 rounded-2xl text-base font-semibold transition-all
             ${visit.preConsentAt
@@ -905,7 +910,7 @@ export default function VisitDetailPage() {
               合計: {fmtYen(purchaseTotal)}（{visit.purchaseItems.length}品）
             </span>
           </div>
-          {!showPurchaseForm && (
+          {!showPurchaseForm && !contractIssued && (
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={addThousandYenBox}
@@ -1006,7 +1011,7 @@ export default function VisitDetailPage() {
                         )}
                       </button>
                     )}
-                    <button onClick={() => startEditPurchase(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>
+                    {!contractIssued && <button onClick={() => startEditPurchase(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>}
                     {item.convertedInventoryId ? (
                       <button onClick={() => router.push('/store/inventory')} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">在庫化済み →</button>
                     ) : (
@@ -1184,7 +1189,7 @@ export default function VisitDetailPage() {
               請求合計: {fmtYen(workTotal)}
             </span>
           </div>
-          {!showWorkForm && (
+          {!showWorkForm && !contractIssued && (
             <Button size="sm" onClick={() => { resetWorkForm(); setShowWorkForm(true) }}>
               <span className="flex items-center gap-1">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
@@ -1206,10 +1211,12 @@ export default function VisitDetailPage() {
                   </div>
                   {item.notes && <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 whitespace-pre-wrap break-words">備考: {item.notes}</div>}
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => startEditWork(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>
-                  <button onClick={() => deleteWorkItem(item.id)} className="text-xs text-[var(--md-sys-color-error)] hover:underline">削除</button>
-                </div>
+                {!contractIssued && (
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => startEditWork(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>
+                    <button onClick={() => deleteWorkItem(item.id)} className="text-xs text-[var(--md-sys-color-error)] hover:underline">削除</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

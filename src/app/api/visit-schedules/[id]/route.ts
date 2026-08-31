@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 import { recordAccessLog } from '@/lib/access-log'
 import { syncDealAssigneeFromVisit } from '@/lib/deal-assignee'
+import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 
 const VALID_STATUSES = ['scheduled', 'pending', 'completed', 'rescheduled', 'absent', 'cancelled', 'revisit']
 
@@ -24,10 +25,12 @@ export async function GET(
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, address: true, phone: true, email: true, customerType: true, occupation: true, leadSource: true, idAddress: true, idName: true, idDocumentType: true, idDocumentPath: true, idDocumentBackPath: true, idBirthDate: true, idLicenseNumber: true } },
+      user: { select: { id: true, name: true, address: true, phone: true, email: true, customerType: true, occupation: true, birthDate: true, leadSource: true, idAddress: true, idName: true, idDocumentType: true, idDocumentPath: true, idDocumentBackPath: true, idBirthDate: true, idLicenseNumber: true } },
       store: {
         select: {
           id: true, name: true, address: true, phone: true,
+          // 売買契約書に古物営業許可番号を記載する（店舗の値は運営者から継承される）
+          antiquePermitNumber: true,
           operator: {
             select: {
               id: true,
@@ -36,6 +39,7 @@ export async function GET(
               name: true,
               address: true,
               representativeName: true,
+              antiquePermitNumber: true,
             },
           },
         },
@@ -55,9 +59,11 @@ export async function GET(
 
   // 品目は「案件」配下を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
   const itemWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: id }
-  const [purchaseItemsRaw, workItemsRaw] = await Promise.all([
+  const [purchaseItemsRaw, workItemsRaw, salesContract] = await Promise.all([
     prisma.purchaseItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' }, include: { inventoryItem: { select: { id: true } } } }),
     prisma.workItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
+    // 売買契約書の発行後は取引内容を凍結するため、画面側で編集UIを閉じる判定に使う
+    prisma.salesContract.findUnique({ where: itemWhere, select: { id: true } }),
   ])
 
   // purchaseItems の imageUrls をプロキシURLに変換 + aiResearch をパース
@@ -93,6 +99,7 @@ export async function GET(
     purchaseItems: items,
     workItems: workItemsRaw,
     purchaseUpliftPercent: schedule.deal?.purchaseUpliftPercent ?? 0,
+    hasSalesContract: !!salesContract,
   })
 }
 
@@ -134,6 +141,12 @@ export async function PATCH(
   // 店舗は自店舗のスケジュールのみ更新可
   if (sessionUser.role === 'store' && schedule.storeId !== sessionUser.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // 事前同意は案件の取引内容の一部。売買契約書の発行後は凍結する
+  // （日時変更・補足確認書類・再訪問日などは契約後も更新できる必要があるため対象外）
+  if (preConsentSignature !== undefined && await isDealContracted(schedule.dealId)) {
+    return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
   }
 
   const updateData: any = {}

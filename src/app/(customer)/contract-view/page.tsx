@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useCallback, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { storeContractName } from '@/lib/operator-utils'
+import { formatBirthDate } from '@/lib/kobutsu-ledger'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
 
@@ -22,12 +23,15 @@ interface ContractData {
     email: string | null
     idAddress: string | null
     idName: string | null
+    birthDate?: string | null
+    occupation?: string | null
   }
   store: {
     id: string
     name: string
     address: string
     phone: string
+    antiquePermitNumber?: string | null
   }
   purchaseItems: {
     id: string
@@ -317,6 +321,14 @@ function ContractViewContent() {
                   <span className="text-gray-500 w-20 shrink-0">電話番号</span>
                   <span className="text-gray-900">{contract.user.phone}</span>
                 </div>
+                <div className="flex">
+                  <span className="text-gray-500 w-20 shrink-0">生年月日</span>
+                  <span className="text-gray-900">{formatBirthDate(contract.user.birthDate) ?? '—'}</span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-500 w-20 shrink-0">ご職業</span>
+                  <span className="text-gray-900">{contract.user.occupation || '—'}</span>
+                </div>
                 {contract.user.email && (
                   <div className="flex">
                     <span className="text-gray-500 w-20 shrink-0">メール</span>
@@ -343,6 +355,10 @@ function ContractViewContent() {
                 <div className="flex">
                   <span className="text-gray-500 w-20 shrink-0">電話番号</span>
                   <span className="text-gray-900">{contract.store.phone}</span>
+                </div>
+                <div className="flex">
+                  <span className="text-gray-500 w-20 shrink-0">古物営業<br />許可番号</span>
+                  <span className="text-gray-900">{contract.store.antiquePermitNumber || '—'}</span>
                 </div>
               </div>
             </div>

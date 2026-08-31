@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
 import { resolveEditedImageUrls } from '@/lib/image-url'
+import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.purchaseItem.findUnique({
@@ -32,6 +33,11 @@ export async function PATCH(
   const { itemId } = await params
   const access = await verifyAccess(itemId, sessionUser)
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
+
+  // 売買契約書の発行後は取引内容を凍結する
+  if (await isItemParentContracted(access.item!)) {
+    return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
+  }
 
   const body = await request.json()
   const updateData: any = {}
@@ -89,6 +95,11 @@ export async function DELETE(
   const { itemId } = await params
   const access = await verifyAccess(itemId, sessionUser)
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
+
+  // 売買契約書の発行後は取引内容を凍結する
+  if (await isItemParentContracted(access.item!)) {
+    return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
+  }
 
   const visitScheduleId = access.item!.visitScheduleId
   const dealId = access.item!.dealId

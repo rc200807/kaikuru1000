@@ -20,6 +20,7 @@ import type { Status } from '@/components/StatusBadge'
 import MessageBanner from '@/components/MessageBanner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
+import DocumentPdfPreview from '@/components/DocumentPdfPreview'
 import Section, { SECTION_CLS, useOpenLatch } from '@/components/detail/SectionCard'
 import { PropRow } from '@/components/detail/PropRow'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
@@ -276,6 +277,8 @@ export default function StoreCustomerDetailPage() {
   const [schedulesLoaded, setSchedulesLoaded] = useState(false)
   // 発行済み書類（見積書・売買契約書のPDF有無）。scheduleId をキーに保持
   const [docsBySchedule, setDocsBySchedule] = useState<Record<string, IssuedDocs>>({})
+  // 発行済みPDFのプレビュー（押した瞬間にダウンロードが始まらないよう、まず画面内で開く）
+  const [pdfPreview, setPdfPreview] = useState<{ title: string; url: string } | null>(null)
 
   // スケジュール追加
   const [addForm, setAddForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
@@ -601,10 +604,12 @@ export default function StoreCustomerDetailPage() {
   }
 
 
-  // 発行済みPDFをダウンロード（店舗セッションで取得・添付不要）
-  function downloadDoc(scheduleId: string, type: 'estimate' | 'contract', kind: 'sale' | 'invoice') {
-    const url = `/api/magic-link/document-pdf?type=${type}&kind=${kind}&visitId=${encodeURIComponent(scheduleId)}`
-    window.open(url, '_blank')
+  // 発行済みPDFを画面上でプレビュー（ダウンロードはモーダル内のボタンから）
+  function previewDoc(scheduleId: string, type: 'estimate' | 'contract', kind: 'sale' | 'invoice') {
+    const title = type === 'estimate'
+      ? (kind === 'invoice' ? '請求見積PDF' : '買取見積PDF')
+      : (kind === 'invoice' ? '請求書PDF' : '売買契約書PDF')
+    setPdfPreview({ title, url: `/api/magic-link/document-pdf?type=${type}&kind=${kind}&visitId=${encodeURIComponent(scheduleId)}` })
   }
 
 
@@ -1485,12 +1490,12 @@ export default function StoreCustomerDetailPage() {
                           <td className="px-2 py-1.5 whitespace-nowrap">
                             <span className="flex gap-1.5">
                               {row.hasSale && (
-                                <button type="button" onClick={() => downloadDoc(row.scheduleId, row.type, 'sale')} className="text-[var(--portal-primary)] hover:underline">
+                                <button type="button" onClick={() => previewDoc(row.scheduleId, row.type, 'sale')} className="text-[var(--portal-primary)] hover:underline">
                                   {row.type === 'estimate' ? '買取PDF' : '契約書PDF'}
                                 </button>
                               )}
                               {row.hasInvoice && (
-                                <button type="button" onClick={() => downloadDoc(row.scheduleId, row.type, 'invoice')} className="text-[var(--portal-primary)] hover:underline">請求PDF</button>
+                                <button type="button" onClick={() => previewDoc(row.scheduleId, row.type, 'invoice')} className="text-[var(--portal-primary)] hover:underline">請求PDF</button>
                               )}
                             </span>
                           </td>
@@ -1625,15 +1630,15 @@ export default function StoreCustomerDetailPage() {
                                   {docs.estimate && (docs.estimate.hasSale || docs.estimate.hasInvoice) && (
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="text-xs text-[var(--md-sys-color-on-surface)] w-16">見積書</span>
-                                      {docs.estimate.hasSale && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'estimate', 'sale')}>{dlIcon}買取PDF</button>}
-                                      {docs.estimate.hasInvoice && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'estimate', 'invoice')}>{dlIcon}請求PDF</button>}
+                                      {docs.estimate.hasSale && <button type="button" className={btnCls} onClick={() => previewDoc(vs.id, 'estimate', 'sale')}>{dlIcon}買取PDF</button>}
+                                      {docs.estimate.hasInvoice && <button type="button" className={btnCls} onClick={() => previewDoc(vs.id, 'estimate', 'invoice')}>{dlIcon}請求PDF</button>}
                                     </div>
                                   )}
                                   {docs.contract && (docs.contract.hasSale || docs.contract.hasInvoice) && (
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="text-xs text-[var(--md-sys-color-on-surface)] w-16">売買契約書</span>
-                                      {docs.contract.hasSale && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'contract', 'sale')}>{dlIcon}契約書PDF</button>}
-                                      {docs.contract.hasInvoice && <button type="button" className={btnCls} onClick={() => downloadDoc(vs.id, 'contract', 'invoice')}>{dlIcon}請求書PDF</button>}
+                                      {docs.contract.hasSale && <button type="button" className={btnCls} onClick={() => previewDoc(vs.id, 'contract', 'sale')}>{dlIcon}契約書PDF</button>}
+                                      {docs.contract.hasInvoice && <button type="button" className={btnCls} onClick={() => previewDoc(vs.id, 'contract', 'invoice')}>{dlIcon}請求書PDF</button>}
                                     </div>
                                   )}
                                 </div>
@@ -2183,6 +2188,14 @@ export default function StoreCustomerDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 発行済みPDFのプレビュー（ダウンロードはモーダル内のボタンから） */}
+      <DocumentPdfPreview
+        open={!!pdfPreview}
+        title={pdfPreview?.title ?? ''}
+        url={pdfPreview?.url ?? null}
+        onClose={() => setPdfPreview(null)}
+      />
 
       {/* 身分証の拡大表示 */}
       <Modal open={idImageOpen} onClose={() => setIdImageOpen(false)} title="身分証" size="xl">

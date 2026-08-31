@@ -23,6 +23,8 @@ export default function Section({
   bodyClassName = 'px-4 sm:px-5 pb-4 sm:pb-5',
   id,
   className = '',
+  step,
+  tone = 'default',
 }: {
   title: string
   meta?: React.ReactNode
@@ -34,11 +36,34 @@ export default function Section({
   bodyClassName?: string
   id?: string
   className?: string
+  /** 訪問時に順番に操作するセクションの手順番号（Step1〜）。指定すると見出しに STEP バッジが出る */
+  step?: number
+  /** work = 訪問時に手を動かすセクション（左に色帯＋見出しに淡い下地）。record = 実施後の記録 */
+  tone?: 'default' | 'work' | 'record'
 }) {
+  // 色は --step-* トークン（ポータルごとに globals.css で定義）。
+  // 店舗=赤／管理=白の主色と衝突させず、作業セクションだけを別系統の色で見分けられるようにする
+  // overflow-hidden は色帯・見出しの下地が角丸からはみ出さないようにするためのもの。
+  // tone 無しの既存セクション（顧客詳細など）に付けると内部のポップオーバーを切りかねないので付けない
+  const toneCls =
+    tone === 'work' ? 'border-l-[3px] border-l-[var(--step-accent)] overflow-hidden'
+    : tone === 'record' ? 'border-l-[3px] border-l-[var(--md-sys-color-outline)] overflow-hidden'
+    : ''
+  const headerCls =
+    tone === 'work' ? 'bg-[var(--step-surface)]'
+    : ''
   const header = (
     // 狭い幅では actions を次行に折り返す（min-w-0 のままだと見出しが1文字ずつ縦に潰れる）
-    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 sm:px-5 pt-4 sm:pt-5 pb-3">
+    <div className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 ${headerCls}`}>
       <div className="flex items-center gap-2 min-w-0 flex-wrap">
+        {step != null && (
+          <span
+            className="text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap"
+            style={{ background: 'var(--step-accent)', color: 'var(--step-on-badge)' }}
+          >
+            STEP {step}
+          </span>
+        )}
         <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{title}</h2>
         {meta && <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{meta}</span>}
         {badge}
@@ -66,10 +91,10 @@ export default function Section({
     </div>
   )
   if (!collapsible) {
-    return <div id={id} className={`${SECTION_CLS} ${className}`}>{header}<div className={bodyClassName}>{children}</div></div>
+    return <div id={id} className={`${SECTION_CLS} ${toneCls} ${className}`}>{header}<div className={bodyClassName}>{children}</div></div>
   }
   return (
-    <details id={id} open={defaultOpen} className={`${SECTION_CLS} ${className} group`}>
+    <details id={id} open={defaultOpen} className={`${SECTION_CLS} ${toneCls} ${className} group`}>
       <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer">{header}</summary>
       <div className={bodyClassName}>{children}</div>
     </details>

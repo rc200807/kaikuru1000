@@ -42,6 +42,7 @@ export default function PurchaseItemManager({
   items,
   categories,
   editable,
+  frozen = false,
   onChanged,
   onMessage,
 }: {
@@ -50,6 +51,11 @@ export default function PurchaseItemManager({
   items: ManagedPurchaseItem[]
   categories: { id: string; name: string }[]
   editable: boolean
+  /**
+   * 売買契約書の発行後など、品目の内容を確定させたいとき true。
+   * 追加・編集・削除だけを止め、AI調査と在庫化（契約後にこそ行う後続作業）は残す。
+   */
+  frozen?: boolean
   onChanged: () => void
   onMessage?: (m: { type: 'success' | 'error'; text: string }) => void
 }) {
@@ -272,7 +278,7 @@ export default function PurchaseItemManager({
   return (
     <div>
       {/* 操作バー */}
-      {editable && (
+      {editable && !frozen && (
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {/* 新規入力の途中で閉じた場合は続きから再開する（編集中だった場合は新規として開き直す） */}
           <Button size="sm" variant="outlined" onClick={() => { if (editingId !== null) resetForm(); setShowForm(true) }}>＋ 品目を追加</Button>
@@ -345,7 +351,7 @@ export default function PurchaseItemManager({
                         </button>
                       )
                     )}
-                    <button onClick={() => startEdit(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>
+                    {!frozen && <button onClick={() => startEdit(item)} className="text-xs text-[var(--portal-primary)] hover:underline">編集</button>}
                     {item.convertedInventoryId ? (
                       <button onClick={() => router.push('/store/inventory')} className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:underline">在庫化済み →</button>
                     ) : (

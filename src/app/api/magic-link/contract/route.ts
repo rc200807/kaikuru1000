@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
           email: true,
           idAddress: true,
           idName: true,
+          // 売買契約書の記載事項（生年月日・職業）
+          birthDate: true,
+          idBirthDate: true,
+          occupation: true,
         },
       },
       store: {
@@ -42,6 +46,9 @@ export async function GET(request: NextRequest) {
           name: true,
           address: true,
           phone: true,
+          // 売買契約書に記載する古物営業許可番号（店舗の値は運営者から継承される）
+          antiquePermitNumber: true,
+          operator: { select: { antiquePermitNumber: true } },
         },
       },
       deal: { select: { purchaseUpliftPercent: true } },
@@ -76,8 +83,18 @@ export async function GET(request: NextRequest) {
     billingAmount,
     staffName: schedule.staffName,
     purchaseUpliftPercent: schedule.deal?.purchaseUpliftPercent ?? 0,
-    user: schedule.user,
-    store: schedule.store,
+    user: {
+      ...schedule.user,
+      // 生年月日は顧客プロフィールが正。未登録なら身分証OCRの値を使う
+      birthDate: schedule.user.birthDate || schedule.user.idBirthDate,
+    },
+    store: {
+      id: schedule.store.id,
+      name: schedule.store.name,
+      address: schedule.store.address,
+      phone: schedule.store.phone,
+      antiquePermitNumber: schedule.store.antiquePermitNumber || schedule.store.operator?.antiquePermitNumber || null,
+    },
     purchaseItems: purchaseItems.map((item) => ({
       id: item.id,
       itemName: item.itemName,

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 
 /** 買取品目一覧取得 */
 export async function GET(
@@ -64,6 +65,12 @@ export async function POST(
 
   if (sessionUser.role === 'store' && schedule.storeId !== sessionUser.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+
+  // 売買契約書の発行後は取引内容を凍結する
+  if (await isDealContracted(schedule.dealId)) {
+    return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
   }
 
   const { itemName, category, imageUrls, quantity, purchasePrice, janCode, rakutenData, isAdditionalRequest, notes } = body

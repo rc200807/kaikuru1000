@@ -4,16 +4,18 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 /**
- * 見積書 / 売買契約書 のPDFをダウンロード配信する。
- * GET /api/magic-link/document-pdf?type=contract|estimate&visitId=...&userId=...
+ * 見積書 / 売買契約書 のPDFを配信する。
+ * GET /api/magic-link/document-pdf?type=contract|estimate&visitId=...&userId=...&disposition=inline
  * - userId が無ければ NextAuth セッションから解決（顧客）。店舗/管理者は全件可。
  * - 保存済みの pdfBase64 を application/pdf として返す。
+ * - disposition=inline を付けるとブラウザ内プレビュー（既定は従来どおりダウンロード）。
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const visitId = searchParams.get('visitId')
   const type = searchParams.get('type') === 'estimate' ? 'estimate' : 'contract'
   const kind = searchParams.get('kind') === 'invoice' ? 'invoice' : 'sale'
+  const disposition = searchParams.get('disposition') === 'inline' ? 'inline' : 'attachment'
   let userId = searchParams.get('userId')
   let isStaff = false
   let staffRole: string | null = null
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(buf as any, {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Disposition': `${disposition}; filename="${filename}"`,
       'Cache-Control': 'private, max-age=0',
     },
   })

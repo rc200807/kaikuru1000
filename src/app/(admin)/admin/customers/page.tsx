@@ -1939,7 +1939,14 @@ export default function AdminCustomersPage() {
                     {detailUser.internalNote && (
                       <div className="flex gap-3">
                         <dt className="w-24 text-sm text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0">内部メモ</dt>
-                        <dd className="text-sm text-[var(--md-sys-color-on-surface)] break-all min-w-0 whitespace-pre-wrap bg-amber-50 dark:bg-amber-950/30 rounded p-2 border border-amber-200 dark:border-amber-800">
+                        {/* 背景に Tailwind の dark:（OSの配色設定で切り替わる）を使うと、
+                            文字色だけがポータル固定（管理=白）のまま残り、OSがライトのときに
+                            「淡いクリーム背景＋白文字」になって読めなくなる。
+                            背景も文字もポータル連動のトークンで指定する */}
+                        <dd
+                          className="text-sm break-all min-w-0 whitespace-pre-wrap rounded p-2 border border-[var(--md-sys-color-outline-variant)]"
+                          style={{ background: 'var(--status-pending-bg)', color: 'var(--md-sys-color-on-surface)' }}
+                        >
                           {detailUser.internalNote}
                         </dd>
                       </div>
@@ -2933,9 +2940,14 @@ export default function AdminCustomersPage() {
                                   key={s.id}
                                   type="button"
                                   onClick={() => { setAddForm(prev => ({ ...prev, storeId: s.id })); setAddStoreSearch(''); setAddStoreOpen(false) }}
+                                  // --status-* はTailwindのパレット外なので、既存箇所と同じく inline style で当てる
+                                  // （クラスの任意値ではCSSが生成されず背景が付かない）
+                                  style={addForm.storeId === s.id
+                                    ? { background: 'var(--status-completed-bg)', color: 'var(--status-completed-text)' }
+                                    : undefined}
                                   className={`px-2.5 py-1.5 rounded-full text-[11px] border transition-all ${
                                     addForm.storeId === s.id
-                                      ? 'border-green-500 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 font-semibold'
+                                      ? 'border-green-500 font-semibold'
                                       : 'border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]'
                                   }`}
                                 >
@@ -2971,7 +2983,7 @@ export default function AdminCustomersPage() {
                               className={`w-full text-left px-3 py-2 text-xs hover:bg-[var(--md-sys-color-surface-container-high)] border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-1.5 ${addForm.storeId === s.id ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium' : ''}`}
                             >
                               {recIds.includes(s.id) && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 font-semibold flex-shrink-0">近い</span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: 'var(--status-completed-bg)', color: 'var(--status-completed-text)' }}>近い</span>
                               )}
                               <span className="truncate">[{s.code}] {s.name}{s.prefecture ? `（${s.prefecture}）` : ''}</span>
                             </button>
@@ -3121,9 +3133,11 @@ export default function AdminCustomersPage() {
                         key={s.id}
                         type="button"
                         onClick={() => setSelectedStore(s.id)}
+                        // --status-* はTailwindのパレット外なので inline style で当てる
+                        style={selectedStore === s.id ? { background: 'var(--status-completed-bg)' } : undefined}
                         className={`w-full text-left px-3 py-2.5 rounded-[var(--md-sys-shape-small)] border transition-all text-sm ${
                           selectedStore === s.id
-                            ? 'border-green-500 bg-green-50 dark:bg-green-950/30 ring-1 ring-green-500'
+                            ? 'border-green-500 ring-1 ring-green-500'
                             : 'border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] hover:bg-[var(--md-sys-color-surface-container)]'
                         }`}
                       >

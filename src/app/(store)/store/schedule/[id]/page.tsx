@@ -1296,7 +1296,7 @@ export default function VisitDetailPage() {
               >
                 <option value="">請求項目を選択</option>
                 {workMasters.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}（{fmtYen(m.defaultUnitPrice)}）</option>
+                  <option key={m.id} value={m.id}>{m.name}</option>
                 ))}
               </select>
               {workMasters.length === 0 && (

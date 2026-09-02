@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { resolveWorkItemMaster } from '@/lib/work-item-master'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -46,12 +47,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (await isDealContracted(id)) return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
 
   const body = await request.json()
-  const { workName, unitPrice, quantity, notes } = body
-  if (!workName) return NextResponse.json({ error: '作業名は必須です' }, { status: 400 })
+  const { masterId, workName, unitPrice, quantity, notes } = body
+
+  // 作業名は自由入力ではなく請求項目マスタから選ばせる（マスタ未登録の環境のみ自由入力を許可）
+  const resolved = await resolveWorkItemMaster({ masterId, workName })
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 })
+
+  const price = unitPrice === undefined || unitPrice === null || unitPrice === ''
+    ? (resolved.defaultUnitPrice ?? 0)
+    : Number(unitPrice) || 0
 
   const item = await prisma.$transaction(async (tx) => {
     const created = await tx.workItem.create({
-      data: { dealId: id, workName, unitPrice: Number(unitPrice) || 0, quantity: quantity ?? 1, notes: notes || null },
+      data: { dealId: id, masterId: resolved.masterId, workName: resolved.workName, unitPrice: price, quantity: quantity ?? 1, notes: notes || null },
     })
     await recomputeDealAmounts(tx, id)
     return created

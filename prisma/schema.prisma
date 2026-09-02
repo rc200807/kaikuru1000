@@ -398,7 +398,9 @@ model WorkItem {
   visitSchedule   VisitSchedule? @relation(fields: [visitScheduleId], references: [id], onDelete: SetNull)
   dealId          String?                     // 案件への紐づけ（再ペアレント。これが正）
   deal            Deal?         @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  workName        String                      // 作業名
+  workName        String                      // 作業名（マスタ名のスナップショット。マスタ改名・削除に耐える）
+  masterId        String?                     // 請求項目マスタへの参照（マスタ削除時は SetNull）
+  master          WorkItemMaster? @relation(fields: [masterId], references: [id], onDelete: SetNull)
   unitPrice       Int      @default(0)        // 単価（円）
   quantity        Int      @default(1)        // 数量
   notes           String?  @db.Text           // 備考
@@ -407,6 +409,21 @@ model WorkItem {
 
   @@index([visitScheduleId])
   @@index([dealId])
+  @@index([masterId])
+}
+
+// 請求項目マスタ（管理ポータルから追加・編集・並び替え・無効化）
+// 案件の請求項目は自由入力ではなく、このマスタから選ばせる。
+model WorkItemMaster {
+  id               String     @id @default(cuid())
+  name             String     @unique     // 作業名（例: 家財搬出作業）
+  defaultUnitPrice Int        @default(0) // 既定の単価（円）。案件側で調整可
+  notes            String?    @db.Text    // 補足（プルダウンの説明として表示）
+  sortOrder        Int        @default(0)
+  isActive         Boolean    @default(true) // false = 新規登録のプルダウンに出さない（既存明細には影響しない）
+  workItems        WorkItem[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 }
 
 // 管理者

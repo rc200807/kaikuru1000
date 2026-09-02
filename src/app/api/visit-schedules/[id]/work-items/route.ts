@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { resolveWorkItemMaster } from '@/lib/work-item-master'
 
 /** 作業品目一覧取得 */
 export async function GET(
@@ -60,19 +61,26 @@ export async function POST(
     return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
   }
 
-  const { workName, unitPrice, quantity, notes } = body
+  const { masterId, workName, unitPrice, quantity, notes } = body
 
-  if (!workName) {
-    return NextResponse.json({ error: '作業名は必須です' }, { status: 400 })
+  // 作業名は自由入力ではなく請求項目マスタから選ばせる（マスタ未登録の環境のみ自由入力を許可）
+  const resolved = await resolveWorkItemMaster({ masterId, workName })
+  if (!resolved.ok) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 })
   }
+
+  const price = unitPrice === undefined || unitPrice === null || unitPrice === ''
+    ? (resolved.defaultUnitPrice ?? 0)
+    : Number(unitPrice) || 0
 
   const item = await prisma.$transaction(async (tx) => {
     const created = await tx.workItem.create({
       data: {
         visitScheduleId: id,
         dealId: schedule.dealId,  // 案件にも紐づける（再ペアレント後の正・両系統を同期）
-        workName,
-        unitPrice: unitPrice ?? 0,
+        masterId: resolved.masterId,
+        workName: resolved.workName,
+        unitPrice: price,
         quantity: quantity ?? 1,
         notes: notes || null,
       },

@@ -120,6 +120,8 @@ export default function VisitDetailPage() {
 
   // 買取カテゴリー
   const [purchaseCategories, setPurchaseCategories] = useState<{id: string; name: string}[]>([])
+  // 請求項目マスタ（管理ポータルで設定された選択肢。作業名は自由入力にしない）
+  const [workMasters, setWorkMasters] = useState<{ id: string; name: string; defaultUnitPrice: number; notes: string | null }[]>([])
 
   // 買取品目フォーム
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
@@ -144,7 +146,7 @@ export default function VisitDetailPage() {
   // 作業品目フォーム
   const [showWorkForm, setShowWorkForm] = useState(false)
   const [editingWork, setEditingWork] = useState<WorkItem | null>(null)
-  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '' as number | '', quantity: 1, notes: '' })
+  const [workForm, setWorkForm] = useState({ masterId: '', workName: '', unitPrice: '' as number | '', quantity: 1, notes: '' })
   const [savingWork, setSavingWork] = useState(false)
 
   // AI調査
@@ -187,6 +189,13 @@ export default function VisitDetailPage() {
     fetch('/api/purchase-categories')
       .then(res => res.ok ? res.json() : [])
       .then(data => setPurchaseCategories(data))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/work-item-masters')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setWorkMasters(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
 
@@ -411,41 +420,46 @@ export default function VisitDetailPage() {
 
   /* ─── 作業品目 ─── */
   function resetWorkForm() {
-    setWorkForm({ workName: '', unitPrice: '', quantity: 1, notes: '' })
+    setWorkForm({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '' })
     setEditingWork(null)
     setShowWorkForm(false)
   }
 
   function startEditWork(item: WorkItem) {
-    setWorkForm({ workName: item.workName, unitPrice: item.unitPrice, quantity: item.quantity, notes: item.notes || '' })
+    // 既存明細はマスタ名で突き合わせる（マスタ改名・削除後は空選択になり、選び直しを促す）
+    const master = workMasters.find(m => m.name === item.workName)
+    setWorkForm({ masterId: master?.id ?? '', workName: item.workName, unitPrice: item.unitPrice, quantity: item.quantity, notes: item.notes || '' })
     setEditingWork(item)
     setShowWorkForm(true)
   }
 
   async function saveWorkItem() {
-    if (!workForm.workName) {
-      setMessage({ type: 'error', text: '作業名は必須です' })
+    if (!workForm.masterId) {
+      setMessage({ type: 'error', text: '請求項目を選択してください' })
       return
     }
 
     setSavingWork(true)
 
     const payload = { ...workForm, unitPrice: Number(workForm.unitPrice) || 0, notes: workForm.notes.trim() || null }
-    if (editingWork) {
-      await fetch(`/api/work-items/${editingWork.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    } else {
-      await fetch(`/api/visit-schedules/${scheduleId}/work-items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-    }
+    const res = editingWork
+      ? await fetch(`/api/work-items/${editingWork.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      : await fetch(`/api/visit-schedules/${scheduleId}/work-items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
 
     setSavingWork(false)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({} as any))
+      setMessage({ type: 'error', text: data?.error || '作業品目の保存に失敗しました' })
+      return
+    }
     resetWorkForm()
     fetchVisit()
     setMessage({ type: 'success', text: '作業品目を保存しました' })
@@ -1235,12 +1249,34 @@ export default function VisitDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-3">
               <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業名 *</label>
-              <input
+              <select
                 className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
-                value={workForm.workName}
-                onChange={(e) => setWorkForm({ ...workForm, workName: e.target.value })}
-                placeholder="例: 搬出作業 / 清掃"
-              />
+                value={workForm.masterId}
+                onChange={(e) => {
+                  const master = workMasters.find(m => m.id === e.target.value)
+                  setWorkForm({
+                    ...workForm,
+                    masterId: e.target.value,
+                    workName: master?.name ?? '',
+                    unitPrice: master ? master.defaultUnitPrice : '',
+                  })
+                }}
+              >
+                <option value="">請求項目を選択</option>
+                {workMasters.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}（{fmtYen(m.defaultUnitPrice)}）</option>
+                ))}
+              </select>
+              {workMasters.length === 0 && (
+                <p className="mt-1 text-xs text-[var(--md-sys-color-error)]">
+                  選択できる請求項目がありません。本部にご連絡ください。
+                </p>
+              )}
+              {workForm.masterId && workMasters.find(m => m.id === workForm.masterId)?.notes && (
+                <p className="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  {workMasters.find(m => m.id === workForm.masterId)!.notes}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">単価（円）</label>
@@ -1281,7 +1317,7 @@ export default function VisitDetailPage() {
           </div>
           <div className="flex gap-2 justify-end pt-1">
             <Button variant="text" size="sm" onClick={resetWorkForm} disabled={savingWork}>キャンセル</Button>
-            <Button size="sm" onClick={saveWorkItem} disabled={savingWork} loading={savingWork}>
+            <Button size="sm" onClick={saveWorkItem} disabled={savingWork || !workForm.masterId} loading={savingWork}>
               {savingWork ? '保存中...' : '保存'}
             </Button>
           </div>

@@ -32,6 +32,7 @@ import { upload } from '@vercel/blob/client'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
+type WorkItemMaster = { id: string; name: string; defaultUnitPrice: number; notes: string | null }
 type ContractInfo = { id: string; visitScheduleId?: string | null; agreedAt: string; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 type EstimateInfo = { id: string; visitScheduleId?: string | null; validUntil: string; purchaseAmount: number; billingAmount: number; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 
@@ -219,7 +220,9 @@ export default function DealDetailView({
   // 買取品目（PurchaseItemManager に委譲）／請求項目の登録（案件キー）
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [showAddWork, setShowAddWork] = useState(false)
-  const [workForm, setWorkForm] = useState({ workName: '', unitPrice: '', quantity: 1, notes: '' })
+  // 請求項目は管理ポータルのマスタから選択する（自由入力にしない）
+  const [workMasters, setWorkMasters] = useState<WorkItemMaster[]>([])
+  const [workForm, setWorkForm] = useState({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '' })
   const [showPreview, setShowPreview] = useState(false)
   const [numberCopied, setNumberCopied] = useState(false)
   const [uploadingContract, setUploadingContract] = useState(false)
@@ -280,6 +283,14 @@ export default function DealDetailView({
     fetch('/api/purchase-categories')
       .then(r => (r.ok ? r.json() : []))
       .then(d => setCategories(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [])
+
+  // 請求項目マスタ（管理ポータルで設定された選択肢）
+  useEffect(() => {
+    fetch('/api/work-item-masters')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setWorkMasters(Array.isArray(d) ? d : []))
       .catch(() => {})
   }, [])
 
@@ -480,14 +491,26 @@ export default function DealDetailView({
   }
 
 
+  function selectWorkMaster(masterId: string) {
+    const master = workMasters.find(m => m.id === masterId)
+    setWorkForm(prev => ({
+      ...prev,
+      masterId,
+      workName: master?.name ?? '',
+      // 既定単価を初期値として入れる（案件ごとに調整可）
+      unitPrice: master ? String(master.defaultUnitPrice) : '',
+    }))
+  }
+
   async function addWorkItem() {
-    if (!deal || !workForm.workName) return
+    if (!deal || !workForm.masterId) return
     setSavingWork(true)
     setMsg(null)
     const res = await fetch(`/api/deals/${dealId}/work-items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        masterId: workForm.masterId,
         workName: workForm.workName,
         unitPrice: Number(workForm.unitPrice) || 0,
         quantity: Number(workForm.quantity) || 1,
@@ -497,9 +520,12 @@ export default function DealDetailView({
     setSavingWork(false)
     if (res.ok) {
       setShowAddWork(false)
-      setWorkForm({ workName: '', unitPrice: '', quantity: 1, notes: '' })
+      setWorkForm({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '' })
       load()
-    } else setMsg({ type: 'error', text: '請求項目の追加に失敗しました' })
+    } else {
+      const data = await res.json().catch(() => ({} as any))
+      setMsg({ type: 'error', text: data?.error || '請求項目の追加に失敗しました' })
+    }
   }
 
   async function deleteItem(kind: 'purchase' | 'work', itemId: string) {
@@ -1978,7 +2004,32 @@ export default function DealDetailView({
       {/* 請求項目を追加 */}
       <Modal open={showAddWork} onClose={() => setShowAddWork(false)} title="請求項目を追加" size="md">
         <div className="space-y-4">
-          <TextField label="作業名" value={workForm.workName} onChange={v => setWorkForm(prev => ({ ...prev, workName: v }))} required />
+          <div>
+            <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">作業名 <span className="text-[var(--md-sys-color-error)]">*</span></label>
+            <select
+              className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-2 py-2.5 bg-[var(--md-sys-color-surface-container-low)] text-[var(--md-sys-color-on-surface)]"
+              value={workForm.masterId}
+              onChange={e => selectWorkMaster(e.target.value)}
+            >
+              <option value="">請求項目を選択</option>
+              {workMasters.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name}（{formatYen(m.defaultUnitPrice)}）
+                </option>
+              ))}
+            </select>
+            {workMasters.length === 0 ? (
+              <p className="mt-1 text-xs text-[var(--md-sys-color-error)]">
+                選択できる請求項目がありません。管理ポータルの「設定 → 請求項目マスタ」で登録してください。
+              </p>
+            ) : (
+              workForm.masterId && workMasters.find(m => m.id === workForm.masterId)?.notes && (
+                <p className="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  {workMasters.find(m => m.id === workForm.masterId)!.notes}
+                </p>
+              )
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <TextField label="単価（円）" type="number" value={workForm.unitPrice} onChange={v => setWorkForm(prev => ({ ...prev, unitPrice: v }))} />
             <TextField label="数量" type="number" value={String(workForm.quantity)} onChange={v => setWorkForm(prev => ({ ...prev, quantity: Number(v) || 1 }))} />
@@ -1986,7 +2037,7 @@ export default function DealDetailView({
           <TextField label="備考" rows={2} value={workForm.notes} onChange={v => setWorkForm(prev => ({ ...prev, notes: v }))} />
           <div className="flex justify-end gap-3 pt-1">
             <Button variant="outlined" type="button" onClick={() => setShowAddWork(false)}>キャンセル</Button>
-            <Button onClick={addWorkItem} loading={savingWork} disabled={savingWork || !workForm.workName}>追加</Button>
+            <Button onClick={addWorkItem} loading={savingWork} disabled={savingWork || !workForm.masterId}>追加</Button>
           </div>
         </div>
       </Modal>

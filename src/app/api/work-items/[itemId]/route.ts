@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { resolveWorkItemMaster } from '@/lib/work-item-master'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.workItem.findUnique({
@@ -41,7 +42,13 @@ export async function PATCH(
   const body = await request.json()
   const updateData: any = {}
 
-  if (body.workName !== undefined) updateData.workName = body.workName
+  // 作業名を変える場合も請求項目マスタから選ばせる（数量・単価だけの更新はそのまま通す）
+  if (body.masterId !== undefined || body.workName !== undefined) {
+    const resolved = await resolveWorkItemMaster({ masterId: body.masterId, workName: body.workName })
+    if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 })
+    updateData.masterId = resolved.masterId
+    updateData.workName = resolved.workName
+  }
   if (body.unitPrice !== undefined) updateData.unitPrice = body.unitPrice
   if (body.quantity !== undefined) updateData.quantity = body.quantity
   if (body.notes !== undefined) updateData.notes = body.notes || null

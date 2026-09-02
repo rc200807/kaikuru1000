@@ -403,7 +403,11 @@ model WorkItem {
   master          WorkItemMaster? @relation(fields: [masterId], references: [id], onDelete: SetNull)
   unitPrice       Int      @default(0)        // 単価（円）
   quantity        Int      @default(1)        // 数量
-  notes           String?  @db.Text           // 備考
+  // 備考は「チェック項目＋追加人員＋自由記入」を組み立てた最終表示文（見積・契約書もこれを表示する）
+  notes           String?  @db.Text           // 備考（表示用の組み立て済みテキスト）
+  notesInput      String?  @db.Text           // 備考の自由記入部分（編集時に復元するための元テキスト）
+  extraStaffCount Int?                        // 追加人員（人数のみ）
+  optionSelections WorkItemOptionSelection[]  // チェックされたオプション
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -421,9 +425,42 @@ model WorkItemMaster {
   notes            String?    @db.Text    // 補足（プルダウンの説明として表示）
   sortOrder        Int        @default(0)
   isActive         Boolean    @default(true) // false = 新規登録のプルダウンに出さない（既存明細には影響しない）
+  allowExtraStaff  Boolean    @default(false) // true = 店舗側で「追加人員（人数）」を入力できる
+  options          WorkItemOption[]           // チェックボックスの選択肢
   workItems        WorkItem[]
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+}
+
+// 請求項目に紐づくチェックボックスの選択肢（管理ポータルで登録した項目だけを店舗が使える）
+model WorkItemOption {
+  id         String   @id @default(cuid())
+  masterId   String
+  master     WorkItemMaster @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  label      String                        // 項目名（例: 2階からの搬出）
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)       // false = 新規登録のチェックボックスに出さない
+  selections WorkItemOptionSelection[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([masterId, label])
+  @@index([masterId])
+}
+
+// 明細ごとのチェック結果。label はスナップショット（マスタ側の改名・削除に耐える）
+model WorkItemOptionSelection {
+  id         String   @id @default(cuid())
+  workItemId String
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  optionId   String?
+  option     WorkItemOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
+  label      String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([workItemId])
+  @@index([optionId])
 }
 
 // 管理者

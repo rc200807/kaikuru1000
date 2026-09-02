@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
-import { resolveWorkItemMaster } from '@/lib/work-item-master'
+import { resolveWorkItemMaster, composeWorkItemNotes } from '@/lib/work-item-master'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.workItem.findUnique({
@@ -43,17 +43,53 @@ export async function PATCH(
   const updateData: any = {}
 
   // 作業名を変える場合も請求項目マスタから選ばせる（数量・単価だけの更新はそのまま通す）
-  if (body.masterId !== undefined || body.workName !== undefined) {
-    const resolved = await resolveWorkItemMaster({ masterId: body.masterId, workName: body.workName })
+  // チェック項目・追加人員・備考は作業名とセットで解決し、備考の表示テキストを組み立て直す。
+  const touchesMaster = body.masterId !== undefined || body.workName !== undefined
+  let resolvedOptions: { optionId: string; label: string; sortOrder: number }[] | null = null
+  if (touchesMaster) {
+    const resolved = await resolveWorkItemMaster({
+      masterId: body.masterId,
+      workName: body.workName,
+      optionIds: body.optionIds,
+      extraStaffCount: body.extraStaffCount,
+      notes: body.notes !== undefined ? body.notes : access.item!.notesInput,
+    })
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 })
-    updateData.masterId = resolved.masterId
-    updateData.workName = resolved.workName
+    const v = resolved.value
+    updateData.masterId = v.masterId
+    updateData.workName = v.workName
+    updateData.notes = v.notes
+    updateData.notesInput = v.notesInput
+    updateData.extraStaffCount = v.extraStaffCount
+    resolvedOptions = v.options
+  } else if (body.notes !== undefined) {
+    // 備考だけの更新：既存のチェック項目・追加人員を保ったまま表示テキストを作り直す
+    const current = await prisma.workItemOptionSelection.findMany({
+      where: { workItemId: itemId },
+      orderBy: { sortOrder: 'asc' },
+    })
+    const notesInput = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null
+    updateData.notesInput = notesInput
+    updateData.notes = composeWorkItemNotes({
+      optionLabels: current.map(c => c.label),
+      extraStaffCount: access.item!.extraStaffCount,
+      notesInput,
+    })
   }
   if (body.unitPrice !== undefined) updateData.unitPrice = body.unitPrice
   if (body.quantity !== undefined) updateData.quantity = body.quantity
-  if (body.notes !== undefined) updateData.notes = body.notes || null
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (resolvedOptions) {
+      // チェック結果は毎回入れ替える（差分計算より単純で、順序もマスタ順に揃う）
+      await tx.workItemOptionSelection.deleteMany({ where: { workItemId: itemId } })
+      if (resolvedOptions.length > 0) {
+        await tx.workItemOptionSelection.createMany({
+          data: resolvedOptions.map(o => ({ workItemId: itemId, optionId: o.optionId, label: o.label, sortOrder: o.sortOrder })),
+        })
+      }
+    }
+
     const result = await tx.workItem.update({
       where: { id: itemId },
       data: updateData,

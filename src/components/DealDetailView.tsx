@@ -32,7 +32,8 @@ import { upload } from '@vercel/blob/client'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
-type WorkItemMaster = { id: string; name: string; defaultUnitPrice: number; notes: string | null }
+type WorkItemOption = { id: string; label: string }
+type WorkItemMaster = { id: string; name: string; defaultUnitPrice: number; notes: string | null; allowExtraStaff: boolean; options: WorkItemOption[] }
 type ContractInfo = { id: string; visitScheduleId?: string | null; agreedAt: string; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 type EstimateInfo = { id: string; visitScheduleId?: string | null; validUntil: string; purchaseAmount: number; billingAmount: number; emailSentAt: string | null; customerEmail: string | null; hasPdf: boolean; hasInvoicePdf: boolean }
 
@@ -222,7 +223,7 @@ export default function DealDetailView({
   const [showAddWork, setShowAddWork] = useState(false)
   // 請求項目は管理ポータルのマスタから選択する（自由入力にしない）
   const [workMasters, setWorkMasters] = useState<WorkItemMaster[]>([])
-  const [workForm, setWorkForm] = useState({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '' })
+  const [workForm, setWorkForm] = useState({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '', optionIds: [] as string[], extraStaffCount: '' })
   const [showPreview, setShowPreview] = useState(false)
   const [numberCopied, setNumberCopied] = useState(false)
   const [uploadingContract, setUploadingContract] = useState(false)
@@ -499,6 +500,18 @@ export default function DealDetailView({
       workName: master?.name ?? '',
       // 既定単価を初期値として入れる（案件ごとに調整可）
       unitPrice: master ? String(master.defaultUnitPrice) : '',
+      // チェック項目・追加人員は請求項目ごとに違うのでリセットする
+      optionIds: [],
+      extraStaffCount: '',
+    }))
+  }
+
+  function toggleWorkOption(optionId: string) {
+    setWorkForm(prev => ({
+      ...prev,
+      optionIds: prev.optionIds.includes(optionId)
+        ? prev.optionIds.filter(id => id !== optionId)
+        : [...prev.optionIds, optionId],
     }))
   }
 
@@ -512,6 +525,8 @@ export default function DealDetailView({
       body: JSON.stringify({
         masterId: workForm.masterId,
         workName: workForm.workName,
+        optionIds: workForm.optionIds,
+        extraStaffCount: workForm.extraStaffCount === '' ? null : Number(workForm.extraStaffCount) || 0,
         unitPrice: Number(workForm.unitPrice) || 0,
         quantity: Number(workForm.quantity) || 1,
         notes: workForm.notes.trim() || null,
@@ -520,7 +535,7 @@ export default function DealDetailView({
     setSavingWork(false)
     if (res.ok) {
       setShowAddWork(false)
-      setWorkForm({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '' })
+      setWorkForm({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '', optionIds: [], extraStaffCount: '' })
       load()
     } else {
       const data = await res.json().catch(() => ({} as any))
@@ -840,6 +855,7 @@ export default function DealDetailView({
   const paymentDiff = totalPurchase - totalBilling
   // 請求金額は deal.billingAmount 優先のため明細合計とズレ得る。ズレたときだけ明細合計を併記する
   const billingItemsTotal = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const selectedWorkMaster = workMasters.find(m => m.id === workForm.masterId) ?? null
   const billingMismatch = deal.billingAmount != null && deal.billingAmount !== billingItemsTotal
   const recordingBusy = recordings.filter(r => r.status === 'pending' || r.status === 'processing').length
   const ledgerMissingCount = ledger?.missing.length ?? 0
@@ -2030,11 +2046,42 @@ export default function DealDetailView({
               )
             )}
           </div>
+          {selectedWorkMaster && selectedWorkMaster.options.length > 0 && (
+            <div>
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                該当する項目にチェック（備考に入ります）
+              </p>
+              <div className="space-y-1">
+                {selectedWorkMaster.options.map(option => (
+                  <label key={option.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={workForm.optionIds.includes(option.id)}
+                      onChange={() => toggleWorkOption(option.id)}
+                      className="w-4 h-4 accent-[var(--md-sys-color-primary)]"
+                    />
+                    <span className="text-sm text-[var(--md-sys-color-on-surface)]">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedWorkMaster?.allowExtraStaff && (
+            <TextField
+              label="追加人員（人数）"
+              type="number"
+              value={workForm.extraStaffCount}
+              onChange={v => setWorkForm(prev => ({ ...prev, extraStaffCount: v }))}
+              helper="入力すると備考に「追加人員: ◯名」と入ります"
+            />
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <TextField label="単価（円）" type="number" value={workForm.unitPrice} onChange={v => setWorkForm(prev => ({ ...prev, unitPrice: v }))} />
             <TextField label="数量" type="number" value={String(workForm.quantity)} onChange={v => setWorkForm(prev => ({ ...prev, quantity: Number(v) || 1 }))} />
           </div>
-          <TextField label="備考" rows={2} value={workForm.notes} onChange={v => setWorkForm(prev => ({ ...prev, notes: v }))} />
+          <TextField label="備考（自由記入）" rows={2} value={workForm.notes} onChange={v => setWorkForm(prev => ({ ...prev, notes: v }))} helper="チェック項目・追加人員は自動で備考に入ります" />
           <div className="flex justify-end gap-3 pt-1">
             <Button variant="outlined" type="button" onClick={() => setShowAddWork(false)}>キャンセル</Button>
             <Button onClick={addWorkItem} loading={savingWork} disabled={savingWork || !workForm.masterId}>追加</Button>

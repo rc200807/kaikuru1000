@@ -61,7 +61,11 @@ export async function GET(
   const itemWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: id }
   const [purchaseItemsRaw, workItemsRaw, salesContract] = await Promise.all([
     prisma.purchaseItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' }, include: { inventoryItem: { select: { id: true } } } }),
-    prisma.workItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
+    prisma.workItem.findMany({
+      where: itemWhere,
+      orderBy: { createdAt: 'asc' },
+      include: { optionSelections: { orderBy: { sortOrder: 'asc' }, select: { optionId: true, label: true } } },
+    }),
     // 売買契約書の発行後は取引内容を凍結するため、画面側で編集UIを閉じる判定に使う
     prisma.salesContract.findUnique({ where: itemWhere, select: { id: true } }),
   ])

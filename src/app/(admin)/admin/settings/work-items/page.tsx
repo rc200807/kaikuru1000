@@ -7,6 +7,13 @@ import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import SettingsShell from '../SettingsShell'
 
+type WorkItemOption = {
+  id: string
+  label: string
+  sortOrder: number
+  isActive: boolean
+}
+
 type WorkItemMaster = {
   id: string
   name: string
@@ -14,6 +21,8 @@ type WorkItemMaster = {
   notes: string | null
   sortOrder: number
   isActive: boolean
+  allowExtraStaff: boolean
+  options: WorkItemOption[]
 }
 
 const fmtYen = (n: number) => `¥${n.toLocaleString()}`
@@ -44,6 +53,9 @@ function WorkItemMasterSection() {
 
   // ドラッグ並び替え
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+
+  // チェック項目・追加人員の設定を開いている行
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   function fetchItems() {
     fetch('/api/work-item-masters?all=1')
@@ -173,6 +185,63 @@ function WorkItemMasterSection() {
     }
   }
 
+  async function toggleExtraStaff(item: WorkItemMaster) {
+    setMessage(null)
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, allowExtraStaff: !i.allowExtraStaff } : i)))
+    const res = await fetch(`/api/admin/work-item-masters/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowExtraStaff: !item.allowExtraStaff }),
+    }).catch(() => null)
+    if (!res || !res.ok) {
+      setMessage({ type: 'error', text: '更新に失敗しました' })
+      fetchItems()
+    }
+  }
+
+  async function addOption(item: WorkItemMaster, label: string) {
+    setMessage(null)
+    const res = await fetch(`/api/admin/work-item-masters/${item.id}/options`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setMessage({ type: 'error', text: data.error || 'チェック項目の追加に失敗しました' })
+      return false
+    }
+    fetchItems()
+    return true
+  }
+
+  async function toggleOptionActive(item: WorkItemMaster, option: WorkItemOption) {
+    setMessage(null)
+    setItems(prev => prev.map(i => (i.id === item.id
+      ? { ...i, options: i.options.map(o => (o.id === option.id ? { ...o, isActive: !o.isActive } : o)) }
+      : i)))
+    const res = await fetch(`/api/admin/work-item-masters/${item.id}/options/${option.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isActive: !option.isActive }),
+    }).catch(() => null)
+    if (!res || !res.ok) {
+      setMessage({ type: 'error', text: '更新に失敗しました' })
+      fetchItems()
+    }
+  }
+
+  async function deleteOption(item: WorkItemMaster, option: WorkItemOption) {
+    if (!confirm(`チェック項目「${option.label}」を削除しますか？\n（既に登録済みの明細の備考には、そのまま残ります）`)) return
+    setMessage(null)
+    const res = await fetch(`/api/admin/work-item-masters/${item.id}/options/${option.id}`, { method: 'DELETE' })
+    if (res.ok) fetchItems()
+    else {
+      const data = await res.json().catch(() => ({}))
+      setMessage({ type: 'error', text: data.error || '削除に失敗しました' })
+    }
+  }
+
   function persistOrder(ordered: WorkItemMaster[]) {
     fetch('/api/admin/work-item-masters/reorder', {
       method: 'PATCH',
@@ -220,8 +289,8 @@ function WorkItemMasterSection() {
             </p>
             <div className="space-y-1">
               {items.map((item, idx) => (
+                <div key={item.id}>
                 <div
-                  key={item.id}
                   draggable={editingId === null}
                   onDragStart={() => editingId === null && setDragIndex(idx)}
                   onDragOver={e => { if (editingId === null) e.preventDefault() }}
@@ -312,9 +381,27 @@ function WorkItemMasterSection() {
                           }}
                         />
                       </button>
+                      <Button
+                        variant="text"
+                        size="sm"
+                        onClick={() => setExpandedId(prev => (prev === item.id ? null : item.id))}
+                      >
+                        {expandedId === item.id ? '閉じる' : `詳細設定${item.options.length > 0 || item.allowExtraStaff ? `（${[item.options.length > 0 ? `${item.options.length}項目` : null, item.allowExtraStaff ? '人員' : null].filter(Boolean).join('・')}）` : ''}`}
+                      </Button>
                       <Button variant="text" size="sm" danger onClick={() => handleDelete(item)}>削除</Button>
                     </>
                   )}
+                </div>
+
+                {expandedId === item.id && (
+                  <OptionEditor
+                    item={item}
+                    onAdd={label => addOption(item, label)}
+                    onToggleOption={option => toggleOptionActive(item, option)}
+                    onDeleteOption={option => deleteOption(item, option)}
+                    onToggleExtraStaff={() => toggleExtraStaff(item)}
+                  />
+                )}
                 </div>
               ))}
             </div>
@@ -345,5 +432,93 @@ function WorkItemMasterSection() {
         </form>
       </div>
     </Card>
+  )
+}
+
+/**
+ * 請求項目ごとの「チェック項目」「追加人員」設定。
+ * ここで登録した項目だけが店舗ページのチェックボックスに並び、選んだ内容は明細の備考に入る。
+ */
+function OptionEditor({
+  item,
+  onAdd,
+  onToggleOption,
+  onDeleteOption,
+  onToggleExtraStaff,
+}: {
+  item: WorkItemMaster
+  onAdd: (label: string) => Promise<boolean>
+  onToggleOption: (option: WorkItemOption) => void
+  onDeleteOption: (option: WorkItemOption) => void
+  onToggleExtraStaff: () => void
+}) {
+  const [label, setLabel] = useState('')
+  const [adding, setAdding] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!label.trim()) return
+    setAdding(true)
+    const ok = await onAdd(label.trim())
+    setAdding(false)
+    if (ok) setLabel('')
+  }
+
+  return (
+    <div className="ml-8 mb-2 px-3 py-3 rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] space-y-4">
+      <div>
+        <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] mb-1">チェック項目</p>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">
+          店舗はここに登録された項目だけをチェックできます。チェックした項目名は明細の備考に入ります。
+        </p>
+
+        {item.options.length === 0 ? (
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-2">チェック項目はまだありません。</p>
+        ) : (
+          <div className="space-y-1 mb-2">
+            {item.options.map(option => (
+              <div key={option.id} className={`flex items-center gap-2 ${option.isActive ? '' : 'opacity-50'}`}>
+                <span className="text-sm text-[var(--md-sys-color-on-surface)] flex-1 min-w-0 truncate">
+                  ☐ {option.label}
+                </span>
+                {!option.isActive && (
+                  <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">無効</span>
+                )}
+                <Button variant="text" size="sm" onClick={() => onToggleOption(option)}>
+                  {option.isActive ? '無効にする' : '有効にする'}
+                </Button>
+                <Button variant="text" size="sm" danger onClick={() => onDeleteOption(option)}>削除</Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={submit} className="flex items-center gap-2 max-w-lg">
+          <input
+            type="text"
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            placeholder="例: 2階からの搬出、エレベーターなし"
+            className="flex-1 min-w-0 px-2 py-1.5 text-sm rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+          />
+          <Button variant="tonal" size="sm" type="submit" loading={adding} disabled={!label.trim()}>項目を追加</Button>
+        </form>
+      </div>
+
+      <div className="pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={item.allowExtraStaff}
+            onChange={onToggleExtraStaff}
+            className="w-4 h-4 accent-[var(--md-sys-color-primary)]"
+          />
+          <span className="text-sm text-[var(--md-sys-color-on-surface)]">追加人員（人数のみ）の入力を許可する</span>
+        </label>
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 ml-6">
+          店舗ページに人数の入力欄が出て、入力した人数は備考に「追加人員: ◯名」として入ります。
+        </p>
+      </div>
+    </div>
   )
 }

@@ -61,16 +61,17 @@ export async function POST(
     return NextResponse.json({ error: DEAL_LOCKED_MESSAGE }, { status: 409 })
   }
 
-  const { masterId, workName, unitPrice, quantity, notes } = body
+  const { masterId, workName, unitPrice, quantity, notes, optionIds, extraStaffCount } = body
 
-  // 作業名は自由入力ではなく請求項目マスタから選ばせる（マスタ未登録の環境のみ自由入力を許可）
-  const resolved = await resolveWorkItemMaster({ masterId, workName })
+  // 作業名・チェック項目・追加人員は自由入力ではなくマスタから選ばせる（マスタ未登録の環境のみ自由入力を許可）
+  const resolved = await resolveWorkItemMaster({ masterId, workName, optionIds, extraStaffCount, notes })
   if (!resolved.ok) {
     return NextResponse.json({ error: resolved.error }, { status: 400 })
   }
+  const v = resolved.value
 
   const price = unitPrice === undefined || unitPrice === null || unitPrice === ''
-    ? (resolved.defaultUnitPrice ?? 0)
+    ? (v.defaultUnitPrice ?? 0)
     : Number(unitPrice) || 0
 
   const item = await prisma.$transaction(async (tx) => {
@@ -78,11 +79,14 @@ export async function POST(
       data: {
         visitScheduleId: id,
         dealId: schedule.dealId,  // 案件にも紐づける（再ペアレント後の正・両系統を同期）
-        masterId: resolved.masterId,
-        workName: resolved.workName,
+        masterId: v.masterId,
+        workName: v.workName,
         unitPrice: price,
         quantity: quantity ?? 1,
-        notes: notes || null,
+        notes: v.notes,
+        notesInput: v.notesInput,
+        extraStaffCount: v.extraStaffCount,
+        optionSelections: { create: v.options.map(o => ({ optionId: o.optionId, label: o.label, sortOrder: o.sortOrder })) },
       },
     })
 

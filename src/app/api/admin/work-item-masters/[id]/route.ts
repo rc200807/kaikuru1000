@@ -12,6 +12,7 @@ const patchSchema = z.object({
   defaultUnitPrice: z.number().int().min(0).optional(),
   notes: z.string().trim().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
+  allowExtraStaff: z.boolean().optional(),
 })
 
 /** 請求項目マスタの更新（名称・既定単価・補足・有効/無効） */

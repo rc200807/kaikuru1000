@@ -18,6 +18,13 @@ export async function GET(request: NextRequest) {
   const items = await prisma.workItemMaster.findMany({
     where: all ? undefined : { isActive: true },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    include: {
+      // 店舗が使えるのは有効なチェック項目だけ（管理画面は ?all=1 で無効も見る）
+      options: {
+        where: all ? undefined : { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      },
+    },
   })
   return NextResponse.json(items)
 }

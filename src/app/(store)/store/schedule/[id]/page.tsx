@@ -50,6 +50,9 @@ type WorkItem = {
   unitPrice: number
   quantity: number
   notes: string | null
+  notesInput?: string | null
+  extraStaffCount?: number | null
+  optionSelections?: { optionId: string | null; label: string }[]
 }
 
 type MarketResearch = {
@@ -121,7 +124,14 @@ export default function VisitDetailPage() {
   // 買取カテゴリー
   const [purchaseCategories, setPurchaseCategories] = useState<{id: string; name: string}[]>([])
   // 請求項目マスタ（管理ポータルで設定された選択肢。作業名は自由入力にしない）
-  const [workMasters, setWorkMasters] = useState<{ id: string; name: string; defaultUnitPrice: number; notes: string | null }[]>([])
+  const [workMasters, setWorkMasters] = useState<{
+    id: string
+    name: string
+    defaultUnitPrice: number
+    notes: string | null
+    allowExtraStaff: boolean
+    options: { id: string; label: string }[]
+  }[]>([])
 
   // 買取品目フォーム
   const [showPurchaseForm, setShowPurchaseForm] = useState(false)
@@ -146,7 +156,7 @@ export default function VisitDetailPage() {
   // 作業品目フォーム
   const [showWorkForm, setShowWorkForm] = useState(false)
   const [editingWork, setEditingWork] = useState<WorkItem | null>(null)
-  const [workForm, setWorkForm] = useState({ masterId: '', workName: '', unitPrice: '' as number | '', quantity: 1, notes: '' })
+  const [workForm, setWorkForm] = useState({ masterId: '', workName: '', unitPrice: '' as number | '', quantity: 1, notes: '', optionIds: [] as string[], extraStaffCount: '' as number | '' })
   const [savingWork, setSavingWork] = useState(false)
 
   // AI調査
@@ -420,7 +430,7 @@ export default function VisitDetailPage() {
 
   /* ─── 作業品目 ─── */
   function resetWorkForm() {
-    setWorkForm({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '' })
+    setWorkForm({ masterId: '', workName: '', unitPrice: '', quantity: 1, notes: '', optionIds: [], extraStaffCount: '' })
     setEditingWork(null)
     setShowWorkForm(false)
   }
@@ -428,7 +438,20 @@ export default function VisitDetailPage() {
   function startEditWork(item: WorkItem) {
     // 既存明細はマスタ名で突き合わせる（マスタ改名・削除後は空選択になり、選び直しを促す）
     const master = workMasters.find(m => m.name === item.workName)
-    setWorkForm({ masterId: master?.id ?? '', workName: item.workName, unitPrice: item.unitPrice, quantity: item.quantity, notes: item.notes || '' })
+    // チェック結果は optionId で復元。マスタから消えた項目は復元できないので落とす。
+    const optionIds = (item.optionSelections ?? [])
+      .map(sel => sel.optionId)
+      .filter((id): id is string => !!id && !!master?.options.some(o => o.id === id))
+    setWorkForm({
+      masterId: master?.id ?? '',
+      workName: item.workName,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      // 備考は自由記入部分だけを戻す（チェック項目・追加人員は保存時に組み立て直す）
+      notes: item.notesInput ?? (item.optionSelections?.length || item.extraStaffCount ? '' : item.notes || ''),
+      optionIds,
+      extraStaffCount: item.extraStaffCount ?? '',
+    })
     setEditingWork(item)
     setShowWorkForm(true)
   }
@@ -441,7 +464,12 @@ export default function VisitDetailPage() {
 
     setSavingWork(true)
 
-    const payload = { ...workForm, unitPrice: Number(workForm.unitPrice) || 0, notes: workForm.notes.trim() || null }
+    const payload = {
+      ...workForm,
+      unitPrice: Number(workForm.unitPrice) || 0,
+      extraStaffCount: workForm.extraStaffCount === '' ? null : Number(workForm.extraStaffCount) || 0,
+      notes: workForm.notes.trim() || null,
+    }
     const res = editingWork
       ? await fetch(`/api/work-items/${editingWork.id}`, {
           method: 'PATCH',
@@ -651,6 +679,7 @@ export default function VisitDetailPage() {
 
   const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0) ?? 0
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
+  const selectedWorkMaster = workMasters.find(m => m.id === workForm.masterId) ?? null
   // 売買契約書はお客様の署名つきの確定書類。発行後は品目・作業の編集を閉じる
   // （在庫化・AI調査は契約後の後続作業なので残す）
   const contractIssued = !!visit?.hasSalesContract
@@ -1259,6 +1288,9 @@ export default function VisitDetailPage() {
                     masterId: e.target.value,
                     workName: master?.name ?? '',
                     unitPrice: master ? master.defaultUnitPrice : '',
+                    // チェック項目・追加人員は請求項目ごとに違うのでリセットする
+                    optionIds: [],
+                    extraStaffCount: '',
                   })
                 }}
               >
@@ -1278,6 +1310,47 @@ export default function VisitDetailPage() {
                 </p>
               )}
             </div>
+            {selectedWorkMaster && selectedWorkMaster.options.length > 0 && (
+              <div className="sm:col-span-3">
+                <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">該当する項目にチェック（備考に入ります）</label>
+                <div className="mt-1 space-y-1">
+                  {selectedWorkMaster.options.map((option) => (
+                    <label key={option.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={workForm.optionIds.includes(option.id)}
+                        onChange={() => setWorkForm({
+                          ...workForm,
+                          optionIds: workForm.optionIds.includes(option.id)
+                            ? workForm.optionIds.filter(id => id !== option.id)
+                            : [...workForm.optionIds, option.id],
+                        })}
+                        className="w-4 h-4 accent-[var(--md-sys-color-primary)]"
+                      />
+                      <span className="text-sm text-[var(--md-sys-color-on-surface)]">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedWorkMaster?.allowExtraStaff && (
+              <div className="sm:col-span-3">
+                <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">追加人員（人数）</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"
+                  value={workForm.extraStaffCount}
+                  onChange={(e) => setWorkForm({ ...workForm, extraStaffCount: e.target.value === '' ? '' : (parseInt(e.target.value) || 0) })}
+                  placeholder="0"
+                />
+                <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                  入力すると備考に「追加人員: ◯名」と入ります
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">単価（円）</label>
               <input
@@ -1306,7 +1379,7 @@ export default function VisitDetailPage() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">備考</label>
+            <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">備考（自由記入）</label>
             <textarea
               rows={2}
               className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]"

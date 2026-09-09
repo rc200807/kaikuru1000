@@ -4,19 +4,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calcAge, isMinorBlockedFromDelivery } from '@/lib/age'
 import { resolveEditedImageUrls } from '@/lib/image-url'
+import { toClientShipment } from '@/lib/delivery-shipment'
+import { deliveryShipmentAvailability, intervalNoticeText } from '@/lib/request-interval'
 
-/** imageUrls / trackingImageUrls をプロキシURLに変換して返す */
-function toClientShipment(s: any) {
-  let blobUrls: string[] = []
-  try { blobUrls = JSON.parse(s.imageUrls || '[]') } catch { /* ignore */ }
-  let trackingUrls: string[] = []
-  try { trackingUrls = JSON.parse(s.trackingImageUrls || '[]') } catch { /* ignore */ }
-  return {
-    ...s,
-    imageUrls: blobUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/images/${i}`),
-    trackingImageUrls: trackingUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/tracking-images/${i}`),
-  }
-}
 
 /** 定期宅配番号を生成: HD-YYYYMM-NNNN（ランダム4桁、重複回避） */
 async function generateShipmentNumber(shipmentMonth: string): Promise<string> {
@@ -141,6 +131,18 @@ export async function POST(request: NextRequest) {
   // ステップ1（新規）: 重複チェック（registered以降は重複不可、draftは上書き可）
   if (existing && existing.status !== 'draft') {
     return NextResponse.json({ error: '今月の送付はすでに登録されています' }, { status: 409 })
+  }
+
+  // 利用間隔の制限（定期宅配は既定で3ヶ月に1回。顧客ごと・管理ポータルで変更できる）。
+  // 下書きの作成・上書きは制限しない（登録完了＝registered を1回とする）
+  if (!existing) {
+    const availability = await deliveryShipmentAvailability(userId)
+    if (!availability.available) {
+      return NextResponse.json({
+        error: `送付のご登録は${availability.intervalMonths}ヶ月に1回までご利用いただけます。${intervalNoticeText(availability)}`,
+        availability,
+      }, { status: 429 })
+    }
   }
 
   // 下書きが存在する場合は上書き

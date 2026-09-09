@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole, ADMIN_ROLES } from '@/lib/admin-auth'
 import { startOfMonth, subMonths } from 'date-fns'
+import { purchasedDealWhere } from '@/lib/purchase-aggregation'
 
 // 全店舗パフォーマンス比較 + 休眠アラート
 // 閾値はクエリで調整可能: ?loginDays=14&visitDays=30&pendingMax=5
@@ -20,7 +21,8 @@ export async function GET(request: NextRequest) {
 
   const [
     stores,
-    monthVisitsAgg, monthCompletedAgg, prevMonthCompletedAgg,
+    monthVisitsAgg, monthCompletedAgg,
+    monthAmountAgg, prevMonthAmountAgg,
     monthDealsAgg, dealStatusAgg,
     lastVisitAgg, lastLoginAgg,
     memberCountAgg, customerCountAgg,
@@ -36,17 +38,22 @@ export async function GET(request: NextRequest) {
       where: { visitDate: { gte: currentMonthStart } },
       _count: { _all: true },
     }),
-    // 当月の完了訪問（件数 + 買取金額）
+    // 当月の完了訪問（件数）
     prisma.visitSchedule.groupBy({
       by: ['storeId'],
       where: { status: 'completed', visitDate: { gte: currentMonthStart } },
       _count: { _all: true },
+    }),
+    // 当月・前月の買取金額。買取金額の正は案件（Deal.purchaseAmount）で、
+    // 訪問側の値は案件詳細から品目を登録した取引では入らない（以前は全店0円になっていた）
+    prisma.deal.groupBy({
+      by: ['storeId'],
+      where: purchasedDealWhere({ storeId: { not: null }, occurredAt: { gte: currentMonthStart } }),
       _sum: { purchaseAmount: true },
     }),
-    // 前月の完了訪問（買取金額）
-    prisma.visitSchedule.groupBy({
+    prisma.deal.groupBy({
       by: ['storeId'],
-      where: { status: 'completed', visitDate: { gte: prevMonthStart, lt: currentMonthStart } },
+      where: purchasedDealWhere({ storeId: { not: null }, occurredAt: { gte: prevMonthStart, lt: currentMonthStart } }),
       _sum: { purchaseAmount: true },
     }),
     // 当月の新規案件数
@@ -86,7 +93,8 @@ export async function GET(request: NextRequest) {
 
   const monthVisits = byStore(monthVisitsAgg)
   const monthCompleted = byStore(monthCompletedAgg)
-  const prevCompleted = byStore(prevMonthCompletedAgg)
+  const monthAmount = byStore(monthAmountAgg)
+  const prevMonthAmountByStore = byStore(prevMonthAmountAgg)
   const monthDeals = byStore(monthDealsAgg)
   const lastVisit = byStore(lastVisitAgg)
   const memberCount = byStore(memberCountAgg)
@@ -110,8 +118,8 @@ export async function GET(request: NextRequest) {
     const deals = dealMap.get(s.id)
     const lastVisitAt = lastVisit.get(s.id)?._max.visitDate ?? null
     const lastLoginAt = lastLogin.get(s.id) ?? null
-    const monthAmount = monthCompleted.get(s.id)?._sum.purchaseAmount ?? 0
-    const prevMonthAmount = prevCompleted.get(s.id)?._sum.purchaseAmount ?? 0
+    const storeMonthAmount = monthAmount.get(s.id)?._sum.purchaseAmount ?? 0
+    const storePrevMonthAmount = prevMonthAmountByStore.get(s.id)?._sum.purchaseAmount ?? 0
 
     const daysSinceLogin = lastLoginAt ? Math.floor((now.getTime() - new Date(lastLoginAt).getTime()) / dayMs) : null
     const daysSinceVisit = lastVisitAt ? Math.floor((now.getTime() - new Date(lastVisitAt).getTime()) / dayMs) : null
@@ -131,8 +139,8 @@ export async function GET(request: NextRequest) {
       prefecture: s.prefecture,
       customerCount: customerCount.get(s.id)?._count._all ?? 0,
       memberCount: memberCount.get(s.id)?._count._all ?? 0,
-      monthAmount,
-      prevMonthAmount,
+      monthAmount: storeMonthAmount,
+      prevMonthAmount: storePrevMonthAmount,
       monthVisits: monthVisits.get(s.id)?._count._all ?? 0,
       monthCompleted: monthCompleted.get(s.id)?._count._all ?? 0,
       monthDeals: monthDeals.get(s.id)?._count._all ?? 0,

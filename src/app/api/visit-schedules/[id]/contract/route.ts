@@ -276,6 +276,8 @@ export async function POST(
       const purchaseTotal = purchaseBase + Math.round(purchaseBase * upliftPct / 100)
       const billingTotal = workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)
       await enqueueEmail({ type: 'contractCreatedNotification', params: {
+        // PDFはキューに載せず、送信時に契約書から読み直して添付する
+        contractId: contract.id,
         to: notifyTo,
         storeName: schedule.store.name,
         customerName: schedule.user.idName || schedule.user.name,

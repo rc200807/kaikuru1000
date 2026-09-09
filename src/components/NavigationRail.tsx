@@ -20,7 +20,7 @@ export default function NavigationRail() {
   const userMenuRef = useRef<HTMLDivElement>(null)
   const scope = useStoreScope()
   // 未読件数・リンク店舗はレイアウトの Provider が1回だけ取得し、BottomNav と共有する
-  const { announcements: unreadCount, releaseNotes: releaseUnread, chat: chatUnread, storeAccounts: linkedStores } = useStoreBadges()
+  const { announcements: unreadCount, releaseNotes: releaseUnread, chat: chatUnread, visitRequests: visitRequestCount, storeAccounts: linkedStores } = useStoreBadges()
 
   // Close user menu on outside click
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function NavigationRail() {
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto thin-scrollbar">
         {navItems.map(item => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/')
-          const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : item.href === '/store/dashboard' ? releaseUnread : 0
+          const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : item.href === '/store/dashboard' ? releaseUnread : item.href === '/store/schedule' ? visitRequestCount : 0
           const showBadge = badgeCount > 0
           return (
             <Link

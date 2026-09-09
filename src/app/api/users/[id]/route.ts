@@ -65,7 +65,8 @@ export async function GET(
       store: true,
       visitSchedules: {
         orderBy: { visitDate: 'asc' },
-        where: { visitDate: { gte: new Date() } },
+        // キャンセル済みを「次回訪問予定」として出さない
+        where: { visitDate: { gte: new Date() }, status: { not: 'cancelled' } },
         take: 3,
       },
     },

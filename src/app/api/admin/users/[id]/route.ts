@@ -6,6 +6,7 @@ import { CUSTOMER_TYPES, isCustomerType, stringifyCustomerTypes, type CustomerTy
 import { recordAccessLog } from '@/lib/access-log'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
 import { autoSyncCustomerRows, autoSyncCustomerRowsDeleted } from '@/lib/sheet-sync'
+import { deleteCustomerCascade } from '@/lib/delete-customer'
 
 const VALID_CUSTOMER_TYPES = CUSTOMER_TYPES as readonly string[]
 
@@ -200,7 +201,7 @@ export async function PATCH(
   return NextResponse.json({ error: '無効なリクエスト' }, { status: 400 })
 }
 
-/** 顧客を物理削除（訪問履歴も含めて削除し、ライセンスキーがあれば解放） */
+/** 顧客を物理削除（案件・訪問・空き家管理案件も含めて削除し、ライセンスキーがあれば解放） */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -215,31 +216,15 @@ export async function DELETE(
 
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, name: true, licenseKeyId: true },
+    select: { id: true, name: true },
   })
   if (!user) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
 
-  // トランザクションで関連データを削除
-  const operations: any[] = [
-    // 訪問スケジュール関連の品目は onDelete: Cascade で自動削除される
-    prisma.visitSchedule.deleteMany({ where: { userId: id } }),
-  ]
-
-  // ライセンスキーがある場合のみ解放
-  if (user.licenseKeyId) {
-    operations.push(
-      prisma.licenseKey.update({
-        where: { id: user.licenseKeyId },
-        data: { isUsed: false },
-      })
-    )
-  }
-
-  operations.push(prisma.user.delete({ where: { id } }))
-
-  await prisma.$transaction(operations)
+  // 案件・訪問・空き家管理案件が紐づいていてもまとめて削除する。
+  // （User への必須リレーションは既定 Restrict なので、順序を守らないと外部キー違反で失敗する）
+  const removed = await deleteCustomerCascade(id)
 
   after(() => autoSyncCustomerRowsDeleted([id]))
 
-  return NextResponse.json({ deleted: true })
+  return NextResponse.json({ deleted: true, removed })
 }

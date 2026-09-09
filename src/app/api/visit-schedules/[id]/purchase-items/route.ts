@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { fixedPriceBoxDuplicateMessage, isFixedPriceBox } from '@/lib/fixed-price-boxes'
 
 /** 買取品目一覧取得 */
 export async function GET(
@@ -77,6 +78,15 @@ export async function POST(
 
   if (!itemName || !category) {
     return NextResponse.json({ error: '品名とカテゴリーは必須です' }, { status: 400 })
+  }
+
+  // 定額BOX（1000円ボックス・エコ得BOX）は1回の買取につき1個まで。
+  // 品目の正は案件配下なので、案件があれば案件単位で数える
+  if (isFixedPriceBox(itemName)) {
+    const already = await prisma.purchaseItem.count({
+      where: schedule.dealId ? { dealId: schedule.dealId, itemName } : { visitScheduleId: id, itemName },
+    })
+    if (already > 0) return NextResponse.json({ error: fixedPriceBoxDuplicateMessage(itemName) }, { status: 409 })
   }
 
   // トランザクションで品目追加 + 合計再計算

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { fixedPriceBoxDuplicateMessage, isFixedPriceBox } from '@/lib/fixed-price-boxes'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -53,6 +54,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const body = await request.json()
   const { itemName, category, imageUrls, quantity, purchasePrice, janCode, rakutenData, isAdditionalRequest, notes } = body
   if (!itemName || !category) return NextResponse.json({ error: '品名とカテゴリーは必須です' }, { status: 400 })
+
+  // 定額BOX（1000円ボックス・エコ得BOX）は1回の買取につき1個まで
+  if (isFixedPriceBox(itemName)) {
+    const already = await prisma.purchaseItem.count({ where: { dealId: id, itemName } })
+    if (already > 0) return NextResponse.json({ error: fixedPriceBoxDuplicateMessage(itemName) }, { status: 409 })
+  }
 
   const item = await prisma.$transaction(async (tx) => {
     const created = await tx.purchaseItem.create({

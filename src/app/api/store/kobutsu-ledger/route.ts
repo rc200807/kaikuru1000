@@ -6,7 +6,8 @@ import { groupLedgerRows, jstDayBoundary } from '@/lib/kobutsu-ledger'
 
 /**
  * 古物台帳の一覧（店舗ポータル）。
- * 売買契約書が発行された案件を1項目として返す（明細は詳細画面で取得）。
+ * 取引が成立した案件（電子の売買契約書あり／紙の契約書の写真あり）を1項目として返す
+ * （明細は詳細画面で取得）。
  * 台帳は営業所（店舗）単位で備えるものなので、常にログイン中の店舗のみを対象にする。
  */
 export async function GET(request: NextRequest) {

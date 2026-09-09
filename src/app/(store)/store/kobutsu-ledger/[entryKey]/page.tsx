@@ -31,8 +31,9 @@ const fmtDate = (iso: string) => formatJstDate(iso, { year: 'numeric', month: '2
 export default function KobutsuLedgerDetailPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
-  const params = useParams<{ contractId: string }>()
-  const contractId = params.contractId
+  const params = useParams<{ entryKey: string }>()
+  // 台帳の1項目のキー。電子契約は "c:<contractId>"、紙契約（写真のみ）は "d:<dealId>"
+  const entryKey = params.entryKey
   const { success, error: toastError } = useToast()
 
   const [group, setGroup] = useState<KobutsuLedgerGroup | null>(null)
@@ -54,7 +55,7 @@ export default function KobutsuLedgerDetailPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/store/kobutsu-ledger/contracts/${contractId}`)
+      const res = await fetch(`/api/store/kobutsu-ledger/entries/${encodeURIComponent(entryKey)}`)
       if (res.status === 404) {
         setNotFound(true)
       } else if (res.ok) {
@@ -64,7 +65,7 @@ export default function KobutsuLedgerDetailPage() {
       }
     } catch { /* ignore */ }
     finally { setLoading(false) }
-  }, [contractId])
+  }, [entryKey])
 
   useEffect(() => {
     if (authStatus === 'authenticated') load()

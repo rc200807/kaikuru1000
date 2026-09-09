@@ -8,6 +8,7 @@ import { sendStoreAssignmentNotification } from '@/lib/mailer'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { CUSTOMER_TYPES, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { defaultIntervalForCustomerType, fetchIntervalDefaults } from '@/lib/request-interval'
 import { recordAccessLog } from '@/lib/access-log'
 import { buildUserNameData } from '@/lib/name-utils'
 import { normalizePostalCode } from '@/lib/postal'
@@ -63,6 +64,11 @@ export async function POST(request: NextRequest) {
     const typesArray = (customerTypes && customerTypes.length > 0 ? customerTypes : [primaryType]) as CustomerType[]
     const customerTypesJson = stringifyCustomerTypes(typesArray, primaryType)
 
+    // 利用間隔（訪問リクエスト／定期宅配の頻度）の既定値。定期宅配は3ヶ月に1回が既定。
+    // 管理ポータルの設定（SiteConfig）を既定値として顧客に持たせる
+    const intervalDefaults = await fetchIntervalDefaults()
+    const visitFrequencyMonths = defaultIntervalForCustomerType(primaryType, intervalDefaults)
+
     // 通常買取 or アキクル or skipLicenseKey（管理者/店舗からの追加）はライセンスキー不要
     const isLicenseFree = primaryType === 'regular' || primaryType === 'akikuru'
     const needsLicenseKey = !isLicenseFree && !skipLicenseKey && !licenseKey
@@ -91,6 +97,7 @@ export async function POST(request: NextRequest) {
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,
+          visitFrequencyMonths,
           leadSource: leadSourceValue,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },
@@ -145,6 +152,7 @@ export async function POST(request: NextRequest) {
           password: hashedPassword,
           customerType: primaryType,
           customerTypes: customerTypesJson,
+          visitFrequencyMonths,
           leadSource: leadSourceValue,
           licenseKeyId: licenseKeyRecord.id,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),

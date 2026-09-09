@@ -30,6 +30,8 @@ type StoreBadges = {
   announcements: number
   releaseNotes: number
   chat: number
+  /** 未対応の訪問リクエスト件数（顧客からの新規リクエスト） */
+  visitRequests: number
   /** 現在の店舗を先頭に含む配列（2件以上ならアカウント切替を表示する） */
   storeAccounts: LinkedStore[]
   refresh: () => void
@@ -39,6 +41,7 @@ const EMPTY: StoreBadges = {
   announcements: 0,
   releaseNotes: 0,
   chat: 0,
+  visitRequests: 0,
   storeAccounts: [],
   refresh: () => {},
 }
@@ -59,6 +62,7 @@ export function StoreBadgesProvider({ children }: { children: React.ReactNode })
     announcements: 0,
     releaseNotes: 0,
     chat: 0,
+    visitRequests: 0,
     storeAccounts: [],
   })
   const lastFetchedAt = useRef(0)
@@ -78,6 +82,7 @@ export function StoreBadgesProvider({ children }: { children: React.ReactNode })
         announcements: data?.announcements ?? 0,
         releaseNotes: data?.releaseNotes ?? 0,
         chat: data?.chat ?? 0,
+        visitRequests: data?.visitRequests ?? 0,
         storeAccounts: accounts,
       })
       lastFetchedAt.current = Date.now()
@@ -101,12 +106,14 @@ export function StoreBadgesProvider({ children }: { children: React.ReactNode })
     window.addEventListener('chat:activity', load)
     window.addEventListener('releasenotes:read', load)
     window.addEventListener('announcements:read', load)
+    window.addEventListener('visitrequests:changed', load)
     return () => {
       clearInterval(timer)
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('chat:activity', load)
       window.removeEventListener('releasenotes:read', load)
       window.removeEventListener('announcements:read', load)
+      window.removeEventListener('visitrequests:changed', load)
     }
   }, [userId, load])
 

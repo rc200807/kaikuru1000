@@ -285,6 +285,11 @@ export default function StoreCustomerDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // 顧客の削除
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+
   // 内部メモ編集 state
   const [editingNote, setEditingNote] = useState(false)
   const [noteDraft, setNoteDraft] = useState('')
@@ -416,7 +421,26 @@ export default function StoreCustomerDetailPage() {
     }
   }
 
-  // 買取トライ
+  /** 顧客を削除する。案件・訪問・書類も一緒に消えるため、氏名の入力確認を挟む */
+  async function handleDeleteCustomer() {
+    if (!customer) return
+    setDeleting(true)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/store/customers/${customer.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        router.push('/store/customers?deleted=1')
+        return
+      }
+      const d = await res.json().catch(() => ({}))
+      setMsg({ type: 'error', text: d.error || '顧客の削除に失敗しました' })
+    } catch {
+      setMsg({ type: 'error', text: '顧客の削除に失敗しました' })
+    }
+    setDeleting(false)
+  }
+
+  // 買取希望品（顧客が問い合わせ時に登録した品物）
   const [memosList, setMemosList] = useState<PurchaseMemo[]>([])
   const [memosLoaded, setMemosLoaded] = useState(false)
 
@@ -425,6 +449,8 @@ export default function StoreCustomerDetailPage() {
   const [inquiriesLoaded, setInquiriesLoaded] = useState(false)
 
   // 案件
+  // 買取金額の集計（案件＋宅配。案件一覧は上限件数で切られるためサーバー側集計を使う）
+  const [purchaseSummary, setPurchaseSummary] = useState<{ total: number; count: number; monthly: { month: string; amount: number }[] } | null>(null)
   const [dealsList, setDealsList] = useState<DealItem[]>([])
   const [dealsLoaded, setDealsLoaded] = useState(false)
   const [dealsTotal, setDealsTotal] = useState(0)
@@ -433,7 +459,10 @@ export default function StoreCustomerDetailPage() {
   const [newDealCategory, setNewDealCategory] = useState<string>('purchase')
   const [creatingDeal, setCreatingDeal] = useState(false)
   const [scheduleForDeal, setScheduleForDeal] = useState<DealItem | null>(null)
-  const [dealScheduleForm, setDealScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
+  const [dealScheduleForm, setDealScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' })
+  // 訪問担当者・訪問目的の選択肢（案件に訪問を紐づける流れでそのまま指定できるようにする）
+  const [storeMembers, setStoreMembers] = useState<{ id: string; name: string }[]>([])
+  const [visitPurposes, setVisitPurposes] = useState<{ id: string; name: string }[]>([])
   const [creatingDealSchedule, setCreatingDealSchedule] = useState(false)
   const [memoStoreNotes, setMemoStoreNotes] = useState<Record<string, string>>({})
   const [savingMemoNote, setSavingMemoNote] = useState<string | null>(null)
@@ -475,6 +504,19 @@ export default function StoreCustomerDetailPage() {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
+  // 訪問担当者・訪問目的の選択肢（訪問予定の作成モーダルで使う）
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return
+    fetch('/api/store/members')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setStoreMembers(Array.isArray(d) ? d : []))
+      .catch(() => {})
+    fetch('/api/visit-purposes')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setVisitPurposes(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [authStatus])
+
   // 1画面ぶんのデータを1本のAPIでまとめて取得する。
   // 以前は 顧客／案件／訪問予定／書類／買取希望品／問い合わせ／宅配／日程提案 で
   // 8本のAPIを並行で叩いていた（往復1本あたり0.3秒前後＋そのぶんの関数起動とDB接続）。
@@ -487,6 +529,7 @@ export default function StoreCustomerDetailPage() {
         if (cancelled) return
         if (data?.customer) {
           setCustomer(data.customer)
+          setPurchaseSummary(data.purchaseSummary ?? null)
 
           setDealsList(data.deals ?? [])
           setDealsTotal(data.dealsTotal ?? (data.deals?.length ?? 0))
@@ -587,6 +630,8 @@ export default function StoreCustomerDetailPage() {
         visitDate: dealScheduleForm.visitDate,
         startTime: dealScheduleForm.startTime || undefined,
         endTime: dealScheduleForm.endTime || undefined,
+        memberId: dealScheduleForm.memberId || undefined,
+        purposeId: dealScheduleForm.purposeId || undefined,
         note: dealScheduleForm.note || undefined,
       }),
     })
@@ -596,7 +641,7 @@ export default function StoreCustomerDetailPage() {
       setDealsList(prev => prev.map(d => d.id === targetId ? { ...d, _count: { visitSchedules: (d._count?.visitSchedules ?? 0) + 1 } } : d))
       setSchedules(prev => [created, ...prev])
       setScheduleForDeal(null)
-      setDealScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' })
+      setDealScheduleForm({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' })
       setMsg({ type: 'success', text: '訪問予定を作成し、案件に紐づけました' })
     } else {
       setMsg({ type: 'error', text: '訪問予定の作成に失敗しました' })
@@ -759,11 +804,16 @@ export default function StoreCustomerDetailPage() {
   const typeInfo = TYPE_MAP[customer.customerType] ?? TYPE_MAP.visit
 
   // ───── ダッシュボード集計 ─────
+  // 買取金額の正は案件（Deal.purchaseAmount）。買取品目は案件に紐づくため、
+  // 訪問側の purchaseAmount は訪問詳細から登録した旧データにしか入らない。
+  // 訪問カードの金額表示だけは旧データのために訪問側もフォールバックで見る。
   const visitAmount = (s: VisitSchedule): number =>
     s.purchaseAmount ?? (s.purchaseItems?.reduce((a, i) => a + (i.purchasePrice || 0), 0) ?? 0)
-  const visitPurchaseTotal = schedules.reduce((sum, s) => sum + visitAmount(s), 0)
+  const isLostDeal = (status: string) => status.startsWith('lost')
   const shipmentPurchaseTotal = shipmentsList.reduce((sum, s) => sum + (s.purchaseAmount ?? 0), 0)
-  const cumulativePurchase = visitPurchaseTotal + shipmentPurchaseTotal
+  const cumulativePurchase = purchaseSummary
+    ? purchaseSummary.total
+    : dealsList.filter(d => !isLostDeal(d.status)).reduce((sum, d) => sum + (d.purchaseAmount ?? 0), 0) + shipmentPurchaseTotal
   const completedVisits = schedules.filter(s => s.status === 'completed').length
   const dashNow = new Date()
   const upcomingVisits = schedules
@@ -779,14 +829,20 @@ export default function StoreCustomerDetailPage() {
     dashMonths.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: `${d.getMonth() + 1}月` })
   }
   const amountByMonth: Record<string, number> = {}
-  for (const s of schedules) {
-    const amt = visitAmount(s)
-    const key = typeof s.visitDate === 'string' ? s.visitDate.slice(0, 7) : ''
-    if (amt > 0 && key) amountByMonth[key] = (amountByMonth[key] || 0) + amt
-  }
-  for (const sh of shipmentsList) {
-    const amt = sh.purchaseAmount ?? 0
-    if (amt > 0 && sh.shipmentMonth) amountByMonth[sh.shipmentMonth] = (amountByMonth[sh.shipmentMonth] || 0) + amt
+  if (purchaseSummary) {
+    for (const m of purchaseSummary.monthly) amountByMonth[m.month] = m.amount
+  } else {
+    for (const d of dealsList) {
+      if (isLostDeal(d.status)) continue
+      const amt = d.purchaseAmount ?? 0
+      const on = d.occurredAt ?? d.createdAt
+      const key = typeof on === 'string' ? on.slice(0, 7) : ''
+      if (amt > 0 && key) amountByMonth[key] = (amountByMonth[key] || 0) + amt
+    }
+    for (const sh of shipmentsList) {
+      const amt = sh.purchaseAmount ?? 0
+      if (amt > 0 && sh.shipmentMonth) amountByMonth[sh.shipmentMonth] = (amountByMonth[sh.shipmentMonth] || 0) + amt
+    }
   }
   const monthlyTrend = dashMonths.map(m => ({ month: m.label, amount: amountByMonth[m.key] || 0 }))
   const hasTrend = monthlyTrend.some(d => d.amount > 0)
@@ -932,7 +988,7 @@ export default function StoreCustomerDetailPage() {
             {/* KPI */}
             <div className="mt-4">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <DashStat label="累計買取金額" value={fmtYen(cumulativePurchase)} sub={isDelivery ? '訪問＋宅配の合計' : undefined} />
+              <DashStat label="累計買取金額" value={fmtYen(cumulativePurchase)} sub={isDelivery ? '案件＋宅配の合計' : '案件の買取金額合計'} />
               <DashStat label={isDelivery ? '送付回数' : '訪問回数（完了）'} value={`${isDelivery ? shipmentsList.length : completedVisits} 回`} sub={isDelivery ? undefined : `予定含む全${schedules.length}件`} />
               <DashStat label="案件数" value={`${dealsList.length} 件`} sub={lastDealStatus ? `最新: ${DEAL_STATUS_LABEL[lastDealStatus] ?? lastDealStatus}` : undefined} />
               <DashStat label={isDelivery ? '直近の送付' : '次回訪問予定'} value={isDelivery ? (shipmentsList[0] ? fmtMD(shipmentsList[0].createdAt) : '—') : (nextVisit ? fmtMD(nextVisit.visitDate) : '—')} sub={!isDelivery && nextVisit?.startTime ? nextVisit.startTime : undefined} />
@@ -1220,7 +1276,7 @@ export default function StoreCustomerDetailPage() {
                           </select>
                           <button
                             type="button"
-                            onClick={() => { setDealScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' }); setScheduleForDeal(deal) }}
+                            onClick={() => { setDealScheduleForm({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' }); setScheduleForDeal(deal) }}
                             className="text-xs px-3 h-8 rounded-lg border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]"
                           >
                             訪問予定を作成
@@ -1307,6 +1363,30 @@ export default function StoreCustomerDetailPage() {
                       rangeEnd={bizHours?.end}
                     />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">訪問担当者（任意）</label>
+                      <select
+                        value={dealScheduleForm.memberId}
+                        onChange={e => setDealScheduleForm(prev => ({ ...prev, memberId: e.target.value }))}
+                        className="w-full h-12 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                      >
+                        <option value="">未設定</option>
+                        {storeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">訪問目的（任意）</label>
+                      <select
+                        value={dealScheduleForm.purposeId}
+                        onChange={e => setDealScheduleForm(prev => ({ ...prev, purposeId: e.target.value }))}
+                        className="w-full h-12 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                      >
+                        <option value="">未設定</option>
+                        {visitPurposes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
                   <TextField
                     label="メモ（任意）"
                     value={dealScheduleForm.note}
@@ -1328,12 +1408,12 @@ export default function StoreCustomerDetailPage() {
               </>
             </Section>
 
-            {/* 買取希望品（買取トライ） */}
+            {/* 買取希望品 */}
             {(!isDelivery || memosList.length > 0) && (
             <Section
               id="cust-memos"
               className="scroll-mt-20"
-              title="買取希望品（買取トライ）"
+              title="買取希望品"
               meta={`${memosList.length}件`}
               badge={pendingMemoCount > 0 ? (
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]">未確認 {pendingMemoCount}</span>
@@ -1343,8 +1423,8 @@ export default function StoreCustomerDetailPage() {
             >
               {memosList.length === 0 ? (
                 <EmptyState
-                  title="買取トライの投稿がありません"
-                  description="顧客が買取トライを投稿するとここに表示されます"
+                  title="買取希望品の登録がありません"
+                  description="お問い合わせ時に登録された買取希望品がここに表示されます"
                 />
               ) : (
                 <div className="space-y-4">
@@ -2185,9 +2265,57 @@ export default function StoreCustomerDetailPage() {
                 </div>
               )}
             </Section>
+
+            {/* 顧客の削除（取り返しがつかない操作なので最後に置く） */}
+            <Section title="顧客の削除" collapsible defaultOpen={false}>
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+                この顧客を完全に削除します。紐づく<strong>案件・訪問予定・見積書・売買契約書・買取品目・宅配の送付記録</strong>も
+                すべて一緒に削除され、元に戻すことはできません。
+              </p>
+              <div className="mt-3">
+                <Button variant="outlined" danger onClick={() => { setDeleteConfirmText(''); setDeleteOpen(true) }}>
+                  この顧客を削除する
+                </Button>
+              </div>
+            </Section>
           </div>
         </div>
       </div>
+
+      {/* 顧客の削除確認 */}
+      <BottomSheet open={deleteOpen} onClose={() => setDeleteOpen(false)} title="顧客を削除しますか？">
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--md-sys-color-on-surface)] leading-relaxed">
+            <strong>{customer.name}</strong> 様と、紐づく案件・訪問予定・発行済み書類・買取品目・宅配の送付記録を
+            すべて削除します。この操作は取り消せません。
+          </p>
+          <div className="rounded-lg px-3 py-2 text-xs" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
+            案件 {dealsTotal || dealsList.length}件 ／ 訪問 {schedules.length}件 ／ 宅配 {shipmentsList.length}件 が削除されます
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+              確認のため、顧客の氏名「{customer.name}」を入力してください
+            </label>
+            <input
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder={customer.name}
+              className="w-full h-12 px-3 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="text" onClick={() => setDeleteOpen(false)} disabled={deleting}>キャンセル</Button>
+            <Button
+              danger
+              onClick={handleDeleteCustomer}
+              loading={deleting}
+              disabled={deleting || deleteConfirmText.trim() !== customer.name}
+            >
+              {deleting ? '削除中...' : '完全に削除する'}
+            </Button>
+          </div>
+        </div>
+      </BottomSheet>
 
       {/* 発行済みPDFのプレビュー（ダウンロードはモーダル内のボタンから） */}
       <DocumentPdfPreview

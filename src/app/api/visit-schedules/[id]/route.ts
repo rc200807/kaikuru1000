@@ -119,7 +119,11 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { status, note, purchaseAmount, billingAmount, preConsentSignature, staffName, revisitDate, revisitStart, revisitEnd, revisitNote, supplementaryDocs, dealId, visitDate, startTime, endTime } = body
+  const {
+    status, note, purchaseAmount, billingAmount, preConsentSignature, staffName,
+    revisitDate, revisitStart, revisitEnd, revisitNote, revisitPending,
+    supplementaryDocs, dealId, visitDate, startTime, endTime, purposeId,
+  } = body
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -175,8 +179,25 @@ export async function PATCH(
   if (revisitStart !== undefined) updateData.revisitStart = revisitStart || null
   if (revisitEnd !== undefined) updateData.revisitEnd = revisitEnd || null
   if (revisitNote !== undefined) updateData.revisitNote = revisitNote || null
+  // 後日引取は日時が未定でも登録できる。revisitPending が「後日引取あり」の正で、
+  // 日付を入れたときは自動で立てる（日付だけ入れて保存した場合の取りこぼしを防ぐ）
+  if (revisitPending !== undefined) updateData.revisitPending = !!revisitPending
+  else if (revisitDate) updateData.revisitPending = true
   if (supplementaryDocs !== undefined) updateData.supplementaryDocs = supplementaryDocs
   if (dealId !== undefined) updateData.dealId = dealId || null
+
+  // 訪問目的（管理ポータルのマスタから選択）。名称はスナップショットとして併存させる
+  if (purposeId !== undefined) {
+    if (purposeId) {
+      const purpose = await prisma.visitPurpose.findUnique({ where: { id: purposeId }, select: { id: true, name: true } })
+      if (!purpose) return NextResponse.json({ error: '訪問目的が見つかりません' }, { status: 400 })
+      updateData.purposeId = purpose.id
+      updateData.purposeName = purpose.name
+    } else {
+      updateData.purposeId = null
+      updateData.purposeName = null
+    }
+  }
 
   const updated = await prisma.visitSchedule.update({
     where: { id },

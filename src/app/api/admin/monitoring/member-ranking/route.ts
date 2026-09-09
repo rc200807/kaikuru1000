@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireRole, ADMIN_ROLES } from '@/lib/admin-auth'
 import { startOfMonth } from 'date-fns'
+import { purchasedDealWhere } from '@/lib/purchase-aggregation'
 
 // 全店舗横断メンバーランキング（当月）
 // memberId が記録されたデータのみ集計する（名前照合の横断集計は重く不正確なため対象外。
@@ -12,18 +13,24 @@ export async function GET(request: NextRequest) {
 
   const monthStart = startOfMonth(new Date())
 
-  const [visitAgg, completedAgg, dealAgg, contractVisits] = await Promise.all([
+  const [visitAgg, completedAgg, amountAgg, dealAgg, contractVisits] = await Promise.all([
     // 当月の担当訪問数
     prisma.visitSchedule.groupBy({
       by: ['memberId'],
       where: { memberId: { not: null }, visitDate: { gte: monthStart } },
       _count: { _all: true },
     }),
-    // 当月の完了訪問（件数 + 買取金額）
+    // 当月の完了訪問（件数）
     prisma.visitSchedule.groupBy({
       by: ['memberId'],
       where: { memberId: { not: null }, status: 'completed', visitDate: { gte: monthStart } },
       _count: { _all: true },
+    }),
+    // 当月の買取金額（担当案件）。買取金額の正は案件（Deal.purchaseAmount）で、
+    // 訪問側の値は案件詳細から品目を登録した取引では入らない
+    prisma.deal.groupBy({
+      by: ['memberId'],
+      where: purchasedDealWhere({ memberId: { not: null }, occurredAt: { gte: monthStart } }),
       _sum: { purchaseAmount: true },
     }),
     // 当月の作成案件数
@@ -46,11 +53,8 @@ export async function GET(request: NextRequest) {
     return p
   }
   for (const g of visitAgg) if (g.memberId) ensure(g.memberId).visitCount = g._count._all
-  for (const g of completedAgg) if (g.memberId) {
-    const p = ensure(g.memberId)
-    p.completedCount = g._count._all
-    p.purchaseAmount = g._sum.purchaseAmount ?? 0
-  }
+  for (const g of completedAgg) if (g.memberId) ensure(g.memberId).completedCount = g._count._all
+  for (const g of amountAgg) if (g.memberId) ensure(g.memberId).purchaseAmount = g._sum.purchaseAmount ?? 0
   for (const g of dealAgg) if (g.memberId) ensure(g.memberId).dealCount = g._count._all
   for (const v of contractVisits) if (v.memberId) ensure(v.memberId).contractCount++
 

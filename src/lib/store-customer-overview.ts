@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { jstTodayStart } from '@/lib/deal-list-query'
+import { monthlyPurchaseAmount, recentMonthKeys, sumPurchaseAmount } from '@/lib/purchase-aggregation'
+import { toClientShipment } from '@/lib/delivery-shipment'
 
 /**
  * 店舗ポータルの顧客詳細で必要なデータを 1 回でまとめて取得する。
@@ -26,19 +28,6 @@ function toClientMemo(memo: Record<string, unknown> & { id: string; imageUrls?: 
     ...memo,
     imageUrls: blobUrls.map((_: string, i: number) => `/api/purchase-memos/${memo.id}/images/${i}`),
     aiAppraisal,
-  }
-}
-
-/** 宅配送付：画像URLはプロキシ経由に変換して返す */
-function toClientShipment(s: Record<string, unknown> & { id: string; imageUrls?: string | null; trackingImageUrls?: string | null }) {
-  let blobUrls: string[] = []
-  try { blobUrls = JSON.parse(s.imageUrls || '[]') } catch { /* ignore */ }
-  let trackingUrls: string[] = []
-  try { trackingUrls = JSON.parse(s.trackingImageUrls || '[]') } catch { /* ignore */ }
-  return {
-    ...s,
-    imageUrls: blobUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/images/${i}`),
-    trackingImageUrls: trackingUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/tracking-images/${i}`),
   }
 }
 
@@ -198,6 +187,14 @@ export async function buildStoreCustomerOverview(storeId: string, userId: string
     }),
   ])
 
+  // 買取金額の集計は案件（Deal）＋宅配買取が正。案件一覧は上限件数で切っているので、
+  // 「累計買取金額」と月次推移はサーバー側で全件から集計して渡す（画面で足し直さない）。
+  const monthKeys = recentMonthKeys(12)
+  const [purchaseTotals, monthlyAmounts] = await Promise.all([
+    sumPurchaseAmount({ userId }, { userId }),
+    monthlyPurchaseAmount(monthKeys, { userId }, { userId }),
+  ])
+
   return {
     customer,
     deals: dealRows,
@@ -208,5 +205,10 @@ export async function buildStoreCustomerOverview(storeId: string, userId: string
     inquiries,
     shipments: shipments.map(s => toClientShipment(s as never)),
     proposals,
+    purchaseSummary: {
+      total: purchaseTotals.amount,
+      count: purchaseTotals.count,
+      monthly: monthKeys.map(month => ({ month, amount: monthlyAmounts[month] ?? 0 })),
+    },
   }
 }

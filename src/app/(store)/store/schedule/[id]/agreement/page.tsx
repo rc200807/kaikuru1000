@@ -159,6 +159,7 @@ type VisitDetail = {
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
   revisitDate?: string | null
+  revisitPending?: boolean
   revisitStart?: string | null
   revisitEnd?: string | null
   revisitNote?: string | null
@@ -719,6 +720,8 @@ export default function AgreementPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // 日時が未定でも「後日引取あり」として登録できる
+          revisitPending: true,
           revisitDate: revisitForm.date || null,
           revisitStart: revisitForm.start || null,
           revisitEnd: revisitForm.end || null,
@@ -746,7 +749,7 @@ export default function AgreementPage() {
       const res = await fetch(`/api/visit-schedules/${scheduleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revisitDate: null, revisitStart: null, revisitEnd: null, revisitNote: null }),
+        body: JSON.stringify({ revisitPending: false, revisitDate: null, revisitStart: null, revisitEnd: null, revisitNote: null }),
       })
       if (res.ok) {
         await fetchVisit()
@@ -980,7 +983,7 @@ export default function AgreementPage() {
           <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">再訪問日（後日引取）</h2>
           {!showRevisitForm && (
             <button onClick={openRevisitForm} className="text-xs text-[var(--portal-primary)] hover:underline">
-              {visit.revisitDate ? '編集' : '設定'}
+              {(visit.revisitPending || visit.revisitDate) ? '編集' : '設定'}
             </button>
           )}
         </div>
@@ -988,7 +991,7 @@ export default function AgreementPage() {
           <div className="space-y-3 p-3 rounded-lg border border-[var(--portal-primary)] bg-[var(--md-sys-color-surface-container-lowest)]">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">再訪問日</label>
+                <label className="block text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1">再訪問日（任意・未定でも登録可）</label>
                 <input type="date" value={revisitForm.date} onChange={e => setRevisitForm(p => ({ ...p, date: e.target.value }))} className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]" />
               </div>
               <div>
@@ -1005,7 +1008,7 @@ export default function AgreementPage() {
               <textarea value={revisitForm.note} onChange={e => setRevisitForm(p => ({ ...p, note: e.target.value }))} rows={2} className="w-full px-3 py-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] resize-y" placeholder="集荷時の注意点など" />
             </div>
             <div className="flex justify-between gap-2">
-              {visit.revisitDate ? (
+              {(visit.revisitPending || visit.revisitDate) ? (
                 <button onClick={clearRevisit} disabled={savingRevisit} className="text-xs text-[var(--md-sys-color-error)] hover:underline">クリア</button>
               ) : <span />}
               <div className="flex gap-2">
@@ -1014,15 +1017,19 @@ export default function AgreementPage() {
               </div>
             </div>
           </div>
-        ) : visit.revisitDate ? (
+        ) : (visit.revisitPending || visit.revisitDate) ? (
           <div className="text-xs text-[var(--md-sys-color-on-surface)] space-y-1 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)]">
-            <div>日付: <strong>{format(new Date(visit.revisitDate), 'yyyy年M月d日（E）', { locale: ja })}</strong>
-              {(visit.revisitStart || visit.revisitEnd) && <span className="ml-2">{visit.revisitStart} 〜 {visit.revisitEnd}</span>}
-            </div>
+            {visit.revisitDate ? (
+              <div>日付: <strong>{format(new Date(visit.revisitDate), 'yyyy年M月d日（E）', { locale: ja })}</strong>
+                {(visit.revisitStart || visit.revisitEnd) && <span className="ml-2">{visit.revisitStart} 〜 {visit.revisitEnd}</span>}
+              </div>
+            ) : (
+              <div className="font-semibold" style={{ color: 'var(--status-pending-text)' }}>日時未定（後日調整）</div>
+            )}
             {visit.revisitNote && <div className="text-[var(--md-sys-color-on-surface-variant)]">メモ: {visit.revisitNote}</div>}
           </div>
         ) : (
-          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">後日引取の予定があれば設定してください。設定すると売買契約書にも記載されます。</p>
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">後日引取の予定があれば設定してください。日時が未定でも登録できます。設定すると売買契約書にも記載されます。</p>
         )}
       </Card>
 

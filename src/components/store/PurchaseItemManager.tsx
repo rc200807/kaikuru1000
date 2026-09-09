@@ -10,6 +10,7 @@ import Modal from '@/components/Modal'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
 import { formatYen } from '@/lib/currency'
+import { FIXED_PRICE_BOXES, fixedPriceBoxDuplicateMessage, isFixedPriceBox, type FixedPriceBox } from '@/lib/fixed-price-boxes'
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false })
 
@@ -32,7 +33,7 @@ export type ManagedPurchaseItem = {
 }
 
 /**
- * 買取品目の登録・編集・削除・AI査定・1000円ボックス・在庫化を行う共有マネージャ。
+ * 買取品目の登録・編集・削除・AI査定・定額BOX（1000円ボックス／エコ得BOX）・在庫化を行う共有マネージャ。
  * 案件詳細（parentType='deal'）と訪問詳細（parentType='visit'）で同じ機能を提供する。
  * 品目自体は親(案件/訪問)のGETから渡され、変更後は onChanged() で親を再取得する。
  */
@@ -202,15 +203,25 @@ export default function PurchaseItemManager({
     }
   }
 
-  async function addThousandYenBox() {
+  /** 定額BOX（1000円ボックス／エコ得BOX）をボタン1つで追加する。1買取1個まで */
+  async function addFixedPriceBox(box: FixedPriceBox) {
+    if (items.some(i => i.itemName === box.name)) {
+      msg({ type: 'error', text: fixedPriceBoxDuplicateMessage(box.name) })
+      return
+    }
     setSaving(true)
     try {
-      await fetch(createUrl, {
+      const res = await fetch(createUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemName: '1000円ボックス', category: '1000円ボックス', quantity: 1, purchasePrice: 1000, imageUrls: [] }),
+        body: JSON.stringify({ itemName: box.name, category: box.name, quantity: 1, purchasePrice: box.price, imageUrls: [] }),
       })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        msg({ type: 'error', text: d.error || '追加に失敗しました' })
+        return
+      }
       onChanged()
-      msg({ type: 'success', text: '1000円ボックスを追加しました' })
+      msg({ type: 'success', text: `${box.name}を追加しました` })
     } catch {
       msg({ type: 'error', text: '追加に失敗しました' })
     } finally {
@@ -282,14 +293,21 @@ export default function PurchaseItemManager({
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {/* 新規入力の途中で閉じた場合は続きから再開する（編集中だった場合は新規として開き直す） */}
           <Button size="sm" variant="outlined" onClick={() => { if (editingId !== null) resetForm(); setShowForm(true) }}>＋ 品目を追加</Button>
-          <button
-            onClick={addThousandYenBox}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm transition-colors disabled:opacity-50"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-            1000円ボックスで買取
-          </button>
+          {FIXED_PRICE_BOXES.map(box => {
+            const alreadyAdded = items.some(i => i.itemName === box.name)
+            return (
+              <button
+                key={box.name}
+                onClick={() => addFixedPriceBox(box)}
+                disabled={saving || alreadyAdded}
+                title={alreadyAdded ? fixedPriceBoxDuplicateMessage(box.name) : undefined}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                {alreadyAdded ? `${box.name} 登録済み` : box.buttonLabel}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -339,7 +357,7 @@ export default function PurchaseItemManager({
                 </div>
                 {editable && (
                   <div className="flex gap-1 flex-shrink-0 items-start">
-                    {item.category !== '1000円ボックス' && (
+                    {!isFixedPriceBox(item.itemName) && (
                       researchResults[item.id] ? (
                         <button onClick={() => toggleResearch(item.id)} className="text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/50 dark:text-purple-300">
                           調査済

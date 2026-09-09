@@ -2,16 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { toClientShipment } from '@/lib/delivery-shipment'
 
-/** imageUrls をプロキシURLに変換して返す */
-function toClientShipment(s: any) {
-  let blobUrls: string[] = []
-  try { blobUrls = JSON.parse(s.imageUrls || '[]') } catch { /* ignore */ }
-  return {
-    ...s,
-    imageUrls: blobUrls.map((_: string, i: number) => `/api/delivery-shipments/${s.id}/images/${i}`),
-  }
-}
 
 /**
  * PATCH /api/delivery-shipments/[id]

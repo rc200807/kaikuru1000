@@ -5,12 +5,13 @@ import { prisma } from '@/lib/prisma'
 import { fetchKobutsuLedgerGroup } from '@/lib/kobutsu-ledger-server'
 
 /**
- * 台帳1項目（案件＝売買契約1件）の詳細。品目ごとの明細を含む。
- * 他店舗の契約は 404（fetchKobutsuLedgerGroup が storeId で絞る）。
+ * 台帳1項目（案件1件）の詳細。品目ごとの明細を含む。
+ * entryKey は電子契約なら "c:<contractId>"、紙契約（写真のみ）なら "d:<dealId>"。
+ * 他店舗の記録は 404（fetchKobutsuLedgerGroup が storeId で絞る）。
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ contractId: string }> },
+  { params }: { params: Promise<{ entryKey: string }> },
 ) {
   const session = await getServerSession(authOptions)
   const user = session?.user as any
@@ -19,8 +20,8 @@ export async function GET(
   }
   const storeId = user.id as string
 
-  const { contractId } = await params
-  const group = await fetchKobutsuLedgerGroup(contractId, storeId)
+  const { entryKey } = await params
+  const group = await fetchKobutsuLedgerGroup(decodeURIComponent(entryKey), storeId)
   if (!group) {
     return NextResponse.json({ error: '台帳の記録が見つかりません' }, { status: 404 })
   }

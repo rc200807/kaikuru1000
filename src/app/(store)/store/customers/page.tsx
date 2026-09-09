@@ -104,7 +104,10 @@ export default function StoreCustomersPage() {
   const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
   const [dealForm, setDealForm] = useState({ detail: '', occurredAt: todayStr() })
   const [createdDealId, setCreatedDealId] = useState<string | null>(null)
-  const [scheduleForm, setScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', note: '' })
+  const [scheduleForm, setScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' })
+  // 訪問担当者・訪問目的の選択肢（案件作成の一連の流れでそのまま指定できるようにする）
+  const [storeMembers, setStoreMembers] = useState<{ id: string; name: string }[]>([])
+  const [visitPurposes, setVisitPurposes] = useState<{ id: string; name: string }[]>([])
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
   const [addCustomerMsg, setAddCustomerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [zipLooking, setZipLooking] = useState(false)
@@ -132,6 +135,15 @@ export default function StoreCustomersPage() {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
 
+  // 顧客詳細から削除して戻ってきたときの完了表示（?deleted=1）
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('deleted') !== '1') return
+    setBulkMsg({ type: 'success', text: '顧客を削除しました' })
+    const url = new URL(window.location.href)
+    url.searchParams.delete('deleted')
+    window.history.replaceState({}, '', url.toString())
+  }, [])
+
   // マスタ（流入経路）・保存ビューを取得
   useEffect(() => {
     if (status !== 'authenticated') return
@@ -145,6 +157,15 @@ export default function StoreCustomersPage() {
         id: v.id, name: v.name, filters: v.filters,
         columns: v.columns ? JSON.parse(v.columns) : null,
       }))))
+      .catch(() => {})
+    // 訪問担当者・訪問目的の選択肢（新規顧客ウィザードの訪問予定ステップで使う）
+    fetch('/api/store/members')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setStoreMembers(Array.isArray(d) ? d : []))
+      .catch(() => {})
+    fetch('/api/visit-purposes')
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setVisitPurposes(Array.isArray(d) ? d : []))
       .catch(() => {})
   }, [status])
 
@@ -301,7 +322,7 @@ export default function StoreCustomersPage() {
     setCreatedCustomer(null)
     setDealForm({ detail: '', occurredAt: todayStr() })
     setCreatedDealId(null)
-    setScheduleForm({ visitDate: '', startTime: '', endTime: '', note: '' })
+    setScheduleForm({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' })
   }
 
   // ステップ1: 顧客作成 → 案件作成へ
@@ -387,6 +408,8 @@ export default function StoreCustomersPage() {
           visitDate: scheduleForm.visitDate,
           startTime: scheduleForm.startTime || undefined,
           endTime: scheduleForm.endTime || undefined,
+          memberId: scheduleForm.memberId || undefined,
+          purposeId: scheduleForm.purposeId || undefined,
           note: scheduleForm.note || undefined,
         }),
       })
@@ -836,6 +859,31 @@ export default function StoreCustomersPage() {
               <div>
                 <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">終了時間（任意）</label>
                 <TimeSelect value={scheduleForm.endTime} onChange={v => setScheduleForm(f => ({ ...f, endTime: v }))} rangeStart={bizHours?.start} rangeEnd={bizHours?.end} selectClassName="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">訪問担当者（任意）</label>
+                <select
+                  value={scheduleForm.memberId}
+                  onChange={(e) => setScheduleForm(f => ({ ...f, memberId: e.target.value }))}
+                  className="w-full h-11 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+                >
+                  <option value="">未設定</option>
+                  {storeMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">案件の担当者にも反映されます</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">訪問目的（任意）</label>
+                <select
+                  value={scheduleForm.purposeId}
+                  onChange={(e) => setScheduleForm(f => ({ ...f, purposeId: e.target.value }))}
+                  className="w-full h-11 px-3 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+                >
+                  <option value="">未設定</option>
+                  {visitPurposes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
               </div>
             </div>
             <div>

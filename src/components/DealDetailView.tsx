@@ -15,6 +15,7 @@ import SignaturePad from '@/components/SignaturePad'
 import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
 import DocumentPdfPreview from '@/components/DocumentPdfPreview'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
+import { dealCreatorLabel } from '@/lib/deal-creator'
 import Section, { SECTION_CLS, useOpenLatch } from '@/components/detail/SectionCard'
 import { PropRow, Row } from '@/components/detail/PropRow'
 import { formatDealNumber } from '@/lib/deal-number'
@@ -45,8 +46,12 @@ type VisitSchedule = {
   status: string
   note: string | null
   staffName: string | null
+  /** 訪問目的（管理ポータルのマスタから選択。名称はスナップショット） */
+  purposeId?: string | null
+  purposeName?: string | null
   /** 後日引取（売買契約書の作成時に登録される。訪問行そのものに保持される） */
   revisitDate: string | null
+  revisitPending?: boolean
   revisitStart: string | null
   revisitEnd: string | null
   revisitNote: string | null
@@ -147,14 +152,6 @@ function toDateInput(d?: string | null) {
   const day = String(dt.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
-const CREATOR_TYPE_LABEL: Record<string, string> = {
-  store: '店舗', admin: '管理者', superadmin: '管理者', hr: '管理者', sysadmin: 'システム', customer: 'お客様', partner: 'パートナー',
-}
-function creatorLabel(d: { createdByName: string | null; createdByType: string | null }) {
-  if (!d.createdByName && !d.createdByType) return '—'
-  const t = d.createdByType ? CREATOR_TYPE_LABEL[d.createdByType] ?? d.createdByType : null
-  return d.createdByName ? `${d.createdByName}${t ? `（${t}）` : ''}` : (t ?? '—')
-}
 
 // 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD（満xx歳）"、和暦などのテキストはそのまま返す
 function fmtBirthDate(v?: string | null) {
@@ -208,7 +205,9 @@ export default function DealDetailView({
 
   // 「この案件に訪問を追加」モーダル
   const [showAddVisit, setShowAddVisit] = useState(false)
-  const [addVisit, setAddVisit] = useState({ visitDate: '', startTime: '', endTime: '', staffName: '', note: '' })
+  const [addVisit, setAddVisit] = useState({ visitDate: '', startTime: '', endTime: '', staffName: '', purposeId: '', note: '' })
+  // 訪問目的の選択肢（管理ポータルのマスタ）
+  const [visitPurposes, setVisitPurposes] = useState<{ id: string; name: string }[]>([])
   // 発行済みPDFのプレビュー（押した瞬間にダウンロードが始まらないよう、まず画面内で開く）
   const [pdfPreview, setPdfPreview] = useState<{ title: string; url: string } | null>(null)
   const [addingVisit, setAddingVisit] = useState(false)
@@ -244,6 +243,11 @@ export default function DealDetailView({
   const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null)
   // 古物台帳（売買契約が発行されている案件のみ記録がある）
   const [ledger, setLedger] = useState<KobutsuLedgerGroup | null>(null)
+  // 台帳詳細へのリンクに使うキー（電子契約 "c:<id>" / 紙契約 "d:<dealId>"）
+  const [ledgerEntryKey, setLedgerEntryKey] = useState<string | null>(null)
+  // 紙で契約した案件の台帳情報（取引年月日はここから入力する）
+  const [paperLedger, setPaperLedger] = useState<{ agreedAt: string | null; imageCount: number } | null>(null)
+  const [savingPaperDate, setSavingPaperDate] = useState(false)
   const [ledgerLoading, setLedgerLoading] = useState(false)
   // 折りたたみセクションの見出しからファイル選択を開くための隠し input
   const paperInputRef = useRef<HTMLInputElement>(null)
@@ -287,6 +291,14 @@ export default function DealDetailView({
       .catch(() => {})
   }, [])
 
+  // 訪問目的の選択肢（管理ポータルのマスタ）
+  useEffect(() => {
+    fetch('/api/visit-purposes')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setVisitPurposes(Array.isArray(d) ? d : []))
+      .catch(() => {})
+  }, [])
+
   // 請求項目マスタ（管理ポータルで設定された選択肢）
   useEffect(() => {
     fetch('/api/work-item-masters')
@@ -305,20 +317,48 @@ export default function DealDetailView({
 
   useEffect(() => { loadRecordings() }, [loadRecordings])
 
-  // 古物台帳の取得（契約が発行されてから記録ができるので、契約の有無で判断）
+  // 古物台帳の取得。
+  // 電子の売買契約書がある案件はもちろん、紙で契約して写真だけアップロードした案件も
+  // 古物営業法の記載義務があるため台帳の対象にする（取引年月日はこの画面から入力する）。
   const loadLedger = useCallback(async () => {
     setLedgerLoading(true)
     try {
       const r = await fetch(`/api/deals/${dealId}/kobutsu-ledger`)
-      if (r.ok) { const d = await r.json(); setLedger(d.group ?? null) }
+      if (r.ok) {
+        const d = await r.json()
+        setLedger(d.group ?? null)
+        setLedgerEntryKey(d.entryKey ?? null)
+        setPaperLedger(d.paperContract ?? null)
+      }
     } catch { /* ignore */ }
     finally { setLedgerLoading(false) }
   }, [dealId])
 
+  const paperContractCount = deal?.paperContractImages.length ?? 0
   useEffect(() => {
-    if (deal?.dealContract) loadLedger()
-    else setLedger(null)
-  }, [deal?.dealContract, loadLedger])
+    if (deal?.dealContract || paperContractCount > 0) loadLedger()
+    else { setLedger(null); setLedgerEntryKey(null); setPaperLedger(null) }
+  }, [deal?.dealContract, paperContractCount, loadLedger])
+
+  /** 紙契約の取引年月日を保存する（古物台帳の「取引の年月日」） */
+  async function savePaperContractAgreedAt(value: string) {
+    setSavingPaperDate(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paperContractAgreedAt: value || null }),
+    })
+    setSavingPaperDate(false)
+    if (res.ok) {
+      setMsg({ type: 'success', text: value ? '取引年月日を保存しました' : '取引年月日をクリアしました' })
+      await load()
+      await loadLedger()
+    } else {
+      const d = await res.json().catch(() => null)
+      setMsg({ type: 'error', text: d?.error || '取引年月日の保存に失敗しました' })
+    }
+  }
 
   // 解析中の録音があれば8秒ごとにポーリングして更新
   useEffect(() => {
@@ -662,13 +702,14 @@ export default function DealDetailView({
         startTime: addVisit.startTime || undefined,
         endTime: addVisit.endTime || undefined,
         staffName: addVisit.staffName || undefined,
+        purposeId: addVisit.purposeId || undefined,
         note: addVisit.note || undefined,
       }),
     })
     setAddingVisit(false)
     if (res.ok) {
       setShowAddVisit(false)
-      setAddVisit({ visitDate: '', startTime: '', endTime: '', staffName: '', note: '' })
+      setAddVisit({ visitDate: '', startTime: '', endTime: '', staffName: '', purposeId: '', note: '' })
       setMsg({ type: 'success', text: '訪問を追加しました' })
       load()
     } else {
@@ -815,15 +856,28 @@ export default function DealDetailView({
   // 書類作成フローの対象訪問（最新）。フローは案件配下の品目で構成され、結果は案件の書類になる。
   const targetVisitId = deal.visitSchedules[0]?.id ?? null
 
-  // 進捗タイムライン（取得可能な日時を時系列で）
-  const timeline: { label: string; at: string; sub?: string }[] = [
-    { label: '案件発生', at: deal.occurredAt ?? deal.createdAt },
-    ...deal.visitSchedules.map(v => ({ label: '訪問', at: v.visitDate, sub: v.staffName ? `担当 ${v.staffName}` : undefined })),
+  // 進捗タイムライン（取得可能な日時を時系列で）。
+  // showTime=false の項目は「日付だけが意味を持つ」もの（訪問日・引取日など）。
+  // 時刻は訪問予定の startTime/endTime を持つので、そちらを sub に添える。
+  const timeline: { label: string; at: string; sub?: string; timeText?: string; showTime?: boolean }[] = [
+    { label: '案件発生', at: deal.occurredAt ?? deal.createdAt, showTime: true },
+    ...deal.visitSchedules.map(v => ({
+      label: '訪問',
+      at: v.visitDate,
+      timeText: timeRange(v.startTime, v.endTime) || '時間未定',
+      sub: [v.staffName ? `担当 ${v.staffName}` : null, v.purposeName ? `目的 ${v.purposeName}` : null]
+        .filter(Boolean).join(' ／ ') || undefined,
+    })),
     ...deal.visitSchedules
-      .filter(v => !!v.revisitDate)
-      .map(v => ({ label: '後日引取', at: v.revisitDate as string, sub: v.revisitNote ?? undefined })),
+      .filter(v => !!v.revisitDate || !!v.revisitPending)
+      .map(v => ({
+        label: '後日引取',
+        at: (v.revisitDate ?? v.visitDate) as string,
+        timeText: v.revisitDate ? (timeRange(v.revisitStart, v.revisitEnd) || '時間未定') : '日時未定',
+        sub: v.revisitNote ?? undefined,
+      })),
     ...(dealEstimate ? [{ label: '見積作成', at: dealEstimate.validUntil, sub: `有効期限 ${fmtDate(dealEstimate.validUntil)}` }] : []),
-    ...(dealContract ? [{ label: '契約締結', at: dealContract.agreedAt }] : []),
+    ...(dealContract ? [{ label: '契約締結', at: dealContract.agreedAt, showTime: true }] : []),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
 
   const pdfUrl = (type: 'contract' | 'estimate', visitId: string, kind: 'sale' | 'invoice') =>
@@ -844,7 +898,7 @@ export default function DealDetailView({
     router.push(`/store/schedule/${targetVisitId}/agreement?dealId=${deal.id}${staffQuery}`)
   }
   // 後日引取は訪問行の revisit* に入るため、訪問件数とは別に数えて見出しに出す
-  const revisitCount = deal.visitSchedules.filter(v => !!v.revisitDate).length
+  const revisitCount = deal.visitSchedules.filter(v => !!v.revisitDate || !!v.revisitPending).length
   // 担当者は「案件の担当メンバー（Deal.memberId・一覧の担当列と同じ）」と
   // 「訪問ごとの担当者名（VisitSchedule.staffName・書類の担当者欄に使う）」の2系統がある。
   // どちらか片方にしか入っていないデータがあるため、両方をまとめて表示する
@@ -1109,7 +1163,7 @@ export default function DealDetailView({
                       </span>
                     }
                   />
-                  <PropRow label="作成者" value={creatorLabel(deal)} />
+                  <PropRow label="作成者" value={dealCreatorLabel({ ...deal, fromInquiry: !!deal.inquiry })} />
                 </div>
               </div>
             </Section>
@@ -1154,7 +1208,14 @@ export default function DealDetailView({
                   <span className="absolute -left-[5px] w-2.5 h-2.5 rounded-full" style={{ background: 'var(--portal-primary,#374151)' }} />
                   <div className="text-sm text-[var(--md-sys-color-on-surface)]">
                     <span className="font-medium">{t.label}</span>
-                    <span className="text-[var(--md-sys-color-on-surface-variant)] ml-2 text-xs">{fmtDate(t.at)}</span>
+                    {/* 日時を必ず出す。記録の日時（発生・締結）は時刻まで、
+                        予定（訪問・引取）は日付＋その予定の時間帯を並べる */}
+                    <span className="text-[var(--md-sys-color-on-surface-variant)] ml-2 text-xs tabular-nums">
+                      {t.showTime ? fmtDateTime(t.at) : fmtDate(t.at)}
+                    </span>
+                    {t.timeText && (
+                      <span className="text-[var(--md-sys-color-on-surface-variant)] ml-1.5 text-xs tabular-nums">{t.timeText}</span>
+                    )}
                   </div>
                   {t.sub && <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{t.sub}</div>}
                 </li>
@@ -1221,21 +1282,29 @@ export default function DealDetailView({
                           <button type="button" onClick={() => { setEditingStaffId(v.id); setStaffDraft(v.staffName ?? '') }} className="text-[var(--portal-primary,#374151)] hover:underline">変更</button>
                         </span>
                       )}
+                      {/* 訪問目的（訪問詳細で設定。ここでは表示のみ） */}
+                      <span>目的: {v.purposeName || '未設定'}</span>
                       <span>買取: {formatYen(v.purchaseAmount)}</span>
                       <span>請求: {formatYen(v.billingAmount)}</span>
                     </div>
                     {v.note && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">{v.note}</p>}
                     {/* 後日引取（売買契約書の作成時に登録される。訪問行のrevisit*に入るため
                         別の訪問レコードにはならないが、案件からも予定として見えるようにする） */}
-                    {v.revisitDate && (
+                    {(v.revisitDate || v.revisitPending) && (
                       <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
                             後日引取
                           </span>
-                          <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{fmtDate(v.revisitDate)}</span>
-                          {(v.revisitStart || v.revisitEnd) && (
-                            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{timeRange(v.revisitStart, v.revisitEnd)}</span>
+                          {v.revisitDate ? (
+                            <>
+                              <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{fmtDate(v.revisitDate)}</span>
+                              {(v.revisitStart || v.revisitEnd) && (
+                                <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{timeRange(v.revisitStart, v.revisitEnd)}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">日時未定（後日調整）</span>
                           )}
                         </div>
                         {v.revisitNote && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">{v.revisitNote}</p>}
@@ -1495,11 +1564,11 @@ export default function DealDetailView({
             )}
             </Section>
 
-            {/* R7 古物台帳 */}
-            {dealContract && (
+            {/* R7 古物台帳（電子契約・紙契約のどちらも記載義務があるので両方で出す） */}
+            {(dealContract || paperContractCount > 0) && (
               <Section
                 title="古物台帳"
-                meta={ledger ? `${ledger.itemCount}品目` : undefined}
+                meta={ledger ? `${ledger.itemCount}品目${ledger.source === 'paper' ? '・紙契約' : ''}` : undefined}
                 badge={ledgerMissingCount > 0 ? (
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
                     記載不足あり
@@ -1507,12 +1576,38 @@ export default function DealDetailView({
                 ) : undefined}
                 collapsible
                 defaultOpen={initialOpen('ledger', ledgerMissingCount > 0, !!ledger)}
-                actions={!isAdmin ? (
-              <Link href={`/store/kobutsu-ledger/${dealContract.id}`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline whitespace-nowrap">
+                actions={!isAdmin && ledgerEntryKey ? (
+              <Link href={`/store/kobutsu-ledger/${encodeURIComponent(ledgerEntryKey)}`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline whitespace-nowrap">
                 台帳詳細を開く →
               </Link>
                 ) : undefined}
               >
+              {/* 紙で契約した案件は、法定の「取引の年月日」をここで入力する
+                   （契約書PDFを出さないため、締結日時が記録として残らない） */}
+              {paperLedger && editable && (
+                <div className="rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-3 py-3 mb-3">
+                  <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-2 leading-relaxed">
+                    紙で売買契約書を作成した案件です。売買契約書の出力は不要ですが、古物台帳の
+                    「取引の年月日」は法定の記載事項なので、こちらで記録してください
+                    （未入力のあいだは訪問日・案件発生日で暫定表示されます）。
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="text-xs font-medium text-[var(--md-sys-color-on-surface)]">取引年月日</label>
+                    <input
+                      type="date"
+                      defaultValue={paperLedger.agreedAt ? toDateInput(paperLedger.agreedAt) : ''}
+                      disabled={savingPaperDate}
+                      onChange={e => savePaperContractAgreedAt(e.target.value)}
+                      className="h-9 px-2 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                    />
+                    {savingPaperDate && <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">保存中...</span>}
+                    {!paperLedger.agreedAt && (
+                      <span className="text-[11px]" style={{ color: 'var(--status-pending-text)' }}>未入力</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {ledgerLoading && !ledger ? (
                 <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">読み込み中...</p>
               ) : !ledger ? (
@@ -1532,6 +1627,7 @@ export default function DealDetailView({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                     <Row label="取引年月日" value={fmtDate(ledger.tradedAt)} />
                     <Row label="区別" value={ledger.tradeType} />
+                    <Row label="契約書" value={ledger.source === 'paper' ? '紙（写真をアップロード）' : '電子（売買契約書PDF）'} />
                     <Row
                       label="品目"
                       value={[
@@ -1611,6 +1707,13 @@ export default function DealDetailView({
             {deal.paperContractImages.length === 0 ? (
               <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">紙で作成した売買契約書の写真はありません{editable ? '。「＋ 写真を追加」からアップロードできます。' : ''}</p>
             ) : (
+              <>
+              {/* 紙で契約した場合は売買契約書の出力は不要。ただし古物台帳の記載事項は必要なので誘導する */}
+              <div className="rounded-lg px-3 py-2 mb-3 text-[11px] leading-relaxed" style={{ background: 'var(--md-sys-color-surface-container-low)', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                紙で契約書を作成済みのため、売買契約書の出力は不要です。
+                古物台帳に必要な情報（取引年月日・法定13品目・古物の特徴）は、上の
+                <strong className="text-[var(--md-sys-color-on-surface)]">「古物台帳」</strong>セクションから入力してください。
+              </div>
               <div className="flex flex-wrap gap-3">
                 {deal.paperContractImages.map((url, idx) => (
                   <div key={idx} className="relative">
@@ -1624,6 +1727,7 @@ export default function DealDetailView({
                   </div>
                 ))}
               </div>
+              </>
             )}
             </Section>
 
@@ -1741,14 +1845,17 @@ export default function DealDetailView({
           </div>
         </div>
 
-        {/* ── ゾーンD: 破壊的操作（管理のみ・全幅） ─────────────── */}
-        {isAdmin && (
-          <div className="flex justify-end pt-2">
-            <Button variant="outlined" size="sm" onClick={handleDelete} loading={deleting} disabled={deleting}>
-              案件を削除
-            </Button>
-          </div>
-        )}
+        {/* ── ゾーンD: 破壊的操作（店舗・管理の両方。全幅） ───────────────
+             店舗からも案件を削除できるようにする（紐づく訪問・書類・品目ごと削除）。
+             確認ダイアログで何が消えるかを列挙する（handleDelete） */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
+          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] sm:mr-auto">
+            案件を削除すると、紐づく訪問予定・見積書・売買契約書・買取品目・請求項目もまとめて削除されます（元に戻せません）。
+          </span>
+          <Button variant="outlined" size="sm" danger onClick={handleDelete} loading={deleting} disabled={deleting}>
+            案件を削除
+          </Button>
+        </div>
 
         {/* フローティング録音ボタン（許可ブロック時の案内パネル込み）の実高さ＋余白ぶんの空きを
              コンテンツ末尾に確保する。fixed要素はドキュメントの流れに影響しないため、これが無いと
@@ -1969,6 +2076,22 @@ export default function DealDetailView({
               placeholder="担当者名を選択または入力"
               className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">訪問目的（任意）</label>
+            <select
+              value={addVisit.purposeId}
+              onChange={e => setAddVisit(prev => ({ ...prev, purposeId: e.target.value }))}
+              className="w-full h-12 px-3.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
+            >
+              <option value="">未設定</option>
+              {visitPurposes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            {visitPurposes.length === 0 && (
+              <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+                選択肢は管理ポータルの「訪問目的の管理」で追加できます
+              </p>
+            )}
           </div>
           <TextField
             label="メモ（任意）"

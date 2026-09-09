@@ -7,6 +7,7 @@ import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
 import { isDealCategory } from '@/lib/deal-categories'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { deleteDealCascade } from '@/lib/delete-customer'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 import { deleteCalendarEvent } from '@/lib/google-calendar'
 import { storeSupportsAkikuru } from '@/lib/store-services'
@@ -56,8 +57,11 @@ export async function GET(
         select: {
           id: true, visitDate: true, startTime: true, endTime: true, status: true, note: true,
           staffName: true, purchaseAmount: true, billingAmount: true,
+          // 訪問目的（管理ポータルのマスタから選択）
+          purposeId: true, purposeName: true,
           // 後日引取（売買契約書の作成時に登録される。訪問行そのものに持つ設計）
-          revisitDate: true, revisitStart: true, revisitEnd: true, revisitNote: true,
+          // revisitPending は「日時未定でも後日引取あり」を表すフラグ
+          revisitDate: true, revisitStart: true, revisitEnd: true, revisitNote: true, revisitPending: true,
           purchaseItems: {
             select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
           },
@@ -188,7 +192,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category } = body
+  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category, paperContractAgreedAt } = body
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -222,6 +226,21 @@ export async function PATCH(
   if (occurredAt !== undefined) {
     const d = new Date(occurredAt)
     if (!isNaN(d.getTime())) updateData.occurredAt = d
+  }
+  // 紙で作成した売買契約書の取引年月日（古物台帳の法定記載事項）。null でクリア可。
+  // 日付だけの入力（"YYYY-MM-DD"）は JST の当日として解釈する（UTC 解釈で前日にずれるのを防ぐ）
+  if (paperContractAgreedAt !== undefined) {
+    if (!paperContractAgreedAt) {
+      updateData.paperContractAgreedAt = null
+    } else {
+      const raw = String(paperContractAgreedAt)
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00+09:00` : raw
+      const d = new Date(iso)
+      if (isNaN(d.getTime())) {
+        return NextResponse.json({ error: '取引年月日が不正です' }, { status: 400 })
+      }
+      updateData.paperContractAgreedAt = d
+    }
   }
   // 事前同意の署名（案件単位）。空文字/null でクリア可。
   if (preConsentSignature !== undefined) {
@@ -271,45 +290,22 @@ export async function DELETE(
 ) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { sessionUser, isAdmin } = resolveAccess(session)
-  if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { sessionUser, isStore, isAdmin } = resolveAccess(session)
+  if (!isStore && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const deal = await prisma.deal.findUnique({ where: { id } })
+  const deal = await prisma.deal.findUnique({ where: { id }, select: { id: true, storeId: true, dealNumber: true } })
   if (!deal) return NextResponse.json({ error: '案件が見つかりません' }, { status: 404 })
+  // 店舗は自店舗の案件のみ削除できる
+  if (isStore && deal.storeId !== sessionUser.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  // 紐づく訪問予定ごと削除する。
-  // 「全訪問は必ず案件に属する」不変条件があるため、訪問のリンクだけ外すと訪問が孤立し、
-  // その配下の契約書・見積がどの案件からも辿れなくなる。かといって訪問を残したまま
-  // 案件だけ消すこともできない（訪問の単体削除APIは存在しない）ので、
-  // 案件を消すときは配下の訪問とその書類・品目もまとめて消す。
-  // 案件に直接ぶら下がるもの（買取品目・請求項目・売買契約書・見積・録音・アキクル請求）は
-  // FK の onDelete: Cascade で落ちる。ここで明示的に消すのは、再ペアレント前の古いデータで
-  // 「訪問にだけ」ぶら下がっている行。
-  const visits = await prisma.visitSchedule.findMany({
-    where: { dealId: id },
-    select: { id: true, storeId: true, googleCalendarEventId: true },
-  })
-  const visitIds = visits.map(v => v.id)
-
-  const removed = await prisma.$transaction(async (tx) => {
-    let contracts = 0, estimates = 0, purchaseItems = 0, workItems = 0
-    if (visitIds.length > 0) {
-      contracts     = (await tx.salesContract.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
-      estimates     = (await tx.estimate.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
-      purchaseItems = (await tx.purchaseItem.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
-      workItems     = (await tx.workItem.deleteMany({ where: { visitScheduleId: { in: visitIds } } })).count
-      await tx.visitSchedule.deleteMany({ where: { dealId: id } })
-    }
-    await tx.deal.delete({ where: { id } })
-    return { visits: visitIds.length, contracts, estimates, purchaseItems, workItems }
-  })
+  // 紐づく訪問・書類・品目もまとめて削除する（deleteDealCascade に集約）
+  const { result: removed, calendarEvents } = await deleteDealCascade(id)
 
   // Googleカレンダーの予定も消す（失敗しても案件の削除自体は成功扱い）
-  for (const v of visits) {
-    if (!v.googleCalendarEventId) continue
+  for (const ev of calendarEvents) {
     try {
-      await deleteCalendarEvent(v.storeId, v.googleCalendarEventId)
+      await deleteCalendarEvent(ev.storeId, ev.eventId)
     } catch (e) {
       console.error('[Deal DELETE] カレンダー予定の削除に失敗:', e)
     }

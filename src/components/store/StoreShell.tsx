@@ -31,35 +31,40 @@ export default function StoreShell({
   // 案件詳細は下部に追従バー（sticky）を持つため、main の下パディングがあるとバーが浮く
   const isDealDetail = /^\/store\/deals\/[^/]+$/.test(pathname)
 
-  if (isLoginPage) {
-    return <div data-portal="store">{children}</div>
-  }
-
-  // 契約書ページではサイドバー・ボトムナビを非表示
-  if (isAgreementPage) {
-    return (
-      <div data-portal="store" className="min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
-        <main className="min-w-0">{children}</main>
-      </div>
-    )
-  }
+  // SessionProvider は「どの見た目のときも必ず」外側に置く。
+  // ここで分岐の内側だけに置くと、クライアント遷移で SessionProvider が外れた枝
+  // （契約書ページなど）に入った瞬間 useSession() が loading のまま固まる。
+  // next-auth はモジュール内の単一セッション状態を共有するため、
+  // 初期セッション付きの Provider が一度でもマウントされると、
+  // 素の Provider は再取得をスキップして undefined を返し続けてしまう
+  // （＝「売買契約書を作成」を押すと読み込み画面から進まない不具合の原因）。
+  const shell = isLoginPage ? (
+    <div data-portal="store">{children}</div>
+  ) : isAgreementPage ? (
+    // 契約書ページではサイドバー・ボトムナビを非表示
+    <div data-portal="store" className="min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
+      <main className="min-w-0">{children}</main>
+    </div>
+  ) : (
+    <div data-portal="store" className="flex min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
+      <ToastProvider>
+        <StoreScopeProvider>
+          {/* ナビのバッジは Rail と BottomNav で共有する（別々に取ると同じAPIを二重に叩く） */}
+          <StoreBadgesProvider>
+            <NavigationRail />
+            <main className={`flex-1 min-w-0 ${isChatPage || isDealDetail ? '' : 'pb-20 md:pb-4'}`}>
+              {children}
+            </main>
+            <BottomNav />
+          </StoreBadgesProvider>
+        </StoreScopeProvider>
+      </ToastProvider>
+    </div>
+  )
 
   return (
     <SessionProvider session={session} refetchOnWindowFocus={false} refetchInterval={0}>
-      <div data-portal="store" className="flex min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
-        <ToastProvider>
-          <StoreScopeProvider>
-            {/* ナビのバッジは Rail と BottomNav で共有する（別々に取ると同じAPIを二重に叩く） */}
-            <StoreBadgesProvider>
-              <NavigationRail />
-              <main className={`flex-1 min-w-0 ${isChatPage || isDealDetail ? '' : 'pb-20 md:pb-4'}`}>
-                {children}
-              </main>
-              <BottomNav />
-            </StoreBadgesProvider>
-          </StoreScopeProvider>
-        </ToastProvider>
-      </div>
+      {shell}
     </SessionProvider>
   )
 }

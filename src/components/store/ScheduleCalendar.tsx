@@ -21,8 +21,11 @@ type RawSchedule = {
   revisitStart: string | null
   revisitEnd: string | null
   revisitNote: string | null
+  staffName: string | null
+  purposeName?: string | null
   user?: { name: string; address?: string | null; phone?: string | null } | null
   store?: { id: string; name: string } | null
+  member?: { id: string; name: string } | null
   deal?: { id: string } | null
 }
 
@@ -38,6 +41,9 @@ type CalEvent = {
   dealId: string | null
   kind: 'visit' | 'revisit'
   storeName: string | null
+  /** 訪問担当者名（時間枠にも出す） */
+  staffName: string | null
+  purposeName: string | null
 }
 
 type View = 'month' | 'week' | 'day'
@@ -105,11 +111,14 @@ export default function ScheduleCalendar() {
       const name = s.user?.name ?? '予定'
       const address = s.user?.address ?? null
       const storeName = scope.isMulti ? (s.store?.name ?? null) : null
+      // 担当者は訪問行の staffName が正。未設定なら帰属メンバー名で補う
+      const staffName = s.staffName || s.member?.name || null
+      const purposeName = s.purposeName ?? null
       if (s.status !== 'cancelled') {
-        list.push({ id: s.id, dateKey: ymd(new Date(s.visitDate)), start: s.startTime, end: s.endTime, name, address, note: s.note, status: s.status, dealId: s.deal?.id ?? null, kind: 'visit', storeName })
+        list.push({ id: s.id, dateKey: ymd(new Date(s.visitDate)), start: s.startTime, end: s.endTime, name, address, note: s.note, status: s.status, dealId: s.deal?.id ?? null, kind: 'visit', storeName, staffName, purposeName })
       }
       if (s.revisitDate) {
-        list.push({ id: `${s.id}-rev`, dateKey: ymd(new Date(s.revisitDate)), start: s.revisitStart, end: s.revisitEnd, name, address, note: s.revisitNote, status: 'revisit', dealId: s.deal?.id ?? null, kind: 'revisit', storeName })
+        list.push({ id: `${s.id}-rev`, dateKey: ymd(new Date(s.revisitDate)), start: s.revisitStart, end: s.revisitEnd, name, address, note: s.revisitNote, status: 'revisit', dealId: s.deal?.id ?? null, kind: 'revisit', storeName, staffName, purposeName })
       }
     }
     return list
@@ -195,6 +204,10 @@ export default function ScheduleCalendar() {
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
               {popover.event.start ? `${popover.event.start}${popover.event.end ? `〜${popover.event.end}` : ''}` : '時間未定'}
             </p>
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1">
+              担当: {popover.event.staffName ?? '未設定'}
+              {popover.event.purposeName && <span className="ml-2">目的: {popover.event.purposeName}</span>}
+            </p>
             {popover.event.address && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 break-words">{popover.event.address}</p>}
             {popover.event.note && <p className="text-xs text-[var(--md-sys-color-on-surface-faint)] mt-1 break-words whitespace-pre-wrap">{popover.event.note}</p>}
             <button
@@ -214,8 +227,8 @@ export default function ScheduleCalendar() {
 /* ───────────── 月間 ───────────── */
 function MonthChip({ e, onEvent }: { e: CalEvent; onEvent: (e: CalEvent, ev: React.MouseEvent) => void }) {
   return (
-    <button type="button" onClick={(ev) => onEvent(e, ev)} title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}`} className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}>
-      {e.start ? <span className="font-medium">{e.start} </span> : null}{e.name}
+    <button type="button" onClick={(ev) => onEvent(e, ev)} title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}`} className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}>
+      {e.start ? <span className="font-medium">{e.start} </span> : null}{e.name}{e.staffName ? <span className="opacity-70">・{e.staffName}</span> : null}
     </button>
   )
 }
@@ -341,7 +354,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
             {days.map((d) => (
               <div key={ymd(d)} className="p-0.5 space-y-0.5 border-l border-[var(--md-sys-color-outline-variant)]">
                 {(eventsByDate[ymd(d)] ?? []).filter(e => toMin(e.start) === null).map(e => (
-                  <button key={e.id} type="button" onClick={(ev) => onEvent(e, ev)} className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}>{e.kind === 'revisit' ? '引取: ' : ''}{e.name}</button>
+                  <button key={e.id} type="button" onClick={(ev) => onEvent(e, ev)} className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}>{e.kind === 'revisit' ? '引取: ' : ''}{e.name}{e.staffName ? `（${e.staffName}）` : ''}</button>
                 ))}
               </div>
             ))}
@@ -380,7 +393,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
                       key={e.id}
                       type="button"
                       onClick={(ev) => onEvent(e, ev)}
-                      title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.address ? ` / ${e.address}` : ''}${e.note ? ` / ${e.note}` : ''}`}
+                      title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${e.purposeName ? ` / ${e.purposeName}` : ''}${e.address ? ` / ${e.address}` : ''}${e.note ? ` / ${e.note}` : ''}`}
                       className={`absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left leading-tight hover:opacity-90 hover:z-10 shadow-sm ${statusStyle(e.status)}`}
                       style={{ top, height, left: `calc(${pos.left * 100}% + 2px)`, width: `calc(${pos.width * 100}% - 4px)` }}
                     >
@@ -388,8 +401,12 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
                         {e.start}{e.end ? `〜${e.end}` : ''}{e.kind === 'revisit' ? '（引取）' : ''}
                       </div>
                       <div className="text-[11px] font-medium truncate">{e.name} 様</div>
+                      {/* 訪問担当者は時間枠で最初に知りたい情報なので、高さが足りなくても必ず出す */}
+                      <div className="text-[9px] font-medium truncate">
+                        {e.staffName ? `担当 ${e.staffName}` : '担当 未設定'}
+                      </div>
                       {tall && (
-                        <div className="text-[9px] opacity-80 truncate">{STATUS_LABEL[e.status] ?? e.status}{e.address ? ` ・ ${e.address}` : ''}</div>
+                        <div className="text-[9px] opacity-80 truncate">{STATUS_LABEL[e.status] ?? e.status}{e.purposeName ? ` ・ ${e.purposeName}` : ''}{e.address ? ` ・ ${e.address}` : ''}</div>
                       )}
                       {tall && e.note && <div className="text-[9px] opacity-70 truncate">{e.note}</div>}
                     </button>

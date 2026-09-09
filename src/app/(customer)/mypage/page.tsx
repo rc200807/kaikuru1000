@@ -19,6 +19,7 @@ import { CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, customerV
 import { calcAge, needsFamilyConsent, isMinorBlockedFromDelivery } from '@/lib/age'
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 import { getSplitName } from '@/lib/name-utils'
+import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
 
 type UserData = {
   id: string
@@ -44,7 +45,7 @@ type UserData = {
   proofDocumentStatus: string | null
   licenseKey: { key: string }
   store: { name: string; phone: string | null; address: string | null; postalCode: string | null } | null
-  visitSchedules: Array<{ id: string; visitDate: string; status: string; note: string | null }>
+  visitSchedules: Array<{ id: string; visitDate: string; startTime: string | null; endTime: string | null; status: string; note: string | null; purposeName: string | null }>
   // 顧客タイプ
   customerType: string  // 主タイプ "visit" | "delivery" | "regular" | "akikuru"
   customerTypes?: string  // JSON配列（複数可）
@@ -64,6 +65,10 @@ type VisitRecord = {
   purchaseAmount: number | null
   billingAmount: number | null
   store: { id: string; name: string }
+  startTime: string | null
+  endTime: string | null
+  /** 買取金額の正は案件。訪問側は旧データにしか入らない */
+  deal: { id: string; status: string; purchaseAmount: number | null } | null
   purchaseItems: { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }[]
   workItems: { id: string; workName: string; quantity: number; unitPrice: number }[]
   salesContract: { id: string; createdAt: string } | null
@@ -73,29 +78,6 @@ type Stats = {
   totalPurchaseAmount: number
   purchaseCount: number
   monthlyStats: Array<{ year: number; month: number; amount: number }>
-}
-
-type AiAppraisalResult = {
-  productDetail: string
-  marketPriceHigh: string
-  marketPriceLow: string
-  offerPrice: string
-  offerReason: string
-  platforms: string
-  supplement: string
-}
-
-type PurchaseMemo = {
-  id: string
-  title: string
-  description: string | null
-  imageUrls: string[]
-  status: string
-  storeNote: string | null
-  aiAppraisal: AiAppraisalResult | null
-  aiAppraisalAt: string | null
-  createdAt: string
-  updatedAt: string
 }
 
 type DeliveryShipment = {
@@ -120,16 +102,30 @@ export default function MyPage() {
   )
 }
 
+/** 訪問リクエストの利用可否（/api/visit-requests が返す） */
+type RequestAvailability = {
+  available: boolean
+  intervalMonths: number
+  lastUsedAt: string | null
+  nextAvailableAt: string | null
+}
+
+/** 取り下げた（廃止した）タブ。URLで指定されてもダッシュボードにフォールバックする */
+const RETIRED_TABS = ['memos']
+
 function MyPageContent() {
   const { data: session, status, update: updateSession } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<UserData | null>(null)
-  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'dashboard')
+  // 買取トライ（tab=memos）は取り下げたため、古いブックマーク・共有リンクはダッシュボードに寄せる
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get('tab') || 'dashboard'
+    return RETIRED_TABS.includes(tab) ? 'dashboard' : tab
+  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const memoImageInputRef = useRef<HTMLInputElement>(null)
 
   const [editForm, setEditForm] = useState({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', phone: '', address: '' })
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
@@ -155,35 +151,11 @@ function MyPageContent() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [statsLoaded, setStatsLoaded] = useState(false)
 
-  // 買取トライ
-  const [memos, setMemos] = useState<PurchaseMemo[]>([])
-  const [memosLoaded, setMemosLoaded] = useState(false)
-  const [memosLoading, setMemosLoading] = useState(false)
-  const [memosPage, setMemosPage] = useState(1)
-  const [memosHasMore, setMemosHasMore] = useState(false)
-  const [memosTotal, setMemosTotal] = useState(0)
-  const [memosLoadingMore, setMemosLoadingMore] = useState(false)
-  const MEMOS_LIMIT = 20
-  const [showMemoForm, setShowMemoForm] = useState(false)
-  const [memoForm, setMemoForm] = useState({ title: '', description: '' })
-  const [memoImages, setMemoImages] = useState<string[]>([])
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const [submittingMemo, setSubmittingMemo] = useState(false)
-  const [aiAppraisalRemaining, setAiAppraisalRemaining] = useState<number | null>(null)
-  const [apprasingMemoId, setApprasingMemoId] = useState<string | null>(null)
-
-  // 買取トライ モーダル
-  const [tryModalOpen, setTryModalOpen] = useState(false)
-  const [tryStep, setTryStep] = useState(1)
-  const [tryPhoto, setTryPhoto] = useState<File | null>(null)
-  const [tryPhotoPreview, setTryPhotoPreview] = useState('')
-  const [tryItemName, setTryItemName] = useState('')
-  const [tryAppraisalResult, setTryAppraisalResult] = useState<AiAppraisalResult | null>(null)
-  const [trySaving, setTrySaving] = useState(false)
-  const [tryError, setTryError] = useState('')
-  const [trySavedMemoId, setTrySavedMemoId] = useState<string | null>(null)
-
   // 訪問リクエスト
+  // 利用間隔の制限（既定は月1回）。次回リクエスト可能日を画面に出す
+  const [requestAvailability, setRequestAvailability] = useState<RequestAvailability | null>(null)
+  // 定期宅配の送付間隔（既定は3ヶ月に1回）。次回登録可能日を画面に出す
+  const [shipmentAvailability, setShipmentAvailability] = useState<RequestAvailability | null>(null)
   const [visitRequests, setVisitRequests] = useState<any[]>([])
   const [visitRequestsLoaded, setVisitRequestsLoaded] = useState(false)
   const [showRequestForm, setShowRequestForm] = useState(false)
@@ -249,7 +221,6 @@ function MyPageContent() {
   // オンボーディングモーダル
   const [showOnboardingModal, setShowOnboardingModal] = useState(false)
   const [showWorthlessModal, setShowWorthlessModal] = useState(false)
-  const [pendingMemoCount, setPendingMemoCount] = useState(0)
 
   // 身分証登録プロンプトモーダル
   const [showIdDocumentModal, setShowIdDocumentModal] = useState(false)
@@ -258,7 +229,7 @@ function MyPageContent() {
   const [showIdRequiredModal, setShowIdRequiredModal] = useState(false)
   const [idRequiredItemLabel, setIdRequiredItemLabel] = useState('')
 
-  const docTypesRequiringBack = ['運転免許証']
+  const docTypesRequiringBack = ID_DOC_TYPES_REQUIRING_BACK
   const needsBackImage = docTypesRequiringBack.includes(selectedDocType)
 
   useEffect(() => {
@@ -315,6 +286,26 @@ function MyPageContent() {
     }
   }, [activeTab, statsLoaded, status])
 
+  // ダッシュボードでも訪問リクエストの利用可否を取得する（クイックアクションの案内に使う）
+  useEffect(() => {
+    if (activeTab === 'dashboard' && !visitRequestsLoaded && status === 'authenticated' && user && user.customerType !== 'delivery') {
+      loadVisitRequests()
+    }
+    // loadVisitRequests は毎レンダー同一の関数ではないが、依存に入れると無限ループになるため除外する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, visitRequestsLoaded, status, user?.customerType])
+
+  // 宅配顧客: 送付間隔の利用可否を取得（ダッシュボード・送付登録タブの案内に使う）
+  useEffect(() => {
+    if (status !== 'authenticated' || user?.customerType !== 'delivery') return
+    if (activeTab !== 'dashboard' && activeTab !== 'shipments') return
+    if (shipmentAvailability) return
+    fetch('/api/delivery-shipments/availability')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (data) setShipmentAvailability(data) })
+      .catch(() => {})
+  }, [status, user?.customerType, activeTab, shipmentAvailability])
+
   // 宅配顧客: ダッシュボード表示時にも送付履歴をロード（今月ステータス表示用）
   useEffect(() => {
     if (activeTab === 'dashboard' && !shipmentsLoaded && status === 'authenticated' && user?.customerType === 'delivery') {
@@ -324,23 +315,6 @@ function MyPageContent() {
         .catch(() => setShipmentsLoaded(true))
     }
   }, [activeTab, shipmentsLoaded, status, user?.customerType])
-
-  // オンボーディングモーダル: 未査定メモがあればダッシュボード表示時にモーダルを出す
-  useEffect(() => {
-    if (user && activeTab === 'dashboard') {
-      fetch('/api/purchase-memos?limit=50')
-        .then(r => r.json())
-        .then(data => {
-          const list = data?.memos ?? (Array.isArray(data) ? data : [])
-          const pending = list.filter((m: any) => !m.aiAppraisalAt)
-          if (pending.length > 0 && !sessionStorage.getItem('onboarding-dismissed')) {
-            setPendingMemoCount(pending.length)
-            setTimeout(() => setShowOnboardingModal(true), 1000)
-          }
-        })
-        .catch(() => {})
-    }
-  }, [user, activeTab])
 
   // 身分証登録プロンプト: ライセンスキー登録ユーザーで未提出なら表示
   useEffect(() => {
@@ -700,52 +674,6 @@ function MyPageContent() {
     setUploadingProof(false)
   }
 
-  // メモ画像アップロード
-  async function handleMemoImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingImage(true)
-    const formData = new FormData()
-    await appendImageToFormData(formData, 'file', file)
-    const res = await fetch('/api/purchase-memos/images', { method: 'POST', body: formData })
-    if (res.ok) {
-      const data = await res.json()
-      setMemoImages(prev => [...prev, data.url])
-    } else {
-      const d = await res.json()
-      setMessage({ type: 'error', text: d.error || '画像のアップロードに失敗しました' })
-    }
-    setUploadingImage(false)
-    e.target.value = ''
-  }
-
-  // メモ作成
-  async function handleSubmitMemo(e: React.FormEvent) {
-    e.preventDefault()
-    if (!memoForm.title) return
-    setSubmittingMemo(true)
-    const res = await fetch('/api/purchase-memos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: memoForm.title,
-        description: memoForm.description || undefined,
-        imageUrls: memoImages,
-      }),
-    })
-    setSubmittingMemo(false)
-    if (res.ok) {
-      const created = await res.json()
-      setMemos(prev => [created, ...prev])
-      setMemoForm({ title: '', description: '' })
-      setMemoImages([])
-      setShowMemoForm(false)
-      setMessage({ type: 'success', text: '買取トライを登録しました' })
-    } else {
-      setMessage({ type: 'error', text: 'メモの登録に失敗しました' })
-    }
-  }
-
   // 口座情報保存
   async function handleSaveBank(e: React.FormEvent) {
     e.preventDefault()
@@ -803,132 +731,6 @@ function MyPageContent() {
     }
   }
 
-  // メモ削除
-  async function handleDeleteMemo(id: string) {
-    if (!confirm('このメモを削除しますか？')) return
-    const res = await fetch(`/api/purchase-memos/${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setMemos(prev => prev.filter(m => m.id !== id))
-    }
-  }
-
-  // AI査定
-  async function handleAiAppraisal(id: string) {
-    if (apprasingMemoId) return
-    setApprasingMemoId(id)
-    setMessage(null)
-    try {
-      const res = await fetch(`/api/purchase-memos/${id}/ai-appraisal`, { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
-        setMemos(prev => prev.map(m =>
-          m.id === id
-            ? { ...m, aiAppraisal: data.appraisal, aiAppraisalAt: data.aiAppraisalAt }
-            : m
-        ))
-        setAiAppraisalRemaining(data.remaining)
-        setMessage({ type: 'success', text: 'AI査定が完了しました' })
-      } else {
-        setMessage({ type: 'error', text: data.error || 'AI査定に失敗しました' })
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'AI査定に失敗しました' })
-    } finally {
-      setApprasingMemoId(null)
-    }
-  }
-
-  // 買取トライ モーダル — 写真選択
-  async function handleTryPhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const converted = await convertToJpegIfNeeded(file)
-    setTryPhoto(converted)
-    const preview = await createPreviewUrl(converted)
-    setTryPhotoPreview(preview)
-  }
-
-  // 買取トライ モーダル — ステートリセット
-  function resetTryState() {
-    setTryStep(1)
-    setTryPhoto(null)
-    setTryPhotoPreview('')
-    setTryItemName('')
-    setTryAppraisalResult(null)
-    setTrySaving(false)
-    setTryError('')
-    setTrySavedMemoId(null)
-  }
-
-  // 買取トライ モーダル — 写真アップロード → メモ作成 → AI査定
-  async function handleTryAppraisal() {
-    if (!tryPhoto || !tryItemName.trim()) return
-    setTryStep(3)
-    setTryError('')
-    try {
-      // 1. 写真アップロード
-      const formData = new FormData()
-      await appendImageToFormData(formData, 'file', tryPhoto)
-      const uploadRes = await fetch('/api/purchase-memos/images', { method: 'POST', body: formData })
-      if (!uploadRes.ok) {
-        const d = await uploadRes.json()
-        throw new Error(d.error || '画像のアップロードに失敗しました')
-      }
-      const { url: photoUrl } = await uploadRes.json()
-
-      // 2. メモ作成
-      const memoRes = await fetch('/api/purchase-memos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: tryItemName.trim(), imageUrls: [photoUrl] }),
-      })
-      if (!memoRes.ok) {
-        throw new Error('メモの登録に失敗しました')
-      }
-      const createdMemo = await memoRes.json()
-      setTrySavedMemoId(createdMemo.id)
-
-      // 3. AI査定
-      const aiRes = await fetch(`/api/purchase-memos/${createdMemo.id}/ai-appraisal`, { method: 'POST' })
-      const aiData = await aiRes.json()
-      if (aiRes.ok) {
-        setTryAppraisalResult(aiData.appraisal)
-        if (aiData.remaining !== undefined) setAiAppraisalRemaining(aiData.remaining)
-        setTryStep(4)
-      } else {
-        // AI査定失敗でもメモは保存済み — 結果なしで表示
-        setTryError(aiData.error || 'AI査定に失敗しましたが、メモは保存されました')
-        setTryStep(4)
-      }
-    } catch (err: any) {
-      setTryError(err.message || 'エラーが発生しました')
-      setTryStep(4)
-    }
-  }
-
-  // 買取トライ モーダル — 保存（閉じる）
-  function handleTrySave() {
-    setTrySaving(true)
-    // メモは既にステップ3で作成済み。一覧をリフレッシュして閉じる
-    fetch('/api/purchase-memos?limit=1&page=1')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.memos?.length) {
-          const newMemo = data.memos[0]
-          setMemos(prev => {
-            const exists = prev.some(m => m.id === newMemo.id)
-            return exists ? prev.map(m => m.id === newMemo.id ? newMemo : m) : [newMemo, ...prev]
-          })
-        }
-      })
-      .finally(() => {
-        setTrySaving(false)
-        setTryModalOpen(false)
-        resetTryState()
-        setMessage({ type: 'success', text: '買取トライを登録しました' })
-      })
-  }
-
   // Listen for bottom nav tab changes
   useEffect(() => {
     function onBottomNavChange(e: Event) {
@@ -944,7 +746,7 @@ function MyPageContent() {
     function onPopState() {
       const params = new URLSearchParams(window.location.search)
       const tab = params.get('tab') || 'dashboard'
-      setActiveTab(tab)
+      setActiveTab(RETIRED_TABS.includes(tab) ? 'dashboard' : tab)
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
@@ -1026,7 +828,6 @@ function MyPageContent() {
       ]
     : [
         { key: 'dashboard',   label: 'ダッシュボード' },
-        { key: 'memos',       label: '買取トライ' },
         { key: 'visit-request', label: '訪問リクエスト' },
         { key: 'history',     label: '訪問履歴' },
         { key: 'profile',     label: 'プロフィール' },
@@ -1057,32 +858,7 @@ function MyPageContent() {
         })
         .catch(() => { setVisitsLoaded(true); setVisitsLoading(false) })
     }
-    if (tabKey === 'memos' && !memosLoaded) {
-      setMemosLoading(true)
-      fetch(`/api/purchase-memos?page=1&limit=${MEMOS_LIMIT}`)
-        .then(r => r.json())
-        .then(data => {
-          const list = data?.memos ?? (Array.isArray(data) ? data : [])
-          setMemos(list)
-          setMemosTotal(data?.total ?? list.length)
-          setMemosPage(1)
-          setMemosHasMore((data?.total ?? list.length) > MEMOS_LIMIT)
-          setMemosLoaded(true)
-          setMemosLoading(false)
-        })
-        .catch(() => { setMemosLoaded(true); setMemosLoading(false) })
-      // AI査定の残り回数を取得（任意のメモIDでGETする — idは無視される）
-      fetch('/api/purchase-memos/_/ai-appraisal')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data) setAiAppraisalRemaining(data.remaining) })
-        .catch(() => {})
-    }
-    if (tabKey === 'visit-request' && !visitRequestsLoaded) {
-      fetch('/api/visit-requests?requestedBy=customer')
-        .then(r => r.ok ? r.json() : { requests: [] })
-        .then(data => { setVisitRequests(Array.isArray(data) ? data : data.requests || []); setVisitRequestsLoaded(true) })
-        .catch(() => setVisitRequestsLoaded(true))
-    }
+    if (tabKey === 'visit-request' && !visitRequestsLoaded) loadVisitRequests()
     if (tabKey === 'visit-request' && !storeProposalsLoaded) {
       fetch('/api/visit-requests?requestedBy=store')
         .then(r => r.ok ? r.json() : { requests: [] })
@@ -1117,18 +893,16 @@ function MyPageContent() {
     setVisitsLoadingMore(false)
   }
 
-  async function loadMoreMemos() {
-    setMemosLoadingMore(true)
-    const nextPage = memosPage + 1
-    try {
-      const res = await fetch(`/api/purchase-memos?page=${nextPage}&limit=${MEMOS_LIMIT}`)
-      const data = await res.json()
-      const list = data?.memos ?? (Array.isArray(data) ? data : [])
-      setMemos(prev => [...prev, ...list])
-      setMemosPage(nextPage)
-      setMemosHasMore(nextPage * MEMOS_LIMIT < (data?.total ?? 0))
-    } catch { /* ignore */ }
-    setMemosLoadingMore(false)
+  /** 訪問リクエスト一覧＋利用可否を取得する（ダッシュボードとリクエストタブで共用） */
+  function loadVisitRequests() {
+    fetch('/api/visit-requests?requestedBy=customer')
+      .then(r => r.ok ? r.json() : { requests: [] })
+      .then(data => {
+        setVisitRequests(Array.isArray(data) ? data : data.requests || [])
+        if (data?.availability) setRequestAvailability(data.availability)
+        setVisitRequestsLoaded(true)
+      })
+      .catch(() => setVisitRequestsLoaded(true))
   }
 
   // 訪問リクエスト送信
@@ -1146,6 +920,7 @@ function MyPageContent() {
       if (res.ok) {
         const created = await res.json()
         setVisitRequests(prev => [created, ...prev])
+        if (created?.availability) setRequestAvailability(created.availability)
         setRequestForm({
           candidate1Date: '', candidate1Start: '', candidate1End: '',
           candidate2Date: '', candidate2Start: '', candidate2End: '',
@@ -1153,9 +928,10 @@ function MyPageContent() {
           customerNote: '',
         })
         setShowRequestForm(false)
-        setRequestMsg({ type: 'success', text: '訪問リクエストを送信しました' })
+        setRequestMsg({ type: 'success', text: '訪問リクエストを送信しました。店舗が日程を確認し、確定後にメールでご連絡します。' })
       } else {
         const d = await res.json()
+        if (d?.availability) setRequestAvailability(d.availability)
         setRequestMsg({ type: 'error', text: d.error || '送信に失敗しました' })
       }
     } catch {
@@ -1210,9 +986,6 @@ function MyPageContent() {
   const maxMonthlyAmount = stats?.monthlyStats
     ? Math.max(...stats.monthlyStats.map(m => m.amount), 1)
     : 1
-
-  const activeMemos = memos.filter(m => m.status !== 'completed')
-  const completedMemos = memos.filter(m => m.status === 'completed')
 
   const customerTypeLabel = user ? (CUSTOMER_TYPE_LABEL[user.customerType as CustomerType] ?? user.customerType) : ''
 
@@ -1296,36 +1069,56 @@ function MyPageContent() {
                   {/* Next visit / delivery status in header */}
                   {isDelivery ? (
                     (() => {
-                      const now = new Date()
-                      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-                      const thisMonthShipment = shipments.find(s => s.shipmentMonth === currentMonth)
+                      // 送付は月1回固定ではなく間隔設定（既定3ヶ月に1回）になったため、
+                      // 「今月」ではなく直近の送付の状況と次回登録可能日を出す
+                      const latestShipment = shipments.find(s => s.status !== 'draft') ?? shipments[0] ?? null
                       const shipStatusLabel: Record<string, string> = {
-                        registered: '登録済み', shipped: '発送済み', received: '受取済み・買取品確認中', appraised: '買取品確認完了',
+                        draft: '下書き', registered: '登録済み', shipped: '発送済み',
+                        received: '受取済み・買取品確認中', appraised: '買取品確認完了', transferred: '振込完了',
                       }
                       return (
                         <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
-                          <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">今月の送付状況</p>
-                          {thisMonthShipment ? (
-                            <p className="text-white text-xl font-bold">{shipStatusLabel[thisMonthShipment.status] ?? thisMonthShipment.status}</p>
+                          <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">直近の送付状況</p>
+                          {latestShipment ? (
+                            <>
+                              <p className="text-white text-xl font-bold">{shipStatusLabel[latestShipment.status] ?? latestShipment.status}</p>
+                              <p className="text-white/60 text-xs mt-0.5">{latestShipment.shipmentMonth.replace('-', '年')}月分</p>
+                            </>
                           ) : (
                             <p className="text-white/80 text-sm">未登録</p>
+                          )}
+                          {shipmentAvailability && !shipmentAvailability.available && shipmentAvailability.nextAvailableAt && (
+                            <p className="text-white/70 text-xs mt-1">
+                              次回の送付登録は {format(new Date(shipmentAvailability.nextAvailableAt), 'M月d日', { locale: ja })} から可能です
+                            </p>
                           )}
                         </div>
                       )
                     })()
                   ) : nextVisit ? (
                     <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
-                      <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定日</p>
+                      <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定</p>
                       <p className="text-white text-xl font-bold">
                         {format(new Date(nextVisit.visitDate), 'M月d日（E）', { locale: ja })}
+                        {nextVisit.startTime && (
+                          <span className="ml-2 text-base font-semibold">
+                            {nextVisit.startTime}{nextVisit.endTime ? `〜${nextVisit.endTime}` : ''}
+                          </span>
+                        )}
                       </p>
+                      {!nextVisit.startTime && (
+                        <p className="text-white/60 text-xs mt-0.5">時間は調整中です</p>
+                      )}
+                      {nextVisit.purposeName && (
+                        <p className="text-white/70 text-xs mt-0.5">目的: {nextVisit.purposeName}</p>
+                      )}
                       {user.store && (
                         <p className="text-white/60 text-xs mt-0.5">{user.store.name}</p>
                       )}
                     </div>
                   ) : (
                     <div className="mt-2 bg-white/15 backdrop-blur-md rounded-2xl px-4 py-3 border border-white/20">
-                      <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定日</p>
+                      <p className="text-white/70 text-[10px] font-medium uppercase tracking-wider mb-1">次回訪問予定</p>
                       <p className="text-white/80 text-sm">未定</p>
                     </div>
                   )}
@@ -1359,18 +1152,6 @@ function MyPageContent() {
                       icon: (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
-                        </svg>
-                      ),
-                    }] : []),
-                    ...(!isDelivery ? [{
-                      key: 'memo',
-                      label: '買取トライで事前査定',
-                      sub: '写真で簡単に買取価格をチェック',
-                      done: memos.length > 0,
-                      action: () => handleTabChange('memos'),
-                      icon: (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
                       ),
                     }] : []),
@@ -1426,12 +1207,14 @@ function MyPageContent() {
                 })()}
 
                 {/* ─── Quick Action Cards ─── */}
-                <div className={isDelivery ? 'flex' : 'grid grid-cols-2 gap-3'}>
+                <div className="flex">
                   {(isDelivery
                     ? [
                         {
                           label: '送付登録',
-                          sub: '今月の送付を登録',
+                          sub: shipmentAvailability && !shipmentAvailability.available && shipmentAvailability.nextAvailableAt
+                            ? `${format(new Date(shipmentAvailability.nextAvailableAt), 'M月d日', { locale: ja })}から可能`
+                            : '段ボールの送付を登録',
                           tab: 'shipments',
                           requiresId: false,
                           gradient: 'from-orange-400 to-red-500',
@@ -1445,26 +1228,15 @@ function MyPageContent() {
                     : [
                         {
                           label: '訪問リクエスト',
-                          sub: '日時を予約',
+                          sub: requestAvailability && !requestAvailability.available && requestAvailability.nextAvailableAt
+                            ? `${format(new Date(requestAvailability.nextAvailableAt), 'M月d日', { locale: ja })}から可能`
+                            : '日時を予約',
                           tab: 'visit-request',
                           requiresId: true,
                           gradient: 'from-blue-400 to-indigo-500',
                           icon: (
                             <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                            </svg>
-                          ),
-                        },
-                        {
-                          label: '買取トライ',
-                          sub: '写真で事前査定',
-                          tab: 'memos',
-                          requiresId: true,
-                          gradient: 'from-red-400 to-orange-500',
-                          icon: (
-                            <svg className="w-7 h-7 text-white drop-shadow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                             </svg>
                           ),
                         },
@@ -1486,7 +1258,7 @@ function MyPageContent() {
                             handleTabChange(item.tab)
                           }
                         }}
-                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all ${isDelivery ? 'w-full sm:w-fit sm:min-w-[240px]' : ''} ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
+                        className={`relative bg-white/70 backdrop-blur-xl rounded-2xl p-5 text-left shadow-sm border border-white/50 transition-all w-full sm:w-fit sm:min-w-[240px] ${disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:bg-white/80 active:scale-[0.98]'}`}
                       >
                         {locked && (
                           <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-gray-400 flex items-center justify-center">
@@ -1740,69 +1512,6 @@ function MyPageContent() {
 
               </div>
 
-              {/* ─── オンボーディングモーダル ─── */}
-              {showOnboardingModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                  {/* Overlay */}
-                  <div
-                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                    onClick={() => {
-                      setShowOnboardingModal(false)
-                      sessionStorage.setItem('onboarding-dismissed', '1')
-                    }}
-                  />
-                  {/* Card */}
-                  <div className="relative bg-white rounded-3xl shadow-2xl p-8 max-w-sm mx-auto animate-in fade-in zoom-in duration-300">
-                    {/* Icon */}
-                    <div className="flex justify-center mb-5">
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-rose-400 flex items-center justify-center shadow-lg">
-                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
-                        </svg>
-                      </div>
-                    </div>
-                    {/* Title */}
-                    <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
-                      あなたの商品を簡易査定しましょう！
-                    </h2>
-                    {/* Description */}
-                    <p className="text-sm text-gray-600 text-center mb-4 leading-relaxed">
-                      登録いただいた商品の写真からAIが自動で買取価格を査定します。査定は無料で、数秒で結果がわかります。
-                    </p>
-                    {/* Pending count badge */}
-                    <div className="flex justify-center mb-6">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-600 text-xs font-semibold">
-                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clipRule="evenodd" />
-                        </svg>
-                        未査定の商品が {pendingMemoCount} 件あります
-                      </span>
-                    </div>
-                    {/* Primary button */}
-                    <button
-                      onClick={() => {
-                        setShowOnboardingModal(false)
-                        sessionStorage.setItem('onboarding-dismissed', '1')
-                        setActiveTab('memos')
-                      }}
-                      className="w-full bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl py-3 font-semibold text-sm shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
-                    >
-                      買取トライで査定する
-                    </button>
-                    {/* Secondary button */}
-                    <button
-                      onClick={() => {
-                        setShowOnboardingModal(false)
-                        sessionStorage.setItem('onboarding-dismissed', '1')
-                      }}
-                      className="w-full mt-3 text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
-                    >
-                      あとで
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* ─── 身分証登録プロンプトモーダル ─── */}
               {showIdDocumentModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1893,308 +1602,6 @@ function MyPageContent() {
             </div>
           )}
 
-          {/* ─── 買取トライタブ ─── */}
-          {activeTab === 'memos' && (
-            <div className="space-y-4">
-              {/* TRY!! ヒーローセクション */}
-              {!tryModalOpen && (
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-50 via-white to-pink-50 border border-white/60 shadow-sm">
-                  {/* 横スクロールイラストバンド */}
-                  <div className="absolute inset-0 flex items-center overflow-hidden pointer-events-none">
-                    <div className="flex gap-8 animate-[scrollIcons_20s_linear_infinite] whitespace-nowrap opacity-[0.08]">
-                      {[...[
-                        '👜', '📱', '💻', '📺', '🪑', '⌚', '💍', '🎸', '📷', '🎮',
-                        '👜', '📱', '💻', '📺', '🪑', '⌚', '💍', '🎸', '📷', '🎮',
-                      ]].map((emoji, i) => (
-                        <span key={i} className="text-6xl select-none">{emoji}</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* メインコンテンツ */}
-                  <div className="relative z-10 flex flex-col items-center py-8 px-4">
-                    {/* 円形グラフィック */}
-                    <button
-                      onClick={() => { setTryModalOpen(true); setTryStep(1); setMessage(null) }}
-                      className="group relative w-44 h-44 mb-4"
-                    >
-                      {/* 外側のグロー */}
-                      <div className="absolute -inset-3 rounded-full bg-gradient-to-br from-red-300/20 via-pink-200/15 to-rose-300/20 blur-xl animate-pulse" />
-                      {/* 外側のすりガラスリング — 少し透ける */}
-                      <div className="absolute inset-0 rounded-full bg-white/10 backdrop-blur-[2px] border border-white/25 shadow-[0_8px_32px_rgba(185,28,28,0.15)]" />
-                      {/* 中間リング — 透け感を残す */}
-                      <div className="absolute inset-3 rounded-full bg-white/15 backdrop-blur-[4px] border border-white/30" />
-                      {/* 内側のすりガラス円 — 商品が透ける */}
-                      <div className="absolute inset-6 rounded-full bg-gradient-to-br from-red-500/55 to-rose-400/55 backdrop-blur-[5px] border border-white/20 shadow-lg shadow-red-500/20 flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-transform overflow-hidden">
-                        {/* ボタン内を流れる商品イラスト */}
-                        <div className="absolute inset-0 flex items-center overflow-hidden pointer-events-none">
-                          <div className="flex gap-4 animate-[scrollIcons_12s_linear_infinite] whitespace-nowrap opacity-[0.15]">
-                            {[...'👜📱💻📺🪑⌚💍🎸📷🎮👜📱💻📺🪑⌚💍🎸📷🎮'].map((emoji, i) => (
-                              <span key={i} className="text-3xl select-none">{emoji}</span>
-                            ))}
-                          </div>
-                        </div>
-                        {/* 光沢オーバーレイ */}
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/25 via-transparent to-transparent" style={{ clipPath: 'ellipse(80% 40% at 50% 20%)' }} />
-                        <div className="text-center relative z-10">
-                          <p className="text-white text-2xl font-black tracking-wider drop-shadow-sm">TRY!!</p>
-                          <p className="text-white/90 text-[10px] mt-0.5 font-medium">タップで査定開始</p>
-                        </div>
-                      </div>
-                      {/* キラキラ装飾 */}
-                      <div className="absolute top-1 right-5 w-2.5 h-2.5 rounded-full bg-white/60 animate-ping" />
-                      <div className="absolute bottom-5 left-1 w-2 h-2 rounded-full bg-pink-200/60 animate-ping" style={{ animationDelay: '0.7s' }} />
-                      <div className="absolute top-8 left-0 w-1.5 h-1.5 rounded-full bg-red-200/50 animate-ping" style={{ animationDelay: '1.2s' }} />
-                    </button>
-
-                    <p className="text-sm font-semibold text-gray-700 mb-1">写真を撮って、AI査定してみよう！</p>
-                    <p className="text-xs text-gray-400">お手持ちのアイテムの買取価格がすぐわかります</p>
-
-                    {aiAppraisalRemaining !== null && (
-                      <div className="mt-3 inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                        AI査定: 今月あと{aiAppraisalRemaining}回利用可能
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* 買取トライ モーダル */}
-              {tryModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                  <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-                    {/* Header */}
-                    <div className="flex items-center justify-between p-4 border-b border-gray-100">
-                      <h3 className="font-bold text-lg text-gray-900">買取トライ</h3>
-                      <button
-                        onClick={() => { setTryModalOpen(false); resetTryState() }}
-                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* Step indicator */}
-                    <div className="flex gap-2 px-6 pt-4">
-                      {[1, 2, 3, 4].map(s => (
-                        <div key={s} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${tryStep >= s ? 'bg-gradient-to-r from-red-500 to-rose-400' : 'bg-gray-200'}`} />
-                      ))}
-                    </div>
-
-                    {/* Step 1: Photo */}
-                    {tryStep === 1 && (
-                      <div className="p-6 text-center">
-                        <p className="font-semibold text-gray-800 mb-1">アイテムの写真を撮影</p>
-                        <p className="text-xs text-gray-400 mb-5">JPEG・PNG・WebP・HEIC対応</p>
-                        {tryPhotoPreview ? (
-                          <div className="relative inline-block">
-                            <img loading="lazy" decoding="async" src={tryPhotoPreview} alt="プレビュー" className="w-64 h-64 object-cover rounded-2xl shadow-md" />
-                            <button
-                              onClick={() => { setTryPhoto(null); setTryPhotoPreview('') }}
-                              className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ) : (
-                          <label className="block w-64 h-64 mx-auto border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-red-400 transition-colors">
-                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment" className="hidden" onChange={handleTryPhotoSelect} />
-                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-                              <svg className="w-12 h-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              <p className="text-sm font-medium">タップして撮影</p>
-                              <p className="text-xs mt-1">またはギャラリーから選択</p>
-                            </div>
-                          </label>
-                        )}
-                        <button
-                          onClick={() => tryPhoto && setTryStep(2)}
-                          disabled={!tryPhoto}
-                          className="mt-6 w-full py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold disabled:opacity-40 transition-opacity shadow-lg shadow-red-500/25"
-                        >
-                          次へ
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Step 2: Item name */}
-                    {tryStep === 2 && (
-                      <div className="p-6">
-                        <p className="font-semibold text-gray-800 mb-1 text-center">アイテム名を入力</p>
-                        <p className="text-xs text-gray-400 mb-5 text-center">ブランド名・商品名を入力してください</p>
-                        <img loading="lazy" decoding="async" src={tryPhotoPreview} alt="プレビュー" className="w-24 h-24 object-cover rounded-xl mx-auto mb-5 shadow-md" />
-                        <input
-                          value={tryItemName}
-                          onChange={e => setTryItemName(e.target.value)}
-                          placeholder="例: ルイヴィトン バッグ"
-                          className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400"
-                          autoFocus
-                        />
-                        <div className="flex gap-3 mt-6">
-                          <button
-                            onClick={() => setTryStep(1)}
-                            className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl font-semibold hover:bg-gray-200 transition-colors"
-                          >
-                            戻る
-                          </button>
-                          <button
-                            onClick={handleTryAppraisal}
-                            disabled={!tryItemName.trim()}
-                            className="flex-[2] py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold disabled:opacity-40 transition-opacity shadow-lg shadow-red-500/25"
-                          >
-                            AI査定を実行
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Step 3: Appraising (loading) */}
-                    {tryStep === 3 && (
-                      <div className="p-6 text-center py-16">
-                        <div className="relative w-20 h-20 mx-auto mb-6">
-                          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-red-100 to-rose-100 animate-pulse" />
-                          <div className="absolute inset-2 rounded-full bg-white flex items-center justify-center">
-                            <div className="w-10 h-10 border-[3px] border-red-500 border-t-transparent rounded-full animate-spin" />
-                          </div>
-                        </div>
-                        <p className="font-bold text-lg text-gray-800">AI査定中...</p>
-                        <p className="text-sm text-gray-500 mt-2">写真を分析しています</p>
-                        <p className="text-xs text-gray-400 mt-1">しばらくお待ちください</p>
-                      </div>
-                    )}
-
-                    {/* Step 4: Result */}
-                    {tryStep === 4 && (
-                      <div className="p-6">
-                        {/* 成功アイコン */}
-                        <div className="text-center mb-5">
-                          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
-                          <p className="font-bold text-lg text-gray-900">査定完了!</p>
-                        </div>
-
-                        {/* 写真と名前 */}
-                        <img loading="lazy" decoding="async" src={tryPhotoPreview} alt="アイテム" className="w-32 h-32 object-cover rounded-xl mx-auto mb-3 shadow-md" />
-                        <p className="text-center font-medium text-gray-800 mb-4">{tryItemName}</p>
-
-                        {/* AI結果表示 */}
-                        {tryAppraisalResult && (
-                          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-4 mb-4 border border-purple-100/50">
-                            <div className="flex items-center gap-2 mb-3">
-                              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                              </svg>
-                              <p className="text-sm font-bold text-purple-700">AI査定結果</p>
-                            </div>
-                            {tryAppraisalResult.offerPrice && (
-                              <p className="text-2xl font-bold text-center text-purple-600 mb-3">{tryAppraisalResult.offerPrice}</p>
-                            )}
-                            {tryAppraisalResult.productDetail && (
-                              <p className="text-sm text-gray-700 mb-1"><span className="font-medium text-gray-900">商品:</span> {tryAppraisalResult.productDetail}</p>
-                            )}
-                            {tryAppraisalResult.marketPriceHigh && tryAppraisalResult.marketPriceLow && (
-                              <p className="text-sm text-gray-700 mb-1"><span className="font-medium text-gray-900">相場:</span> {tryAppraisalResult.marketPriceLow} 〜 {tryAppraisalResult.marketPriceHigh}</p>
-                            )}
-                            {tryAppraisalResult.offerReason && (
-                              <p className="text-sm text-gray-600 mt-2">{tryAppraisalResult.offerReason}</p>
-                            )}
-                            {tryAppraisalResult.supplement && (
-                              <p className="text-xs text-gray-500 mt-2 leading-relaxed">{tryAppraisalResult.supplement}</p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* エラー表示 */}
-                        {tryError && (
-                          <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4">
-                            <p className="text-red-600 text-sm">{tryError}</p>
-                          </div>
-                        )}
-
-                        <button
-                          onClick={handleTrySave}
-                          disabled={trySaving}
-                          className="w-full py-3 bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl font-semibold disabled:opacity-60 transition-opacity shadow-lg shadow-red-500/25"
-                        >
-                          {trySaving ? '保存中...' : '保存する'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* メモ一覧 */}
-              {memosLoading ? (
-                <div className="py-8">
-                  <LoadingSpinner size="md" label="読み込み中..." className="justify-center" />
-                </div>
-              ) : memos.length === 0 ? (
-                <EmptyState
-                  icon={
-                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  }
-                  title="買取トライがありません"
-                  description="「メモを追加」から買取を検討しているものを登録しましょう"
-                />
-              ) : (
-                <div className="space-y-6">
-                  {activeMemos.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-3 uppercase tracking-wide">
-                        対応中 ({activeMemos.length})
-                      </h3>
-                      <div className="space-y-3">
-                        {activeMemos.map(memo => (
-                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} onAiAppraisal={handleAiAppraisal} isAppraising={apprasingMemoId === memo.id} appraisalDisabled={apprasingMemoId !== null || (aiAppraisalRemaining !== null && aiAppraisalRemaining <= 0)} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {completedMemos.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] mb-3 uppercase tracking-wide">
-                        対応完了 ({completedMemos.length})
-                      </h3>
-                      <div className="space-y-3 opacity-70">
-                        {completedMemos.map(memo => (
-                          <MemoCard key={memo.id} memo={memo} onDelete={handleDeleteMemo} onAiAppraisal={handleAiAppraisal} isAppraising={apprasingMemoId === memo.id} appraisalDisabled={apprasingMemoId !== null || (aiAppraisalRemaining !== null && aiAppraisalRemaining <= 0)} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {memosHasMore && (
-                    <div className="flex justify-center py-4">
-                      <Button
-                        variant="tonal"
-                        onClick={loadMoreMemos}
-                        loading={memosLoadingMore}
-                        disabled={memosLoadingMore}
-                      >
-                        {memosLoadingMore ? '読み込み中...' : `もっと読み込む（${memos.length} / ${memosTotal}件）`}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* ─── 送付履歴タブ（宅配顧客のみ） ─── */}
           {activeTab === 'shipments' && (
             <div className="space-y-4">
@@ -2216,7 +1623,11 @@ function MyPageContent() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">送付履歴</h2>
-                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">月ごとに段ボールを送付してください（月1回）</p>
+                  <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                    {shipmentAvailability && shipmentAvailability.intervalMonths > 0
+                      ? `段ボールの送付は${shipmentAvailability.intervalMonths}ヶ月に1回までご利用いただけます`
+                      : 'ご都合のよいタイミングで段ボールを送付してください'}
+                  </p>
                 </div>
                 {(() => {
                   if (deliveryBlocked) return null
@@ -2230,7 +1641,7 @@ function MyPageContent() {
                     return (
                       <div className="flex-shrink-0">
                         <Button size="sm" disabled className="opacity-50 cursor-not-allowed">
-                          今月の送付を登録
+                          送付を登録
                         </Button>
                       </div>
                     )
@@ -2240,6 +1651,17 @@ function MyPageContent() {
 
                   // Hide button if a draft already exists (user can edit it inline in the card)
                   if (existingDraft) return null
+
+                  // 送付間隔の制限中は登録できない（次回可能日は下の案内に出す）
+                  if (shipmentAvailability && !shipmentAvailability.available) {
+                    return (
+                      <div className="flex-shrink-0">
+                        <Button size="sm" disabled className="opacity-50 cursor-not-allowed">
+                          送付を登録
+                        </Button>
+                      </div>
+                    )
+                  }
 
                   return !alreadyRegistered ? (
                     <div className="flex-shrink-0">
@@ -2270,12 +1692,40 @@ function MyPageContent() {
                           setMessage({ type: 'error', text: '下書きの作成に失敗しました' })
                         }
                       }}>
-                        今月の送付を登録
+                        送付を登録
                       </Button>
                     </div>
                   ) : null
                 })()}
               </div>
+
+              {/* 送付間隔の案内（次回いつから登録できるか） */}
+              {!deliveryBlocked && shipmentAvailability && shipmentAvailability.intervalMonths > 0 && (
+                shipmentAvailability.available ? (
+                  <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+                    <span className="mt-0.5 shrink-0">✅</span>
+                    <span>いま送付のご登録をいただけます。</span>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                    <span className="mt-0.5 shrink-0">🕒</span>
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">
+                        次回の送付登録は{shipmentAvailability.nextAvailableAt
+                          ? format(new Date(shipmentAvailability.nextAvailableAt), 'yyyy年M月d日（E）', { locale: ja })
+                          : '—'}から可能です
+                      </p>
+                      <p className="text-amber-700">
+                        送付は{shipmentAvailability.intervalMonths}ヶ月に1回までのご利用となります
+                        {shipmentAvailability.lastUsedAt && (
+                          <>（前回のご登録: {format(new Date(shipmentAvailability.lastUsedAt), 'yyyy年M月d日', { locale: ja })}）</>
+                        )}
+                        。
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
 
               {/* 未登録項目の警告 */}
               {!deliveryBlocked && (!user.idDocumentPath || !user.bankName || !user.accountNumber || (user.addressMismatch && !user.addressVerified)) && (
@@ -2313,15 +1763,20 @@ function MyPageContent() {
                 </Card>
               )}
 
-              {/* 送付手順ガイド（18歳以下は非表示） */}
+              {/* 送付手順ガイド（18歳以下は非表示）。
+                  各送付カードに「いまやること」を出しているので、全体の流れは折りたたみで置く */}
               {!deliveryBlocked && (
               <Card variant="elevated" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
+                <details>
+                <summary className="cursor-pointer list-none">
                 <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3 flex items-center gap-2">
                   <svg className="w-5 h-5 text-[#B91C1C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
                   </svg>
-                  送付までの手順
+                  送付までの手順（全体の流れ）
+                  <span className="ml-auto text-[11px] font-normal text-[var(--md-sys-color-on-surface-variant)]">タップで開く</span>
                 </h3>
+                </summary>
                 <ol className="space-y-3 text-sm text-[var(--md-sys-color-on-surface-variant)]">
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[#B91C1C] text-white text-xs font-bold flex items-center justify-center">1</span>
@@ -2344,6 +1799,7 @@ function MyPageContent() {
                     <span>発送作業が完了したら送付履歴の「<strong>発送完了を報告する</strong>」をタップ</span>
                   </li>
                 </ol>
+                </details>
               </Card>
               )}
 
@@ -3117,16 +2573,11 @@ function MyPageContent() {
                         提出する身分証明書の種類を選んでください。
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {[
-                          { type: '運転免許証', icon: '🪪' },
-                          { type: 'マイナンバーカード', icon: '💳' },
-                          { type: 'パスポート', icon: '📕' },
-                          { type: '在留カード', icon: '🌏' },
-                        ].map(doc => (
+                        {ID_DOCUMENT_TYPES.map(doc => (
                           <button
-                            key={doc.type}
+                            key={doc.value}
                             onClick={() => {
-                              setSelectedDocType(doc.type)
+                              setSelectedDocType(doc.value)
                               setIdUploadStep(2)
                               // 書類変更時に裏面リセット
                               setBackFile(null)
@@ -3134,14 +2585,14 @@ function MyPageContent() {
                             }}
                             className={`
                               flex items-center gap-3 p-4 rounded-[var(--md-sys-shape-medium)] border-2 text-left transition-all
-                              ${selectedDocType === doc.type
+                              ${selectedDocType === doc.value
                                 ? 'border-[var(--portal-primary,#B91C1C)] bg-red-50'
                                 : 'border-[var(--md-sys-color-outline-variant)] hover:border-[var(--portal-primary,#B91C1C)] hover:bg-[var(--md-sys-color-surface-container-low)]'
                               }
                             `}
                           >
                             <span className="text-2xl">{doc.icon}</span>
-                            <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{doc.type}</span>
+                            <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{doc.label}</span>
                           </button>
                         ))}
                       </div>
@@ -3487,11 +2938,46 @@ function MyPageContent() {
                   <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">希望日時を送信して訪問を依頼しましょう</p>
                 </div>
                 <div className="flex-shrink-0">
-                  <Button size="sm" onClick={() => { setShowRequestForm(v => !v); setRequestMsg(null) }}>
+                  <Button
+                    size="sm"
+                    disabled={!showRequestForm && requestAvailability ? !requestAvailability.available : false}
+                    onClick={() => { setShowRequestForm(v => !v); setRequestMsg(null) }}
+                  >
                     {showRequestForm ? 'キャンセル' : '+ 新しい訪問リクエスト'}
                   </Button>
                 </div>
               </div>
+
+              {/* 利用間隔の案内（次回いつからリクエストできるか） */}
+              {requestAvailability && requestAvailability.intervalMonths > 0 && (
+                requestAvailability.available ? (
+                  <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+                    <span className="mt-0.5 shrink-0">✅</span>
+                    <span>
+                      いまリクエストいただけます。
+                      <span className="text-emerald-700">訪問リクエストは{requestAvailability.intervalMonths}ヶ月に1回までのご利用となります。</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                    <span className="mt-0.5 shrink-0">🕒</span>
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">
+                        次回のリクエストは{requestAvailability.nextAvailableAt
+                          ? format(new Date(requestAvailability.nextAvailableAt), 'yyyy年M月d日（E）', { locale: ja })
+                          : '—'}から可能です
+                      </p>
+                      <p className="text-amber-700">
+                        訪問リクエストは{requestAvailability.intervalMonths}ヶ月に1回までのご利用となります
+                        {requestAvailability.lastUsedAt && (
+                          <>（前回のリクエスト: {format(new Date(requestAvailability.lastUsedAt), 'yyyy年M月d日', { locale: ja })}）</>
+                        )}
+                        。お急ぎの場合は担当店舗までお電話ください。
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
 
               {needsFamilyConsent(age) && (
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
@@ -3800,6 +3286,11 @@ function MyPageContent() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
                             {format(new Date(visit.visitDate), 'yyyy年M月d日（E）', { locale: ja })}
+                            {visit.startTime && (
+                              <span className="ml-1.5 font-normal text-[var(--md-sys-color-on-surface-variant)]">
+                                {visit.startTime}{visit.endTime ? `〜${visit.endTime}` : ''}
+                              </span>
+                            )}
                           </span>
                           <StatusBadge status={visit.status as Status} />
                           {visit.salesContract && (
@@ -3809,11 +3300,21 @@ function MyPageContent() {
                         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
                           {visit.store.name}
                         </p>
-                        {visit.purchaseAmount != null && visit.purchaseAmount > 0 && (
-                          <p className="text-sm font-semibold text-[#B91C1C] mt-1">
-                            買取金額: ¥{visit.purchaseAmount.toLocaleString()}
-                          </p>
-                        )}
+                        {/* 買取金額は案件が正。訪問側に値がある旧データはそのまま出す */}
+                        {(() => {
+                          const visitAmount = visit.purchaseAmount ?? 0
+                          const dealAmount = visit.deal?.purchaseAmount ?? 0
+                          const amount = visitAmount > 0 ? visitAmount : dealAmount
+                          if (amount <= 0) return null
+                          return (
+                            <p className="text-sm font-semibold text-[#B91C1C] mt-1">
+                              買取金額: ¥{amount.toLocaleString()}
+                              {visitAmount <= 0 && (
+                                <span className="ml-1.5 text-[11px] font-normal text-[var(--md-sys-color-on-surface-variant)]">（案件の合計）</span>
+                              )}
+                            </p>
+                          )
+                        })()}
                         {visit.note && (
                           <p className="text-xs text-[var(--md-sys-color-outline)] mt-0.5">
                             {visit.note}
@@ -4056,20 +3557,6 @@ function OcrScanningAnimation({ label }: { label: string }) {
   )
 }
 
-// ─── MemoCard サブコンポーネント ───
-
-const MEMO_STATUS_LABEL: Record<string, string> = {
-  pending: '未確認',
-  reviewed: '確認済み',
-  completed: '対応完了',
-}
-
-const MEMO_STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]',
-  reviewed: 'bg-[var(--status-scheduled-bg)] text-[var(--status-scheduled-text)]',
-  completed: 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]',
-}
-
 const SHIPMENT_STATUS_LABEL: Record<string, string> = {
   draft:       '下書き',
   registered:  '登録済み',
@@ -4089,13 +3576,18 @@ const SHIPMENT_STATUS_STYLE: Record<string, string> = {
 }
 
 // 6-step delivery progress
-const DELIVERY_STEPS = [
-  { label: '発送準備', desc: '商品を梱包して写真を記録' },
-  { label: '発送前準備', desc: '伝票を記入して写真を記録' },
-  { label: '発送', desc: '発送完了を店舗に報告' },
-  { label: '店舗受取確認', desc: '店舗が荷物を受け取り' },
-  { label: '買取品確認', desc: '買取品確認が完了' },
-  { label: '振込', desc: '代金のお振り込みが完了' },
+/**
+ * 宅配買取の6ステップ。
+ * owner はそのステップを進めるのが「お客様」か「店舗」かで、画面上で作業の担当を分けて示す。
+ * todo は「いまやること」バナーに出す一言（お客様の作業のときだけ使う）。
+ */
+const DELIVERY_STEPS: { label: string; desc: string; owner: 'customer' | 'store'; todo: string }[] = [
+  { label: '発送準備',     desc: '商品を梱包して写真を記録', owner: 'customer', todo: '箱に商品を入れて、中身の写真を撮って登録してください' },
+  { label: '発送前準備',   desc: '伝票を記入して写真を記録', owner: 'customer', todo: '伝票に発送IDを記入し、伝票の写真を登録してください' },
+  { label: '発送',         desc: '発送完了を店舗に報告',     owner: 'customer', todo: '荷物を発送したら「発送完了を報告する」を押してください' },
+  { label: '店舗受取確認', desc: '店舗が荷物を受け取り',     owner: 'store',    todo: '店舗の受取確認をお待ちください' },
+  { label: '買取品確認',   desc: '買取品確認が完了',         owner: 'store',    todo: '店舗が買取品を確認しています' },
+  { label: '振込',         desc: '代金のお振り込みが完了',   owner: 'store',    todo: 'お振り込みの手続き中です' },
 ]
 
 // ステップ3〜6のサブステータスラベル
@@ -4150,7 +3642,11 @@ function ShipmentCard({
   const canEditSteps = isDraft || isRegistered // 発送完了前はステップ1・2を編集可
 
   // Draft/edit-mode internal state
-  const [draftStep, setDraftStep] = useState<1 | 2>(1)
+  // 画面を離れて戻ってきたとき、Step1（箱の中の写真）が保存済みなら Step2 から再開する。
+  // 以前は常に 1 から始まるため、下書き完了後に開き直すと最初の入力をやり直す形になっていた。
+  const [draftStep, setDraftStep] = useState<1 | 2>(
+    () => (shipment.status === 'draft' && (shipment.imageUrls?.length ?? 0) > 0 ? 2 : 1),
+  )
   const [editingStep, setEditingStep] = useState<number | null>(null) // registered時の編集中ステップ
   const [description, setDescription] = useState(shipment.description || '')
   const [boxImages, setBoxImages] = useState<string[]>(shipment.imageUrls || [])
@@ -4305,6 +3801,8 @@ function ShipmentCard({
   // --- stepsDone calculation ---
   const isEditing = editingStep !== null
   const stepsDone = isDraft ? (draftStep === 2 ? 1 : 0) : isEditing ? editingStep! : getDeliveryStepsDone(shipment.status)
+  // 現在進行中のステップ（すべて完了していれば null）
+  const activeStep = stepsDone < DELIVERY_STEPS.length ? DELIVERY_STEPS[stepsDone] : null
 
   return (
     <>
@@ -4338,6 +3836,50 @@ function ShipmentCard({
         )}
       </div>
 
+      {/* いまやること（現在のステップと次の操作を1行で示す） */}
+      {activeStep && !isEditing && (
+        <div className={`mb-4 rounded-2xl px-4 py-3 border ${
+          activeStep.owner === 'customer'
+            ? 'bg-[var(--portal-primary,#B91C1C)]/[0.06] border-[var(--portal-primary,#B91C1C)]/25'
+            : 'bg-blue-50 border-blue-200'
+        }`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              activeStep.owner === 'customer'
+                ? 'bg-[var(--portal-primary,#B91C1C)] text-white'
+                : 'bg-blue-500 text-white'
+            }`}>
+              {activeStep.owner === 'customer' ? 'お客様の作業' : '店舗の作業'}
+            </span>
+            <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">
+              STEP {stepsDone + 1} / {DELIVERY_STEPS.length}・{activeStep.label}
+            </span>
+          </div>
+          <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] leading-snug">{activeStep.todo}</p>
+        </div>
+      )}
+      {!activeStep && !isEditing && (
+        <div className="mb-4 rounded-2xl px-4 py-3 border bg-emerald-50 border-emerald-200">
+          <p className="text-sm font-semibold text-emerald-800">すべて完了しました。ご利用ありがとうございました。</p>
+        </div>
+      )}
+
+      {/* 進捗バー */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] font-medium text-[var(--md-sys-color-on-surface-variant)]">進捗</span>
+          <span className="text-[11px] font-semibold tabular-nums text-[var(--md-sys-color-on-surface)]">
+            {stepsDone} / {DELIVERY_STEPS.length}
+          </span>
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-[var(--md-sys-color-outline-variant)] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+            style={{ width: `${(stepsDone / DELIVERY_STEPS.length) * 100}%` }}
+          />
+        </div>
+      </div>
+
       {/* Non-draft description */}
       {!isDraft && shipment.description && (
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap mb-4">
@@ -4351,9 +3893,24 @@ function ShipmentCard({
           const done = idx < stepsDone
           const active = idx === stepsDone && stepsDone < 6
           const isLast = idx === DELIVERY_STEPS.length - 1
+          // 作業の担当が切り替わる位置に見出しを入れ、「自分の作業」と「待ち」を区別できるようにする
+          const ownerChanged = idx === 0 || DELIVERY_STEPS[idx - 1].owner !== step.owner
 
           return (
-            <div key={idx} className="flex gap-3">
+            <Fragment key={idx}>
+            {ownerChanged && (
+              <div className="flex items-center gap-2 mb-2 mt-0.5">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  step.owner === 'customer'
+                    ? 'bg-[var(--portal-primary,#B91C1C)]/10 text-[var(--portal-primary,#B91C1C)]'
+                    : 'bg-blue-50 text-blue-700'
+                }`}>
+                  {step.owner === 'customer' ? 'お客様の作業' : '店舗の作業（お待ちください）'}
+                </span>
+                <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+              </div>
+            )}
+            <div className="flex gap-3">
               {/* Circle + connector line */}
               <div className="flex flex-col items-center flex-shrink-0">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${
@@ -4779,6 +4336,7 @@ function ShipmentCard({
                 )}
               </div>
             </div>
+            </Fragment>
           )
         })}
       </div>
@@ -4876,279 +4434,6 @@ function ShipmentCard({
   )
 }
 
-function MemoCard({
-  memo,
-  onDelete,
-  onAiAppraisal,
-  isAppraising,
-  appraisalDisabled,
-}: {
-  memo: PurchaseMemo
-  onDelete: (id: string) => void
-  onAiAppraisal: (id: string) => void
-  isAppraising: boolean
-  appraisalDisabled: boolean
-}) {
-  const [showImages, setShowImages] = useState(false)
-  const [showAppraisal, setShowAppraisal] = useState(!!memo.aiAppraisal)
-  // ライトボックス: null=閉じている / number=表示中の画像インデックス
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-
-  const total = memo.imageUrls.length
-
-  // キーボード操作（Esc・←→）
-  useEffect(() => {
-    if (lightboxIndex === null) return
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { setLightboxIndex(null) }
-      if (e.key === 'ArrowRight') { setLightboxIndex(i => i !== null ? Math.min(i + 1, total - 1) : null) }
-      if (e.key === 'ArrowLeft')  { setLightboxIndex(i => i !== null ? Math.max(i - 1, 0) : null) }
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [lightboxIndex, total])
-
-  // ライトボックスが開いている間、背景スクロールを無効化
-  useEffect(() => {
-    if (lightboxIndex !== null) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => { document.body.style.overflow = '' }
-  }, [lightboxIndex])
-
-  return (
-    <>
-      <Card variant="outlined" padding="md" className="!bg-white/70 backdrop-blur-xl !border border-white/50 !shadow-sm">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
-                {memo.title}
-              </h4>
-              <span
-                className={`text-xs font-medium px-2 py-0.5 rounded-full ${MEMO_STATUS_STYLE[memo.status] ?? ''}`}
-              >
-                {MEMO_STATUS_LABEL[memo.status] ?? memo.status}
-              </span>
-            </div>
-            {memo.description && (
-              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">
-                {memo.description}
-              </p>
-            )}
-            {memo.storeNote && (
-              <div className="mt-2 px-3 py-2 bg-[var(--md-sys-color-surface-container-low)] rounded-[var(--md-sys-shape-small)]">
-                <p className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-0.5">
-                  店舗からのメモ
-                </p>
-                <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">
-                  {memo.storeNote}
-                </p>
-              </div>
-            )}
-            <p className="text-xs text-[var(--md-sys-color-outline)] mt-2">
-              {format(new Date(memo.createdAt), 'yyyy年M月d日', { locale: ja })}
-            </p>
-          </div>
-          {memo.status === 'pending' && (
-            <button
-              onClick={() => onDelete(memo.id)}
-              className="text-xs text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error,#B3261E)] flex-shrink-0 px-2 py-1"
-            >
-              削除
-            </button>
-          )}
-        </div>
-
-        {total > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {memo.imageUrls.map((url, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setLightboxIndex(i)}
-                className="relative w-20 h-20 rounded-lg overflow-hidden hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]"
-              >
-                <img loading="lazy" decoding="async" src={url} alt={`画像 ${i + 1}`} className="w-full h-full object-cover" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* ─── AI査定セクション ─── */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {memo.aiAppraisal ? (
-            <button
-              onClick={() => setShowAppraisal(v => !v)}
-              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all shadow-sm"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              {showAppraisal ? 'AI査定結果を閉じる' : 'AI査定結果を見る'}
-            </button>
-          ) : (
-            <button
-              onClick={() => onAiAppraisal(memo.id)}
-              disabled={isAppraising || appraisalDisabled}
-              className="text-xs font-medium bg-gradient-to-r from-purple-500 to-blue-500 text-white px-3 py-1.5 rounded-full hover:from-purple-600 hover:to-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-            >
-              {isAppraising ? (
-                <>
-                  <LoadingSpinner size="sm" />
-                  AI査定中...
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  AI査定する
-                </>
-              )}
-            </button>
-          )}
-          {memo.aiAppraisal && !showAppraisal && memo.aiAppraisalAt && (
-            <span className="text-xs text-[var(--md-sys-color-outline)]">
-              ({format(new Date(memo.aiAppraisalAt), 'M/d実施', { locale: ja })})
-            </span>
-          )}
-          {memo.aiAppraisal && (
-            <button
-              onClick={() => onAiAppraisal(memo.id)}
-              disabled={isAppraising || appraisalDisabled}
-              className="text-xs text-[var(--md-sys-color-outline)] hover:text-[var(--portal-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isAppraising ? '査定中...' : '再査定'}
-            </button>
-          )}
-        </div>
-
-        {/* AI査定結果表示 */}
-        {memo.aiAppraisal && showAppraisal && (
-          <div className="mt-3 rounded-xl overflow-hidden border border-purple-300/40 dark:border-purple-700/40">
-            {/* ヘッダー */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <span className="text-sm font-bold text-white">AI査定結果</span>
-              </div>
-              {memo.aiAppraisalAt && (
-                <span className="text-xs text-white/70">
-                  {format(new Date(memo.aiAppraisalAt), 'yyyy/M/d HH:mm', { locale: ja })}
-                </span>
-              )}
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-[#1a1025] dark:to-[#0f1a2e] p-4 space-y-4">
-              {/* 買取提示額（メイン） */}
-              <div className="bg-white dark:bg-[#2a1f3d] rounded-lg p-4 text-center shadow-sm">
-                <p className="text-xs font-medium text-purple-600 dark:text-purple-300 mb-1">買取提示額（税込）</p>
-                <p className="text-3xl font-extrabold text-purple-600 dark:text-purple-300">
-                  {memo.aiAppraisal.offerPrice}
-                </p>
-              </div>
-
-              {/* 商品詳細 */}
-              <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
-                <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">商品詳細</p>
-                <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed">{memo.aiAppraisal.productDetail}</p>
-              </div>
-
-              {/* 補足情報 */}
-              {memo.aiAppraisal.supplement && (
-                <div className="bg-white/60 dark:bg-white/10 rounded-lg p-3">
-                  <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">補足情報</p>
-                  <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{memo.aiAppraisal.supplement}</p>
-                </div>
-              )}
-
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center pt-1">
-                ※ AIによる概算です。実際の買取金額は査定時に確定します。
-              </p>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* ─── ライトボックスモーダル ─── */}
-      {lightboxIndex !== null && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85"
-          onClick={() => setLightboxIndex(null)}
-        >
-          {/* 閉じるボタン */}
-          <button
-            onClick={() => setLightboxIndex(null)}
-            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors z-10"
-            aria-label="閉じる"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* 前へ */}
-          {lightboxIndex > 0 && (
-            <button
-              onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1) }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors z-10"
-              aria-label="前の画像"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
-          {/* 次へ */}
-          {lightboxIndex < total - 1 && (
-            <button
-              onClick={e => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1) }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors z-10"
-              aria-label="次の画像"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-
-          {/* 画像本体 */}
-          <div
-            className="max-w-[90vw] max-h-[85vh] flex items-center justify-center"
-            onClick={e => e.stopPropagation()}
-          >
-            <img loading="lazy" decoding="async"
-              src={memo.imageUrls[lightboxIndex]}
-              alt={`画像 ${lightboxIndex + 1}`}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-            />
-          </div>
-
-          {/* 枚数カウンター */}
-          {total > 1 && (
-            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-1.5">
-              {memo.imageUrls.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={e => { e.stopPropagation(); setLightboxIndex(i) }}
-                  className={`w-2 h-2 rounded-full transition-colors ${i === lightboxIndex ? 'bg-white' : 'bg-white/40 hover:bg-white/70'}`}
-                  aria-label={`${i + 1}枚目`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </>
-  )
-}
-
 /** カレンダー+2時間枠で訪問リクエストを入力するフォーム */
 function VisitRequestCalendarForm({
   requestForm, setRequestForm, onSubmit, submitting, onCancel,
@@ -5191,7 +4476,8 @@ function VisitRequestCalendarForm({
     const slots: { start: string; end: string; label: string }[] = []
     const [sh, sm] = bizHours.start.split(':').map(Number)
     const [eh] = bizHours.end.split(':').map(Number)
-    let h = sh, m = sm || 0
+    const m = sm || 0
+    let h = sh
     while (h + 2 <= eh || (h + 2 === eh && m === 0)) {
       const startStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`
       const endH = h + 2

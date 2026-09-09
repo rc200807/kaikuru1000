@@ -4,6 +4,12 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { startOfMonth, subMonths, subDays, startOfDay, format } from 'date-fns'
 import { jstMonthKey, jstDateKey } from '@/lib/datetime'
+import {
+  monthlyPurchaseAmount as monthlyPurchaseAmountByMonth,
+  purchasedDealWhere,
+  recentMonthKeys,
+  sumPurchaseAmount,
+} from '@/lib/purchase-aggregation'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,12 +36,9 @@ export async function GET(request: NextRequest) {
     currentMonthCustomers,
     totalVisitsCount,
     currentMonthVisits,
-    totalPurchaseAgg,
-    currentMonthPurchaseAgg,
     storeCustomerGroups,
     newUsersInRange,
     visitsInRange,
-    completedVisitsRecent,
     storePurchaseGroups,
     dealsForTrend,
     dealStatusAgg,
@@ -55,14 +58,6 @@ export async function GET(request: NextRequest) {
     prisma.user.count({ where: { ...userWhere, createdAt: { gte: currentMonthStart } } }),
     prisma.visitSchedule.count({ where: visitUserWhere }),
     prisma.visitSchedule.count({ where: { visitDate: { gte: currentMonthStart }, ...visitUserWhere } }),
-    prisma.visitSchedule.aggregate({
-      where: { status: 'completed', ...visitUserWhere },
-      _sum: { purchaseAmount: true },
-    }),
-    prisma.visitSchedule.aggregate({
-      where: { status: 'completed', visitDate: { gte: currentMonthStart }, ...visitUserWhere },
-      _sum: { purchaseAmount: true },
-    }),
     // 店舗別当月顧客数 TOP10
     prisma.user.groupBy({
       by: ['storeId'],
@@ -81,15 +76,10 @@ export async function GET(request: NextRequest) {
       where: { visitDate: { gte: twelveMonthsAgo }, ...visitUserWhere },
       select: { visitDate: true },
     }),
-    // 月次買取金額推移
-    prisma.visitSchedule.findMany({
-      where: { status: 'completed', visitDate: { gte: twelveMonthsAgo }, ...visitUserWhere },
-      select: { visitDate: true, purchaseAmount: true },
-    }),
-    // 店舗別買取金額ランキング（全期間 TOP10）
-    prisma.visitSchedule.groupBy({
+    // 店舗別買取金額ランキング（全期間 TOP10）。買取金額の正は案件（Deal）
+    prisma.deal.groupBy({
       by: ['storeId'],
-      where: { status: 'completed', ...visitUserWhere },
+      where: purchasedDealWhere({ storeId: { not: null } }),
       _sum: { purchaseAmount: true },
       orderBy: { _sum: { purchaseAmount: 'desc' } },
       take: 10,
@@ -101,9 +91,10 @@ export async function GET(request: NextRequest) {
     }),
     prisma.deal.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.user.groupBy({ by: ['leadSource'], _count: { _all: true } }),
-    prisma.visitSchedule.groupBy({
+    // リピート率の母数（買取実績のある顧客ごとの案件数）
+    prisma.deal.groupBy({
       by: ['userId'],
-      where: { status: 'completed' },
+      where: purchasedDealWhere(),
       _count: { _all: true },
     }),
     // LINE 関連
@@ -121,8 +112,16 @@ export async function GET(request: NextRequest) {
     }),
   ])
 
-  const totalPurchaseAmount = totalPurchaseAgg._sum.purchaseAmount ?? 0
-  const currentMonthPurchaseAmount = currentMonthPurchaseAgg._sum.purchaseAmount ?? 0
+  // 買取金額は案件（Deal.purchaseAmount）＋宅配買取（DeliveryShipment）から集計する。
+  // 旧 VisitSchedule.purchaseAmount は案件詳細で品目を登録した取引では入らないため 0 になっていた。
+  const monthKeys = recentMonthKeys(12, now)
+  const [totalTotals, currentMonthTotals, monthlyAmountMap] = await Promise.all([
+    sumPurchaseAmount(),
+    sumPurchaseAmount({ occurredAt: { gte: currentMonthStart } }, { shipmentMonth: jstMonthKey(now) }),
+    monthlyPurchaseAmountByMonth(monthKeys),
+  ])
+  const totalPurchaseAmount = totalTotals.amount
+  const currentMonthPurchaseAmount = currentMonthTotals.amount
 
   // === 店舗別当月顧客数 TOP10: store名は結果に依存するのでここで解決 ===
   const storeIds = storeCustomerGroups.map(g => g.storeId).filter((id): id is string => id !== null)
@@ -169,28 +168,24 @@ export async function GET(request: NextRequest) {
     count,
   }))
 
-  const monthlyAmountMap: Record<string, number> = {}
-  for (let i = 11; i >= 0; i--) monthlyAmountMap[jstMonthKey(subMonths(now, i))] = 0
-  for (const v of completedVisitsRecent) {
-    const m = jstMonthKey(v.visitDate)
-    if (m in monthlyAmountMap) monthlyAmountMap[m] += v.purchaseAmount ?? 0
-  }
-  const monthlyPurchaseAmount = Object.entries(monthlyAmountMap).map(([month, amount]) => ({
+  const monthlyPurchaseAmount = monthKeys.map(month => ({
     month: month.slice(5) + '月',
-    amount,
+    amount: monthlyAmountMap[month] ?? 0,
   }))
 
-  const rankingStoreIds = storePurchaseGroups.map(g => g.storeId)
+  const rankingStoreIds = storePurchaseGroups.map(g => g.storeId).filter((id): id is string => !!id)
   const rankingStores = rankingStoreIds.length > 0
     ? await prisma.store.findMany({ where: { id: { in: rankingStoreIds } }, select: { id: true, name: true } })
     : []
   const rankingStoreNameMap = new Map(rankingStores.map(s => [s.id, s.name]))
 
-  const storePurchaseRanking = storePurchaseGroups.map(g => ({
-    storeId: g.storeId,
-    name: rankingStoreNameMap.get(g.storeId) ?? '',
-    amount: g._sum.purchaseAmount ?? 0,
-  }))
+  const storePurchaseRanking = storePurchaseGroups
+    .filter((g): g is typeof g & { storeId: string } => !!g.storeId)
+    .map(g => ({
+      storeId: g.storeId,
+      name: rankingStoreNameMap.get(g.storeId) ?? '',
+      amount: g._sum.purchaseAmount ?? 0,
+    }))
 
   // 日別集計（直近7日）
   const lineDailyMap: Record<string, { date: string; inbound: number; outbound: number }> = {}
@@ -231,7 +226,7 @@ export async function GET(request: NextRequest) {
     .map(g => ({ name: g.leadSource ?? '未設定', count: g._count._all }))
     .sort((a, b) => b.count - a.count)
 
-  // リピート率（完了訪問2回以上の顧客 / 1回以上の顧客）
+  // リピート率（買取実績2件以上の顧客 / 1件以上の顧客）
   const customersWithPurchase = completedByUser.length
   const repeatCustomers = completedByUser.filter(g => g._count._all >= 2).length
   const repeatRate = customersWithPurchase > 0 ? repeatCustomers / customersWithPurchase : 0

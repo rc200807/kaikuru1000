@@ -278,7 +278,7 @@ export default function InquiryPage() {
             </p>
             {registeredItemCount > 0 && (
               <p className="text-sm text-emerald-600 mt-2 font-medium">
-                {registeredItemCount}件の商品が買取トライに登録されました
+                {registeredItemCount}件の買取希望品をお預かりしました
               </p>
             )}
           </div>

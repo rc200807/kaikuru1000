@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { fetchKobutsuLedgerGroup } from '@/lib/kobutsu-ledger-server'
+import { contractEntryKey, dealEntryKey } from '@/lib/kobutsu-ledger'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -28,6 +29,7 @@ export async function GET(
     where: { id },
     select: {
       id: true, storeId: true,
+      paperContractImages: true, paperContractAgreedAt: true,
       salesContract: { select: { id: true } },
       // 案件に契約が直付けされていない旧データは訪問側の契約を見る
       visitSchedules: { select: { salesContract: { select: { id: true } } } },
@@ -43,15 +45,31 @@ export async function GET(
     return NextResponse.json({ group: null, store: null })
   }
 
+  // 電子の売買契約書があればそれが台帳のキー。無い場合でも、紙で契約した案件
+  // （写真をアップロードした案件）は台帳の記載対象なので案件キーで引く。
   const contractId =
     deal.salesContract?.id ??
     deal.visitSchedules.map(v => v.salesContract?.id).find((v): v is string => !!v) ??
     null
-  if (!contractId) return NextResponse.json({ group: null, store: null })
 
-  const group = await fetchKobutsuLedgerGroup(contractId, deal.storeId)
+  let paperImages: string[] = []
+  try { paperImages = JSON.parse(deal.paperContractImages || '[]') } catch { /* ignore */ }
+  const hasPaperContract = paperImages.length > 0
+
+  const entryKey = contractId
+    ? contractEntryKey(contractId)
+    : hasPaperContract ? dealEntryKey(deal.id) : null
+  if (!entryKey) return NextResponse.json({ group: null, store: null })
+
+  const group = await fetchKobutsuLedgerGroup(entryKey, deal.storeId)
   return NextResponse.json({
     group,
+    entryKey,
+    // 紙契約の場合、取引年月日は案件詳細から入力する（未入力なら訪問日・案件発生日で暫定表示）
+    paperContract: contractId ? null : {
+      agreedAt: deal.paperContractAgreedAt?.toISOString() ?? null,
+      imageCount: paperImages.length,
+    },
     store: deal.store
       ? { name: deal.store.name, code: deal.store.code, antiquePermitNumber: deal.store.antiquePermitNumber }
       : null,

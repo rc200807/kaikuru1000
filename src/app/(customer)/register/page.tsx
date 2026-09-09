@@ -10,16 +10,10 @@ import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
+import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
 
-const DOC_TYPES = [
-  { value: '運転免許証', label: '運転免許証（裏面も必要）' },
-  { value: 'マイナンバーカード', label: 'マイナンバーカード（表面のみ）' },
-  { value: 'パスポート', label: 'パスポート' },
-  { value: '健康保険証', label: '健康保険証' },
-  { value: '在留カード', label: '在留カード' },
-  { value: 'その他', label: 'その他' },
-]
-const DOC_TYPES_REQUIRING_BACK = ['運転免許証']
+const DOC_TYPES = ID_DOCUMENT_TYPES
+const DOC_TYPES_REQUIRING_BACK = ID_DOC_TYPES_REQUIRING_BACK
 
 export default function RegisterPage() {
   const router = useRouter()

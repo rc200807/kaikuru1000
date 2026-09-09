@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireRole, ADMIN_ROLES } from '@/lib/admin-auth'
 import { startOfMonth, subMonths } from 'date-fns'
 import { jstMonthKey } from '@/lib/datetime'
+import { purchasedDealWhere } from '@/lib/purchase-aggregation'
 import {
   visitWhereForMember, dealWhereForMember, estimateWhereForMember, accessLogWhereForMember,
   type MemberRef,
@@ -40,16 +41,19 @@ export async function GET(
     dealCount, estimateCount, contractCount, purchaseItemCount,
     loginCount, lastLogin,
     trendVisits, recentVisits, recentDeals,
+    trendDeals,
     legacyVisitCount, legacyDealCount,
   ] = await Promise.all([
     prisma.visitSchedule.count({ where: visitWhere }),
     prisma.visitSchedule.count({ where: { AND: [visitWhere, { status: 'completed' }] } }),
-    prisma.visitSchedule.aggregate({
-      where: { AND: [visitWhere, { status: 'completed' }] },
+    // 買取金額の正は案件（Deal.purchaseAmount）。訪問側の旧フィールドは案件詳細から
+    // 品目を登録した取引では入らないため 0 になっていた
+    prisma.deal.aggregate({
+      where: { AND: [dealWhere, purchasedDealWhere()] },
       _sum: { purchaseAmount: true },
     }),
-    prisma.visitSchedule.aggregate({
-      where: { AND: [visitWhere, { status: 'completed', visitDate: { gte: currentMonthStart } }] },
+    prisma.deal.aggregate({
+      where: { AND: [dealWhere, purchasedDealWhere({ occurredAt: { gte: currentMonthStart } })] },
       _sum: { purchaseAmount: true },
     }),
     prisma.deal.count({ where: dealWhere }),
@@ -64,7 +68,7 @@ export async function GET(
     }),
     prisma.visitSchedule.findMany({
       where: { AND: [visitWhere, { visitDate: { gte: twelveMonthsAgo } }] },
-      select: { visitDate: true, status: true, purchaseAmount: true },
+      select: { visitDate: true, status: true },
     }),
     prisma.visitSchedule.findMany({
       where: visitWhere,
@@ -86,6 +90,11 @@ export async function GET(
         user: { select: { id: true, name: true } },
       },
     }),
+    // 月次推移の買取金額（担当案件・発生日でバケット）
+    prisma.deal.findMany({
+      where: { AND: [dealWhere, purchasedDealWhere({ occurredAt: { gte: twelveMonthsAgo } })] },
+      select: { occurredAt: true, purchaseAmount: true },
+    }),
     // 過去参考値（名前照合）が混じっているかの判定
     prisma.visitSchedule.count({ where: { memberId: null, storeId: m.storeId, staffName: m.name.trim() } }),
     prisma.deal.count({ where: { memberId: null, storeId: m.storeId, createdByType: 'store', createdByName: m.name.trim() } }),
@@ -98,7 +107,10 @@ export async function GET(
     const key = jstMonthKey(v.visitDate)
     if (!(key in monthlyMap)) continue
     monthlyMap[key].visitCount++
-    if (v.status === 'completed') monthlyMap[key].purchaseAmount += v.purchaseAmount ?? 0
+  }
+  for (const d of trendDeals) {
+    const key = jstMonthKey(d.occurredAt)
+    if (key in monthlyMap) monthlyMap[key].purchaseAmount += d.purchaseAmount ?? 0
   }
   const monthlyTrend = Object.entries(monthlyMap).map(([month, d]) => ({
     month: `${month.slice(5)}月`,

@@ -15,6 +15,7 @@ import VideoThumbnail from '@/components/VideoThumbnail'
 import StoreReleaseNotesCard from '@/components/store/ReleaseNotesCard'
 import { AnnouncementCategoryIcon } from '@/components/announcement/categoryIcons'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { useStoreBadges } from '@/components/store/StoreBadgesContext'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatJstDate } from '@/lib/datetime'
 
@@ -345,6 +346,8 @@ export default function StoreDashboardPage() {
   const [highlights, setHighlights] = useState<Highlights | null>(null)
   const [loading, setLoading] = useState(true)
   const scope = useStoreScope()
+  // 未対応の訪問リクエスト件数（ナビのバッジと共有。60秒ごとに更新される）
+  const { visitRequests: pendingVisitRequests } = useStoreBadges()
   const scopeKey = scope.selectedIds.join(',')
 
   useEffect(() => {
@@ -454,6 +457,35 @@ export default function StoreDashboardPage() {
             <span key={s.id} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm">{s.name}</span>
           ))}
         </div>
+      )}
+
+      {/* ── 訪問リクエストの通知（未対応があるときだけ出す） ── */}
+      {pendingVisitRequests > 0 && (
+        <Link
+          href="/store/schedule"
+          className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-[var(--store-primary)]/30 bg-[var(--store-primary-container)]/40 hover:bg-[var(--store-primary-container)]/60 transition-colors"
+        >
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--store-primary)] text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--store-primary)] opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--store-primary)]" />
+            </span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-[var(--md-sys-color-on-surface)]">
+              お客様からの訪問リクエストが {pendingVisitRequests} 件届いています
+            </span>
+            <span className="block text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              スケジュール画面で候補日時を承認、または代替日をご提案ください
+            </span>
+          </span>
+          <svg className="w-5 h-5 shrink-0 text-[var(--md-sys-color-on-surface-variant)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
       )}
 
       {/* ── ランク + KPI ── */}

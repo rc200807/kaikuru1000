@@ -42,7 +42,7 @@ export default function BottomNav() {
   const [switching, setSwitching] = useState(false)
   const scope = useStoreScope()
   // 未読件数・リンク店舗はレイアウトの Provider が1回だけ取得し、NavigationRail と共有する
-  const { announcements: unreadCount, releaseNotes: releaseUnread, chat: chatUnread, storeAccounts: linkedStores } = useStoreBadges()
+  const { announcements: unreadCount, releaseNotes: releaseUnread, chat: chatUnread, visitRequests: visitRequestCount, storeAccounts: linkedStores } = useStoreBadges()
 
   // Prevent body scroll when menu is open
   useEffect(() => {
@@ -219,7 +219,7 @@ export default function BottomNav() {
             <div className="grid grid-cols-3 gap-1">
               {[...navItems, ...accountNavItems].map(item => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/')
-                const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : item.href === '/store/dashboard' ? releaseUnread : 0
+                const badgeCount = item.href === '/store/announcements' ? unreadCount : item.href === '/store/chat' ? chatUnread : item.href === '/store/dashboard' ? releaseUnread : item.href === '/store/schedule' ? visitRequestCount : 0
                 const showBadge = badgeCount > 0
                 return (
                   <Link

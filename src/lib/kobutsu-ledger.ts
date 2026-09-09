@@ -10,7 +10,9 @@
  *   5. 本人確認の措置の区分（確認方法）
  * 加えて様式には「区別（買受け/委託）」「代価」「備考」欄がある。
  *
- * このシステムでは「売買契約書が発行された案件の買取品目」を1行として台帳を構成する。
+ * このシステムでは「取引が成立した案件の買取品目」を1行として台帳を構成する。
+ * 取引の成立は「電子の売買契約書が発行された」または「紙の売買契約書の写真が登録された」で判定する
+ * （紙で契約しても記載義務は同じなので、台帳には必ず載せる）。
  * 注意: 'use client' を付けないこと（サーバー・クライアント共用）
  */
 
@@ -144,12 +146,37 @@ export function verificationMethod(user: {
   return null
 }
 
+/**
+ * 台帳の1項目を指すキー。
+ * 電子の売買契約書があれば "c:<contractId>"、紙の契約書（写真のみ）の案件は "d:<dealId>"。
+ * 紙で契約した取引も古物台帳には記載義務があるため、契約書の有無にかかわらず
+ * 同じ形で台帳を引けるようにしている。
+ */
+export type LedgerSource = 'digital' | 'paper'
+
+export function contractEntryKey(contractId: string): string {
+  return `c:${contractId}`
+}
+export function dealEntryKey(dealId: string): string {
+  return `d:${dealId}`
+}
+/** エントリキーを解析する。旧形式（プレフィックスなし＝契約ID）も受け付ける */
+export function parseEntryKey(key: string): { kind: 'contract' | 'deal'; id: string } {
+  if (key.startsWith('c:')) return { kind: 'contract', id: key.slice(2) }
+  if (key.startsWith('d:')) return { kind: 'deal', id: key.slice(2) }
+  return { kind: 'contract', id: key }
+}
+
 /** 台帳の明細1行（買取品目1点） */
 export type KobutsuLedgerRow = {
   /** 買取品目ID（補記の保存キー） */
   id: string
-  /** 売買契約ID（台帳の1項目＝1案件のキー） */
-  contractId: string
+  /** 台帳の1項目（=1案件）のキー。詳細画面のURLに使う */
+  entryKey: string
+  /** 売買契約ID（電子契約のときのみ） */
+  contractId: string | null
+  /** 電子契約か紙契約（写真のみ）か */
+  source: LedgerSource
   dealId: string | null
   /** 案件番号（例: 20260824001）。案件に紐づかない旧データは null */
   dealNumber: string | null
@@ -227,6 +254,7 @@ export const KOBUTSU_CSV_HEADER = [
   '確認方法',
   '備考',
   '社内カテゴリ',
+  '契約書',
   '案件番号',
   '案件ID',
 ] as const
@@ -249,6 +277,7 @@ export function toCsvRow(row: KobutsuLedgerRow, formatDate: (iso: string) => str
     row.customer.verification ?? '',
     row.note ?? '',
     row.internalCategory ?? '',
+    row.source === 'paper' ? '紙（写真）' : '電子',
     row.dealNumber ?? '',
     row.dealId ?? '',
   ]
@@ -266,7 +295,10 @@ export function jstDayBoundary(value: string | null | undefined, edge: 'start' |
  * グループのキーは売買契約ID（1案件=1契約。案件に紐づかない旧データは訪問単位の契約）。
  */
 export type KobutsuLedgerGroup = {
-  contractId: string
+  /** 台帳の1項目のキー（"c:<contractId>" / "d:<dealId>"） */
+  entryKey: string
+  contractId: string | null
+  source: LedgerSource
   dealId: string | null
   dealNumber: string | null
   visitScheduleId: string | null
@@ -296,13 +328,13 @@ export function groupLedgerRows(rows: KobutsuLedgerRow[], opts: { includeRows?: 
   const order: string[] = []
   const byContract = new Map<string, KobutsuLedgerRow[]>()
   for (const row of rows) {
-    const list = byContract.get(row.contractId)
+    const list = byContract.get(row.entryKey)
     if (list) list.push(row)
-    else { byContract.set(row.contractId, [row]); order.push(row.contractId) }
+    else { byContract.set(row.entryKey, [row]); order.push(row.entryKey) }
   }
 
-  return order.map(contractId => {
-    const items = byContract.get(contractId)!
+  return order.map(entryKey => {
+    const items = byContract.get(entryKey)!
     const head = items[0]
     const categories: KobutsuCategoryKey[] = []
     const missing = new Set<KobutsuMissingField>()
@@ -312,7 +344,9 @@ export function groupLedgerRows(rows: KobutsuLedgerRow[], opts: { includeRows?: 
     }
     const quantity = items.reduce((s, i) => s + i.quantity, 0)
     return {
-      contractId,
+      entryKey,
+      contractId: head.contractId,
+      source: head.source,
       dealId: head.dealId,
       dealNumber: head.dealNumber,
       visitScheduleId: head.visitScheduleId,
@@ -348,6 +382,7 @@ export const KOBUTSU_DEAL_CSV_HEADER = [
   '相手方の生年月日',
   '相手方の年齢',
   '確認方法',
+  '契約書',
   '案件番号',
   '案件ID',
 ] as const
@@ -368,6 +403,7 @@ export function toDealCsvRow(group: KobutsuLedgerGroup, formatDate: (iso: string
     formatBirthDate(group.customer.birthDate) ?? '',
     group.customer.age ?? '',
     group.customer.verification ?? '',
+    group.source === 'paper' ? '紙（写真）' : '電子',
     group.dealNumber ?? '',
     group.dealId ?? '',
   ]

@@ -285,12 +285,6 @@ textarea {
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
-/* ── 買取トライ アイコンスクロール ─────────────────────── */
-@keyframes scrollIcons {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
 @keyframes slideDown {
   0% { opacity: 0; transform: translate(-50%, -16px) scale(0.95); }
   100% { opacity: 1; transform: translate(-50%, 0) scale(1); }

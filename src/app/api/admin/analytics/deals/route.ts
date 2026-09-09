@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { WEBFORM_CREATED_BY_TYPE } from '@/lib/deal-creator'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/admin-auth'
 import { buildBuckets, fillSeries } from '@/lib/analytics/period'
@@ -13,6 +14,8 @@ export const dynamic = 'force-dynamic'
 
 const CREATED_BY_LABEL: Record<string, string> = {
   store: '店舗', admin: '本部', superadmin: '本部', hr: '本部', customer: '顧客', partner: 'パートナー',
+  // Webフォーム（お問い合わせフォーム）由来。案件の作成者種別と表記を揃える
+  [WEBFORM_CREATED_BY_TYPE]: 'Webフォーム',
 }
 const INQUIRY_TYPE_LABEL: Record<string, string> = {
   assessment: '査定', purchase: '買取', estate: '遺品整理', other: 'その他',

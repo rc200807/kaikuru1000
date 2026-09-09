@@ -15,6 +15,8 @@ const ITEMS: SettingItem[] = [
   { href: '/admin/settings/email', title: 'メール通知設定', desc: 'SMTPサーバー設定・テスト送信', icon: '✉️' },
   { href: '/admin/settings/rakuten', title: '楽天商品検索API', desc: 'バーコード連携用のアプリケーションID', icon: '🛒' },
   { href: '/admin/settings/visit-statuses', title: '訪問ステータス管理', desc: '訪問スケジュールのステータス', icon: '🏷️' },
+  { href: '/admin/settings/visit-purposes', title: '訪問目的の管理', desc: '店舗が訪問予定で選ぶ訪問目的の選択肢', icon: '🎯' },
+  { href: '/admin/settings/request-intervals', title: '訪問リクエスト・宅配の利用間隔', desc: 'お客様が訪問リクエスト／宅配の送付を何ヶ月に1回まで使えるかの既定値', icon: '⏱️' },
   { href: '/admin/settings/purchase-categories', title: '買取カテゴリ管理', desc: '買取品目のカテゴリ', icon: '📦' },
   { href: '/admin/settings/work-items', title: '請求項目マスタ', desc: '案件の請求項目の選択肢（作業名・既定単価・並び順・有効/無効）', icon: '🧾' },
   { href: '/admin/settings/lead-sources', title: '流入経路管理', desc: '顧客の流入経路の選択肢（電話・LINE・紹介 など）', icon: '🧭' },

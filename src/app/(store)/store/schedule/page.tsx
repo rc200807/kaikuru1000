@@ -207,6 +207,8 @@ export default function StoreSchedulePage() {
           setSchedulesPage(1)
           setSchedulesHasMore((schedData?.total ?? schedList.length) > SCHEDULES_LIMIT)
         })
+      // ダッシュボード・ナビの未対応バッジを即座に減らす
+      window.dispatchEvent(new Event('visitrequests:changed'))
       setMessage({ type: 'success', text: '訪問リクエストを承認しました' })
     } else {
       setMessage({ type: 'error', text: '承認に失敗しました' })
@@ -234,6 +236,7 @@ export default function StoreSchedulePage() {
       setVisitRequests(prev => prev.map(r => r.id === counterModal.requestId ? { ...r, ...updated, status: 'counter_proposed' } : r))
       setCounterModal(null)
       setCounterForm({ date: '', start: '', end: '', note: '' })
+      window.dispatchEvent(new Event('visitrequests:changed'))
       setMessage({ type: 'success', text: '別の日程を提案しました' })
     } else {
       setMessage({ type: 'error', text: '提案に失敗しました' })

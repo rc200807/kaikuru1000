@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createTimer } from '@/lib/api-timing'
+import { recordAccessLog } from '@/lib/access-log'
+import { deleteCustomerCascade } from '@/lib/delete-customer'
+import { after } from 'next/server'
+import { autoSyncCustomerRowsDeleted } from '@/lib/sheet-sync'
 
 /**
  * 顧客詳細（店舗ポータル）。
@@ -51,4 +55,40 @@ export async function GET(
 
   if (!customer) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
   return t.json({ customer })
+}
+
+/**
+ * 顧客の削除（店舗ポータル）。
+ * 案件・訪問・書類などが紐づいていてもまとめて削除する（deleteCustomerCascade）。
+ * 自店舗の担当顧客のみ削除できる。
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = session.user as any
+  if (sessionUser.role !== 'store') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const storeId = sessionUser.id as string
+  const { id } = await params
+
+  const customer = await prisma.user.findFirst({
+    where: { id, storeId },
+    select: { id: true, name: true },
+  })
+  if (!customer) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
+
+  const removed = await deleteCustomerCascade(id)
+
+  await recordAccessLog({
+    userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name,
+    memberId: sessionUser.memberId ?? null,
+    action: `顧客を削除「${customer.name}」（案件${removed.deals}件・訪問${removed.visits}件を含む）`,
+    req: request as never,
+  })
+  after(() => autoSyncCustomerRowsDeleted([id]))
+
+  return NextResponse.json({ deleted: true, removed })
 }

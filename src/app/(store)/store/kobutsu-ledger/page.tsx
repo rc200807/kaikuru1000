@@ -110,7 +110,7 @@ export default function KobutsuLedgerPage() {
     <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 56px)' }}>
       <AppBar
         title="古物台帳"
-        subtitle="売買契約書が発行された買取（買受け）の記録"
+        subtitle="売買契約書（電子・紙）を作成した買取（買受け）の記録"
         actions={
           <div className="flex items-center gap-2">
             <Button size="sm" variant="tonal" onClick={() => exportCsv('deal')} disabled={loading}>案件単位CSV</Button>
@@ -219,7 +219,7 @@ export default function KobutsuLedgerPage() {
               </svg>
             }
             title="該当する記録がありません"
-            description="売買契約書が発行された買取が、指定期間内にありません"
+            description="売買契約書（電子・紙）を作成した買取が、指定期間内にありません"
           />
         ) : (
           <>
@@ -235,7 +235,7 @@ export default function KobutsuLedgerPage() {
                 </thead>
                 <tbody>
                   {visible.map(g => (
-                    <tr key={g.contractId} className="border-t border-[var(--md-sys-color-outline-variant)] align-top hover:bg-[var(--md-sys-color-surface-container-low)]">
+                    <tr key={g.entryKey} className="border-t border-[var(--md-sys-color-outline-variant)] align-top hover:bg-[var(--md-sys-color-surface-container-low)]">
                       <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{fmtDate(g.tradedAt)}</td>
                       <td className="px-2.5 py-2 whitespace-nowrap tabular-nums text-[var(--md-sys-color-on-surface-variant)]">{formatDealNumber(g.dealNumber)}</td>
                       <td className="px-2.5 py-2 min-w-[130px]">
@@ -251,7 +251,7 @@ export default function KobutsuLedgerPage() {
                         )}
                       </td>
                       <td className="px-2.5 py-2 min-w-[180px]">
-                        <Link href={`/store/kobutsu-ledger/${g.contractId}`} className="font-medium text-[var(--store-primary)] hover:underline">
+                        <Link href={`/store/kobutsu-ledger/${encodeURIComponent(g.entryKey)}`} className="font-medium text-[var(--store-primary)] hover:underline">
                           {g.itemSummary}
                         </Link>
                         {g.missing.length > 0 ? (
@@ -281,7 +281,7 @@ export default function KobutsuLedgerPage() {
                       </td>
                       <td className="px-2.5 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <Link href={`/store/kobutsu-ledger/${g.contractId}`} className="text-[var(--store-primary)] hover:underline">台帳詳細</Link>
+                          <Link href={`/store/kobutsu-ledger/${encodeURIComponent(g.entryKey)}`} className="text-[var(--store-primary)] hover:underline">台帳詳細</Link>
                           {g.dealId && (
                             <Link href={`/store/deals/${g.dealId}`} className="text-[var(--md-sys-color-on-surface-variant)] hover:underline">案件</Link>
                           )}
@@ -297,8 +297,8 @@ export default function KobutsuLedgerPage() {
             <div className="md:hidden flex flex-col gap-2">
               {visible.map(g => (
                 <Link
-                  key={g.contractId}
-                  href={`/store/kobutsu-ledger/${g.contractId}`}
+                  key={g.entryKey}
+                  href={`/store/kobutsu-ledger/${encodeURIComponent(g.entryKey)}`}
                   className="block rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3 active:bg-[var(--md-sys-color-surface-container)]"
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -330,7 +330,7 @@ export default function KobutsuLedgerPage() {
             </div>
 
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-              1案件（売買契約1件）＝1項目で表示しています。品目ごとの明細・特徴の記載は「台帳詳細」から確認・編集できます。
+              1案件＝1項目で表示しています。品目ごとの明細・特徴の記載は「台帳詳細」から確認・編集できます。
             </p>
           </>
         )}
@@ -339,7 +339,8 @@ export default function KobutsuLedgerPage() {
           <p className="font-semibold text-[var(--md-sys-color-on-surface)] mb-1">この台帳について</p>
           <p>
             古物営業法16条・同施行規則17条（別記様式第15号）の記載事項（取引年月日／品目／数量／特徴／相手方の住所・氏名・職業・年齢／確認方法）に沿って、
-            売買契約書が発行された買取を記録しています。帳簿は最終記載日から3年間の保存が必要です。
+            売買契約書を作成した買取を記録しています（紙で契約書を作成し写真を登録した案件も対象です）。
+            帳簿は最終記載日から3年間の保存が必要です。
             電子帳簿として運用する場合は、営業所で直ちに書面へ表示できる状態（印刷できる環境）を整えてください。
           </p>
           <p className="mt-1">

@@ -12,6 +12,10 @@ import {
   sendBugReportNotification,
   sendContractEmail,
   sendContractCreatedNotification,
+  sendVisitRequestReceivedToCustomer,
+  sendVisitRequestReceivedToStore,
+  sendVisitConfirmedToCustomer,
+  sendVisitConfirmedToStore,
 } from './mailer'
 
 const MAX_ATTEMPTS = 3
@@ -24,12 +28,23 @@ const MAX_ATTEMPTS = 3
 type ContractEmailParams =
   Omit<Parameters<typeof sendContractEmail>[0], 'pdfBase64' | 'invoicePdfBase64'> & { contractId: string }
 
+/**
+ * 店舗への契約作成通知の payload。
+ * こちらも PDF はキューに載せず、送信時に SalesContract から読み直して添付する。
+ */
+type ContractCreatedNotificationParams =
+  Omit<Parameters<typeof sendContractCreatedNotification>[0], 'pdfBase64' | 'invoicePdfBase64'> & { contractId?: string }
+
 type QueueablePayload =
   | { type: 'inquiryAutoReply'; params: Parameters<typeof sendInquiryAutoReply>[0] }
   | { type: 'storeInquiryNotification'; params: Parameters<typeof sendStoreInquiryNotification>[0] }
   | { type: 'bugReportNotification'; params: Parameters<typeof sendBugReportNotification>[0] }
   | { type: 'contractEmail'; params: ContractEmailParams }
-  | { type: 'contractCreatedNotification'; params: Parameters<typeof sendContractCreatedNotification>[0] }
+  | { type: 'contractCreatedNotification'; params: ContractCreatedNotificationParams }
+  | { type: 'visitRequestReceivedCustomer'; params: Parameters<typeof sendVisitRequestReceivedToCustomer>[0] }
+  | { type: 'visitRequestReceivedStore'; params: Parameters<typeof sendVisitRequestReceivedToStore>[0] }
+  | { type: 'visitConfirmedCustomer'; params: Parameters<typeof sendVisitConfirmedToCustomer>[0] }
+  | { type: 'visitConfirmedStore'; params: Parameters<typeof sendVisitConfirmedToStore>[0] }
 
 /** メールをキューに登録（非同期） */
 export async function enqueueEmail(payload: QueueablePayload): Promise<void> {
@@ -40,6 +55,20 @@ export async function enqueueEmail(payload: QueueablePayload): Promise<void> {
       status: 'pending',
     },
   })
+}
+
+/** JSON 化で string になった候補日を Date に戻す */
+function reviveCandidates(params: any) {
+  if (Array.isArray(params?.candidates)) {
+    for (const c of params.candidates) {
+      if (typeof c.date === 'string') c.date = new Date(c.date)
+    }
+  }
+}
+
+/** JSON 化で string になった訪問日を Date に戻す */
+function reviveVisitDate(params: any) {
+  if (typeof params?.visitDate === 'string') params.visitDate = new Date(params.visitDate)
 }
 
 /** メールを直接送信（キューを通さず即時実行） */
@@ -81,11 +110,37 @@ async function sendImmediately(type: string, params: any): Promise<boolean> {
       }
       return ok
     }
-    case 'contractCreatedNotification':
+    case 'contractCreatedNotification': {
       if (params.visitDate && typeof params.visitDate === 'string') {
         params.visitDate = new Date(params.visitDate)
       }
-      return await sendContractCreatedNotification(params)
+      // PDFはキューに載せていないので保存済みの契約書から読み直して添付する
+      const { contractId, ...rest } = params
+      const saved = contractId
+        ? await prisma.salesContract.findUnique({
+            where: { id: contractId },
+            select: { pdfBase64: true, invoicePdfBase64: true },
+          })
+        : null
+      return await sendContractCreatedNotification({
+        ...rest,
+        pdfBase64: saved?.pdfBase64 ?? null,
+        invoicePdfBase64: saved?.invoicePdfBase64 ?? null,
+      })
+    }
+    // 訪問リクエスト系。JSON.stringify で Date が string になるので必ず復元する
+    case 'visitRequestReceivedCustomer':
+      reviveCandidates(params)
+      return await sendVisitRequestReceivedToCustomer(params)
+    case 'visitRequestReceivedStore':
+      reviveCandidates(params)
+      return await sendVisitRequestReceivedToStore(params)
+    case 'visitConfirmedCustomer':
+      reviveVisitDate(params)
+      return await sendVisitConfirmedToCustomer(params)
+    case 'visitConfirmedStore':
+      reviveVisitDate(params)
+      return await sendVisitConfirmedToStore(params)
     default:
       throw new Error(`Unknown email type: ${type}`)
   }

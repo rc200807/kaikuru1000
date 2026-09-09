@@ -82,7 +82,9 @@ const BASE_COLUMN_OPTIONS = [
   { key: 'preConsent', label: '事前同意' },
   { key: 'leadSource', label: '流入経路' },
 ]
-const DEFAULT_COLS = ['nextVisit', 'dealNumber', 'category', 'amount', 'member']
+const DEFAULT_COLS = ['nextVisit', 'dealNumber', 'occurredAt', 'category', 'amount', 'member']
+/** 既存ユーザーの保存済み列に後から必須にした列を1回だけ足すためのキー */
+const COLS_MIGRATION_KEY = 'kk-store-deals-cols-migrated-occurredAt'
 
 // テーブル列キー → サーバーソートフィールド
 const SORT_FIELD_BY_COL: Record<string, string> = { createdAt: 'createdAt', occurredAt: 'occurredAt', amount: 'purchaseAmount', nextVisit: 'nextVisit' }
@@ -190,7 +192,20 @@ function StoreDealsContent() {
       const raw = localStorage.getItem(COLS_STORAGE_KEY)
       if (raw) {
         const arr = JSON.parse(raw)
-        if (Array.isArray(arr)) setVisibleCols(arr.filter((k: string) => columnKeys.includes(k)))
+        if (Array.isArray(arr)) {
+          let cols = arr.filter((k: string) => columnKeys.includes(k))
+          // 「案件発生日」は常に見えるようにしたい列。保存済みの表示設定には入っていないので、
+          // 初回だけ差し込む（以降はユーザーが外したらそのまま尊重する）
+          if (!localStorage.getItem(COLS_MIGRATION_KEY)) {
+            if (!cols.includes('occurredAt')) {
+              const at = cols.indexOf('dealNumber')
+              cols = at >= 0 ? [...cols.slice(0, at + 1), 'occurredAt', ...cols.slice(at + 1)] : [...cols, 'occurredAt']
+              localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(cols))
+            }
+            localStorage.setItem(COLS_MIGRATION_KEY, '1')
+          }
+          setVisibleCols(cols)
+        }
       }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps

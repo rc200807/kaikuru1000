@@ -28,12 +28,13 @@ export async function GET(request: NextRequest) {
     prisma.operator.findMany({ select: { id: true, name: true, entityType: true } }),
     prisma.deal.findMany({
       where: dealWhere(range, filters),
-      select: { storeId: true, status: true, purchaseAmount: true, billingAmount: true },
+      // スタッフ別実績の買取金額も案件から取る（訪問の purchaseAmount は旧データにしか入らない）
+      select: { storeId: true, status: true, purchaseAmount: true, billingAmount: true, memberId: true, createdByName: true },
     }),
     prisma.user.groupBy({ by: ['storeId'], where: customerWhere(range, filters), _count: { _all: true } }),
     prisma.visitSchedule.findMany({
       where: visitWhere(range, filters, 'completed'),
-      select: { memberId: true, staffName: true, storeId: true, purchaseAmount: true },
+      select: { memberId: true, staffName: true, storeId: true },
     }),
     prisma.trainingVideoView.groupBy({
       by: ['storeId'],
@@ -140,14 +141,22 @@ export async function GET(request: NextRequest) {
   }
   const entityTypes = [...entityTypeAgg.entries()].map(([name, count]) => ({ name, count }))
 
-  // スタッフ別実績（memberId 優先、なければ staffName スナップショット）
+  // スタッフ別実績（memberId 優先、なければ担当者名スナップショット）。
+  // 訪問件数は完了訪問から、買取金額は成約案件から積む（金額の正は案件）。
   const staffAgg = new Map<string, { name: string | null; memberId: string | null; visits: number; amount: number }>()
   for (const v of completedVisits) {
     const key = v.memberId ?? `name:${v.staffName ?? '未設定'}`
     const cur = staffAgg.get(key) ?? { name: v.staffName, memberId: v.memberId, visits: 0, amount: 0 }
     cur.visits++
-    cur.amount += v.purchaseAmount ?? 0
     if (!cur.name && v.staffName) cur.name = v.staffName
+    staffAgg.set(key, cur)
+  }
+  for (const d of deals) {
+    if (!isWon(d.status)) continue
+    const key = d.memberId ?? `name:${d.createdByName ?? '未設定'}`
+    const cur = staffAgg.get(key) ?? { name: d.createdByName, memberId: d.memberId, visits: 0, amount: 0 }
+    cur.amount += d.purchaseAmount ?? 0
+    if (!cur.name && d.createdByName) cur.name = d.createdByName
     staffAgg.set(key, cur)
   }
   const memberIds = [...staffAgg.values()].map(v => v.memberId).filter((id): id is string => id != null)

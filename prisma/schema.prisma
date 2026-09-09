@@ -313,7 +313,11 @@ model VisitSchedule {
   revisitStart          String?             // 再訪問開始時間 (HH:MM)
   revisitEnd            String?             // 再訪問終了時間 (HH:MM)
   revisitNote           String?             // 再訪問メモ
+  revisitPending        Boolean  @default(false) // 後日引取あり（日時が未定のときも登録できるようにするフラグ）
   supplementaryDocs     String?  @db.Text   // 補足確認書類（チェックした書類名のJSON配列）
+  purposeId             String?             // 訪問目的（VisitPurpose マスタ。管理ポータルで管理）
+  purpose               VisitPurpose? @relation(fields: [purposeId], references: [id], onDelete: SetNull)
+  purposeName           String?             // 訪問目的名のスナップショット（マスタ改名・削除に耐える）
   purchaseItems  PurchaseItem[]
   workItems      WorkItem[]
   salesContract  SalesContract?
@@ -326,6 +330,7 @@ model VisitSchedule {
   @@index([dealId])
   @@index([dealId, visitDate])  // 案件一覧の「訪問予定」フィルタ（EXISTS）用
   @@index([memberId])
+  @@index([purposeId])
   @@index([storeId, visitDate])   // スケジュール画面（期間表示）・ダッシュボード
   @@index([userId, visitDate])    // 顧客詳細・最終訪問日の算出
   @@index([status, visitDate])    // 「今日の訪問」など横断集計
@@ -339,6 +344,17 @@ model VisitStatus {
   color     String   @default("#6B7280")  // hex color for badge
   sortOrder Int      @default(0)
   isDefault Boolean  @default(false)  // default status for new visits
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 訪問目的マスタ（管理ポータルから管理。訪問予定の「訪問目的」プルダウンの選択肢）
+model VisitPurpose {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  visits    VisitSchedule[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -554,6 +570,11 @@ model SiteConfig {
   calendarShareDealDetail   Boolean @default(true)  // 案件内容（本部への招待のみ）
   calendarShareInternalNote Boolean @default(true)  // 顧客の内部メモ（本部への招待のみ。店舗・管理者限定の情報）
   calendarShareLinks        Boolean @default(true)  // 顧客情報・訪問詳細への内部リンク（本部への招待のみ）
+
+  // 利用間隔の既定値（顧客ごとの User.visitFrequencyMonths が未設定のときのフォールバック、
+  // および新規登録時に顧客へ設定される既定値）。0 は無制限。
+  visitRequestIntervalMonths     Int @default(1)  // 訪問リクエスト: 既定は月1回
+  deliveryShipmentIntervalMonths Int @default(3)  // 定期宅配の送付: 既定は3ヶ月に1回
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -795,6 +816,7 @@ model Deal {
   preConsentSignature String? @db.Text      // 事前同意の署名画像（base64）
   preConsentAt        DateTime?             // 事前同意日時
   paperContractImages String  @default("[]") // 紙で作成した売買契約書の写真URL（JSON配列）
+  paperContractAgreedAt DateTime?             // 紙契約書の取引年月日（古物台帳の「取引の年月日」。電子契約が無い案件用）
   visitSchedules VisitSchedule[]           // 1案件:N訪問予定（任意リンク）
   purchaseItems  PurchaseItem[]            // 案件配下の買取品目
   workItems      WorkItem[]                // 案件配下の請求項目

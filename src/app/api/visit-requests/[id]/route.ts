@@ -4,6 +4,70 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createCalendarEvent } from '@/lib/google-calendar'
 import { ensureDealForVisit } from '@/lib/ensure-deal'
+import { enqueueEmail } from '@/lib/email-queue'
+
+/**
+ * 訪問日程の確定を顧客と店舗に通知する（承認・逆提案受諾・店舗提案承認で共通）。
+ * 送信はキュー経由。失敗しても日程確定そのものは成功扱いにする。
+ */
+async function notifyVisitConfirmed(params: {
+  userId: string
+  storeId: string
+  visitDate: Date
+  startTime: string | null
+  endTime: string | null
+}) {
+  const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
+  try {
+    const [user, store] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: params.userId },
+        select: { name: true, email: true, phone: true, address: true },
+      }),
+      prisma.store.findUnique({
+        where: { id: params.storeId },
+        select: { name: true, phone: true, email: true, contractNotifyEmail: true },
+      }),
+    ])
+    if (!user || !store) return
+
+    if (user.email) {
+      await enqueueEmail({
+        type: 'visitConfirmedCustomer',
+        params: {
+          customerEmail: user.email,
+          customerName: user.name,
+          storeName: store.name,
+          storePhone: store.phone,
+          visitDate: params.visitDate,
+          startTime: params.startTime,
+          endTime: params.endTime,
+          mypageUrl: `${baseUrl}/mypage?tab=visit-request`,
+        },
+      })
+    }
+
+    const notifyTo = store.contractNotifyEmail || store.email
+    if (notifyTo) {
+      await enqueueEmail({
+        type: 'visitConfirmedStore',
+        params: {
+          to: notifyTo,
+          storeName: store.name,
+          customerName: user.name,
+          customerPhone: user.phone,
+          customerAddress: user.address,
+          visitDate: params.visitDate,
+          startTime: params.startTime,
+          endTime: params.endTime,
+          scheduleUrl: `${baseUrl}/store/schedule`,
+        },
+      })
+    }
+  } catch (e) {
+    console.error('[visit-requests] 日程確定の通知メールのキュー登録に失敗:', e)
+  }
+}
 
 // 訪問リクエスト詳細
 export async function GET(
@@ -139,6 +203,14 @@ export async function PATCH(
       console.error('[GoogleCalendar] 訪問リクエスト承認時のカレンダー同期に失敗:', err)
     }
 
+    await notifyVisitConfirmed({
+      userId: visitRequest.userId,
+      storeId: visitRequest.storeId,
+      visitDate,
+      startTime,
+      endTime,
+    })
+
     return NextResponse.json(result.updated)
   }
 
@@ -230,6 +302,14 @@ export async function PATCH(
     } catch (err) {
       console.error('[GoogleCalendar] 逆提案受諾時のカレンダー同期に失敗:', err)
     }
+
+    await notifyVisitConfirmed({
+      userId: visitRequest.userId,
+      storeId: visitRequest.storeId,
+      visitDate: visitRequest.counterDate!,
+      startTime: visitRequest.counterStart,
+      endTime: visitRequest.counterEnd,
+    })
 
     return NextResponse.json(result.updated)
   }
@@ -353,6 +433,14 @@ export async function PATCH(
     } catch (err) {
       console.error('[GoogleCalendar] 店舗提案承認時のカレンダー同期に失敗:', err)
     }
+
+    await notifyVisitConfirmed({
+      userId: visitRequest.userId,
+      storeId: visitRequest.storeId,
+      visitDate,
+      startTime,
+      endTime,
+    })
 
     return NextResponse.json(result.updated)
   }

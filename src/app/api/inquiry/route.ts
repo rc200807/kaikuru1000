@@ -4,6 +4,7 @@ import crypto from 'crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createDealWithNumber } from '@/lib/deal-number-server'
+import { WEBFORM_CREATED_BY_NAME, WEBFORM_CREATED_BY_TYPE } from '@/lib/deal-creator'
 import { sendInquiryAutoReply } from '@/lib/mailer'
 import { enqueueEmail } from '@/lib/email-queue'
 import { checkInquiryRateLimit, getClientIp } from '@/lib/inquiry-rate-limit'
@@ -233,7 +234,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // --- 買取トライ（PurchaseMemo）作成 ---
+    // --- 買取希望品（PurchaseMemo）作成 — 店舗が顧客詳細で確認する ---
     let itemCount = 0
     if (userId && Array.isArray(items) && items.length > 0) {
       for (const item of items) {
@@ -272,9 +273,11 @@ export async function POST(request: NextRequest) {
             inquiryId: inquiry.id,
             detail: dealDetail,
             status: 'inquiry',
-            createdByType: 'customer',
+            // Webフォーム由来の案件は、作成者をお客様の氏名ではなく「Webフォーム」と記録する
+            // （店舗の一覧で「誰が作った案件か」を判別できるようにするため）
+            createdByType: WEBFORM_CREATED_BY_TYPE,
             createdById: userId,
-            createdByName: name,
+            createdByName: WEBFORM_CREATED_BY_NAME,
           },
         })
       } catch (e: any) {

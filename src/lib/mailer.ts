@@ -440,7 +440,8 @@ export async function sendContractEmail(params: {
   return true
 }
 
-/** 売買契約書の作成を店舗（指定の通知先）に通知する。送信成功なら true、設定未構成なら false。 */
+/** 売買契約書の作成を店舗（指定の通知先）に通知する。送信成功なら true、設定未構成なら false。
+ *  契約書・請求書のPDFがあれば添付する（店舗が控えをそのまま保管できるようにする）。 */
 export async function sendContractCreatedNotification(params: {
   to: string
   storeName: string
@@ -450,6 +451,10 @@ export async function sendContractCreatedNotification(params: {
   purchaseAmount: number
   billingAmount: number
   contractUrl?: string
+  /** 売買契約書PDF（base64）。キューには載せず送信時に読み直す */
+  pdfBase64?: string | null
+  /** 請求書PDF（base64） */
+  invoicePdfBase64?: string | null
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
@@ -457,6 +462,9 @@ export async function sendContractCreatedNotification(params: {
   const visitDateStr = params.visitDate.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric' })
   const yen = (n: number) => `¥${n.toLocaleString()}`
   const cName = escapeHtml(params.customerName)
+  // 契約書・請求書のPDFがあれば添付する（本文でも添付の有無を案内する）
+  const notifyPdf = params.pdfBase64 ? Buffer.from(params.pdfBase64, 'base64') : null
+  const notifyInvoicePdf = params.invoicePdfBase64 ? Buffer.from(params.invoicePdfBase64, 'base64') : null
 
   const html = `
 <!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>売買契約書 作成のお知らせ</title></head>
@@ -478,6 +486,7 @@ export async function sendContractCreatedNotification(params: {
           <tr><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;">買取金額</td><td style="padding:12px 18px;border-bottom:1px solid #f3f4f6;font-size:14px;font-weight:600;color:#991b1b;text-align:right;">${yen(params.purchaseAmount)}</td></tr>
           <tr><td style="padding:12px 18px;font-size:13px;color:#6b7280;">請求金額</td><td style="padding:12px 18px;font-size:14px;font-weight:600;color:#111827;text-align:right;">${yen(params.billingAmount)}</td></tr>
         </table>
+        ${notifyPdf ? '<p style="margin:0 0 16px;color:#6b7280;font-size:12px;line-height:1.7;">売買契約書のPDFを添付しています。控えとして保管してください。</p>' : ''}
         ${params.contractUrl ? `<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><a href="${escapeHtml(params.contractUrl)}" style="display:inline-block;background-color:#991b1b;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:8px;">契約を確認</a></td></tr></table>` : ''}
       </td></tr>
       <tr><td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;"><p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">このメールは買いクル管理システムから自動送信されています</p></td></tr>
@@ -490,6 +499,10 @@ export async function sendContractCreatedNotification(params: {
     to: params.to,
     subject: `【買いクル】売買契約書 作成 - ${params.customerName} 様`,
     html,
+    attachments: [
+      ...(notifyPdf ? [{ filename: `売買契約書_${visitDateStr}_${params.customerName}.pdf`, content: notifyPdf, contentType: 'application/pdf' }] : []),
+      ...(notifyInvoicePdf ? [{ filename: `請求書_${visitDateStr}_${params.customerName}.pdf`, content: notifyInvoicePdf, contentType: 'application/pdf' }] : []),
+    ],
     text: [
       `${params.storeName} 御中`,
       '',
@@ -499,6 +512,7 @@ export async function sendContractCreatedNotification(params: {
       `電話番号: ${params.customerPhone}`,
       `買取金額: ${yen(params.purchaseAmount)}`,
       `請求金額: ${yen(params.billingAmount)}`,
+      ...(notifyPdf ? ['', '売買契約書のPDFを添付しています。'] : []),
       ...(params.contractUrl ? ['', `契約確認: ${params.contractUrl}`] : []),
     ].join('\n'),
   })
@@ -1339,7 +1353,6 @@ export async function sendStoreAssignmentNotification(params: {
             マイページからは以下の機能がご利用いただけます：
           </p>
           <ul style="margin:0 0 24px;padding-left:20px;color:#374151;font-size:13px;line-height:2;">
-            <li><strong>買取トライ</strong> — 写真からAI簡易査定</li>
             <li><strong>訪問リクエスト</strong> — 希望日時を送信して訪問予約</li>
             <li><strong>身分証明書の登録</strong></li>
             <li><strong>口座情報の登録</strong></li>
@@ -1382,7 +1395,7 @@ export async function sendStoreAssignmentNotification(params: {
       `担当店舗: ${params.storeName}`,
       `買取方法: ${typeLabel}`,
       '',
-      'マイページから身分証明書の登録や買取トライなどをお試しください。',
+      'マイページから身分証明書の登録や訪問リクエストなどをお試しください。',
       `ログインURL: ${params.loginUrl}`,
     ].join('\n'),
   })
@@ -1571,6 +1584,255 @@ export async function sendAkiyaReportEmail(params: {
       '',
       `レポートはこちら: ${params.reportUrl}`,
     ].join('\n'),
+  })
+  return true
+}
+
+/* ─────────────────────────────────────────────────────────────
+   訪問リクエスト関連の通知メール
+
+   受付時（顧客・店舗）と日程確定時（顧客・店舗）の4通は、ヘッダー色と
+   見出し・明細行・ボタンだけが違う同じ骨組みなので、組み立てを共通化する。
+   ───────────────────────────────────────────────────────────── */
+
+type SimpleMailRow = { label: string; value: string; strong?: boolean }
+
+/** 明細テーブル＋任意のボタンを持つ標準レイアウトのメール本文を組み立てる */
+function buildSimpleEmail(params: {
+  /** ヘッダーの帯色 */
+  accent: string
+  /** ヘッダー上部の小見出し（サービス名） */
+  eyebrow: string
+  /** ヘッダーの見出し */
+  heading: string
+  /** 宛名（「〇〇 様」「〇〇 御中」など、そのまま出す） */
+  addressee: string
+  /** 本文リード（改行は \n で渡す） */
+  lead: string
+  rows: SimpleMailRow[]
+  /** 明細のあとに添える注意書き（任意） */
+  footnote?: string
+  ctaUrl?: string
+  ctaLabel?: string
+}): { html: string; text: string } {
+  const rowsHtml = params.rows.map((r, i) => {
+    const last = i === params.rows.length - 1
+    const border = last ? '' : 'border-bottom:1px solid #f3f4f6;'
+    const weight = r.strong ? 'font-weight:600;' : ''
+    return `<tr><td style="padding:12px 18px;${border}font-size:13px;color:#6b7280;">${escapeHtml(r.label)}</td><td style="padding:12px 18px;${border}font-size:14px;${weight}color:#111827;text-align:right;">${escapeHtml(r.value)}</td></tr>`
+  }).join('')
+
+  const html = `
+<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(params.heading)}</title></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;"><tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+      <tr><td style="background-color:${params.accent};border-radius:12px 12px 0 0;padding:28px 32px;">
+        <p style="margin:0;color:rgba(255,255,255,0.75);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;">${escapeHtml(params.eyebrow)}</p>
+        <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">${escapeHtml(params.heading)}</h1>
+      </td></tr>
+      <tr><td style="background-color:#ffffff;padding:32px;">
+        <p style="margin:0 0 20px;color:#374151;font-size:15px;line-height:1.7;">
+          ${escapeHtml(params.addressee)}<br><br>
+          ${escapeHtml(params.lead).replace(/\n/g, '<br>')}
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:20px;">${rowsHtml}</table>
+        ${params.footnote ? `<p style="margin:0 0 20px;color:#6b7280;font-size:12px;line-height:1.7;">${escapeHtml(params.footnote).replace(/\n/g, '<br>')}</p>` : ''}
+        ${params.ctaUrl ? `<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><a href="${escapeHtml(params.ctaUrl)}" style="display:inline-block;background-color:${params.accent};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 28px;border-radius:8px;">${escapeHtml(params.ctaLabel ?? '詳細を確認')}</a></td></tr></table>` : ''}
+      </td></tr>
+      <tr><td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;"><p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">このメールは買いクル管理システムから自動送信されています</p></td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`
+
+  const text = [
+    params.addressee,
+    '',
+    params.lead,
+    '',
+    ...params.rows.map(r => `${r.label}: ${r.value}`),
+    ...(params.footnote ? ['', params.footnote] : []),
+    ...(params.ctaUrl ? ['', `${params.ctaLabel ?? '詳細'}: ${params.ctaUrl}`] : []),
+  ].join('\n')
+
+  return { html, text }
+}
+
+export type VisitRequestCandidate = { date: Date; start?: string | null; end?: string | null }
+
+/** 候補日時を「9月20日（土） 10:00〜12:00」の形に整える */
+function formatCandidate(c: VisitRequestCandidate): string {
+  const day = c.date.toLocaleDateString('ja-JP', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+  })
+  if (!c.start) return `${day} 時間未定`
+  return `${day} ${c.start}${c.end ? `〜${c.end}` : ''}`
+}
+
+/** 訪問リクエストの受付を顧客に通知する */
+export async function sendVisitRequestReceivedToCustomer(params: {
+  customerEmail: string
+  customerName: string
+  storeName: string
+  candidates: VisitRequestCandidate[]
+  customerNote?: string | null
+  /** 次回リクエスト可能日の案内（任意） */
+  nextAvailableNotice?: string | null
+  mypageUrl: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const { html, text } = buildSimpleEmail({
+    accent: '#991b1b',
+    eyebrow: '買いクル',
+    heading: '訪問リクエストを受け付けました',
+    addressee: `${params.customerName} 様`,
+    lead: 'ご希望の訪問日時を受け付けました。\n担当店舗が内容を確認し、日程が決まり次第あらためてご連絡いたします。',
+    rows: [
+      { label: '担当店舗', value: params.storeName, strong: true },
+      ...params.candidates.map((c, i) => ({ label: `第${i + 1}希望`, value: formatCandidate(c) })),
+      ...(params.customerNote ? [{ label: 'ご連絡事項', value: params.customerNote }] : []),
+    ],
+    footnote: params.nextAvailableNotice ?? undefined,
+    ctaUrl: params.mypageUrl,
+    ctaLabel: 'マイページで確認',
+  })
+
+  await transporter.sendMail({
+    from,
+    to: params.customerEmail,
+    subject: '【買いクル】訪問リクエストを受け付けました',
+    html,
+    text,
+  })
+  return true
+}
+
+/** 訪問リクエストの到着を店舗に通知する */
+export async function sendVisitRequestReceivedToStore(params: {
+  to: string
+  storeName: string
+  customerName: string
+  customerPhone: string
+  customerAddress: string
+  candidates: VisitRequestCandidate[]
+  customerNote?: string | null
+  requestUrl: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const { html, text } = buildSimpleEmail({
+    accent: '#991b1b',
+    eyebrow: '買いクル',
+    heading: '訪問リクエストが届きました',
+    addressee: `${params.storeName} 御中`,
+    lead: 'お客様から訪問リクエストが届きました。\n候補日時をご確認のうえ、店舗ポータルから承認または代替日をご提案ください。',
+    rows: [
+      { label: 'お客様', value: params.customerName, strong: true },
+      { label: '電話番号', value: params.customerPhone || '未登録' },
+      { label: '住所', value: params.customerAddress || '未登録' },
+      ...params.candidates.map((c, i) => ({ label: `第${i + 1}希望`, value: formatCandidate(c) })),
+      ...(params.customerNote ? [{ label: 'ご連絡事項', value: params.customerNote }] : []),
+    ],
+    ctaUrl: params.requestUrl,
+    ctaLabel: '訪問リクエストを確認',
+  })
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `【買いクル】訪問リクエスト - ${params.customerName} 様`,
+    html,
+    text,
+  })
+  return true
+}
+
+/** 訪問日程の確定を顧客に通知する */
+export async function sendVisitConfirmedToCustomer(params: {
+  customerEmail: string
+  customerName: string
+  storeName: string
+  storePhone?: string | null
+  visitDate: Date
+  startTime?: string | null
+  endTime?: string | null
+  mypageUrl: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const when = formatCandidate({ date: params.visitDate, start: params.startTime, end: params.endTime })
+  const { html, text } = buildSimpleEmail({
+    accent: '#047857',
+    eyebrow: '買いクル',
+    heading: '訪問日程が確定しました',
+    addressee: `${params.customerName} 様`,
+    lead: 'ご希望の訪問日程が確定しました。\n当日は担当者がお伺いいたしますので、よろしくお願いいたします。',
+    rows: [
+      { label: '訪問日時', value: when, strong: true },
+      { label: '担当店舗', value: params.storeName },
+      ...(params.storePhone ? [{ label: '店舗電話番号', value: params.storePhone }] : []),
+    ],
+    footnote: '当日は本人確認のため、身分証明証のご提示をお願いいたします。\nご都合が変わった場合は、担当店舗までお早めにご連絡ください。',
+    ctaUrl: params.mypageUrl,
+    ctaLabel: 'マイページで確認',
+  })
+
+  await transporter.sendMail({
+    from,
+    to: params.customerEmail,
+    subject: `【買いクル】訪問日程が確定しました（${when}）`,
+    html,
+    text,
+  })
+  return true
+}
+
+/** 訪問日程の確定を店舗に通知する */
+export async function sendVisitConfirmedToStore(params: {
+  to: string
+  storeName: string
+  customerName: string
+  customerPhone: string
+  customerAddress: string
+  visitDate: Date
+  startTime?: string | null
+  endTime?: string | null
+  scheduleUrl: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const when = formatCandidate({ date: params.visitDate, start: params.startTime, end: params.endTime })
+  const { html, text } = buildSimpleEmail({
+    accent: '#047857',
+    eyebrow: '買いクル',
+    heading: '訪問日程が確定しました',
+    addressee: `${params.storeName} 御中`,
+    lead: '訪問リクエストの日程が確定し、訪問予定に登録されました。',
+    rows: [
+      { label: '訪問日時', value: when, strong: true },
+      { label: 'お客様', value: params.customerName },
+      { label: '電話番号', value: params.customerPhone || '未登録' },
+      { label: '住所', value: params.customerAddress || '未登録' },
+    ],
+    ctaUrl: params.scheduleUrl,
+    ctaLabel: '訪問予定を確認',
+  })
+
+  await transporter.sendMail({
+    from,
+    to: params.to,
+    subject: `【買いクル】訪問日程確定 - ${params.customerName} 様（${when}）`,
+    html,
+    text,
   })
   return true
 }

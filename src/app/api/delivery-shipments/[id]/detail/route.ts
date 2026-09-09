@@ -2,15 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { toClientShipment } from '@/lib/delivery-shipment'
 
-/** JSON文字列の画像URLをパースして返す */
-function toClient(s: any) {
-  let imageUrls: string[] = []
-  try { imageUrls = JSON.parse(s.imageUrls || '[]') } catch { /* ignore */ }
-  let trackingImageUrls: string[] = []
-  try { trackingImageUrls = JSON.parse(s.trackingImageUrls || '[]') } catch { /* ignore */ }
-  return { ...s, imageUrls, trackingImageUrls }
-}
 
 /**
  * GET /api/delivery-shipments/[id]/detail
@@ -56,5 +49,5 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  return NextResponse.json(toClient(shipment))
+  return NextResponse.json(toClientShipment(shipment))
 }

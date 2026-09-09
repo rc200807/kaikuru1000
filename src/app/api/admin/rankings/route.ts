@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { purchasedDealWhere } from '@/lib/purchase-aggregation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -51,14 +52,16 @@ export async function GET(request: NextRequest) {
   }))
 
   // --- 店舗別買取金額ランキング（全期間・全店舗）---
-  const purchaseGroups = await prisma.visitSchedule.groupBy({
+  // 買取金額の正は案件（Deal.purchaseAmount）。訪問側の値は案件詳細から品目を登録した
+  // 取引では入らないため、以前はランキングが全店 0 円になっていた
+  const purchaseGroups = await prisma.deal.groupBy({
     by: ['storeId'],
-    where: { status: 'completed' },
+    where: purchasedDealWhere({ storeId: { not: null } }),
     _sum: { purchaseAmount: true },
     orderBy: { _sum: { purchaseAmount: 'desc' } },
   })
 
-  const purchaseStoreIds = purchaseGroups.map(g => g.storeId)
+  const purchaseStoreIds = purchaseGroups.map(g => g.storeId).filter((id): id is string => !!id)
   const purchaseStores =
     purchaseStoreIds.length > 0
       ? await prisma.store.findMany({
@@ -68,11 +71,13 @@ export async function GET(request: NextRequest) {
       : []
   const purchaseStoreMap = new Map(purchaseStores.map(s => [s.id, s.name]))
 
-  const purchaseRanking = purchaseGroups.map(g => ({
-    storeId: g.storeId,
-    name: purchaseStoreMap.get(g.storeId) ?? '',
-    amount: g._sum.purchaseAmount ?? 0,
-  }))
+  const purchaseRanking = purchaseGroups
+    .filter((g): g is typeof g & { storeId: string } => !!g.storeId)
+    .map(g => ({
+      storeId: g.storeId,
+      name: purchaseStoreMap.get(g.storeId) ?? '',
+      amount: g._sum.purchaseAmount ?? 0,
+    }))
 
   return NextResponse.json({ customerRanking, purchaseRanking, period })
 }

@@ -31,7 +31,7 @@ export async function GET() {
   const readerId = user.memberId ?? storeId
   const t = createTimer()
 
-  const [announcements, releaseNotes, chat, accounts] = await t.measure('badges', () =>
+  const [announcements, releaseNotes, chat, accounts, visitRequests] = await t.measure('badges', () =>
     Promise.all([
       // 未読お知らせ数（配信対象＝店舗の対応サービスで絞った母集団の中で数える）
       (async () => {
@@ -91,6 +91,11 @@ export async function GET() {
         }
         return { currentStore, linkedStores: Array.from(map.values()) }
       })(),
+
+      // 未対応の訪問リクエスト（顧客からの新規リクエスト）。ダッシュボードとナビに出す
+      prisma.visitRequest.count({
+        where: { storeId, requestedBy: 'customer', status: 'pending' },
+      }),
     ]),
   )
 
@@ -98,6 +103,7 @@ export async function GET() {
     announcements,
     releaseNotes,
     chat,
+    visitRequests,
     currentStore: accounts.currentStore,
     linkedStores: accounts.linkedStores,
   })

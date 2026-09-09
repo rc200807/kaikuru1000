@@ -48,7 +48,10 @@ export async function GET(request: NextRequest) {
       include: {
         user: { select: { id: true, name: true, address: true, phone: true } },
         store: { select: { id: true, name: true } },
-        deal: { select: { id: true, status: true } },
+        member: { select: { id: true, name: true } },
+        // 買取金額の正は案件（Deal.purchaseAmount）。訪問側の値は旧データにしか入らないため、
+        // 一覧では案件の金額もフォールバックとして返す
+        deal: { select: { id: true, status: true, purchaseAmount: true } },
         salesContract: { select: { id: true, createdAt: true } },
         purchaseItems: { select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true } },
         workItems: { select: { id: true, workName: true, quantity: true, unitPrice: true } },
@@ -72,10 +75,31 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { userId, storeId, visitDate, startTime, endTime, note, dealId } = body
+  const { userId, storeId, visitDate, startTime, endTime, note, dealId, staffName, memberId, purposeId } = body
 
   if (!userId || !storeId || !visitDate) {
     return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
+  }
+
+  // 訪問担当者（店舗メンバー）。案件作成の流れでそのまま指定できるようにする。
+  // memberId が来たときは自店舗のメンバーか検証し、名前はスナップショットとして保存する
+  let resolvedMemberId: string | null = sessionUser?.memberId ?? null
+  let resolvedStaffName: string | null = typeof staffName === 'string' && staffName.trim() ? staffName.trim() : null
+  if (memberId) {
+    const member = await prisma.storeMember.findUnique({ where: { id: memberId }, select: { id: true, name: true, storeId: true } })
+    if (!member || member.storeId !== storeId) {
+      return NextResponse.json({ error: '訪問担当者が見つかりません' }, { status: 400 })
+    }
+    resolvedMemberId = member.id
+    resolvedStaffName = resolvedStaffName ?? member.name
+  }
+
+  // 訪問目的（管理ポータルのマスタから選択）
+  let resolvedPurpose: { id: string; name: string } | null = null
+  if (purposeId) {
+    const purpose = await prisma.visitPurpose.findUnique({ where: { id: purposeId }, select: { id: true, name: true } })
+    if (!purpose) return NextResponse.json({ error: '訪問目的が見つかりません' }, { status: 400 })
+    resolvedPurpose = purpose
   }
 
   // 訪問には必ず案件を紐づける（無ければ自動生成。作成者はセッションの実行者）
@@ -93,7 +117,10 @@ export async function POST(request: NextRequest) {
       endTime: endTime || null,
       note,
       status: 'scheduled',
-      memberId: sessionUser?.memberId ?? null,
+      staffName: resolvedStaffName,
+      memberId: resolvedMemberId,
+      purposeId: resolvedPurpose?.id ?? null,
+      purposeName: resolvedPurpose?.name ?? null,
     },
     include: {
       user: { select: { id: true, name: true, address: true, phone: true, internalNote: true, customerType: true } },

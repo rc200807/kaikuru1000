@@ -6,7 +6,14 @@ import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import SettingsShell from '../SettingsShell'
-import { STORE_NAV_GATE_LABEL, type StoreNavGate } from '@/lib/store-nav'
+import {
+  STORE_NAV_GATE_LABEL,
+  STORE_NAV_VISIBILITY_OPTIONS,
+  storeNavVisibility,
+  storeNavVisibilityFlags,
+  type StoreNavGate,
+  type StoreNavVisibility,
+} from '@/lib/store-nav'
 
 type NavItemRow = {
   key: string
@@ -15,6 +22,8 @@ type NavItemRow = {
   gate: StoreNavGate | null
   locked: boolean
   visible: boolean
+  /** テスト店舗にだけ表示する項目 */
+  testStoreOnly: boolean
 }
 
 type OverrideRow = {
@@ -26,7 +35,7 @@ type OverrideRow = {
   note: string | null
 }
 
-type StoreOption = { id: string; name: string; code: string }
+type StoreOption = { id: string; name: string; code: string; isTestStore?: boolean }
 
 /** 特例エディタの1項目の状態: 既定に従う / 強制表示 / 強制非表示 */
 type OverrideChoice = 'default' | 'show' | 'hide'
@@ -82,7 +91,8 @@ function StoreMenuSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order: next.map(i => i.key),
-          hidden: next.filter(i => !i.visible).map(i => i.key),
+          hidden: next.filter(i => !i.locked && !i.testStoreOnly && !i.visible).map(i => i.key),
+          testOnly: next.filter(i => !i.locked && i.testStoreOnly).map(i => i.key),
         }),
       })
       if (res.ok) {
@@ -109,10 +119,13 @@ function StoreMenuSettings() {
     persist(next)
   }
 
-  function toggleVisible(key: string) {
+  /** 表示範囲（全店舗 / テスト店舗のみ / 非表示）を切り替える */
+  function setVisibility(key: string, visibility: StoreNavVisibility) {
     const target = items.find(i => i.key === key)
     if (!target || target.locked) return
-    const next = items.map(i => (i.key === key ? { ...i, visible: !i.visible } : i))
+    if (storeNavVisibility(target) === visibility) return
+    const flags = storeNavVisibilityFlags(visibility)
+    const next = items.map(i => (i.key === key ? { ...i, ...flags } : i))
     setItems(next)
     persist(next)
   }
@@ -198,7 +211,8 @@ function StoreMenuSettings() {
     }
   }
 
-  const hiddenCount = items.filter(i => !i.visible).length
+  const hiddenCount = items.filter(i => !i.testStoreOnly && !i.visible).length
+  const testOnlyCount = items.filter(i => i.testStoreOnly).length
   const editingStore = stores.find(s => s.id === editingStoreId) ?? null
 
   return (
@@ -217,11 +231,16 @@ function StoreMenuSettings() {
           </svg>
           <h3 className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">メニューの並び順・表示</h3>
           <span className="ml-auto text-xs text-[var(--md-sys-color-on-surface-variant)]">
-            {loading ? '' : `${items.length}項目${hiddenCount > 0 ? ` / 非表示 ${hiddenCount}` : ''}`}
+            {loading ? '' : [
+              `${items.length}項目`,
+              hiddenCount > 0 ? `非表示 ${hiddenCount}` : null,
+              testOnlyCount > 0 ? `テスト店舗のみ ${testOnlyCount}` : null,
+            ].filter(Boolean).join(' / ')}
           </span>
         </div>
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5 ml-8">
-          店舗ポータルの左サイドメニュー（モバイルはメニュー内）の並び順と表示/非表示です。⠿ をドラッグして並べ替えると全店舗に反映されます。
+          店舗ポータルの左サイドメニュー（モバイルはメニュー内）の並び順と表示範囲です。⠿ をドラッグして並べ替えると全店舗に反映されます。
+          「テスト店舗のみ」にした項目は、店舗情報で「テスト店舗」に分類した店舗にだけ表示されます（店舗ごとの特例よりも優先されます）。
         </p>
 
         <div className="ml-8 space-y-1">
@@ -240,7 +259,7 @@ function StoreMenuSettings() {
                   dragIndex === idx
                     ? 'bg-[var(--md-sys-color-surface-container-high)]'
                     : 'hover:bg-[var(--md-sys-color-surface-container-low)]'
-                } ${!item.visible ? 'opacity-50' : ''}`}
+                } ${!item.visible && !item.testStoreOnly ? 'opacity-50' : ''}`}
               >
                 <span
                   className="text-[var(--md-sys-color-on-surface-variant)] select-none flex-shrink-0 cursor-grab"
@@ -261,36 +280,36 @@ function StoreMenuSettings() {
                     常に表示
                   </span>
                 ) : (
-                  <>
-                    {!item.visible && (
-                      <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
-                        非表示
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={item.visible}
-                      aria-label={`${item.label}を${item.visible ? '非表示' : '表示'}にする`}
-                      onClick={() => toggleVisible(item.key)}
-                      disabled={saving}
-                      title={item.visible ? '非表示にする' : '表示する'}
-                      className="flex-shrink-0 relative w-10 h-6 rounded-full transition-colors"
-                      style={{
-                        // 管理ポータルは --md-sys-color-primary を定義していないため --portal-primary を使う
-                        background: item.visible ? 'var(--portal-primary, #374151)' : 'var(--md-sys-color-surface-container-highest)',
-                        border: '1px solid var(--md-sys-color-outline-variant)',
-                      }}
-                    >
-                      <span
-                        className="absolute top-0.5 rounded-full transition-all"
-                        style={{
-                          width: 18, height: 18, left: item.visible ? 19 : 2,
-                          background: item.visible ? 'var(--portal-on-primary, #fff)' : 'var(--md-sys-color-outline)',
-                        }}
-                      />
-                    </button>
-                  </>
+                  <div
+                    role="radiogroup"
+                    aria-label={`${item.label}の表示範囲`}
+                    className="flex-shrink-0 inline-flex rounded-full overflow-hidden"
+                    style={{ border: '1px solid var(--md-sys-color-outline-variant)' }}
+                  >
+                    {STORE_NAV_VISIBILITY_OPTIONS.map(opt => {
+                      const active = storeNavVisibility(item) === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          title={opt.description}
+                          onClick={() => setVisibility(item.key, opt.value)}
+                          disabled={saving}
+                          className="px-2.5 py-1 text-[11px] font-semibold transition-colors whitespace-nowrap disabled:opacity-60"
+                          style={
+                            active
+                              // 管理ポータルは --md-sys-color-primary を定義していないため --portal-primary を使う
+                              ? { background: 'var(--portal-primary, #374151)', color: 'var(--portal-on-primary, #fff)' }
+                              : { background: 'transparent', color: 'var(--md-sys-color-on-surface-variant)' }
+                          }
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             ))
@@ -311,6 +330,7 @@ function StoreMenuSettings() {
         </div>
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mb-5 ml-8">
           指定した店舗だけ、共通設定で非表示にしたメニューを表示できます。「すべて表示」か、項目ごとの上書きを選べます。
+          共通設定で「テスト店舗のみ」にした項目はここでは上書きできません（テスト店舗に分類された店舗にだけ表示されます）。
         </p>
 
         <div className="ml-8 space-y-4">
@@ -359,7 +379,7 @@ function StoreMenuSettings() {
                 <option value="">＋ 特例を設定する店舗を選択...</option>
                 {stores.map(s => (
                   <option key={s.id} value={s.id}>
-                    {s.name}（{s.code}）{overrideByStore.has(s.id) ? ' ※特例あり' : ''}
+                    {s.name}（{s.code}）{s.isTestStore ? ' [テスト店舗]' : ''}{overrideByStore.has(s.id) ? ' ※特例あり' : ''}
                   </option>
                 ))}
               </select>
@@ -395,13 +415,16 @@ function StoreMenuSettings() {
                       <span className="text-sm text-[var(--md-sys-color-on-surface)] flex-1 min-w-0 truncate">
                         {item.label}
                         <span className="ml-1.5 text-[11px] text-[var(--md-sys-color-on-surface-faint)]">
-                          {item.visible ? '共通: 表示' : '共通: 非表示'}
+                          {item.testStoreOnly
+                            ? '共通: テスト店舗のみ（特例より優先）'
+                            : item.visible ? '共通: 表示' : '共通: 非表示'}
                         </span>
                       </span>
                       <select
                         value={editChoices[item.key] ?? 'default'}
                         onChange={e => setEditChoices(prev => ({ ...prev, [item.key]: e.target.value as OverrideChoice }))}
-                        className="px-2 py-1 text-xs rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]"
+                        disabled={item.testStoreOnly}
+                        className="px-2 py-1 text-xs rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] disabled:opacity-40"
                       >
                         <option value="default">既定</option>
                         <option value="show">表示</option>

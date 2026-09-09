@@ -63,7 +63,38 @@ export const STORE_NAV_GATE_LABEL: Record<StoreNavGate, string> = {
 }
 
 /** DB の StoreNavSetting 行（必要な列だけ） */
-export type StoreNavSettingRow = { key: string; sortOrder: number; visible: boolean }
+export type StoreNavSettingRow = {
+  key: string
+  sortOrder: number
+  visible: boolean
+  /** テスト店舗（Store.isTestStore）にだけ表示する項目 */
+  testStoreOnly?: boolean
+}
+
+/**
+ * 項目の表示範囲。管理ポータルでは3択（全店舗 / テスト店舗のみ / 非表示）で設定し、
+ * DB では visible + testStoreOnly の組み合わせで持つ（矛盾した状態を作らないため）。
+ */
+export type StoreNavVisibility = 'all' | 'testOnly' | 'hidden'
+
+export const STORE_NAV_VISIBILITY_OPTIONS: readonly { value: StoreNavVisibility; label: string; description: string }[] = [
+  { value: 'all',      label: '全店舗',        description: 'すべての店舗に表示します' },
+  { value: 'testOnly', label: 'テスト店舗のみ', description: 'テスト店舗に分類された店舗にだけ表示します' },
+  { value: 'hidden',   label: '非表示',        description: 'どの店舗にも表示しません' },
+]
+
+/** visible / testStoreOnly → 表示範囲 */
+export function storeNavVisibility(row: { visible: boolean; testStoreOnly?: boolean }): StoreNavVisibility {
+  if (row.testStoreOnly) return 'testOnly'
+  return row.visible ? 'all' : 'hidden'
+}
+
+/** 表示範囲 → visible / testStoreOnly */
+export function storeNavVisibilityFlags(v: StoreNavVisibility): { visible: boolean; testStoreOnly: boolean } {
+  if (v === 'testOnly') return { visible: true, testStoreOnly: true }
+  if (v === 'hidden') return { visible: false, testStoreOnly: false }
+  return { visible: true, testStoreOnly: false }
+}
 /** DB の StoreNavOverride 行（必要な列だけ） */
 export type StoreNavOverrideRow = { showAll: boolean; items: string }
 
@@ -97,7 +128,7 @@ export function stringifyStoreNavOverrideItems(items: Record<string, boolean> | 
 /** 共通設定を「定義順で埋めた」配列に正規化（管理画面の初期表示に使う） */
 export function mergeStoreNavSettings(
   settings: readonly StoreNavSettingRow[] | null | undefined,
-): { key: string; sortOrder: number; visible: boolean }[] {
+): { key: string; sortOrder: number; visible: boolean; testStoreOnly: boolean }[] {
   const byKey = new Map((settings ?? []).map(s => [s.key, s]))
   return STORE_NAV_ITEMS
     .map((def, idx) => {
@@ -106,24 +137,33 @@ export function mergeStoreNavSettings(
         key: def.key,
         sortOrder: row ? row.sortOrder : idx,
         visible: def.locked ? true : row ? row.visible : true,
+        // locked 項目（ダッシュボード）はテスト店舗限定にできない
+        testStoreOnly: def.locked ? false : !!row?.testStoreOnly,
         _idx: idx,
       }
     })
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a._idx - b._idx))
-    .map(({ key, sortOrder, visible }) => ({ key, sortOrder, visible }))
+    .map(({ key, sortOrder, visible, testStoreOnly }) => ({ key, sortOrder, visible, testStoreOnly }))
 }
 
 /**
  * 店舗に表示するメニューのキー配列を解決する（並び順つき）。
- * 優先順位: 固定表示(locked) > 店舗特例(showAll / items) > 共通設定 > 既定(表示)
+ * 優先順位: 固定表示(locked) > テスト店舗限定(testStoreOnly) > 店舗特例(showAll / items) > 共通設定 > 既定(表示)
+ *
+ * testStoreOnly は「その店舗がテスト店舗でなければ絶対に出さない」ハードゲートなので、
+ * 店舗特例（showAll / items）より先に判定する。テスト店舗を「全店舗表示すべて＋テスト限定項目」
+ * にするため、テスト店舗では testStoreOnly の項目を特例より優先して表示する。
  * gate（アキクル・組織管理者）はクライアント側で別途判定する。
  */
 export function resolveStoreNavKeys(opts: {
   settings?: readonly StoreNavSettingRow[] | null
   override?: StoreNavOverrideRow | null
+  /** この店舗がテスト店舗か（Store.isTestStore） */
+  isTestStore?: boolean
 }): string[] {
   const overrideItems = parseStoreNavOverrideItems(opts.override?.items)
   const showAll = !!opts.override?.showAll
+  const isTestStore = !!opts.isTestStore
   const bySettingKey = new Map((opts.settings ?? []).map(s => [s.key, s]))
 
   return mergeStoreNavSettings(opts.settings)
@@ -131,6 +171,7 @@ export function resolveStoreNavKeys(opts: {
       const def = DEF_BY_KEY.get(row.key)
       if (!def) return false
       if (def.locked) return true
+      if (row.testStoreOnly) return isTestStore
       if (showAll) return true
       const ov = overrideItems[row.key]
       if (typeof ov === 'boolean') return ov

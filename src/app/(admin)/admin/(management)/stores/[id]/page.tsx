@@ -49,6 +49,8 @@ type Store = {
   antiquePermitNumber?: string | null
   serviceAreas?: string | null
   supportedServices?: string | null
+  /** テスト店舗（統計に加算されない動作確認用の店舗） */
+  isTestStore?: boolean
   isActive: boolean
   _count?: { customers: number }
 }
@@ -385,6 +387,7 @@ export default function StoreDetailPage() {
       antiquePermitNumber: store.antiquePermitNumber || '',
       serviceAreas,
       supportedServices: store.supportedServices || '[]',
+      isTestStore: store.isTestStore ? '1' : '',
     })
     setEditMode(true)
   }
@@ -447,7 +450,8 @@ export default function StoreDetailPage() {
     const res = await fetch(`/api/admin/stores/${store.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updateDetails: true, ...editForm }),
+      // isTestStore は真偽値で送る（editForm は文字列マップなので '1' で保持している）
+      body: JSON.stringify({ updateDetails: true, ...editForm, isTestStore: editForm.isTestStore === '1' }),
     })
     setSavingEdit(false)
     if (res.ok) {
@@ -583,6 +587,18 @@ export default function StoreDetailPage() {
           <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>
             <code>{store.code}</code>
             {store.storeStatus && <span>{storeStatusLabel(store.storeStatus)}</span>}
+            {store.isTestStore && (
+              <span
+                title="テスト店舗（買取金額・訪問件数などの全体統計に加算されません）"
+                style={{
+                  padding: '1px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  background: 'var(--md-sys-color-tertiary-container, #e8def8)',
+                  color: 'var(--md-sys-color-on-tertiary-container, #1d192b)',
+                }}
+              >
+                テスト店舗
+              </span>
+            )}
             {store._count && <span>顧客 {store._count.customers}名</span>}
           </div>
         </div>
@@ -665,6 +681,23 @@ export default function StoreDetailPage() {
               <EditField label="LINE友達登録リンク" type="url" value={editForm.lineAddFriendUrl} onChange={v => setEditForm({ ...editForm, lineAddFriendUrl: v })} placeholder="https://lin.ee/..." />
               <EditField label="インボイス番号" value={editForm.invoiceNumber} onChange={v => setEditForm({ ...editForm, invoiceNumber: v })} />
               <EditField label="古物営業許可番号" value={editForm.antiquePermitNumber} onChange={v => setEditForm({ ...editForm, antiquePermitNumber: v })} />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>分類</label>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 8, border: '1px solid var(--md-sys-color-outline-variant)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={editForm.isTestStore === '1'}
+                  onChange={e => setEditForm({ ...editForm, isTestStore: e.target.checked ? '1' : '' })}
+                  style={{ marginTop: 2, width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: 13, color: 'var(--md-sys-color-on-surface)' }}>
+                  テスト店舗
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 2 }}>
+                    買取金額・訪問件数などの全体統計に加算しません。店舗メニュー設定で「テスト店舗のみ」に指定した項目が表示されます。
+                  </span>
+                </span>
+              </label>
             </div>
             <div style={{ marginTop: 16 }}>
               <label style={{ display: 'block', fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 4 }}>対応サービス</label>

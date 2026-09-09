@@ -11,7 +11,8 @@ export async function GET() {
 
   const [stores, leadSources] = await Promise.all([
     prisma.store.findMany({
-      where: { isActive: true },
+      // テスト店舗は統計に加算しないので絞り込み候補にも出さない
+      where: { isActive: true, isTestStore: false },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     }),

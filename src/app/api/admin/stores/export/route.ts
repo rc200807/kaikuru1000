@@ -31,6 +31,7 @@ export async function GET() {
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true, serviceAreas: true,
       supportedServices: true,
+      isTestStore: true,
       createdAt: true,
       operator: { select: { name: true } },
       _count: { select: { customers: true } },
@@ -49,6 +50,7 @@ export async function GET() {
       case 'closingDate':  return ymd(s.closingDate)
       case 'serviceAreas': return s.serviceAreas ?? ''
       case 'supportedServices': return storeServicesLabel(s.supportedServices)
+      case 'isTestStore':  return s.isTestStore ? 'はい' : 'いいえ'
       case 'operatorName': return s.operator?.name ?? ''
       case 'isActive':     return s.isActive ? '有効' : '無効'
       case 'customerCount': return String(s._count.customers)

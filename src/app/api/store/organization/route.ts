@@ -23,8 +23,8 @@ export async function GET() {
   const [{ operator, stores }, orgAdmin, self, navSettings, navOverride] = await Promise.all([
     getOperatorStores(sessionStoreId),
     isOrgAdmin({ id: sessionStoreId, memberId: user.memberId ?? null }),
-    prisma.store.findUnique({ where: { id: sessionStoreId }, select: { supportedServices: true } }),
-    prisma.storeNavSetting.findMany({ select: { key: true, sortOrder: true, visible: true } }),
+    prisma.store.findUnique({ where: { id: sessionStoreId }, select: { supportedServices: true, isTestStore: true } }),
+    prisma.storeNavSetting.findMany({ select: { key: true, sortOrder: true, visible: true, testStoreOnly: true } }),
     prisma.storeNavOverride.findUnique({
       where: { storeId: sessionStoreId },
       select: { showAll: true, items: true },
@@ -47,7 +47,13 @@ export async function GET() {
     // セッション店舗の対応サービス（機能ゲート用。例: ['kaikuru','akikuru']）
     services: parseStoreServices(self?.supportedServices),
     // サイドメニューの表示キー（管理ポータルの共通設定＋この店舗の特例を解決済み・並び順つき）
-    navKeys: resolveStoreNavKeys({ settings: navSettings, override: navOverride }),
+    navKeys: resolveStoreNavKeys({
+      settings: navSettings,
+      override: navOverride,
+      // テスト店舗にだけ表示する項目（管理ポータルの店舗メニュー設定）を解決するため
+      isTestStore: !!self?.isTestStore,
+    }),
+    isTestStore: !!self?.isTestStore,
     sessionStoreId,
   })
 }

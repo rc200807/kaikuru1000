@@ -13,6 +13,7 @@ import {
   recentMonthKeys,
   sumPurchaseAmount,
 } from '@/lib/purchase-aggregation'
+import { NON_TEST_STORE_DEAL } from '@/lib/test-store'
 
 export type StoreDashboardOptions = {
   /** true でランキングTOP10に金額(amount)を含める（管理向け。店舗向けは相対barのみ） */
@@ -50,14 +51,15 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
       where: { ...storeFilter, visitDate: { gte: twelveMonthsAgo } },
       select: { visitDate: true, status: true, storeId: true },
     }),
-    // 全店舗の買取金額ランキング（当月）。買取金額の正は案件（Deal）なのでそちらで集計する
+    // 全店舗の買取金額ランキング（当月）。買取金額の正は案件（Deal）なのでそちらで集計する。
+    // テスト店舗はランキング・母数の対象外（自店舗がテスト店舗なら順位は null になる）
     prisma.deal.groupBy({
       by: ['storeId'],
-      where: purchasedDealWhere({ occurredAt: { gte: currentMonthStart }, storeId: { not: null } }),
+      where: purchasedDealWhere({ occurredAt: { gte: currentMonthStart }, storeId: { not: null }, ...NON_TEST_STORE_DEAL }),
       _sum: { purchaseAmount: true },
       orderBy: { _sum: { purchaseAmount: 'desc' } },
     }),
-    prisma.store.count({ where: { isActive: true } }),
+    prisma.store.count({ where: { isActive: true, isTestStore: false } }),
     // 本日の訪問件数（KPI用）
     prisma.visitSchedule.count({
       where: { ...storeFilter, visitDate: { gte: today, lt: tomorrow } },

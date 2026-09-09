@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
     const tomorrow = dateFromJstStr(addDaysStr(todayStr, 1))
 
     const [stores, deals, logins] = await Promise.all([
-      prisma.store.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+      prisma.store.findMany({ where: { isActive: true, isTestStore: false }, select: { id: true, name: true } }),
       prisma.deal.findMany({
-        where: { occurredAt: { gte: prevStart, lt: tomorrow } },
+        where: { occurredAt: { gte: prevStart, lt: tomorrow }, NOT: { store: { isTestStore: true } } },
         select: { storeId: true, occurredAt: true, status: true, purchaseAmount: true },
       }),
       prisma.accessLog.findMany({

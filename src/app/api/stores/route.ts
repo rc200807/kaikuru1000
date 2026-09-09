@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
       operatorId: true, serviceAreas: true, supportedServices: true, createdAt: true,
+      isTestStore: true,
       operator: { select: { id: true, name: true } },
       _count: { select: { customers: true } },
     },

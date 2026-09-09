@@ -8,6 +8,7 @@ import {
 } from '@/lib/analytics/period'
 import { DEAL_CATEGORIES } from '@/lib/deal-categories'
 import { CUSTOMER_TYPES } from '@/lib/customer-types'
+import { NON_TEST_STORE_DEAL, NON_TEST_STORE_USER } from '@/lib/test-store'
 import type { AnalyticsResponse } from '@/lib/analytics/types'
 
 export type AnalyticsFilters = {
@@ -40,8 +41,8 @@ export async function resolveAnalyticsParams(request: NextRequest): Promise<Reso
   let allStartStr: string | undefined
   if (preset === 'all') {
     const [minUser, minDeal] = await Promise.all([
-      prisma.user.aggregate({ _min: { createdAt: true } }),
-      prisma.deal.aggregate({ _min: { occurredAt: true } }),
+      prisma.user.aggregate({ where: NON_TEST_STORE_USER, _min: { createdAt: true } }),
+      prisma.deal.aggregate({ where: NON_TEST_STORE_DEAL, _min: { occurredAt: true } }),
     ])
     const candidates = [minUser._min.createdAt, minDeal._min.occurredAt].filter((d): d is Date => d != null)
     if (candidates.length > 0) {
@@ -79,10 +80,15 @@ export function dateWhere(range: DateRange) {
   return { gte: range.from, lt: range.to }
 }
 
-/** Deal 向けの共通 where（occurredAt 範囲 + 全フィルタ） */
+/**
+ * Deal 向けの共通 where（occurredAt 範囲 + 全フィルタ）。
+ * 店舗を指定していないときはテスト店舗の案件を母数から外す。
+ * 店舗を明示指定したときは（テスト店舗であっても）その店舗の数字をそのまま見せる。
+ */
 export function dealWhere(range: DateRange, filters: AnalyticsFilters) {
   const where: Record<string, unknown> = { occurredAt: dateWhere(range) }
   if (filters.storeId) where.storeId = filters.storeId
+  else Object.assign(where, NON_TEST_STORE_DEAL)
   if (filters.dealCategory) where.category = filters.dealCategory
   const userWhere: Record<string, unknown> = {}
   if (filters.customerType) userWhere.customerType = filters.customerType
@@ -95,6 +101,7 @@ export function dealWhere(range: DateRange, filters: AnalyticsFilters) {
 export function customerWhere(range: DateRange, filters: AnalyticsFilters) {
   const where: Record<string, unknown> = { createdAt: dateWhere(range), mergedIntoUserId: null }
   if (filters.storeId) where.storeId = filters.storeId
+  else Object.assign(where, NON_TEST_STORE_USER)
   if (filters.customerType) where.customerType = filters.customerType
   if (filters.leadSource) where.leadSource = filters.leadSource
   return where
@@ -105,6 +112,7 @@ export function visitWhere(range: DateRange, filters: AnalyticsFilters, status?:
   const where: Record<string, unknown> = { visitDate: dateWhere(range) }
   if (status) where.status = status
   if (filters.storeId) where.storeId = filters.storeId
+  else where.store = { isTestStore: false }
   const userWhere: Record<string, unknown> = {}
   if (filters.customerType) userWhere.customerType = filters.customerType
   if (filters.leadSource) userWhere.leadSource = filters.leadSource
@@ -128,6 +136,7 @@ export function buildMeta(params: ResolvedParams, notes?: string[]): AnalyticsRe
 /** 店舗ID→名前などの解決用に全店舗の軽量リストを取得 */
 export async function fetchStoreMap() {
   const stores = await prisma.store.findMany({
+    where: { isTestStore: false },
     select: { id: true, name: true, prefecture: true, operatorId: true, storeStatus: true, isActive: true, openingDate: true },
   })
   return new Map(stores.map(s => [s.id, s]))

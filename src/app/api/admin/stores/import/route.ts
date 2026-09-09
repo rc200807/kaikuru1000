@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { parseCsv } from '@/lib/csv-parser'
 import { STORE_CSV_COLUMNS, resolveStoreCsvHeader, storeStatusValueFromCell } from '@/lib/store-csv'
+import { boolFromCell } from '@/lib/operator-sheet'
 import { storeServicesValueFromCell } from '@/lib/store-services'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
 import { recordAccessLog } from '@/lib/access-log'
@@ -121,6 +122,8 @@ export async function POST(req: NextRequest) {
       } else if (col.kind === 'services') {
         // ラベル/キーの区切り文字列 → 正規化JSON配列（不明値は無視、空欄は '[]'）
         data.supportedServices = storeServicesValueFromCell(raw)
+      } else if (col.kind === 'bool') {
+        data[col.key] = raw === '' ? false : boolFromCell(raw)
       } else if (col.kind === 'date') {
         if (!raw) { data[col.key] = null; continue }
         const d = new Date(raw)

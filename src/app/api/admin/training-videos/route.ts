@@ -19,18 +19,19 @@ export async function GET() {
     include: {
       category: { select: { id: true, name: true } },
       admin: { select: { name: true } },
-      _count: { select: { views: true } },
+      // 視聴率の分母からテスト店舗を除くので、分子（視聴店舗数）も同じ条件で数える
+      _count: { select: { views: { where: { store: { isTestStore: false } } } } },
     },
   })
 
   // 全店舗数を取得（視聴率の分母として）
-  const totalActiveStores = await prisma.store.count({ where: { isActive: true } })
+  const totalActiveStores = await prisma.store.count({ where: { isActive: true, isTestStore: false } })
 
   // 各動画の合計再生回数を集計
   const playSums = await prisma.trainingVideoView.groupBy({
     by: ['trainingVideoId'],
     _sum: { playCount: true },
-    where: { trainingVideoId: { in: videos.map(v => v.id) } },
+    where: { trainingVideoId: { in: videos.map(v => v.id) }, store: { isTestStore: false } },
   })
   const totalPlayMap = new Map(playSums.map(p => [p.trainingVideoId, p._sum.playCount ?? 0]))
 

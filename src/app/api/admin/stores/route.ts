@@ -54,6 +54,7 @@ const createSchema = z.object({
   contractNotifyEmail: z.string().optional(),
   calendarInviteEmail: z.string().optional(),
   supportedServices:   z.string().optional(), // JSON配列文字列（例: '["kaikuru","akikuru"]'）
+  isTestStore:         z.boolean().optional(), // テスト店舗（統計から除外）
   operatorId:          z.string().optional().or(z.literal('')),
 })
 
@@ -67,6 +68,7 @@ const STORE_DETAIL_SELECT = {
   bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
   invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
   serviceAreas: true, supportedServices: true, operatorId: true,
+  isTestStore: true,
   operator: { select: { id: true, name: true } },
   _count: { select: { customers: true } },
 } as const
@@ -91,6 +93,7 @@ export async function POST(request: NextRequest) {
     bankName, branchName, accountType, accountNumber, accountHolder,
     invoiceNumber, antiquePermitNumber, contractNotifyEmail, calendarInviteEmail,
     supportedServices,
+    isTestStore,
     operatorId,
   } = parsed.data
 
@@ -153,6 +156,7 @@ export async function POST(request: NextRequest) {
       contractNotifyEmail: contractNotifyEmail || null,
       calendarInviteEmail: calendarInviteEmail || null,
       supportedServices:   stringifyStoreServices(parseStoreServices(supportedServices)),
+      isTestStore:         isTestStore === true,
       operatorId:          opId,
       // 運営者が割り当てられている場合は継承項目を運営者の値で上書き（運営者が「正」）
       ...(inherited ?? {}),

@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { buildBuckets, fillSeries } from '@/lib/analytics/period'
 import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import { resolveAnalyticsParams, dateWhere, buildMeta, fetchStoreMap } from '../_lib/params'
+import { NON_TEST_STORE_INVENTORY, NON_TEST_STORE_PURCHASE_ITEM } from '@/lib/test-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,11 @@ export async function GET(request: NextRequest) {
 
   const params = await resolveAnalyticsParams(request)
   const { range, compare, granularity, filters } = params
-  const storeFilter = filters.storeId ? { storeId: filters.storeId } : {}
+  // テスト店舗は全社統計に加算しない（店舗を明示指定したときはその店舗の数字をそのまま見せる）
+  const storeFilter = filters.storeId ? { storeId: filters.storeId } : NON_TEST_STORE_INVENTORY
+  const itemStoreFilter = filters.storeId
+    ? { deal: { storeId: filters.storeId } }
+    : NON_TEST_STORE_PURCHASE_ITEM
 
   const [
     purchaseItems, categories, statusAgg, listedCount, soldItems, staleItems, topItems, storeMap,
@@ -36,7 +41,7 @@ export async function GET(request: NextRequest) {
     prisma.purchaseItem.findMany({
       where: {
         createdAt: dateWhere(range),
-        ...(filters.storeId ? { deal: { storeId: filters.storeId } } : {}),
+        ...itemStoreFilter,
       },
       select: { purchasePrice: true, quantity: true, categoryId: true, category: true },
     }),
@@ -56,7 +61,7 @@ export async function GET(request: NextRequest) {
     prisma.purchaseItem.findMany({
       where: {
         createdAt: dateWhere(range),
-        ...(filters.storeId ? { deal: { storeId: filters.storeId } } : {}),
+        ...itemStoreFilter,
       },
       orderBy: { purchasePrice: 'desc' },
       take: 20,
@@ -73,7 +78,7 @@ export async function GET(request: NextRequest) {
       ? prisma.purchaseItem.aggregate({
           where: {
             createdAt: dateWhere(compare),
-            ...(filters.storeId ? { deal: { storeId: filters.storeId } } : {}),
+            ...itemStoreFilter,
           },
           _sum: { quantity: true },
         })

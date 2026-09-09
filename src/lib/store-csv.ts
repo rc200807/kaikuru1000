@@ -6,10 +6,11 @@
 //   'status' … 営業ステータス（ラベル⇔値を変換）。
 //   'date'   … 日付（YYYY-MM-DD）。
 //   'services' … 対応サービス（ラベル区切り⇔JSON配列を変換）。
+//   'bool'   … 真偽値（「はい」/「いいえ」で出力。空欄は false）。
 //   'ref'    … 参照専用（エクスポートのみ。インポートでは無視）。
 import { STORE_STATUSES } from './store-status'
 
-export type StoreCsvColumnKind = 'key' | 'field' | 'status' | 'date' | 'services' | 'ref'
+export type StoreCsvColumnKind = 'key' | 'field' | 'status' | 'date' | 'services' | 'bool' | 'ref'
 // aliases: 旧見出し（列名を変更した際の後方互換。取込時のみ参照する）
 export type StoreCsvColumn = { key: string; header: string; kind: StoreCsvColumnKind; aliases?: string[] }
 
@@ -41,6 +42,7 @@ export const STORE_CSV_COLUMNS: StoreCsvColumn[] = [
   { key: 'antiquePermitNumber', header: '古物許可番号',          kind: 'field' },
   { key: 'serviceAreas',        header: '対応エリア(JSON)',      kind: 'field' },
   { key: 'supportedServices',   header: '対応サービス',          kind: 'services' },
+  { key: 'isTestStore',         header: 'テスト店舗',            kind: 'bool' },
   // 以下は参照専用（インポートでは変更しない）
   { key: 'operatorName',        header: '運営者名',              kind: 'ref' },
   { key: 'isActive',            header: '有効',                  kind: 'ref' },

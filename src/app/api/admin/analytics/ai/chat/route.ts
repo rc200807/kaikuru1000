@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const history = Array.isArray(body.history) ? body.history.slice(-8) : []
 
     // プランナーに渡すコンテキスト仕様
-    const stores = await prisma.store.findMany({ where: { isActive: true }, select: { id: true, name: true } })
+    const stores = await prisma.store.findMany({ where: { isActive: true, isTestStore: false }, select: { id: true, name: true } })
     const leadSources = await prisma.leadSource.findMany({ select: { name: true } })
     const contextSpec = `利用できるデータタブ: ${AI_QUERYABLE_TABS.map(t => `${t}(${ANALYTICS_TAB_LABEL[t as AnalyticsTab]})`).join(', ')}
 タブの内容ガイド:

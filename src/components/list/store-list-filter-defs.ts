@@ -40,6 +40,12 @@ export const STORE_MISSING_OPTIONS: ChipOption[] = [
 
 export const STORE_SERVICE_OPTIONS: ChipOption[] = STORE_SERVICES.map(s => ({ value: s.key, label: s.label }))
 
+/** 店舗の分類（テスト店舗は統計に加算されない） */
+export const STORE_KIND_OPTIONS: ChipOption[] = [
+  { value: 'normal', label: '通常店舗のみ' },
+  { value: 'test', label: 'テスト店舗のみ' },
+]
+
 export const CUSTOMER_BUCKET_OPTIONS: ChipOption[] = [
   { value: '0', label: '0名' },
   { value: '1-9', label: '1〜9名' },
@@ -55,6 +61,7 @@ export function storeListChips(): ChipDef[] {
     { key: 'prefecture', label: '所在都道府県', type: 'multi', options: STORE_PREFECTURE_OPTIONS },
     { key: 'coverPref', label: '対応エリア', type: 'single', options: COVER_PREF_OPTIONS },
     { key: 'services', label: '対応サービス', type: 'multi', options: STORE_SERVICE_OPTIONS },
+    { key: 'kind', label: '分類', type: 'single', options: STORE_KIND_OPTIONS },
     { key: 'missing', label: '情報不備', type: 'multi', options: STORE_MISSING_OPTIONS },
     { key: 'created', label: '登録日', type: 'daterange' },
   ]
@@ -69,6 +76,7 @@ export function storeListAdvFields(operators: { id: string; name: string }[]): A
     { key: 'prefecture', label: '所在都道府県', type: 'multi', options: STORE_PREFECTURE_OPTIONS },
     { key: 'coverPref', label: '対応エリア', type: 'single', options: COVER_PREF_OPTIONS },
     { key: 'services', label: '対応サービス', type: 'multi', options: STORE_SERVICE_OPTIONS },
+    { key: 'kind', label: '分類', type: 'single', options: STORE_KIND_OPTIONS },
     { key: 'missing', label: '情報不備（いずれかが未設定）', type: 'multi', options: STORE_MISSING_OPTIONS },
     {
       key: 'operatorId', label: '運営者', type: 'single',
@@ -90,11 +98,12 @@ export const STORES_PRESET_VIEWS: ListView[] = [
   { id: 'preset-missing', name: '情報不備あり', filters: 'missing=email,phone,postal,bank,invoice,permit', preset: true },
   { id: 'preset-no-area', name: '対応エリア未登録', filters: 'coverPref=none&storeStatus=active', preset: true },
   { id: 'preset-closed', name: '閉店', filters: 'storeStatus=closed', preset: true },
+  { id: 'preset-test', name: 'テスト店舗', filters: 'kind=test', preset: true },
 ]
 
 /** URL・保存ビューで扱うフィルタキー */
 export const STORE_FILTER_PARAM_KEYS = [
-  'search', 'storeStatus', 'login', 'prefecture', 'coverPref', 'services', 'missing',
+  'search', 'storeStatus', 'login', 'prefecture', 'coverPref', 'services', 'kind', 'missing',
   'operatorId', 'customers', 'createdFrom', 'createdTo', 'openedFrom', 'openedTo',
 ] as const
 
@@ -132,6 +141,7 @@ export type FilterableStore = {
   antiquePermitNumber: string | null
   serviceAreas: string | null
   supportedServices?: string | null
+  isTestStore?: boolean
   operatorId: string | null
   createdAt?: string | null
   hasLoggedIn?: boolean
@@ -199,6 +209,7 @@ export function applyStoreFilters<T extends FilterableStore>(
   const prefs = params.prefecture ? params.prefecture.split(',').filter(Boolean) : []
   const coverPref = params.coverPref || ''
   const servicesF = params.services ? params.services.split(',').filter(Boolean) : []
+  const kindF = params.kind || ''
   const missingF = params.missing ? params.missing.split(',').filter(Boolean) : []
   const operatorF = params.operatorId || ''
   const bucketF = params.customers || ''
@@ -237,6 +248,10 @@ export function applyStoreFilters<T extends FilterableStore>(
       const services = parseStoreServices(s.supportedServices)
       if (!servicesF.some(k => services.includes(k as (typeof services)[number]))) return false
     }
+
+    // 分類（テスト店舗 / 通常店舗）
+    if (kindF === 'test' && !s.isTestStore) return false
+    if (kindF === 'normal' && s.isTestStore) return false
 
     // 情報不備（いずれかが未設定 = OR）
     if (missingF.length > 0) {

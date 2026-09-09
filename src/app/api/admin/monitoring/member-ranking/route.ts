@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireRole, ADMIN_ROLES } from '@/lib/admin-auth'
 import { startOfMonth } from 'date-fns'
 import { purchasedDealWhere } from '@/lib/purchase-aggregation'
+import { NON_TEST_STORE_DEAL, NON_TEST_STORE_VISIT } from '@/lib/test-store'
 
 // 全店舗横断メンバーランキング（当月）
 // memberId が記録されたデータのみ集計する（名前照合の横断集計は重く不正確なため対象外。
@@ -17,31 +18,31 @@ export async function GET(request: NextRequest) {
     // 当月の担当訪問数
     prisma.visitSchedule.groupBy({
       by: ['memberId'],
-      where: { memberId: { not: null }, visitDate: { gte: monthStart } },
+      where: { memberId: { not: null }, visitDate: { gte: monthStart }, ...NON_TEST_STORE_VISIT },
       _count: { _all: true },
     }),
     // 当月の完了訪問（件数）
     prisma.visitSchedule.groupBy({
       by: ['memberId'],
-      where: { memberId: { not: null }, status: 'completed', visitDate: { gte: monthStart } },
+      where: { memberId: { not: null }, status: 'completed', visitDate: { gte: monthStart }, ...NON_TEST_STORE_VISIT },
       _count: { _all: true },
     }),
     // 当月の買取金額（担当案件）。買取金額の正は案件（Deal.purchaseAmount）で、
     // 訪問側の値は案件詳細から品目を登録した取引では入らない
     prisma.deal.groupBy({
       by: ['memberId'],
-      where: purchasedDealWhere({ memberId: { not: null }, occurredAt: { gte: monthStart } }),
+      where: purchasedDealWhere({ memberId: { not: null }, occurredAt: { gte: monthStart }, ...NON_TEST_STORE_DEAL }),
       _sum: { purchaseAmount: true },
     }),
     // 当月の作成案件数
     prisma.deal.groupBy({
       by: ['memberId'],
-      where: { memberId: { not: null }, createdAt: { gte: monthStart } },
+      where: { memberId: { not: null }, createdAt: { gte: monthStart }, ...NON_TEST_STORE_DEAL },
       _count: { _all: true },
     }),
     // 当月の契約数（帰属訪問のうち売買契約書あり）
     prisma.visitSchedule.findMany({
-      where: { memberId: { not: null }, visitDate: { gte: monthStart }, salesContract: { isNot: null } },
+      where: { memberId: { not: null }, visitDate: { gte: monthStart }, salesContract: { isNot: null }, ...NON_TEST_STORE_VISIT },
       select: { memberId: true },
     }),
   ])

@@ -26,7 +26,7 @@ export async function GET() {
   }
 
   const [settings, overrides, stores] = await Promise.all([
-    prisma.storeNavSetting.findMany({ select: { key: true, sortOrder: true, visible: true } }),
+    prisma.storeNavSetting.findMany({ select: { key: true, sortOrder: true, visible: true, testStoreOnly: true } }),
     prisma.storeNavOverride.findMany({
       select: {
         storeId: true, showAll: true, items: true, note: true, updatedAt: true,
@@ -35,7 +35,7 @@ export async function GET() {
     }),
     prisma.store.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, code: true },
+      select: { id: true, name: true, code: true, isTestStore: true },
       orderBy: { code: 'asc' },
     }),
   ])
@@ -52,6 +52,7 @@ export async function GET() {
         gate: def.gate ?? null,
         locked: !!def.locked,
         visible: row.visible,
+        testStoreOnly: row.testStoreOnly,
       }
     }),
     overrides: overrides
@@ -69,7 +70,12 @@ export async function GET() {
   })
 }
 
-/** PUT: 共通設定を保存。order は表示順、hidden は非表示にするキー */
+/**
+ * PUT: 共通設定を保存。
+ * order は表示順、hidden は非表示にするキー、testOnly はテスト店舗にだけ表示するキー。
+ * testOnly は hidden より優先する（テスト店舗限定＝表示するのでどちらにも入れない運用だが、
+ * 両方に入っていても状態が矛盾しないようにここで一方に寄せる）。
+ */
 export async function PUT(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const user = session?.user as any
@@ -80,8 +86,10 @@ export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => null)
   const rawOrder: unknown = body?.order
   const rawHidden: unknown = body?.hidden
-  if (!Array.isArray(rawOrder) || !Array.isArray(rawHidden)) {
-    return NextResponse.json({ error: 'order / hidden が不正です' }, { status: 400 })
+  // testOnly は後から足した項目なので未指定（旧クライアント）は空扱いにする
+  const rawTestOnly: unknown = body?.testOnly ?? []
+  if (!Array.isArray(rawOrder) || !Array.isArray(rawHidden) || !Array.isArray(rawTestOnly)) {
+    return NextResponse.json({ error: 'order / hidden / testOnly が不正です' }, { status: 400 })
   }
 
   // 未知キーは黙って除外し、指定漏れのキーは定義順で末尾に足す（項目追加時も設定が壊れない）
@@ -96,15 +104,21 @@ export async function PUT(request: NextRequest) {
   const hidden = new Set(
     (rawHidden as unknown[]).filter((k): k is string => typeof k === 'string' && STORE_NAV_KEYS.includes(k)),
   )
+  const testOnly = new Set(
+    (rawTestOnly as unknown[]).filter((k): k is string => typeof k === 'string' && STORE_NAV_KEYS.includes(k)),
+  )
 
   await prisma.$transaction(
     order.map((key, index) => {
-      // locked 項目（ダッシュボード）は非表示にできない
-      const visible = storeNavItem(key)?.locked ? true : !hidden.has(key)
+      // locked 項目（ダッシュボード）は非表示・テスト店舗限定にできない
+      const locked = !!storeNavItem(key)?.locked
+      const isTestOnly = !locked && testOnly.has(key)
+      // テスト店舗限定は「テスト店舗には表示する」設定なので visible は true で持つ
+      const visible = locked ? true : isTestOnly ? true : !hidden.has(key)
       return prisma.storeNavSetting.upsert({
         where: { key },
-        create: { key, sortOrder: index, visible },
-        update: { sortOrder: index, visible },
+        create: { key, sortOrder: index, visible, testStoreOnly: isTestOnly },
+        update: { sortOrder: index, visible, testStoreOnly: isTestOnly },
       })
     }),
   )

@@ -10,6 +10,15 @@ import {
   recentMonthKeys,
   sumPurchaseAmount,
 } from '@/lib/purchase-aggregation'
+import {
+  NON_TEST_STORE_DEAL,
+  NON_TEST_STORE_USER,
+  NON_TEST_STORE_VISIT,
+  NON_TEST_STORE_SHIPMENT,
+  NON_TEST_STORE_LINE_CHANNEL,
+  NON_TEST_STORE_LINE_USER,
+  NON_TEST_STORE_LINE_MESSAGE,
+} from '@/lib/test-store'
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -22,8 +31,9 @@ export async function GET(request: NextRequest) {
   const twelveMonthsAgo = startOfMonth(subMonths(now, 11))
   const thirtyDaysAgo = startOfDay(subDays(now, 29))
 
-  const userWhere = {}
-  const visitUserWhere = {}
+  // テスト店舗（Store.isTestStore）はダッシュボードの全社統計に加算しない
+  const userWhere = NON_TEST_STORE_USER
+  const visitUserWhere = NON_TEST_STORE_VISIT
 
   // LINE 統計で使う起点（下の Promise.all で参照する）
   const sevenDaysAgo = new Date()
@@ -79,35 +89,35 @@ export async function GET(request: NextRequest) {
     // 店舗別買取金額ランキング（全期間 TOP10）。買取金額の正は案件（Deal）
     prisma.deal.groupBy({
       by: ['storeId'],
-      where: purchasedDealWhere({ storeId: { not: null } }),
+      where: purchasedDealWhere({ storeId: { not: null }, ...NON_TEST_STORE_DEAL }),
       _sum: { purchaseAmount: true },
       orderBy: { _sum: { purchaseAmount: 'desc' } },
       take: 10,
     }),
     // 月次案件数（直近12ヶ月）
     prisma.deal.findMany({
-      where: { createdAt: { gte: twelveMonthsAgo } },
+      where: { createdAt: { gte: twelveMonthsAgo }, ...NON_TEST_STORE_DEAL },
       select: { createdAt: true },
     }),
-    prisma.deal.groupBy({ by: ['status'], _count: { _all: true } }),
-    prisma.user.groupBy({ by: ['leadSource'], _count: { _all: true } }),
+    prisma.deal.groupBy({ by: ['status'], where: NON_TEST_STORE_DEAL, _count: { _all: true } }),
+    prisma.user.groupBy({ by: ['leadSource'], where: NON_TEST_STORE_USER, _count: { _all: true } }),
     // リピート率の母数（買取実績のある顧客ごとの案件数）
     prisma.deal.groupBy({
       by: ['userId'],
-      where: purchasedDealWhere(),
+      where: purchasedDealWhere(NON_TEST_STORE_DEAL),
       _count: { _all: true },
     }),
     // LINE 関連
-    prisma.lineChannel.count(),
-    prisma.lineChannel.count({ where: { isActive: true } }),
-    prisma.lineUser.count(),
-    prisma.lineUser.count({ where: { userId: { not: null } } }),
-    prisma.lineMessage.count({ where: { direction: 'inbound', readAt: null } }),
-    prisma.lineMessage.count({ where: { direction: 'inbound', sentAt: { gte: sevenDaysAgo } } }),
-    prisma.lineMessage.count({ where: { direction: 'outbound', sentAt: { gte: sevenDaysAgo } } }),
-    prisma.lineMessage.count({ where: { direction: 'outbound', status: 'failed', sentAt: { gte: sevenDaysAgo } } }),
+    prisma.lineChannel.count({ where: NON_TEST_STORE_LINE_CHANNEL }),
+    prisma.lineChannel.count({ where: { isActive: true, ...NON_TEST_STORE_LINE_CHANNEL } }),
+    prisma.lineUser.count({ where: NON_TEST_STORE_LINE_USER }),
+    prisma.lineUser.count({ where: { userId: { not: null }, ...NON_TEST_STORE_LINE_USER } }),
+    prisma.lineMessage.count({ where: { direction: 'inbound', readAt: null, ...NON_TEST_STORE_LINE_MESSAGE } }),
+    prisma.lineMessage.count({ where: { direction: 'inbound', sentAt: { gte: sevenDaysAgo }, ...NON_TEST_STORE_LINE_MESSAGE } }),
+    prisma.lineMessage.count({ where: { direction: 'outbound', sentAt: { gte: sevenDaysAgo }, ...NON_TEST_STORE_LINE_MESSAGE } }),
+    prisma.lineMessage.count({ where: { direction: 'outbound', status: 'failed', sentAt: { gte: sevenDaysAgo }, ...NON_TEST_STORE_LINE_MESSAGE } }),
     prisma.lineMessage.findMany({
-      where: { sentAt: { gte: sevenDaysAgo } },
+      where: { sentAt: { gte: sevenDaysAgo }, ...NON_TEST_STORE_LINE_MESSAGE },
       select: { direction: true, sentAt: true },
     }),
   ])
@@ -116,9 +126,12 @@ export async function GET(request: NextRequest) {
   // 旧 VisitSchedule.purchaseAmount は案件詳細で品目を登録した取引では入らないため 0 になっていた。
   const monthKeys = recentMonthKeys(12, now)
   const [totalTotals, currentMonthTotals, monthlyAmountMap] = await Promise.all([
-    sumPurchaseAmount(),
-    sumPurchaseAmount({ occurredAt: { gte: currentMonthStart } }, { shipmentMonth: jstMonthKey(now) }),
-    monthlyPurchaseAmountByMonth(monthKeys),
+    sumPurchaseAmount(NON_TEST_STORE_DEAL, NON_TEST_STORE_SHIPMENT),
+    sumPurchaseAmount(
+      { occurredAt: { gte: currentMonthStart }, ...NON_TEST_STORE_DEAL },
+      { shipmentMonth: jstMonthKey(now), ...NON_TEST_STORE_SHIPMENT },
+    ),
+    monthlyPurchaseAmountByMonth(monthKeys, NON_TEST_STORE_DEAL, NON_TEST_STORE_SHIPMENT),
   ])
   const totalPurchaseAmount = totalTotals.amount
   const currentMonthPurchaseAmount = currentMonthTotals.amount

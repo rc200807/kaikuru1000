@@ -127,6 +127,8 @@ model Store {
   avatar     String?  @db.Text  // プロフィール画像URL（Vercel Blob）
   sheetRowId String?  // Googleスプレッドシートの行ID（同期用）
   isActive   Boolean  @default(true)
+  // テスト店舗（動作確認用）。true の店舗は買取金額・訪問件数などの全社統計から除外する
+  isTestStore Boolean @default(false)
   // 店舗詳細情報
   storeStatus         String?   @default("active")  // "active" or "closed"
   openingDate         DateTime? // 開業日
@@ -198,6 +200,7 @@ model Store {
   updatedAt  DateTime @updatedAt
 
   @@index([operatorId])
+  @@index([isTestStore])
 }
 
 // 運営者情報（法人・個人事業主）
@@ -2585,6 +2588,8 @@ model StoreNavSetting {
   key       String   @id
   sortOrder Int      @default(0)
   visible   Boolean  @default(true)
+  // テスト店舗限定表示。true の項目は Store.isTestStore = true の店舗にだけ表示する
+  testStoreOnly Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -7,6 +7,10 @@ import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import {
   resolveAnalyticsParams, dealWhere, dateWhere, buildMeta, fetchStoreMap, WON_STATUSES,
 } from '../_lib/params'
+import {
+  NON_TEST_STORE_ESTIMATE, NON_TEST_STORE_SALES_CONTRACT,
+  NON_TEST_STORE_SHIPMENT, NON_TEST_STORE_PURCHASE_ITEM,
+} from '@/lib/test-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,9 +36,10 @@ export async function GET(request: NextRequest) {
   const { range, compare, granularity, filters } = params
 
   // 買取品目は案件経由で storeId フィルタを適用（案件未紐付けの品目は対象外になる）
+  // テスト店舗の品目は全社統計に加算しない
   const purchaseItemWhere = {
     createdAt: dateWhere(range),
-    ...(filters.storeId ? { deal: { storeId: filters.storeId } } : {}),
+    ...(filters.storeId ? { deal: { storeId: filters.storeId } } : NON_TEST_STORE_PURCHASE_ITEM),
   }
 
   const [
@@ -53,10 +58,10 @@ export async function GET(request: NextRequest) {
       select: { purchasePrice: true, quantity: true, categoryId: true, category: true },
     }),
     prisma.purchaseCategory.findMany({ select: { id: true, name: true } }),
-    prisma.estimate.count({ where: { createdAt: dateWhere(range) } }),
-    prisma.salesContract.count({ where: { agreedAt: dateWhere(range) } }),
+    prisma.estimate.count({ where: { createdAt: dateWhere(range), ...NON_TEST_STORE_ESTIMATE } }),
+    prisma.salesContract.count({ where: { agreedAt: dateWhere(range), ...NON_TEST_STORE_SALES_CONTRACT } }),
     prisma.deliveryShipment.findMany({
-      where: { createdAt: dateWhere(range) },
+      where: { createdAt: dateWhere(range), ...NON_TEST_STORE_SHIPMENT },
       select: { status: true, purchaseAmount: true, shipmentMonth: true },
     }),
     fetchStoreMap(),

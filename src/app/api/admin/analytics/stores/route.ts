@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
 
   const [stores, operators, deals, newUsers, completedVisits, trainingViews, prevDeals] = await Promise.all([
     prisma.store.findMany({
+      // テスト店舗は店舗別実績・KPI の母数から除外する
+      where: { isTestStore: false },
       select: {
         id: true, name: true, prefecture: true, storeStatus: true, isActive: true,
         openingDate: true, operatorId: true,
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
     }),
     prisma.trainingVideoView.groupBy({
       by: ['storeId'],
+      where: { store: { isTestStore: false } },
       _sum: { playCount: true },
       orderBy: { _sum: { playCount: 'desc' } },
       take: 10,

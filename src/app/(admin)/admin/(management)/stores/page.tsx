@@ -63,6 +63,8 @@ type Store = {
   supportedServices: string | null
   operatorId: string | null
   operator: { id: string; name: string } | null
+  /** テスト店舗（統計に加算されない動作確認用の店舗） */
+  isTestStore?: boolean
   createdAt: string | null
   hasLoggedIn?: boolean
   lastLoginAt?: string | null
@@ -124,6 +126,7 @@ export default function AdminStoresPage() {
     code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '',
     warehousePostalCode: '', warehouseAddress: '',
   })
+  const [createIsTestStore, setCreateIsTestStore] = useState(false)
   const [creating, setCreating] = useState(false)
 
   // 郵便番号→住所の自動入力（7桁で zipcloud を照会）
@@ -286,6 +289,7 @@ export default function AdminStoresPage() {
         address:    createForm.address.trim() || undefined,
         warehousePostalCode: createForm.warehousePostalCode.trim() || undefined,
         warehouseAddress:    createForm.warehouseAddress.trim() || undefined,
+        isTestStore:         createIsTestStore,
       }),
     })
     const data = await res.json()
@@ -294,6 +298,7 @@ export default function AdminStoresPage() {
     if (res.ok) {
       setShowCreateModal(false)
       setCreateForm({ code: '', name: '', email: '', phone: '', prefecture: '', postalCode: '', address: '', warehousePostalCode: '', warehouseAddress: '' })
+      setCreateIsTestStore(false)
       setPasswordModal({ storeName: createForm.name.trim(), password: data.password, storeId: data.store.id, storeEmail: data.store.email ?? null, storeCode: data.store.code })
       refreshStores()
     } else {
@@ -486,6 +491,7 @@ export default function AdminStoresPage() {
       invoiceNumber: store.invoiceNumber || '',
       antiquePermitNumber: store.antiquePermitNumber || '',
       supportedServices: store.supportedServices || '[]',
+      isTestStore: store.isTestStore ? '1' : '',
     })
     setEditMode(true)
   }
@@ -496,7 +502,8 @@ export default function AdminStoresPage() {
     const res = await fetch(`/api/admin/stores/${detailStore.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updateDetails: true, ...editForm }),
+      // isTestStore は真偽値で送る（editForm は文字列マップなので '1' で保持している）
+      body: JSON.stringify({ updateDetails: true, ...editForm, isTestStore: editForm.isTestStore === '1' }),
     })
     setSaving(false)
     if (res.ok) {
@@ -818,7 +825,19 @@ export default function AdminStoresPage() {
     {
       key: 'name',
       header: '店舗名',
-      render: (store) => <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{store.name}</span>,
+      render: (store) => (
+        <span className="inline-flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{store.name}</span>
+          {store.isTestStore && (
+            <span
+              title="テスト店舗（統計に加算されません）"
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-[var(--md-sys-color-tertiary-container,#e8def8)] text-[var(--md-sys-color-on-tertiary-container,#1d192b)]"
+            >
+              TEST
+            </span>
+          )}
+        </span>
+      ),
       sortable: true,
       sortValue: (store) => store.name,
     },
@@ -1220,6 +1239,21 @@ export default function AdminStoresPage() {
             placeholder="東京都足立区..."
           />
 
+          <label className="flex items-start gap-2.5 p-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={createIsTestStore}
+              onChange={e => setCreateIsTestStore(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[var(--portal-primary,#374151)]"
+            />
+            <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+              テスト店舗にする
+              <span className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                買取金額・訪問件数などの全体統計に加算されません。動作確認用の店舗に使ってください。
+              </span>
+            </span>
+          </label>
+
           <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
             ※ 初期パスワードは自動生成されます。作成後に一度だけ表示されますので必ず控えてください。
           </p>
@@ -1556,6 +1590,20 @@ export default function AdminStoresPage() {
                           </select>
                         </div>
                       </div>
+                      <label className="flex items-start gap-2.5 p-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.isTestStore === '1'}
+                          onChange={e => setEditForm({ ...editForm, isTestStore: e.target.checked ? '1' : '' })}
+                          className="mt-0.5 w-4 h-4 accent-[var(--portal-primary,#374151)]"
+                        />
+                        <span className="text-sm text-[var(--md-sys-color-on-surface)]">
+                          テスト店舗
+                          <span className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                            買取金額・訪問件数などの全体統計に加算しません。店舗メニュー設定で「テスト店舗のみ」に指定した項目が表示されます。
+                          </span>
+                        </span>
+                      </label>
                       <div>
                         <label className="block text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">対応サービス</label>
                         <div className="flex flex-wrap gap-2">
@@ -1649,6 +1697,7 @@ export default function AdminStoresPage() {
                         { label: '店舗名', value: detailStore.name },
                         { label: '店舗コード', value: detailStore.code, mono: true },
                         { label: 'ステータス', value: storeStatusLabel(detailStore.storeStatus) },
+                        { label: '分類', value: detailStore.isTestStore ? 'テスト店舗（統計に加算しない）' : '通常店舗' },
                         { label: '対応サービス', value: storeServicesLabel(detailStore.supportedServices) || null },
                         { label: '都道府県', value: detailStore.prefecture },
                         { label: '郵便番号', value: detailStore.postalCode ? `〒${detailStore.postalCode}` : null },
@@ -1856,6 +1905,14 @@ export default function AdminStoresPage() {
                   <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1">ステータス</p>
                   <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
                     {storeStatusLabel(selectedStore.storeStatus)}
+                    {selectedStore.isTestStore && (
+                      <span
+                        title="テスト店舗（買取金額・訪問件数などの全体統計に加算されません）"
+                        className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full align-middle bg-[var(--md-sys-color-tertiary-container,#e8def8)] text-[var(--md-sys-color-on-tertiary-container,#1d192b)]"
+                      >
+                        TEST
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] px-4 py-3">

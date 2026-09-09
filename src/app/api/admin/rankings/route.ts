@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { purchasedDealWhere } from '@/lib/purchase-aggregation'
+import { NON_TEST_STORE_DEAL, NON_TEST_STORE_USER } from '@/lib/test-store'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
     where: {
       storeId: { not: null },
       ...(dateGte ? { createdAt: { gte: dateGte } } : {}),
+      // テスト店舗はランキングに載せない
+      ...NON_TEST_STORE_USER,
     },
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
@@ -56,7 +59,7 @@ export async function GET(request: NextRequest) {
   // 取引では入らないため、以前はランキングが全店 0 円になっていた
   const purchaseGroups = await prisma.deal.groupBy({
     by: ['storeId'],
-    where: purchasedDealWhere({ storeId: { not: null } }),
+    where: purchasedDealWhere({ storeId: { not: null }, ...NON_TEST_STORE_DEAL }),
     _sum: { purchaseAmount: true },
     orderBy: { _sum: { purchaseAmount: 'desc' } },
   })

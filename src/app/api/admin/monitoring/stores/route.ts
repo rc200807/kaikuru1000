@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
     memberCountAgg, customerCountAgg,
   ] = await Promise.all([
     prisma.store.findMany({
-      where: { isActive: true },
+      // テスト店舗は全店舗比較・休眠アラートの対象外
+      where: { isActive: true, isTestStore: false },
       select: { id: true, name: true, code: true, prefecture: true, storeStatus: true },
       orderBy: { name: 'asc' },
     }),

@@ -336,6 +336,7 @@ const STORE_SELECT = {
   bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
   invoiceNumber: true, antiquePermitNumber: true, serviceAreas: true,
   supportedServices: true,
+  isTestStore: true,
   createdAt: true,
   operator: { select: { name: true } },
   // 顧客数はシートの同期対象外なので集計しない（顧客の増減で毎回シートが書き換わるのを避ける）
@@ -364,6 +365,7 @@ async function buildStoreRecords(codes?: string[]): Promise<RecordRow[]> {
         case 'supportedServices': values[col.key] = storeServicesLabel(s.supportedServices); break
         case 'operatorName':      values[col.key] = s.operator?.name ?? ''; break
         case 'isActive':          values[col.key] = s.isActive ? '有効' : '無効'; break
+        case 'isTestStore':       values[col.key] = s.isTestStore ? 'はい' : 'いいえ'; break
         case 'createdAt':         values[col.key] = day(s.createdAt); break
         case 'inquiryUrl':        values[col.key] = `${baseUrl}/inquiry/${s.code}`; break
         case 'telUrl':            values[col.key] = `${baseUrl}/tel/${s.code}`; break
@@ -489,6 +491,8 @@ export async function importStoresFromSheet(): Promise<ImportResult> {
         data.storeStatus = v
       } else if (col.kind === 'services') {
         data.supportedServices = storeServicesValueFromCell(raw)
+      } else if (col.kind === 'bool') {
+        data[col.key] = raw === '' ? false : boolFromCell(raw)
       } else if (col.kind === 'date') {
         if (!raw) { data[col.key] = null; continue }
         const d = new Date(raw)

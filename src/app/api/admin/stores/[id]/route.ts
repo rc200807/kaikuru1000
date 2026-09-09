@@ -80,11 +80,15 @@ export async function PATCH(
       'bankName', 'branchName', 'accountType', 'accountNumber', 'accountHolder',
       'invoiceNumber', 'antiquePermitNumber', 'contractNotifyEmail', 'calendarInviteEmail',
       'serviceAreas', 'supportedServices',
+      'isTestStore',
     ] as const
     const data: Record<string, any> = {}
     for (const field of allowedFields) {
       if (field in body) {
-        if (field === 'openingDate' || field === 'closingDate') {
+        if (field === 'isTestStore') {
+          // 真偽値のフィールドは `|| null` で潰さない（false が null になってしまう）
+          data[field] = body[field] === true
+        } else if (field === 'openingDate' || field === 'closingDate') {
           data[field] = body[field] ? new Date(body[field]) : null
         } else if (field === 'supportedServices') {
           // JSON配列文字列 or 配列を受け取り、有効キーのみに正規化して保存
@@ -133,6 +137,7 @@ export async function PATCH(
         bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
         invoiceNumber: true, antiquePermitNumber: true, contractNotifyEmail: true, calendarInviteEmail: true,
         serviceAreas: true, supportedServices: true, operatorId: true,
+        isTestStore: true,
         operator: { select: { id: true, name: true } },
         _count: { select: { customers: true } },
       },
@@ -166,7 +171,7 @@ export async function GET(
       bankName: true, branchName: true, accountType: true, accountNumber: true, accountHolder: true,
       invoiceNumber: true, antiquePermitNumber: true,
       serviceAreas: true, supportedServices: true,
-      isActive: true,
+      isActive: true, isTestStore: true,
       _count: { select: { customers: true } },
     },
   })

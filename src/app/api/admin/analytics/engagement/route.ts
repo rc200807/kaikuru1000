@@ -7,6 +7,11 @@ import { jstDateKey } from '@/lib/datetime'
 import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import { resolveAnalyticsParams, dateWhere, visitWhere, dealWhere, customerWhere, buildMeta, WON_STATUSES } from '../_lib/params'
 import { formAdminLabel } from '@/lib/forms/types'
+import {
+  NON_TEST_STORE_INQUIRY, NON_TEST_STORE_LINE_USER, NON_TEST_STORE_LINE_MESSAGE,
+  NON_TEST_STORE_COMMUNITY, NON_TEST_STORE_BUG_REPORT,
+  fetchTestStoreIds, questionWhereExcludingTestStores,
+} from '@/lib/test-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +37,10 @@ export async function GET(request: NextRequest) {
   const notes: string[] = []
   if (!withDetailSeries) notes.push('期間が長いため、アクセスログとLINEの時系列は省略しています（件数のみ表示）')
 
+  // 知恵袋（Question）は店舗リレーションを持たないため、テスト店舗の除外は店舗ID列挙で行う
+  const testStoreIds = await fetchTestStoreIds(prisma)
+  const questionWhere = questionWhereExcludingTestStores(testStoreIds)
+
   const [
     inquiries, formSubmissions, forms,
     lineUserTotal, lineUserLinked, lineInCount, lineOutCount, lineMessages,
@@ -41,15 +50,18 @@ export async function GET(request: NextRequest) {
     trainingPlayTotal, communityCount, questionCount, resolvedQuestionCount, bugAgg, chatCount,
   ] = await Promise.all([
     prisma.inquiry.findMany({
-      where: { createdAt: dateWhere(range), ...(filters.storeId ? { storeId: filters.storeId } : {}) },
+      where: {
+        createdAt: dateWhere(range),
+        ...(filters.storeId ? { storeId: filters.storeId } : NON_TEST_STORE_INQUIRY),
+      },
       select: { createdAt: true, inquiryType: true },
     }),
     prisma.formSubmission.groupBy({ by: ['formId'], where: { createdAt: dateWhere(range) }, _count: { _all: true } }),
     prisma.form.findMany({ select: { id: true, title: true, internalName: true } }),
-    prisma.lineUser.count(),
-    prisma.lineUser.count({ where: { userId: { not: null } } }),
-    prisma.lineMessage.count({ where: { direction: 'inbound', sentAt: dateWhere(range) } }),
-    prisma.lineMessage.count({ where: { direction: 'outbound', sentAt: dateWhere(range) } }),
+    prisma.lineUser.count({ where: NON_TEST_STORE_LINE_USER }),
+    prisma.lineUser.count({ where: { userId: { not: null }, ...NON_TEST_STORE_LINE_USER } }),
+    prisma.lineMessage.count({ where: { direction: 'inbound', sentAt: dateWhere(range), ...NON_TEST_STORE_LINE_MESSAGE } }),
+    prisma.lineMessage.count({ where: { direction: 'outbound', sentAt: dateWhere(range), ...NON_TEST_STORE_LINE_MESSAGE } }),
     withDetailSeries
       ? prisma.lineMessage.findMany({ where: { sentAt: dateWhere(range) }, select: { direction: true, sentAt: true } })
       : Promise.resolve([]),
@@ -74,12 +86,12 @@ export async function GET(request: NextRequest) {
     prisma.announcementRead.count({
       where: { announcement: { isPublished: true, publishedAt: dateWhere(range) } },
     }),
-    prisma.store.findMany({ where: { isActive: true }, select: { supportedServices: true } }),
-    prisma.trainingVideoView.aggregate({ _sum: { playCount: true } }),
-    prisma.communityThread.count({ where: { createdAt: dateWhere(range) } }),
-    prisma.question.count({ where: { createdAt: dateWhere(range) } }),
-    prisma.question.count({ where: { createdAt: dateWhere(range), isResolved: true } }),
-    prisma.bugReport.groupBy({ by: ['status'], where: { createdAt: dateWhere(range) }, _count: { _all: true } }),
+    prisma.store.findMany({ where: { isActive: true, isTestStore: false }, select: { supportedServices: true } }),
+    prisma.trainingVideoView.aggregate({ where: { store: { isTestStore: false } }, _sum: { playCount: true } }),
+    prisma.communityThread.count({ where: { createdAt: dateWhere(range), ...NON_TEST_STORE_COMMUNITY } }),
+    prisma.question.count({ where: { createdAt: dateWhere(range), ...questionWhere } }),
+    prisma.question.count({ where: { createdAt: dateWhere(range), isResolved: true, ...questionWhere } }),
+    prisma.bugReport.groupBy({ by: ['status'], where: { createdAt: dateWhere(range), ...NON_TEST_STORE_BUG_REPORT }, _count: { _all: true } }),
     prisma.chatMessage.count({ where: { createdAt: dateWhere(range), deletedAt: null } }),
   ])
 

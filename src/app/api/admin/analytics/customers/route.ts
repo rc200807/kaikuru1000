@@ -7,6 +7,7 @@ import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import {
   resolveAnalyticsParams, customerWhere, visitWhere, dealWhere, buildMeta, fetchStoreMap, WON_STATUSES,
 } from '../_lib/params'
+import { NON_TEST_STORE_LINE_USER } from '@/lib/test-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,8 +32,8 @@ export async function GET(request: NextRequest) {
       where: visitWhere(range, filters, 'completed'),
       _count: { _all: true },
     }),
-    prisma.lineUser.count(),
-    prisma.lineUser.count({ where: { userId: { not: null } } }),
+    prisma.lineUser.count({ where: NON_TEST_STORE_LINE_USER }),
+    prisma.lineUser.count({ where: { userId: { not: null }, ...NON_TEST_STORE_LINE_USER } }),
     prisma.deal.groupBy({
       by: ['userId'],
       where: { ...dealWhere(range, filters), status: { in: WON_STATUSES } },

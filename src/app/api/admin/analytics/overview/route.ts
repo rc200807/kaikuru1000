@@ -8,6 +8,7 @@ import {
   resolveAnalyticsParams, dealWhere, customerWhere, visitWhere, dateWhere,
   buildMeta, fetchStoreMap, WON_STATUSES,
 } from '../_lib/params'
+import { NON_TEST_STORE_INQUIRY, NON_TEST_STORE_SHIPMENT } from '@/lib/test-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,13 +20,15 @@ export async function GET(request: NextRequest) {
   const params = await resolveAnalyticsParams(request)
   const { range, compare, granularity, filters } = params
 
+  // テスト店舗は全社統計に加算しない（店舗を明示指定したときはその店舗の数字をそのまま見せる）
   const inquiryWhere = (r: typeof range) => ({
     createdAt: dateWhere(r),
-    ...(filters.storeId ? { storeId: filters.storeId } : {}),
+    ...(filters.storeId ? { storeId: filters.storeId } : NON_TEST_STORE_INQUIRY),
   })
   const deliveryWhere = (r: typeof range) => ({
     createdAt: dateWhere(r),
     status: { in: ['appraised', 'transferred'] },
+    ...NON_TEST_STORE_SHIPMENT,
   })
 
   const [

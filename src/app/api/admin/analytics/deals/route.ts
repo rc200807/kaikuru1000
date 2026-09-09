@@ -9,6 +9,7 @@ import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import {
   resolveAnalyticsParams, dealWhere, dateWhere, buildMeta, WON_STATUSES, LOST_STATUSES,
 } from '../_lib/params'
+import { NON_TEST_STORE_INQUIRY, NON_TEST_STORE_SALES_CONTRACT } from '@/lib/test-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,9 +37,10 @@ export async function GET(request: NextRequest) {
   const params = await resolveAnalyticsParams(request)
   const { range, compare, granularity, filters } = params
 
+  // テスト店舗は全社統計に加算しない（店舗を明示指定したときはその店舗の数字をそのまま見せる）
   const inquiryWhere = (r: typeof range) => ({
     createdAt: dateWhere(r),
-    ...(filters.storeId ? { storeId: filters.storeId } : {}),
+    ...(filters.storeId ? { storeId: filters.storeId } : NON_TEST_STORE_INQUIRY),
   })
 
   const [
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
       },
     }),
     prisma.salesContract.findMany({
-      where: { agreedAt: dateWhere(range), dealId: { not: null } },
+      where: { agreedAt: dateWhere(range), dealId: { not: null }, ...NON_TEST_STORE_SALES_CONTRACT },
       select: { agreedAt: true, deal: { select: { occurredAt: true } } },
     }),
     prisma.inquiry.groupBy({ by: ['inquiryType'], where: inquiryWhere(range), _count: { _all: true } }),
@@ -61,7 +63,10 @@ export async function GET(request: NextRequest) {
     prisma.deal.count({ where: { ...dealWhere(range, filters), inquiryId: { not: null } } }),
     prisma.visitRequest.groupBy({
       by: ['status'],
-      where: { createdAt: dateWhere(range), ...(filters.storeId ? { storeId: filters.storeId } : {}) },
+      where: {
+        createdAt: dateWhere(range),
+        ...(filters.storeId ? { storeId: filters.storeId } : { store: { isTestStore: false } }),
+      },
       _count: { _all: true },
     }),
     prisma.deal.findMany({

@@ -15,6 +15,7 @@ import TimeSelect from '@/components/TimeSelect'
 import { useBusinessHours } from '@/hooks/useBusinessHours'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import { PROOF_DOCUMENT_TYPES } from '@/lib/document-types'
+import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
 
 /* ─── PINロック解除モーダル ─── */
 function PinUnlockModal({
@@ -167,15 +168,9 @@ type VisitDetail = {
 }
 
 /* ─── 身分証アップロードモーダル ─── */
-const DOC_TYPES = [
-  { value: '運転免許証', label: '運転免許証（裏面も必要）' },
-  { value: 'マイナンバーカード', label: 'マイナンバーカード（表面のみ）' },
-  { value: 'パスポート', label: 'パスポート' },
-  { value: '健康保険証', label: '健康保険証' },
-  { value: '在留カード', label: '在留カード' },
-  { value: 'その他', label: 'その他' },
-]
-const DOC_TYPES_REQUIRING_BACK = ['運転免許証']
+// 受け付ける身分証明証は顧客ポータルと同一（id-document-types.ts が唯一の定義）
+const DOC_TYPES = ID_DOCUMENT_TYPES
+const DOC_TYPES_REQUIRING_BACK = ID_DOC_TYPES_REQUIRING_BACK
 
 type IdEditState = {
   documentType: string
@@ -450,6 +445,12 @@ function IdDocumentUploadModal({
                 {DOC_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.value}</option>
                 ))}
+                {/* OCRが受付対象外の書類（健康保険証など）を読み取ったときは、
+                    読み取り値を選択肢として残す。黙って消えると「何を提示されたか」が
+                    分からなくなるため、担当者が気付いて受付可能な種別へ直せるようにする */}
+                {edit.documentType && !DOC_TYPES.some(t => t.value === edit.documentType) && (
+                  <option value={edit.documentType}>{edit.documentType}（受付対象外・要確認）</option>
+                )}
               </select>
             </div>
             <div>

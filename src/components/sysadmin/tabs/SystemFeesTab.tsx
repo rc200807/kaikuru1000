@@ -26,6 +26,7 @@ type StoreFeeRow = {
   name: string
   code: string
   storeStatus: string | null
+  isTestStore?: boolean
   hasCustomer: boolean
   services: BreakdownItem[]
   autoAmount: number
@@ -397,6 +398,14 @@ export default function SystemFeesTab() {
                       <div style={{ fontWeight: 600 }}>{row.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)' }}>
                         {row.code}
+                        {row.isTestStore && (
+                          <span
+                            title="テスト店舗（統計には加算されません。課金設定はここで個別にON/OFFします）"
+                            style={{ marginLeft: 6, color: '#a78bfa', fontWeight: 700 }}
+                          >
+                            テスト店舗
+                          </span>
+                        )}
                         {!row.hasCustomer && <span style={{ marginLeft: 6, color: '#fb923c' }}>決済未設定</span>}
                       </div>
                     </td>

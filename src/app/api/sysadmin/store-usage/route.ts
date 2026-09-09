@@ -60,7 +60,9 @@ export async function GET() {
   const month = jstMonthKey(new Date())
   const [stores, settings, services] = await Promise.all([
     prisma.store.findMany({
-      where: { isActive: true },
+      // このページは店舗数・想定売上・システム利用料の集計しか出さないので、
+      // テスト店舗は行ごと対象外にする（除外件数は excludedTestStores で返す）
+      where: { isActive: true, isTestStore: false },
       select: {
         id: true, name: true, code: true, prefecture: true, storeStatus: true,
         supportedServices: true, openingDate: true, closingDate: true, createdAt: true,
@@ -70,7 +72,10 @@ export async function GET() {
     prisma.systemFeeSetting.findMany({ select: { storeId: true, monthlyAmount: true, note: true, isActive: true } }),
     getSystemFeeServices(),
   ])
-  const disabledAccounts = await prisma.store.count({ where: { isActive: false } })
+  const [disabledAccounts, excludedTestStores] = await Promise.all([
+    prisma.store.count({ where: { isActive: false, isTestStore: false } }),
+    prisma.store.count({ where: { isTestStore: true } }),
+  ])
 
   // ログイン実績（店舗管理ページの「ログイン状態」と同じ判定＝AccessLog に store の login がある）
   const storeIds = stores.map(s => s.id)
@@ -220,6 +225,8 @@ export async function GET() {
       total: rows.length,
       active: activeRows.length,
       disabledAccounts,
+      // テスト店舗はこのページのすべての集計から除外している（内訳ではなく除外件数）
+      excludedTestStores,
       byStatus,
       withoutServices: rows.filter(r => r.serviceKeys.length === 0).length,
     },

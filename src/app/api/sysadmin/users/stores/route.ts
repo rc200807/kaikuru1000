@@ -12,6 +12,7 @@ export async function GET() {
     prisma.store.findMany({
       select: {
         id: true, name: true, code: true, prefecture: true, isActive: true, storeStatus: true,
+        isTestStore: true,
         openingDate: true, closingDate: true, createdAt: true,
         operator: { select: { name: true } },
         _count: { select: { members: true } },
@@ -34,17 +35,26 @@ export async function GET() {
 
   const lastLoginMap = new Map(lastLogins.map(l => [l.userId, l._max.createdAt]))
 
-  const active = stores.filter(s => s.isActive && s.storeStatus !== 'closed').length
-  const closed = stores.filter(s => s.storeStatus === 'closed').length
+  // 一覧にはテスト店舗も出す（運用上そこにあることを見えなくしない）が、
+  // 件数のサマリーは実店舗だけで数える
+  const realStores = stores.filter(s => !s.isTestStore)
+  const active = realStores.filter(s => s.isActive && s.storeStatus !== 'closed').length
+  const closed = realStores.filter(s => s.storeStatus === 'closed').length
 
   return NextResponse.json({
-    summary: { active, closed, total: stores.length },
+    summary: {
+      active,
+      closed,
+      total: realStores.length,
+      testStores: stores.length - realStores.length,
+    },
     stores: stores.map(s => ({
       id: s.id,
       name: s.name,
       code: s.code,
       prefecture: s.prefecture,
       isActive: s.isActive,
+      isTestStore: s.isTestStore,
       storeStatus: s.storeStatus,
       openingDate: s.openingDate,
       closingDate: s.closingDate,

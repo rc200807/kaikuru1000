@@ -17,7 +17,7 @@ type Dashboard = {
   users: { total: number; byType: { type: string; count: number }[]; storeTotal: number; storeMemberTotal: number; adminTotal: number; partnerTotal: number; newByMonth: { month: string; count: number }[] }
   purchase: { itemTotal: number; categoryTotal: number; byMonth: { month: string; count: number }[] }
   accessLog: { today: number; last7d: number; last30d: number; byType: { type: string; count: number }[] }
-  ops: { pendingOrders: number; activeStores: number; unusedLicenses: number; usedLicenses: number; openInquiries: number; openBugReports: number }
+  ops: { pendingOrders: number; activeStores: number; testStores: number; unusedLicenses: number; usedLicenses: number; openInquiries: number; openBugReports: number }
   health?: { emailFailed: number; emailPending: number; errors24h: number; recordingErrors: number; blockedLogins: number; chat24h: number; line24h: number }
 }
 
@@ -68,7 +68,12 @@ export default function SysAdminDashboardPage() {
         <Kpi label="累計運用コスト" value={yen(data.cost.total)} href="/sysadmin/finance?tab=costs" />
         <Kpi label="未対応の発注" value={`${data.ops.pendingOrders} 件`} accent={data.ops.pendingOrders > 0} href="/sysadmin/supplies" />
         <Kpi label="総ユーザー数" value={`${data.users.total} 人`} href="/sysadmin/users" />
-        <Kpi label="店舗数（稼働中）" value={`${data.ops.activeStores} / ${data.users.storeTotal}`} href="/sysadmin/users?tab=stores" />
+        <Kpi
+          label="店舗数（稼働中）"
+          value={`${data.ops.activeStores} / ${data.users.storeTotal}`}
+          sub={data.ops.testStores > 0 ? `テスト店舗 ${data.ops.testStores} 件は除外` : undefined}
+          href="/sysadmin/users?tab=stores"
+        />
         <Kpi label="買取品目登録数" value={`${data.purchase.itemTotal} 件`} href="/sysadmin/activity" />
         <Kpi label="ログイン（24h）" value={`${data.accessLog.today} 回`} href="/sysadmin/security" />
         <Kpi label="ライセンス未使用" value={`${data.ops.unusedLicenses} 件`} />

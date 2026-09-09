@@ -81,7 +81,11 @@ export default function StoreUsageTab() {
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12 }}>
-        <Kpi label="登録店舗（有効アカウント）" value={`${stores.total} 店舗`} />
+        <Kpi
+          label="登録店舗（有効アカウント）"
+          value={`${stores.total} 店舗`}
+          sub={stores.excludedTestStores > 0 ? `テスト店舗 ${stores.excludedTestStores} 件は全集計から除外` : undefined}
+        />
         <Kpi label="アクティブ店舗（営業中）" value={`${stores.active} 店舗`} />
         <Kpi label="アクティブ率" value={`${activeRate}%`} />
         <Kpi label="ログイン済み店舗" value={`${login.loggedIn} 店舗`} />

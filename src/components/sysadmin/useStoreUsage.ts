@@ -47,6 +47,8 @@ export type StoreUsage = {
     total: number
     active: number
     disabledAccounts: number
+    /** すべての集計から除外したテスト店舗の件数 */
+    excludedTestStores: number
     withoutServices: number
     byStatus: { value: string; label: string; count: number; loggedIn: number }[]
   }

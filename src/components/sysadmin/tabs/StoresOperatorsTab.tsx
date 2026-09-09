@@ -7,10 +7,10 @@ import { formatJstDate, formatJstDateTime } from '@/lib/datetime'
 import { normalizeStoreStatus, storeStatusLabel } from '@/lib/store-status'
 
 type Resp = {
-  summary: { active: number; closed: number; total: number }
+  summary: { active: number; closed: number; total: number; testStores: number }
   stores: {
     id: string; name: string; code: string; prefecture: string | null
-    isActive: boolean; storeStatus: string | null
+    isActive: boolean; isTestStore?: boolean; storeStatus: string | null
     openingDate: string | null; closingDate: string | null
     operatorName: string | null; memberCount: number; lastLoginAt: string | null
   }[]
@@ -51,7 +51,11 @@ export default function StoresOperatorsTab() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
         <Kpi label="稼働中の店舗" value={`${data.summary.active} 店`} />
         <Kpi label="閉店" value={`${data.summary.closed} 店`} />
-        <Kpi label="店舗合計" value={`${data.summary.total} 店`} />
+        <Kpi
+          label="店舗合計"
+          value={`${data.summary.total} 店`}
+          sub={data.summary.testStores > 0 ? `テスト店舗 ${data.summary.testStores} 店は件数から除外` : undefined}
+        />
         <Kpi label="運営者" value={`${data.operators.length} 者`} />
       </div>
 
@@ -78,7 +82,17 @@ export default function StoresOperatorsTab() {
                 const nonActive = normalizeStoreStatus(s.storeStatus) !== 'active'
                 return (
                   <tr key={s.id} style={{ ...trStyle, color: nonActive ? 'var(--md-sys-color-on-surface-variant)' : undefined }}>
-                    <td style={{ ...tdStyle, fontWeight: 600 }}>{s.name}</td>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>
+                      {s.name}
+                      {s.isTestStore && (
+                        <span
+                          title="テスト店舗（統計・件数には加算されません）"
+                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#a78bfa' }}
+                        >
+                          TEST
+                        </span>
+                      )}
+                    </td>
                     <td style={tdStyle}>{s.code}</td>
                     <td style={tdStyle}>{s.prefecture ?? '—'}</td>
                     <td style={tdStyle}>{s.operatorName ?? '—'}</td>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSysAdmin } from '@/lib/sysadmin-auth'
+import { NON_TEST_STORE } from '@/lib/test-store'
 
 export const runtime = 'nodejs'
 
@@ -81,7 +82,8 @@ export async function GET() {
   const usersByType = await prisma.user.groupBy({ by: ['customerType'], _count: { _all: true } })
   const [userTotal, storeTotal, storeMemberTotal, adminTotal, partnerTotal] = await Promise.all([
     prisma.user.count(),
-    prisma.store.count(),
+    // 店舗数はテスト店舗を除いた実店舗数（テスト店舗は testStores で別に返す）
+    prisma.store.count({ where: NON_TEST_STORE }),
     prisma.storeMember.count(),
     prisma.admin.count(),
     prisma.salesPartner.count(),
@@ -121,8 +123,9 @@ export async function GET() {
   const pendingOrders = await prisma.supplyOrder.count({ where: { status: 'pending', paymentStatus: 'paid' } })
 
   // ===== その他の運用指標 =====
-  const [activeStores, unusedLicenses, usedLicenses, openInquiries, openBugReports] = await Promise.all([
-    prisma.store.count({ where: { isActive: true } }),
+  const [activeStores, testStores, unusedLicenses, usedLicenses, openInquiries, openBugReports] = await Promise.all([
+    prisma.store.count({ where: { isActive: true, ...NON_TEST_STORE } }),
+    prisma.store.count({ where: { isTestStore: true } }),
     prisma.licenseKey.count({ where: { isUsed: false } }),
     prisma.licenseKey.count({ where: { isUsed: true } }),
     prisma.inquiry.count({ where: { status: { not: 'completed' } } }),
@@ -177,6 +180,7 @@ export async function GET() {
     ops: {
       pendingOrders,
       activeStores,
+      testStores,
       unusedLicenses,
       usedLicenses,
       openInquiries,

@@ -14,7 +14,9 @@ export async function GET() {
   const [stores, settings, services, currentPayments] = await Promise.all([
     prisma.store.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, code: true, storeStatus: true, stripeCustomerId: true, supportedServices: true },
+      // テスト店舗も一覧には残す（課金設定は SystemFeeSetting.isActive で個別にON/OFFするため、
+      // ここから消すと「課金対象になっているのに見えない店舗」が生まれる）
+      select: { id: true, name: true, code: true, storeStatus: true, stripeCustomerId: true, supportedServices: true, isTestStore: true },
       orderBy: { code: 'asc' },
     }),
     prisma.systemFeeSetting.findMany(),
@@ -40,6 +42,7 @@ export async function GET() {
         name: s.name,
         code: s.code,
         storeStatus: s.storeStatus,
+        isTestStore: s.isTestStore,
         hasCustomer: !!s.stripeCustomerId,
         services: auto.breakdown,          // 課金対象になる対応サービスの内訳
         autoAmount: auto.total,            // 自動算出額

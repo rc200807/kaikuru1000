@@ -14,7 +14,7 @@ export const tooltipStyle: React.CSSProperties = {
   background: '#141414', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#ededed', fontSize: 12,
 }
 
-export function Kpi({ label, value, accent, href }: { label: string; value: string; accent?: boolean; href?: string }) {
+export function Kpi({ label, value, accent, href, sub }: { label: string; value: string; accent?: boolean; href?: string; sub?: string }) {
   const [hover, setHover] = useState(false)
   const card = (
     <div
@@ -31,6 +31,7 @@ export function Kpi({ label, value, accent, href }: { label: string; value: stri
     >
       <div style={{ fontSize: 12, color: 'var(--md-sys-color-on-surface-variant)', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700, color: accent ? '#fbbf24' : 'var(--md-sys-color-on-surface)' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--md-sys-color-on-surface-variant)', marginTop: 4 }}>{sub}</div>}
     </div>
   )
   if (!href) return card

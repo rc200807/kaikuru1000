@@ -2019,6 +2019,20 @@ model AnswerReaction {
   @@index([answerId])
 }
 
+// 分析APIのレスポンスのスナップショット（集計結果キャッシュ）。
+// アクセス解析の概要はセッション・PVを横断集計するため、開くたびに再計算すると待たされる。
+// 同じ条件なら短時間はキャッシュを返し、期限切れは「古い結果を即返してから裏で再計算」する。
+model AnalyticsSnapshot {
+  id         String   @id @default(cuid())
+  cacheKey   String   @unique // sha256(kind + 正規化パラメータ)
+  kind       String            // 例: tracking
+  payload    String   @db.Text // レスポンスJSON
+  computedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([kind, computedAt])
+}
+
 // 分析画面のAI生成結果キャッシュ・ログ（インサイト/チャット/レポート/店舗診断ほか）
 model AnalyticsAiInsight {
   id          String   @id @default(cuid())
@@ -2105,12 +2119,18 @@ model TrackingSession {
   city           String?               // IP由来の市区町村（x-vercel-ip-city）
   isFirstSession Boolean  @default(true) // 新規 vs 再訪の集計用
   hasConversion  Boolean  @default(false) // 集計高速化用の非正規化フラグ
+  // このセッションのPV数。集計高速化用の非正規化カウンタ（hasConversion と同じ位置づけ）。
+  // 直帰率は「PVが1以下のセッション数」なので、これがあると1本のcountで求まる。
+  // 無いと PageView 全件を sessionId で groupBy して数万行を持ち帰ることになる。
+  pageViewCount  Int      @default(0)
   pageViews      TrackingPageView[]
   events         TrackingEvent[]
 
   @@index([visitorId, startedAt])
   @@index([startedAt])
   @@index([lastActivityAt])
+  // 直帰セッション（pageViewCount<=1）を期間で数えるため
+  @@index([startedAt, pageViewCount])
 }
 
 // ページビュー

@@ -84,7 +84,7 @@ function RealtimeCard() {
 }
 
 function OverviewSection({ query }: { query: string }) {
-  const { data, loading, error } = useAnalyticsData('tracking', query)
+  const { data, loading, error, refresh, refreshing } = useAnalyticsData('tracking', query)
   if (loading) return <TabLoading />
   if (error || !data) return <TabError message={error ?? 'no data'} />
 
@@ -94,7 +94,18 @@ function OverviewSection({ query }: { query: string }) {
 
   return (
     <div className="space-y-4">
-      <MetaCaption meta={data.meta} />
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <MetaCaption meta={data.meta} />
+        {/* 概要は集計結果をキャッシュして即表示している。いまの数字を見たいときはここから作り直す */}
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          className="text-[11px] px-2.5 py-1 rounded-lg border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] disabled:opacity-60 whitespace-nowrap flex-shrink-0"
+        >
+          {refreshing ? '集計中…' : '最新に更新'}
+        </button>
+      </div>
       <AiInsightCard tab="tracking" query={query} data={data} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

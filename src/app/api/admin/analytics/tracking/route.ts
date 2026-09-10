@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { createTimer } from '@/lib/api-timing'
+import { readSnapshot, writeSnapshot, snapshotKey } from '@/lib/analytics-snapshot'
 import { requireAdmin } from '@/lib/admin-auth'
 import {
   buildBuckets, bucketKeyOf, bucketDateRange, dateFromJstStr, addDaysStr, GRANULARITY_LABEL,
@@ -10,7 +12,7 @@ import { CHANNEL_LABEL } from '@/lib/tracking'
 import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import {
   resolveTrackingParams, dateWhere, referrerDomain, urlToPath,
-  SAMPLE_SESSION_CAP, SAMPLE_PV_CAP, SESSION_TS_CAP, PV_GROUP_CAP, EVENT_FETCH_CAP, mapLimit,
+  SAMPLE_SESSION_CAP, SAMPLE_PV_CAP, SESSION_TS_CAP, EVENT_FETCH_CAP, mapLimit,
 } from '../../tracking/_lib/common'
 
 export const dynamic = 'force-dynamic'
@@ -40,7 +42,52 @@ export async function GET(request: NextRequest) {
   const admin = await requireAdmin()
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { range, compare, granularity: requestedGranularity } = resolveTrackingParams(request)
+  const params = resolveTrackingParams(request)
+  const t = createTimer()
+
+  // 同じ条件のスナップショットがあれば即返す。
+  // 期限切れ（stale）でも古い結果をすぐ返し、作り直しはレスポンスを返したあとに回す。
+  const refresh = request.nextUrl.searchParams.get('refresh') === '1'
+  const cacheKey = snapshotKey('tracking', {
+    from: params.range.from.toISOString(),
+    to: params.range.to.toISOString(),
+    compareFrom: params.compare?.from.toISOString() ?? null,
+    compareTo: params.compare?.to.toISOString() ?? null,
+    granularity: params.granularity,
+  })
+  const hit = refresh ? null : await t.measure('snapshot', () => readSnapshot<AnalyticsResponse>(cacheKey))
+  if (hit) {
+    if (hit.stale) {
+      after(async () => {
+        // 応答後の作り直し。ここで落ちても表示済みの結果には影響させない
+        try {
+          await writeSnapshot(cacheKey, 'tracking', await computeTracking(params, createTimer()))
+        } catch (e) {
+          console.error('[analytics/tracking] スナップショットの再計算に失敗:', e)
+        }
+      })
+    }
+    return t.json(withComputedAt(hit.payload, hit.computedAt))
+  }
+
+  const fresh = await computeTracking(params, t)
+  after(() => writeSnapshot(cacheKey, 'tracking', fresh))
+  return t.json(fresh)
+}
+
+/** meta.notes に「いつ時点の集計か」を添える（キャッシュを返したことを隠さない） */
+function withComputedAt(payload: AnalyticsResponse, computedAt: Date): AnalyticsResponse {
+  const at = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: TOKYO_TZ, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(computedAt)
+  const notes = [...(payload.meta.notes ?? []), `${at} 時点の集計結果です`]
+  return { ...payload, meta: { ...payload.meta, notes } }
+}
+
+async function computeTracking(
+  { range, compare, granularity: requestedGranularity }: ReturnType<typeof resolveTrackingParams>,
+  t: ReturnType<typeof createTimer>,
+): Promise<AnalyticsResponse> {
   const notes: string[] = []
 
   // 粒度が細かすぎるとバケット数＝クエリ数が爆発するので粗く丸める
@@ -67,59 +114,67 @@ export async function GET(request: NextRequest) {
     sessionCount, newSessionCount, cvSessionCount, visitorCount,
     cvCount, cvTypeGroups, cvEvents,
     channelGroups, deviceGroups, browserGroups, osGroups, regionGroups, cityGroups,
-    pvByBucket, pvSessionGroups, sampleSessions,
+    pvByBucket, sessionsByBucket, bounceCount, sampleSessions, compareCounts,
   ] = await Promise.all([
     // 時系列・ヒートマップ・平均セッション時間用（時刻＋訪問者IDのみの軽量取得）
-    prisma.trackingSession.findMany({
+    t.measure('sessionRows', () => prisma.trackingSession.findMany({
       where: sessionWhere,
       select: { startedAt: true, lastActivityAt: true, visitorId: true },
       orderBy: { startedAt: 'desc' },
       take: SESSION_TS_CAP + 1,
-    }),
-    prisma.trackingSession.count({ where: sessionWhere }),
-    prisma.trackingSession.count({ where: { ...sessionWhere, isFirstSession: true } }),
-    prisma.trackingSession.count({ where: { ...sessionWhere, hasConversion: true } }),
+    })),
+    t.measure('sessCount', () => prisma.trackingSession.count({ where: sessionWhere })),
+    t.measure('newSess', () => prisma.trackingSession.count({ where: { ...sessionWhere, isFirstSession: true } })),
+    t.measure('cvSess', () => prisma.trackingSession.count({ where: { ...sessionWhere, hasConversion: true } })),
     // UU は訪問者テーブル側の EXISTS で数える（visitorId を全件持ってこない）
-    prisma.trackingVisitor.count({ where: { sessions: { some: sessionWhere } } }),
-    prisma.trackingEvent.count({ where: cvWhere }),
-    prisma.trackingEvent.groupBy({ by: ['type'], where: cvWhere, _count: { _all: true } }),
+    t.measure('uu', () => prisma.trackingVisitor.count({ where: { sessions: { some: sessionWhere } } })),
+    t.measure('cvCount', () => prisma.trackingEvent.count({ where: cvWhere })),
+    t.measure('cvType', () => prisma.trackingEvent.groupBy({ by: ['type'], where: cvWhere, _count: { _all: true } })),
     // CVイベントは件数が少ないので行取得（時系列＋最新フィードに使用）
-    prisma.trackingEvent.findMany({
+    t.measure('cvEvents', () => prisma.trackingEvent.findMany({
       where: cvWhere,
       select: { type: true, sessionId: true, visitorId: true, occurredAt: true, buttonId: true, storeId: true },
       orderBy: { occurredAt: 'desc' },
       take: EVENT_FETCH_CAP + 1,
-    }),
-    prisma.trackingSession.groupBy({ by: ['channel'], where: sessionWhere, _count: { _all: true } }),
-    prisma.trackingSession.groupBy({ by: ['deviceType'], where: sessionWhere, _count: { _all: true } }),
-    prisma.trackingSession.groupBy({ by: ['browser'], where: sessionWhere, _count: { _all: true } }),
-    prisma.trackingSession.groupBy({ by: ['os'], where: sessionWhere, _count: { _all: true } }),
-    prisma.trackingSession.groupBy({ by: ['country', 'region'], where: sessionWhere, _count: { _all: true } }),
-    prisma.trackingSession.groupBy({ by: ['region', 'city'], where: sessionWhere, _count: { _all: true } }),
+    })),
+    t.measure('gChannel', () => prisma.trackingSession.groupBy({ by: ['channel'], where: sessionWhere, _count: { _all: true } })),
+    t.measure('gDevice', () => prisma.trackingSession.groupBy({ by: ['deviceType'], where: sessionWhere, _count: { _all: true } })),
+    t.measure('gBrowser', () => prisma.trackingSession.groupBy({ by: ['browser'], where: sessionWhere, _count: { _all: true } })),
+    t.measure('gOs', () => prisma.trackingSession.groupBy({ by: ['os'], where: sessionWhere, _count: { _all: true } })),
+    t.measure('gRegion', () => prisma.trackingSession.groupBy({ by: ['country', 'region'], where: sessionWhere, _count: { _all: true } })),
+    t.measure('gCity', () => prisma.trackingSession.groupBy({ by: ['region', 'city'], where: sessionWhere, _count: { _all: true } })),
     // PV はバケットごとに DB 側で count（行は 1 件も JS に持ってこない）
-    mapLimit(buckets, 8, b => prisma.trackingPageView.count({ where: { occurredAt: bucketWhere(b.key, granularity, range) } })),
-    // 直帰率用：セッションごとの PV 件数。多い順に取るので「2PV以上のセッション数」は
-    // 上限に達しない限り厳密に求まる。
-    prisma.trackingPageView.groupBy({
-      by: ['sessionId'],
-      where: pvWhere,
-      _count: { sessionId: true },
-      orderBy: { _count: { sessionId: 'desc' } },
-      take: PV_GROUP_CAP,
-    }),
+    t.measure('pvBuckets', () => mapLimit(buckets, 8, b => prisma.trackingPageView.count({ where: { occurredAt: bucketWhere(b.key, granularity, range) } }))),
+    // セッション数の推移も DB 側 count。行の取り込み上限（SESSION_TS_CAP）に達しても
+    // 古いバケットが 0 に見えないよう、主要指標はここで厳密に求める
+    t.measure('sessBuckets', () => mapLimit(buckets, 8, b => prisma.trackingSession.count({ where: { startedAt: bucketWhere(b.key, granularity, range) } }))),
+    // 直帰率用：PVが1以下のセッション数。TrackingSession.pageViewCount（非正規化）で1本のcountで済む。
+    // 以前は PageView 全件を sessionId で groupBy して数万行を持ち帰っていた
+    t.measure('bounceCount', () => prisma.trackingSession.count({
+      where: { ...sessionWhere, pageViewCount: { lte: 1 } },
+    })),
     // 参照元・ランディング・離脱ページ用のサンプル（URL は TEXT で重いため直近分のみ）
-    prisma.trackingSession.findMany({
+    t.measure('sampleSessions', () => prisma.trackingSession.findMany({
       where: sessionWhere,
       select: { id: true, referrer: true, entryUrl: true, startedAt: true },
       orderBy: { startedAt: 'desc' },
       take: SAMPLE_SESSION_CAP,
-    }),
+    })),
+    // 比較期間のKPI。本体と同じ波で投げる（直列にすると往復がそのまま応答時間に乗る）
+    t.measure('compare', () => (compare
+      ? Promise.all([
+          prisma.trackingSession.count({ where: { startedAt: dateWhere(compare) } }),
+          prisma.trackingPageView.count({ where: { occurredAt: dateWhere(compare) } }),
+          prisma.trackingEvent.count({ where: { occurredAt: dateWhere(compare), isConversion: true } }),
+          prisma.trackingVisitor.count({ where: { sessions: { some: { startedAt: dateWhere(compare) } } } }),
+        ])
+      : Promise.resolve(null))),
   ])
 
   const sessionsTruncated = sessionRows.length > SESSION_TS_CAP
   const tsRows = sessionsTruncated ? sessionRows.slice(0, SESSION_TS_CAP) : sessionRows
   if (sessionsTruncated) {
-    notes.push(`セッションが多いため推移・ヒートマップ・平均滞在は直近${SESSION_TS_CAP.toLocaleString()}件で集計しています`)
+    notes.push(`セッションが多いため、訪問者数・ヒートマップ・平均滞在は直近${SESSION_TS_CAP.toLocaleString()}件のサンプル集計です（セッション数・PV数は全件）`)
   }
   const cvTruncated = cvEvents.length > EVENT_FETCH_CAP
   const cvRows = cvTruncated ? cvEvents.slice(0, EVENT_FETCH_CAP) : cvEvents
@@ -132,9 +187,7 @@ export async function GET(request: NextRequest) {
 
   // ─── KPI ───
   const pvCount = pvByBucket.reduce((a, b) => a + b, 0)
-  const multiPvSessions = pvSessionGroups.filter(g => g._count.sessionId > 1).length
-  const bounces = Math.max(0, sessionCount - multiPvSessions)
-  if (pvSessionGroups.length >= PV_GROUP_CAP) notes.push('直帰率は上限件数に達したため概算値です')
+  const bounces = Math.min(bounceCount, sessionCount)
 
   const durations = tsRows
     .map(s => (s.lastActivityAt.getTime() - s.startedAt.getTime()) / 1000)
@@ -143,27 +196,21 @@ export async function GET(request: NextRequest) {
   const cvByType = { inquiry_submit: 0, form_submit: 0, button_click: 0 } as Record<string, number>
   for (const g of cvTypeGroups) cvByType[g.type] = g._count._all
 
-  // 比較期間（軽量にcountのみ）
-  let prevCounts: { sessions: number; pv: number; cv: number; uu: number } | null = null
-  if (compare) {
-    const prevSessionWhere = { startedAt: dateWhere(compare) }
-    const [prevSessions, prevPv, prevCv, prevUu] = await Promise.all([
-      prisma.trackingSession.count({ where: prevSessionWhere }),
-      prisma.trackingPageView.count({ where: { occurredAt: dateWhere(compare) } }),
-      prisma.trackingEvent.count({ where: { occurredAt: dateWhere(compare), isConversion: true } }),
-      prisma.trackingVisitor.count({ where: { sessions: { some: prevSessionWhere } } }),
-    ])
-    prevCounts = { sessions: prevSessions, pv: prevPv, cv: prevCv, uu: prevUu }
-  }
+  // 比較期間（上の Promise.all で同時に取得済み）
+  const prevCounts = compareCounts
+    ? { sessions: compareCounts[0], pv: compareCounts[1], cv: compareCounts[2], uu: compareCounts[3] }
+    : null
 
   // ─── 時系列 ───
   const bucketIndex = new Map(buckets.map((b, i) => [b.key, i]))
-  const seriesData = buckets.map((b, i) => ({ label: b.label, sessions: 0, visitors: 0, pv: pvByBucket[i] ?? 0, cv: 0 }))
+  const seriesData = buckets.map((b, i) => ({
+    label: b.label, sessions: sessionsByBucket[i] ?? 0, visitors: 0, pv: pvByBucket[i] ?? 0, cv: 0,
+  }))
+  // 訪問者数（ユニーク）はバケットごとの distinct が必要なので、取り込んだ行から数える
   const visitorSetByBucket = new Map<number, Set<string>>()
   for (const s of tsRows) {
     const i = bucketIndex.get(bucketKeyOf(s.startedAt, granularity))
     if (i === undefined) continue
-    seriesData[i].sessions++
     let set = visitorSetByBucket.get(i)
     if (!set) { set = new Set(); visitorSetByBucket.set(i, set) }
     set.add(s.visitorId)
@@ -206,13 +253,13 @@ export async function GET(request: NextRequest) {
 
   // 離脱ページ（サンプルセッションの最後のPV）
   const samplePvs = sampleSessions.length > 0
-    ? await prisma.trackingPageView.findMany({
+    ? await t.measure('samplePvs', () => prisma.trackingPageView.findMany({
         where: { sessionId: { in: sampleSessions.map(s => s.id) } },
         // occurredAt は orderBy に使うので select にも含める（未選択カラムでの並べ替えは Prisma が panic する）
         select: { sessionId: true, path: true, title: true, occurredAt: true },
         orderBy: { occurredAt: 'asc' },
         take: SAMPLE_PV_CAP,
-      })
+      }))
     : []
   const lastPvBySession = new Map<string, { path: string; title: string | null }>()
   for (const pv of samplePvs) lastPvBySession.set(pv.sessionId, { path: pv.path, title: pv.title }) // 時系列順なので最後が残る
@@ -237,11 +284,11 @@ export async function GET(request: NextRequest) {
   const storeIds = [...new Set(recentCv.map(e => e.storeId).filter((v): v is string => !!v))]
   const buttonIds = [...new Set(recentCv.map(e => e.buttonId).filter((v): v is string => !!v))]
   const sessionIds = [...new Set(recentCv.map(e => e.sessionId).filter((v): v is string => !!v))]
-  const [stores, buttons, cvSessions] = await Promise.all([
+  const [stores, buttons, cvSessions] = await t.measure('cvFeedLookups', () => Promise.all([
     storeIds.length ? prisma.store.findMany({ where: { id: { in: storeIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
     buttonIds.length ? prisma.trackingButton.findMany({ where: { id: { in: buttonIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
     sessionIds.length ? prisma.trackingSession.findMany({ where: { id: { in: sessionIds } }, select: { id: true, channel: true, referrer: true } }) : Promise.resolve([]),
-  ])
+  ]))
   const storeMap = new Map(stores.map(s => [s.id, s.name]))
   const buttonMap = new Map(buttons.map(b => [b.id, b.name]))
   const sessionById = new Map(cvSessions.map(s => [s.id, s]))
@@ -287,5 +334,5 @@ export async function GET(request: NextRequest) {
       heatmapMeta: [{ hourStart }],
     },
   }
-  return NextResponse.json(response)
+  return response
 }

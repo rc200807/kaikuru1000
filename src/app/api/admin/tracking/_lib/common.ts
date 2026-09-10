@@ -61,14 +61,17 @@ export const FLOW_SESSION_CAP = 5_000
 
 // 概要タブ用の上限。生行の取り込みは「時刻列だけ」「直近サンプルだけ」に限定し、
 // 件数系は DB 側 count/groupBy で求めることで件数に依存しない応答時間にする。
-/** 時系列・ヒートマップ用に取り込むセッション数の上限（時刻＋訪問者IDのみ） */
-export const SESSION_TS_CAP = 200_000
+/**
+ * 訪問者数・ヒートマップ・平均滞在のために取り込むセッション数の上限（時刻＋訪問者IDのみ）。
+ * ここを大きくすると DB→関数の転送量がそのまま応答時間になる（20万件で約10MB）。
+ * セッション数・PV数の推移は DB 側の count で厳密に出しているので、
+ * ここはサンプルで足りる指標だけが対象。
+ */
+export const SESSION_TS_CAP = 50_000
 /** 参照元・LP・離脱ページのサンプル対象セッション数 */
 export const SAMPLE_SESSION_CAP = 3_000
 /** サンプルセッションのPV取得上限（暴走セッション対策のバックストップ） */
 export const SAMPLE_PV_CAP = 60_000
-/** 直帰率算出（sessionId 別PV件数）の groupBy 上限 */
-export const PV_GROUP_CAP = 150_000
 /** CVイベント取得上限 */
 export const EVENT_FETCH_CAP = 20_000
 

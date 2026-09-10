@@ -159,8 +159,8 @@ export async function POST(request: NextRequest) {
 
     // ─── ページビュー ───
     if (body.type === 'pageview') {
-      const pvCount = await prisma.trackingPageView.count({ where: { sessionId: session.id } })
-      if (pvCount >= MAX_PV_PER_SESSION) return noContent()
+      // 上限判定はセッションの非正規化カウンタで行う（PVごとに count クエリを撃たない）
+      if (session.pageViewCount >= MAX_PV_PER_SESSION) return noContent()
       await prisma.trackingPageView.create({
         data: {
           pvKey: clip(body.pvKey, 64),
@@ -170,6 +170,11 @@ export async function POST(request: NextRequest) {
           title: clip(body.title, 200),
           queryParams: JSON.stringify(typeof body.params === 'object' && body.params ? body.params : {}).slice(0, 4000),
         },
+      })
+      // 直帰率の算出に使う。集計側で PageView を sessionId で groupBy しなくて済む
+      await prisma.trackingSession.update({
+        where: { id: session.id },
+        data: { pageViewCount: { increment: 1 } },
       })
       return noContent()
     }

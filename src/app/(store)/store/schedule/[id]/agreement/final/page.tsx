@@ -754,7 +754,7 @@ export default function FinalAgreementPage() {
       </div>
 
       {existingContract && (
-        <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-300 dark:border-green-700 text-xs text-green-800 dark:text-green-200">
+        <div className="p-3 rounded-lg bg-green-50 border border-green-400 text-xs text-green-900">
           <p className="font-semibold mb-0.5">契約書記録あり</p>
           <p>
             同意日時: {format(new Date(existingContract.agreedAt), 'yyyy年M月d日 HH:mm', { locale: ja })}

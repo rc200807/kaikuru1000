@@ -339,8 +339,8 @@ export default function PurchaseItemManager({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{item.itemName}</span>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{item.category}</span>
-                    {item.isAdditionalRequest && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 font-medium">追加依頼品</span>}
-                    {item.janCode && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 font-mono">JAN: {item.janCode}</span>}
+                    {item.isAdditionalRequest && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>追加依頼品</span>}
+                    {item.janCode && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono" style={{ background: 'var(--status-scheduled-bg)', color: 'var(--status-scheduled-text)' }}>JAN: {item.janCode}</span>}
                   </div>
                   <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
                     数量: {item.quantity} × {formatYen(item.purchasePrice)} = <strong>{formatYen(item.purchasePrice * item.quantity)}</strong>
@@ -349,7 +349,7 @@ export default function PurchaseItemManager({
                     <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 whitespace-pre-wrap break-words">備考: {item.notes}</div>
                   )}
                   {item.rakutenData && (
-                    <div className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                    <div className="text-[10px] mt-0.5" style={{ color: 'var(--status-scheduled-text)' }}>
                       {item.rakutenData.makerName && <span>{item.rakutenData.makerName}</span>}
                       {item.rakutenData.averagePrice && <span> / 参考: ¥{item.rakutenData.averagePrice.toLocaleString()}</span>}
                     </div>
@@ -359,7 +359,7 @@ export default function PurchaseItemManager({
                   <div className="flex gap-1 flex-shrink-0 items-start">
                     {!isFixedPriceBox(item.itemName) && (
                       researchResults[item.id] ? (
-                        <button onClick={() => toggleResearch(item.id)} className="text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/50 dark:text-purple-300">
+                        <button onClick={() => toggleResearch(item.id)} className="text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 hover:opacity-80" style={{ background: 'var(--status-rescheduled-bg)', color: 'var(--status-rescheduled-text)' }}>
                           調査済
                           <svg className={`w-3 h-3 transition-transform ${expandedResearch[item.id] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                         </button>
@@ -420,15 +420,15 @@ export default function PurchaseItemManager({
       <Modal open={showForm} onClose={dismissForm} title={editingId ? '品目を編集' : '品目を追加'} size="lg">
         <div className="space-y-3">
           {form.janCode && (
-            <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+            <div className="p-2.5 rounded-lg border" style={{ background: 'var(--status-scheduled-bg)', borderColor: 'var(--status-scheduled-text)' }}>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-medium text-blue-700 dark:text-blue-300">JAN: {form.janCode}</span>
+                <span className="text-xs font-mono font-medium" style={{ color: 'var(--status-scheduled-text)' }}>JAN: {form.janCode}</span>
                 <button onClick={() => setForm({ ...form, janCode: '', rakutenData: null })} className="ml-auto text-xs text-blue-500 hover:underline">クリア</button>
               </div>
               {form.rakutenData && (
-                <div className="mt-2 text-xs text-blue-800 dark:text-blue-200">
+                <div className="mt-2 text-xs" style={{ color: 'var(--status-scheduled-text)' }}>
                   <div className="font-medium">{form.rakutenData.productName}</div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-blue-600 dark:text-blue-400">
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]" style={{ color: 'var(--status-scheduled-text)' }}>
                     {form.rakutenData.makerName && <span>メーカー: {form.rakutenData.makerName}</span>}
                     {form.rakutenData.brandName && <span>ブランド: {form.rakutenData.brandName}</span>}
                     {form.rakutenData.averagePrice && <span>参考価格: ¥{form.rakutenData.averagePrice.toLocaleString()}</span>}
@@ -438,12 +438,12 @@ export default function PurchaseItemManager({
             </div>
           )}
           {janLookupLoading && (
-            <div className="flex items-center gap-2 p-2 rounded bg-blue-50 dark:bg-blue-950/30 text-xs text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2 p-2 rounded text-xs" style={{ background: 'var(--status-scheduled-bg)', color: 'var(--status-scheduled-text)' }}>
               <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />商品情報を検索中...
             </div>
           )}
           {janLookupError && (
-            <div className="p-2 rounded text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">{janLookupError}（手動で品名を入力してください）</div>
+            <div className="p-2 rounded text-xs border" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)', borderColor: 'var(--status-pending-text)' }}>{janLookupError}（手動で品名を入力してください）</div>
           )}
           <div className="flex justify-end">
             <Button size="sm" variant="text" onClick={() => setShowScanner(true)}>📷 バーコードを読み取る</Button>

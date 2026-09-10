@@ -11,18 +11,22 @@
  * 店舗識別色。店舗ポータルは固定ライトテーマ（globals.css の [data-portal="store"]）なので
  * 白〜薄グレー背景に載る前提で選んでいる。
  * ブランド赤（--store-primary #b91c1c）は「操作できるもの」の色なので店舗色には使わない。
+ *
+ * 濃さは -700〜-800 帯に揃えてある。頭文字の丸は白文字を載せるので、
+ * -600 帯だとコントラストが 3.1〜3.8:1 しかなく小さい文字では読めないため
+ * （現行は全色 5.0:1 以上。左の色帯としても濃いほうが判別しやすい）。
  */
 export const STORE_COLORS = [
-  '#2563eb', // blue
-  '#059669', // emerald
-  '#d97706', // amber
-  '#7c3aed', // violet
-  '#db2777', // pink
-  '#0891b2', // cyan
-  '#65a30d', // lime
-  '#ea580c', // orange
-  '#4f46e5', // indigo
-  '#0f766e', // teal
+  '#1d4ed8', // blue
+  '#047857', // emerald
+  '#b45309', // amber
+  '#6d28d9', // violet
+  '#be185d', // pink
+  '#155e75', // cyan
+  '#3f6212', // lime
+  '#c2410c', // orange
+  '#4338ca', // indigo
+  '#115e59', // teal
 ] as const
 
 /**

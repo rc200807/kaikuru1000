@@ -210,17 +210,17 @@ export default function KobutsuLedgerPage() {
             </div>
             {summary.incomplete > 0 && (
               <div>
-                <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 leading-none">
+                <div className="text-2xl font-bold leading-none" style={{ color: 'var(--status-pending-text)' }}>
                   {summary.incomplete}<span className="text-base font-semibold">件</span>
                 </div>
-                <div className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">記載事項に不足あり</div>
+                <div className="text-[11px] mt-1" style={{ color: 'var(--status-pending-text)' }}>記載事項に不足あり</div>
               </div>
             )}
           </div>
         )}
 
         {truncated && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="text-xs" style={{ color: 'var(--status-pending-text)' }}>
             件数が多いため一部のみ表示しています。期間を狭めるか、CSV出力をご利用ください。
           </p>
         )}
@@ -262,7 +262,7 @@ export default function KobutsuLedgerPage() {
                           </span>
                         )}
                         {g.hasUnsetCategory && (
-                          <span className={`${g.categories.length > 0 ? 'ml-1 ' : ''}text-amber-600 dark:text-amber-400`}>
+                          <span className={g.categories.length > 0 ? 'ml-1' : undefined} style={{ color: 'var(--status-pending-text)' }}>
                             {g.categories.length > 0 ? '＋未設定' : '未設定'}
                           </span>
                         )}
@@ -272,11 +272,11 @@ export default function KobutsuLedgerPage() {
                           {g.itemSummary}
                         </Link>
                         {g.missing.length > 0 ? (
-                          <div className="text-[11px] text-amber-700 dark:text-amber-400">
+                          <div className="text-[11px]" style={{ color: 'var(--status-pending-text)' }}>
                             不足: {g.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
                           </div>
                         ) : (
-                          <div className="text-[11px] text-emerald-600 dark:text-emerald-400">記載済み</div>
+                          <div className="text-[11px]" style={{ color: 'var(--status-completed-text)' }}>記載済み</div>
                         )}
                       </td>
                       <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{g.itemCount}品目</td>
@@ -285,16 +285,16 @@ export default function KobutsuLedgerPage() {
                       <td className="px-2.5 py-2 min-w-[220px]">
                         <div className="text-[var(--md-sys-color-on-surface)]">{g.customer.name}</div>
                         <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-words">
-                          {g.customer.address || <span className="text-amber-600 dark:text-amber-400">住所なし</span>}
+                          {g.customer.address || <span style={{ color: 'var(--status-pending-text)' }}>住所なし</span>}
                         </div>
                         <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                          {g.customer.occupation || <span className="text-amber-600 dark:text-amber-400">職業なし</span>}
+                          {g.customer.occupation || <span style={{ color: 'var(--status-pending-text)' }}>職業なし</span>}
                           {' ・ '}
-                          {g.customer.age != null ? `${g.customer.age}歳` : <span className="text-amber-600 dark:text-amber-400">年齢なし</span>}
+                          {g.customer.age != null ? `${g.customer.age}歳` : <span style={{ color: 'var(--status-pending-text)' }}>年齢なし</span>}
                         </div>
                       </td>
                       <td className="px-2.5 py-2 whitespace-nowrap">
-                        {g.customer.verification || <span className="text-amber-600 dark:text-amber-400">未確認</span>}
+                        {g.customer.verification || <span style={{ color: 'var(--status-pending-text)' }}>未確認</span>}
                       </td>
                       <td className="px-2.5 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -338,7 +338,7 @@ export default function KobutsuLedgerPage() {
                   <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{g.customer.address || '住所なし'}</div>
                   <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">確認方法: {g.customer.verification || '未確認'}</div>
                   {g.missing.length > 0 && (
-                    <div className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    <div className="mt-1.5 text-[11px]" style={{ color: 'var(--status-pending-text)' }}>
                       未記載: {g.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
                     </div>
                   )}

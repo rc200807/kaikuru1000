@@ -130,7 +130,7 @@ export default function WeekSchedulePicker({
               return (
                 <div key={key} className="mx-0.5 min-h-[18px] py-0.5 flex flex-wrap gap-0.5">
                   {noTime.map(v => (
-                    <span key={v.id} className="text-[9px] px-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 truncate max-w-full" title={v.user?.name ?? ''}>{v.user?.name ?? '予定'}</span>
+                    <span key={v.id} className="text-[9px] px-1 rounded bg-amber-100 text-amber-900 truncate max-w-full" title={v.user?.name ?? ''}>{v.user?.name ?? '予定'}</span>
                   ))}
                 </div>
               )
@@ -162,18 +162,18 @@ export default function WeekSchedulePicker({
                       isSel
                         ? 'border-[var(--portal-primary)] ring-2 ring-[var(--portal-primary)]/40 bg-[var(--status-scheduled-bg)]'
                         : booked.length > 0
-                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30'
+                        ? 'border-red-300 bg-red-50'
                         : 'border-transparent hover:bg-[var(--md-sys-color-surface-container-high)]'
                     }`}
                     title={booked.map(v => `${v.startTime ?? ''} ${v.user?.name ?? ''}`).join('\n')}
                   >
                     {startsHere && (
-                      <span className="block text-[9px] leading-tight text-red-700 dark:text-red-300 truncate">
+                      <span className="block text-[9px] leading-tight text-red-800 truncate">
                         {startsHere.startTime} {startsHere.user?.name ?? '予定'}
                       </span>
                     )}
                     {booked.length > 0 && !startsHere && (
-                      <span className="block text-[9px] leading-tight text-red-400 dark:text-red-500">〃</span>
+                      <span className="block text-[9px] leading-tight text-red-700">〃</span>
                     )}
                   </button>
                 )

@@ -234,8 +234,8 @@ export default function StoreOrganizationPage() {
       {message && (
         <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-medium ${
           message.type === 'success'
-            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+            ? 'bg-green-100 text-green-800'
+            : 'bg-red-100 text-red-800'
         }`}>
           {message.text}
         </div>
@@ -339,7 +339,7 @@ export default function StoreOrganizationPage() {
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--store-primary-container)] text-[var(--store-primary)] font-semibold">ログイン中</span>
                         )}
                         {s.storeStatus === 'closed' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300">閉店</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700">閉店</span>
                         )}
                       </div>
                       <p className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-faint)]">{s.code}</p>
@@ -482,11 +482,11 @@ function EngagementMatrix({ data, loading, type }: { data: EngagementData | null
                           <span className="text-[10px] text-[var(--md-sys-color-on-surface-faint)]">対象外</span>
                         ) : cell ? (
                           type === 'videos' ? (
-                            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400" title={cell.lastViewedAt ? format(new Date(cell.lastViewedAt), 'yyyy/M/d HH:mm', { locale: ja }) : undefined}>
+                            <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-700" title={cell.lastViewedAt ? format(new Date(cell.lastViewedAt), 'yyyy/M/d HH:mm', { locale: ja }) : undefined}>
                               ✓<span className="text-[10px] font-normal">{cell.playCount}回</span>
                             </span>
                           ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-bold" title={cell.readAt ? format(new Date(cell.readAt), 'yyyy/M/d HH:mm', { locale: ja }) : undefined}>✓</span>
+                            <span className="text-emerald-700 font-bold" title={cell.readAt ? format(new Date(cell.readAt), 'yyyy/M/d HH:mm', { locale: ja }) : undefined}>✓</span>
                           )
                         ) : (
                           <span className="text-[var(--md-sys-color-outline)]">—</span>
@@ -495,7 +495,7 @@ function EngagementMatrix({ data, loading, type }: { data: EngagementData | null
                     )
                   })}
                   <td className="px-3 py-2.5 text-right">
-                    <span className={`text-xs font-semibold ${rate === 100 ? 'text-emerald-600 dark:text-emerald-400' : rate >= 50 ? 'text-[var(--md-sys-color-on-surface)]' : 'text-amber-600 dark:text-amber-400'}`}>{rate}%</span>
+                    <span className={`text-xs font-semibold ${rate === 100 ? 'text-emerald-700' : rate >= 50 ? 'text-[var(--md-sys-color-on-surface)]' : 'text-amber-700'}`}>{rate}%</span>
                   </td>
                 </tr>
               )

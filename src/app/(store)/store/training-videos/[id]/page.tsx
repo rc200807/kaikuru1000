@@ -262,7 +262,7 @@ export default function StoreTrainingVideoDetailPage() {
                 </div>
               </div>
 
-              <div className="px-5 py-4 rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200/50 dark:border-purple-800/30">
+              <div className="px-5 py-4 rounded-2xl bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-300/60">
                 <p className="text-sm text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap leading-relaxed">{video.summary}</p>
               </div>
 

@@ -44,9 +44,9 @@ const INQUIRY_TYPES: Record<string, string> = {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
-  new:       { label: '新規',   bg: 'bg-blue-100 dark:bg-blue-900/40',   text: 'text-blue-800 dark:text-blue-300' },
-  contacted: { label: '対応中', bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-800 dark:text-yellow-300' },
-  completed: { label: '完了',   bg: 'bg-green-100 dark:bg-green-900/40',  text: 'text-green-800 dark:text-green-300' },
+  new:       { label: '新規',   bg: 'bg-blue-100', text: 'text-blue-800' },
+  contacted: { label: '対応中', bg: 'bg-yellow-100', text: 'text-yellow-900' },
+  completed: { label: '完了',   bg: 'bg-green-100', text: 'text-green-800' },
 }
 
 export default function StoreInquiriesPage() {
@@ -207,14 +207,14 @@ export default function StoreInquiriesPage() {
       {/* 問い合わせ記録シート */}
       {inquirySheetUrl && (
         <div className="px-4 sm:px-6 pt-2">
-          <div className="rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-emerald-700 dark:text-emerald-300">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-emerald-800">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6zM3.75 9h16.5M3.75 12h16.5M3.75 15h16.5M9 3.75v16.5" />
               </svg>
-              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">問い合わせ記録シート</p>
+              <p className="text-xs font-semibold text-emerald-900">問い合わせ記録シート</p>
             </div>
-            <p className="text-xs text-emerald-700 dark:text-emerald-300 flex-1 min-w-0">
+            <p className="text-xs text-emerald-800 flex-1 min-w-0">
               この店舗宛の問い合わせはGoogleスプレッドシートに自動記録されています
             </p>
             <a
@@ -377,7 +377,7 @@ function DetailPane({
         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusConf.bg} ${statusConf.text}`}>
           {statusConf.label}
         </span>
-        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+        <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-800">
           {typeLabel}
         </span>
         <StoreChip storeId={inquiry.storeId} storeName={inquiry.store?.name} size="sm" />

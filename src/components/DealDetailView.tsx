@@ -1617,7 +1617,10 @@ export default function DealDetailView({
               ) : (
                 <>
                   {ledger.missing.length > 0 && (
-                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 px-3 py-2 mb-3 text-[11px] text-amber-800 dark:text-amber-200">
+                    <div
+                      className="rounded-lg border px-3 py-2 mb-3 text-[11px]"
+                      style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)', borderColor: 'var(--status-pending-text)' }}
+                    >
                       法定記載事項に不足があります: {ledger.missing.map(m => KOBUTSU_MISSING_LABEL[m]).join('・')}
                       {!isAdmin && '（品目・特徴は台帳詳細から、住所・職業・年齢・確認方法は顧客情報から補えます）'}
                     </div>
@@ -1664,12 +1667,12 @@ export default function DealDetailView({
                                   {!r.categoryManual && <span className="ml-1 text-[10px] text-[var(--md-sys-color-on-surface-variant)]">推定</span>}
                                 </span>
                               ) : (
-                                <span className="text-amber-600 dark:text-amber-400">未設定</span>
+                                <span style={{ color: 'var(--status-pending-text)' }}>未設定</span>
                               )}
                             </td>
                             <td className="px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface)] min-w-[120px]">{r.itemName}</td>
                             <td className="px-2 py-1.5 min-w-[200px] text-[var(--md-sys-color-on-surface-variant)] break-words">
-                              {r.features || <span className="text-amber-600 dark:text-amber-400">未記載</span>}
+                              {r.features || <span style={{ color: 'var(--status-pending-text)' }}>未記載</span>}
                             </td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{r.quantity}</td>
                             <td className="px-2 py-1.5 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{formatYen(r.price)}</td>
@@ -1954,7 +1957,7 @@ export default function DealDetailView({
                         <td className="px-2 py-1.5 text-[var(--md-sys-color-on-surface)]">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span>{it.itemName}</span>
-                            {it.isAdditionalRequest && <span className="text-[9px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">追加依頼品</span>}
+                            {it.isAdditionalRequest && <span className="text-[9px] px-1 py-0.5 rounded-full" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>追加依頼品</span>}
                             <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)]">{it.category}</span>
                           </div>
                           {it.notes && <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words">備考: {it.notes}</div>}

@@ -94,7 +94,7 @@ export default function StoreAnnouncementsPage() {
                   icon: a.announcementCategory.icon,
                   color: a.announcementCategory.color
                     ? `bg-[${a.announcementCategory.color}]/10 text-[${a.announcementCategory.color}]`
-                    : 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-300',
+                    : 'bg-gray-100 text-gray-800',
                 }
               : (() => {
                   const fallback = CATEGORIES[a.category] || CATEGORIES.general
@@ -106,9 +106,9 @@ export default function StoreAnnouncementsPage() {
 
             const priorityBg =
               a.priority === 'urgent'
-                ? 'bg-red-50/50 dark:bg-red-950/20'
+                ? 'bg-red-50/50'
                 : !a.isRead
-                  ? 'bg-blue-50/30 dark:bg-blue-950/10'
+                  ? 'bg-blue-50/30'
                   : 'bg-[var(--md-sys-color-surface-container-low)]'
 
             return (
@@ -153,14 +153,14 @@ export default function StoreAnnouncementsPage() {
 
                   {/* NEW badge */}
                   {isNew && (
-                    <span className="text-xs font-bold text-red-500 dark:text-red-400 animate-pulse">
+                    <span className="text-xs font-bold text-red-700 animate-pulse">
                       NEW
                     </span>
                   )}
 
                   {/* サービス限定配信のときだけ対象を明示 */}
                   {parseAnnouncementTargets(a.targetServices).length > 0 && (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
                       {announcementTargetLabel(a.targetServices)}向け
                     </span>
                   )}

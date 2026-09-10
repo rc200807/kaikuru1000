@@ -326,7 +326,7 @@ export default function CommunityPage() {
                 <Avatar store={thread.store} size="sm" />
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                   {thread.isPinned && (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 flex-shrink-0">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 flex-shrink-0">
                       📌 固定
                     </span>
                   )}

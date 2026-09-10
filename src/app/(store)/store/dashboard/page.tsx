@@ -283,8 +283,8 @@ function HighlightsRow({ highlights }: { highlights: Highlights }) {
                 <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${a.isRead ? 'bg-[var(--md-sys-color-outline-variant)]' : 'bg-[var(--store-primary)]'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                    {a.priority === 'urgent' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">緊急</span>}
-                    {a.priority === 'high' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">重要</span>}
+                    {a.priority === 'urgent' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-800">緊急</span>}
+                    {a.priority === 'high' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-800">重要</span>}
                     {a.announcementCategory && (
                       <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: `${a.announcementCategory.color}20`, color: a.announcementCategory.color }}>
                         <AnnouncementCategoryIcon iconKey={a.announcementCategory.icon} className="w-3 h-3" /> {a.announcementCategory.name}

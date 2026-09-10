@@ -207,12 +207,12 @@ export default function KobutsuLedgerDetailPage() {
                           {!r.categoryManual && <span className="ml-1 text-[10px] text-[var(--md-sys-color-on-surface-faint)]">推定</span>}
                         </span>
                       ) : (
-                        <span className="text-amber-600 dark:text-amber-400">未設定</span>
+                        <span style={{ color: 'var(--status-pending-text)' }}>未設定</span>
                       )}
                     </td>
                     <td className="px-2.5 py-2 font-medium text-[var(--md-sys-color-on-surface)] min-w-[140px]">{r.itemName}</td>
                     <td className="px-2.5 py-2 min-w-[240px] text-[var(--md-sys-color-on-surface-variant)] break-words">
-                      {r.features || <span className="text-amber-600 dark:text-amber-400">未記載</span>}
+                      {r.features || <span style={{ color: 'var(--status-pending-text)' }}>未記載</span>}
                       {r.featuresManual && <span className="ml-1 text-[10px] text-[var(--md-sys-color-on-surface-faint)]">手入力</span>}
                     </td>
                     <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{r.quantity}</td>
@@ -341,7 +341,7 @@ function Row({ label, value, sub, warn }: { label: string; value: string; sub?: 
     <div className="flex gap-3">
       <span className="w-28 flex-shrink-0 text-[var(--md-sys-color-on-surface-variant)] text-xs pt-0.5">{label}</span>
       <span className="min-w-0 flex-1">
-        <span className={`text-sm break-words ${warn ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--md-sys-color-on-surface)]'}`}>{value}</span>
+        <span className="text-sm break-words" style={{ color: warn ? 'var(--status-pending-text)' : 'var(--md-sys-color-on-surface)' }}>{value}</span>
         {sub && <span className="block text-[11px] text-[var(--md-sys-color-on-surface-faint)]">{sub}</span>}
       </span>
     </div>

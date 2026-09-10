@@ -36,10 +36,10 @@ type Announcement = {
 }
 
 const CATEGORIES: Record<string, { label: string; color: string }> = {
-  general:  { label: '一般',         color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' },
-  important:{ label: '重要',         color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' },
-  system:   { label: 'システム',     color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
-  campaign: { label: 'キャンペーン', color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
+  general:  { label: '一般',         color: 'bg-blue-100 text-blue-800' },
+  important:{ label: '重要',         color: 'bg-red-100 text-red-800' },
+  system:   { label: 'システム',     color: 'bg-purple-100 text-purple-800' },
+  campaign: { label: 'キャンペーン', color: 'bg-green-100 text-green-800' },
 }
 
 export default function StoreAnnouncementDetailPage() {
@@ -154,19 +154,19 @@ export default function StoreAnnouncementDetailPage() {
 
           {/* Priority badge */}
           {announcement.priority === 'urgent' && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 animate-pulse">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 animate-pulse">
               緊急
             </span>
           )}
           {announcement.priority === 'high' && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-800">
               重要
             </span>
           )}
 
           {/* サービス限定配信のときだけ対象を明示 */}
           {parseAnnouncementTargets(announcement.targetServices).length > 0 && (
-            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
               {announcementTargetLabel(announcement.targetServices)}向け
             </span>
           )}
@@ -187,7 +187,7 @@ export default function StoreAnnouncementDetailPage() {
 
       {/* 記事本文 */}
       <article
-        className="prose prose-sm dark:prose-invert max-w-none text-[var(--md-sys-color-on-surface)] leading-relaxed"
+        className="prose prose-sm max-w-none text-[var(--md-sys-color-on-surface)] leading-relaxed"
         dangerouslySetInnerHTML={{ __html: announcement.content }}
       />
 

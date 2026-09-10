@@ -309,7 +309,7 @@ export default function StoreLinePage() {
                               msg.messageType === 'image' ? 'p-1' : 'px-3.5 py-2.5'
                             } ${
                               isFailed
-                                ? 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-300 border border-red-300 dark:border-red-800'
+                                ? 'bg-red-100 text-red-800 border border-red-400'
                                 : isOutbound
                                   ? 'bg-[var(--store-primary)] text-[var(--store-on-primary)]'
                                   : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]'
@@ -341,7 +341,7 @@ export default function StoreLinePage() {
                 {/* 返信入力 */}
                 <div className="border-t border-[var(--md-sys-color-outline-variant)] p-3 flex flex-col gap-2 shrink-0">
                   {sendError && (
-                    <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">⚠ {sendError}</p>
+                    <p className="text-xs text-red-800 bg-red-50 px-3 py-2 rounded-lg">⚠ {sendError}</p>
                   )}
                   <div className="flex gap-2">
                     <textarea

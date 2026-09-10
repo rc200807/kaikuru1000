@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
+import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-item-shape'
 import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
 import { resolveEditedImageUrls } from '@/lib/image-url'
 import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
@@ -61,24 +62,31 @@ export async function PATCH(
   if (body.isAdditionalRequest !== undefined) updateData.isAdditionalRequest = !!body.isAdditionalRequest
   if (body.notes !== undefined) updateData.notes = body.notes || null
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const { updated, dealAmounts } = await prisma.$transaction(async (tx) => {
     const result = await tx.purchaseItem.update({
       where: { id: itemId },
       data: updateData,
+      select: { ...PURCHASE_ITEM_SHAPE_SELECT, dealId: true },
     })
 
     // 案件合計を再計算（正）。訪問合計も後方互換で維持。
-    if (result.dealId) await recomputeDealAmounts(tx, result.dealId)
+    let amounts: { purchaseAmount: number; billingAmount: number } | null = null
+    if (result.dealId) amounts = await recomputeDealAmounts(tx, result.dealId)
     if (result.visitScheduleId) {
-      const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId: result.visitScheduleId } })
+      const allItems = await tx.purchaseItem.findMany({
+        where: { visitScheduleId: result.visitScheduleId },
+        select: { purchasePrice: true, quantity: true },
+      })
       const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
       await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { purchaseAmount: total } })
     }
 
-    return result
+    return { updated: result, dealAmounts: amounts }
   })
 
-  return NextResponse.json(updated)
+  // 画面は案件まるごとの再取得をせず、このレスポンスだけで一覧と合計を更新する。
+  // 整形は案件詳細GETと同じ shapePurchaseItem を通すこと（画像URLの形が食い違うと壊れる）
+  return NextResponse.json({ item: shapePurchaseItem(updated), dealAmounts })
 }
 
 /** 買取品目を削除 */
@@ -104,17 +112,24 @@ export async function DELETE(
   const visitScheduleId = access.item!.visitScheduleId
   const dealId = access.item!.dealId
 
-  await prisma.$transaction(async (tx) => {
+  const dealAmounts = await prisma.$transaction(async (tx) => {
     await tx.purchaseItem.delete({ where: { id: itemId } })
 
     // 案件合計を再計算（正）。訪問合計も後方互換で維持。
-    if (dealId) await recomputeDealAmounts(tx, dealId)
+    let amounts: { purchaseAmount: number; billingAmount: number } | null = null
+    if (dealId) amounts = await recomputeDealAmounts(tx, dealId)
     if (visitScheduleId) {
-      const allItems = await tx.purchaseItem.findMany({ where: { visitScheduleId } })
+      const allItems = await tx.purchaseItem.findMany({
+        where: { visitScheduleId },
+        select: { purchasePrice: true, quantity: true },
+      })
       const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
       await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { purchaseAmount: total } })
     }
+    return amounts
   })
 
-  return NextResponse.json({ deleted: true })
+  // visitScheduleId を返すのは、旧データ（訪問直下の品目）のとき
+  // 画面が差分更新ではなく案件まるごとの再取得にフォールバックするため
+  return NextResponse.json({ deleted: true, id: itemId, dealAmounts, visitScheduleId })
 }

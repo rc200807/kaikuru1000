@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
+import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-item-shape'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 import { fixedPriceBoxDuplicateMessage, isFixedPriceBox } from '@/lib/fixed-price-boxes'
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (already > 0) return NextResponse.json({ error: fixedPriceBoxDuplicateMessage(itemName) }, { status: 409 })
   }
 
-  const item = await prisma.$transaction(async (tx) => {
+  const { item, dealAmounts } = await prisma.$transaction(async (tx) => {
     const created = await tx.purchaseItem.create({
       data: {
         dealId: id,
@@ -75,11 +76,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         isAdditionalRequest: isAdditionalRequest ?? false,
         notes: notes || null,
       },
+      select: PURCHASE_ITEM_SHAPE_SELECT,
     })
-    await recomputeDealAmounts(tx, id)
-    return created
+    const amounts = await recomputeDealAmounts(tx, id)
+    return { item: created, dealAmounts: amounts }
   })
 
-  await recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `買取品目を登録「${item.itemName}」`, req: request })
-  return NextResponse.json(item, { status: 201 })
+  // アクセスログはレスポンスを待たせない（登録の体感に効く）
+  after(() => recordAccessLog({ userType: sessionUser.role, userId: sessionUser.id, userName: sessionUser.name, memberId: sessionUser.memberId ?? null, action: `買取品目を登録「${item.itemName}」`, req: request }))
+  // 画面は案件まるごとの再取得をせず、このレスポンスだけで一覧と合計を更新する
+  return NextResponse.json({ item: shapePurchaseItem(item), dealAmounts }, { status: 201 })
 }

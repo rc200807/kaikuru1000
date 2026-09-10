@@ -12,7 +12,7 @@ import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
 import SignaturePad from '@/components/SignaturePad'
-import PurchaseItemManager, { type ManagedPurchaseItem } from '@/components/store/PurchaseItemManager'
+import PurchaseItemManager, { type ManagedPurchaseItem, type PurchaseItemChange } from '@/components/store/PurchaseItemManager'
 import DocumentPdfPreview from '@/components/DocumentPdfPreview'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { dealCreatorLabel } from '@/lib/deal-creator'
@@ -269,7 +269,6 @@ export default function DealDetailView({
   // 紙で契約した案件の台帳情報（取引年月日はここから入力する）
   const [paperLedger, setPaperLedger] = useState<{ agreedAt: string | null; imageCount: number } | null>(null)
   const [savingPaperDate, setSavingPaperDate] = useState(false)
-  const [ledgerLoading, setLedgerLoading] = useState(false)
   // 折りたたみセクションの見出しからファイル選択を開くための隠し input
   const paperInputRef = useRef<HTMLInputElement>(null)
   const recInputRef = useRef<HTMLInputElement>(null)
@@ -285,10 +284,17 @@ export default function DealDetailView({
       if (res.status === 403) { setError('この案件を閲覧する権限がありません'); setLoading(false); return }
       if (res.status === 404) { setError('案件が見つかりません'); setLoading(false); return }
       if (!res.ok) { setError('案件の取得に失敗しました'); setLoading(false); return }
-      const data: Deal = await res.json()
+      const data: Deal & { kobutsuLedger?: any; recordings?: DealRecording[] } = await res.json()
       setDeal(data)
       setDetailEdit(data.detail ?? '')
       setOccurredEdit(toDateInput(data.occurredAt ?? data.createdAt))
+      // 古物台帳と会話録音は同じレスポンスに畳み込まれている（往復2本ぶんの削減）
+      if (data.kobutsuLedger) {
+        setLedger(data.kobutsuLedger.group ?? null)
+        setLedgerEntryKey(data.kobutsuLedger.entryKey ?? null)
+        setPaperLedger(data.kobutsuLedger.paperContract ?? null)
+      }
+      if (Array.isArray(data.recordings)) setRecordings(data.recordings)
     } catch {
       setError('案件の取得に失敗しました')
     }
@@ -296,6 +302,41 @@ export default function DealDetailView({
   }, [dealId])
 
   useEffect(() => { load() }, [load])
+
+  /**
+   * 買取品目の変更を、案件を再取得せずに手元の state へ反映する。
+   *
+   * 以前は変更のたびに load()（案件まるごとのGET）を呼んでいた。
+   * 日本→iad1 は1往復 0.3 秒かかるうえ、load() は setLoading(true) で
+   * 全画面スピナーを出すため、開いていたセクションの開閉やスクロール位置まで戻っていた。
+   *
+   * 合計金額は purchaseItems からクライアント側で再計算しているので、
+   * 配列を差し替えるだけで表示は自動的に追従する
+   * （dealAmounts はDBと値を揃えるための保険）。
+   */
+  const applyPurchaseItemChange = useCallback((change: PurchaseItemChange) => {
+    if (change.kind === 'reload') { load(); return }
+    // 古物台帳が出ている案件（電子契約あり or 紙契約の写真あり）は、品目の増減が
+    // そのまま法定記載事項の表示に効く。台帳は案件GETのレスポンスで組み立てているので、
+    // ここは差分更新せず再取得して表示のズレを作らない。
+    // 品目を登録している最中の案件はまだ台帳が無いので、ホットパスは差分更新のまま。
+    if (ledger) { load(); return }
+    setDeal(prev => {
+      if (!prev) return prev
+      const next = change.kind === 'removed'
+        ? prev.purchaseItems.filter(i => i.id !== change.id)
+        : prev.purchaseItems.some(i => i.id === change.item.id)
+          ? prev.purchaseItems.map(i => (i.id === change.item.id ? change.item : i))
+          // 追加は末尾へ（サーバー側の並びは createdAt 昇順なので一致する）
+          : [...prev.purchaseItems, change.item]
+      return {
+        ...prev,
+        purchaseItems: next,
+        purchaseAmount: change.purchaseAmount ?? prev.purchaseAmount,
+      }
+    })
+  }, [load, ledger])
+
 
   // マスタと担当者候補。
   // 店舗ポータルはサーバー（layout.tsx）が解決済みのものを Context から読むので取得ゼロ。
@@ -343,30 +384,13 @@ export default function DealDetailView({
     } catch { /* ignore */ }
   }, [dealId])
 
-  useEffect(() => { loadRecordings() }, [loadRecordings])
+  // マウント時は取得しない（案件GETのレスポンスに畳み込み済み）。
+  // この関数は解析中の8秒ポーリングとアップロード・削除の直後だけ使う。
 
-  // 古物台帳の取得。
-  // 電子の売買契約書がある案件はもちろん、紙で契約して写真だけアップロードした案件も
-  // 古物営業法の記載義務があるため台帳の対象にする（取引年月日はこの画面から入力する）。
-  const loadLedger = useCallback(async () => {
-    setLedgerLoading(true)
-    try {
-      const r = await fetch(`/api/deals/${dealId}/kobutsu-ledger`)
-      if (r.ok) {
-        const d = await r.json()
-        setLedger(d.group ?? null)
-        setLedgerEntryKey(d.entryKey ?? null)
-        setPaperLedger(d.paperContract ?? null)
-      }
-    } catch { /* ignore */ }
-    finally { setLedgerLoading(false) }
-  }, [dealId])
-
+  // 台帳は /api/deals/[id] のレスポンスに畳み込まれているので、ここでは取得しない。
+  // 以前は deal.dealContract の応答を待ってから叩く**直列**で、
+  // 日本からは 0.3 秒がまるごと1段ぶん積み上がっていた。
   const paperContractCount = deal?.paperContractImages.length ?? 0
-  useEffect(() => {
-    if (deal?.dealContract || paperContractCount > 0) loadLedger()
-    else { setLedger(null); setLedgerEntryKey(null); setPaperLedger(null) }
-  }, [deal?.dealContract, paperContractCount, loadLedger])
 
   /** 紙契約の取引年月日を保存する（古物台帳の「取引の年月日」） */
   async function savePaperContractAgreedAt(value: string) {
@@ -380,8 +404,8 @@ export default function DealDetailView({
     setSavingPaperDate(false)
     if (res.ok) {
       setMsg({ type: 'success', text: value ? '取引年月日を保存しました' : '取引年月日をクリアしました' })
+      // load() のレスポンスに台帳も含まれるので、ここも1往復で済む
       await load()
-      await loadLedger()
     } else {
       const d = await res.json().catch(() => null)
       setMsg({ type: 'error', text: d?.error || '取引年月日の保存に失敗しました' })
@@ -1453,13 +1477,12 @@ export default function DealDetailView({
             )}
 
             <PurchaseItemManager
-              parentType="deal"
               parentId={deal.id}
               items={purchaseItems}
               categories={categories}
               editable={editable}
               frozen={contractIssued}
-              onChanged={load}
+              onChanged={applyPurchaseItemChange}
               onMessage={setMsg}
             />
             </Section>
@@ -1636,9 +1659,7 @@ export default function DealDetailView({
                 </div>
               )}
 
-              {ledgerLoading && !ledger ? (
-                <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">読み込み中...</p>
-              ) : !ledger ? (
+              {!ledger ? (
                 <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
                   この案件に台帳の対象となる買取品目がありません（買取品目を登録すると台帳に記載されます）。
                 </p>

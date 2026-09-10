@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { loadDealRecordings, serializeRecording } from '@/lib/deal-recordings'
 import { recordAccessLog } from '@/lib/access-log'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
@@ -16,27 +17,6 @@ async function resolveDeal(id: string, sessionUser: any) {
   return { deal }
 }
 
-function serialize(r: any, hasTranscript: boolean) {
-  let summary: unknown = null
-  if (r.summary) { try { summary = JSON.parse(r.summary) } catch { summary = null } }
-  return {
-    id: r.id,
-    fileName: r.fileName,
-    mimeType: r.mimeType,
-    fileSize: r.fileSize,
-    durationSec: r.durationSec,
-    status: r.status,
-    // 本文は返さない（数万文字 × ポーリング。開いたときに [recId] の GET で取る）
-    hasTranscript,
-    summary,
-    error: r.error,
-    uploadedByName: r.uploadedByName,
-    createdAt: r.createdAt,
-    processedAt: r.processedAt,
-    audioUrl: `/api/deals/${r.dealId}/recordings/${r.id}/audio`,
-  }
-}
-
 // 案件の会話録音一覧
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
@@ -47,21 +27,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const access = await resolveDeal(id, sessionUser)
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
 
-  const recordings = await prisma.dealRecording.findMany({
-    where: { dealId: id },
-    // transcript（@db.Text）は select しない。存在判定だけ別に引く
-    select: {
-      id: true, dealId: true, fileName: true, mimeType: true, fileSize: true, durationSec: true,
-      status: true, summary: true, error: true, uploadedByName: true, createdAt: true, processedAt: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-  const withTranscript = new Set(
-    (await prisma.dealRecording.findMany({
-      where: { dealId: id, NOT: { transcript: null } }, select: { id: true },
-    })).map(r => r.id),
-  )
-  return NextResponse.json({ recordings: recordings.map(r => serialize(r, withTranscript.has(r.id))) })
+  // 中身は src/lib/deal-recordings.ts に集約（案件詳細GET が同じ関数で畳み込む）
+  return NextResponse.json({ recordings: await loadDealRecordings(id) })
 }
 
 // 録音アップロード完了後にメタデータを登録（status=pending でAI解析待ち）
@@ -99,5 +66,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   })
 
   // 登録直後は status=pending で文字起こしはまだ無い
-  return NextResponse.json(serialize(created, false), { status: 201 })
+  return NextResponse.json(serializeRecording(created, false), { status: 201 })
 }

@@ -34,12 +34,30 @@ export type ManagedPurchaseItem = {
 }
 
 /**
+ * 買取品目に対する変更を親（案件詳細）へ伝えるための差分。
+ *
+ * 以前は変更のたびに `onChanged()` で**案件をまるごと再取得**していた。
+ * 日本→iad1 は1往復 0.3 秒かかるうえ、そのGETは案件配下の全データを引くので
+ * 「品目を1件保存する」たびに丸ごと1往復ぶん待たされていた。
+ * さらに再取得中は全画面スピナーが出るため、開いていた `<details>` の開閉や
+ * スクロール位置まで巻き戻っていた。
+ *
+ * `reload` は安全弁。旧データ（訪問直下に紐づく品目）は訪問行の金額表示にも
+ * 影響するため、そのときだけ従来どおり再取得させる。
+ */
+export type PurchaseItemChange =
+  | { kind: 'upsert'; item: ManagedPurchaseItem; purchaseAmount?: number | null }
+  | { kind: 'removed'; id: string; purchaseAmount?: number | null }
+  | { kind: 'reload' }
+
+/**
  * 買取品目の登録・編集・削除・AI査定・定額BOX（1000円ボックス／エコ得BOX）・在庫化を行う共有マネージャ。
- * 案件詳細（parentType='deal'）と訪問詳細（parentType='visit'）で同じ機能を提供する。
- * 品目自体は親(案件/訪問)のGETから渡され、変更後は onChanged() で親を再取得する。
+ * 品目自体は案件のGETから渡され、変更は onChanged(change) で親に差分だけ伝える。
+ *
+ * 訪問詳細向けの経路（parentType='visit'）は
+ * 「訪問詳細は今後使わず案件詳細に集約する」方針に従って撤去した。
  */
 export default function PurchaseItemManager({
-  parentType,
   parentId,
   items,
   categories,
@@ -48,7 +66,6 @@ export default function PurchaseItemManager({
   onChanged,
   onMessage,
 }: {
-  parentType: 'deal' | 'visit'
   parentId: string
   items: ManagedPurchaseItem[]
   categories: { id: string; name: string }[]
@@ -58,13 +75,11 @@ export default function PurchaseItemManager({
    * 追加・編集・削除だけを止め、AI調査と在庫化（契約後にこそ行う後続作業）は残す。
    */
   frozen?: boolean
-  onChanged: () => void
+  onChanged: (change: PurchaseItemChange) => void
   onMessage?: (m: { type: 'success' | 'error'; text: string }) => void
 }) {
   const router = useRouter()
-  const createUrl = parentType === 'deal'
-    ? `/api/deals/${parentId}/purchase-items`
-    : `/api/visit-schedules/${parentId}/purchase-items`
+  const createUrl = `/api/deals/${parentId}/purchase-items`
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -188,13 +203,16 @@ export default function PurchaseItemManager({
       isAdditionalRequest: form.isAdditionalRequest, notes: form.notes.trim() || null,
     }
     try {
-      if (editingId) {
-        await fetch(`/api/purchase-items/${editingId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      } else {
-        await fetch(createUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const res = editingId
+        ? await fetch(`/api/purchase-items/${editingId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        : await fetch(createUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        msg({ type: 'error', text: d.error || '保存に失敗しました' })
+        return
       }
       resetForm()
-      onChanged()
+      onChanged(changeFromResponse(await res.json().catch(() => null)))
       msg({ type: 'success', text: '買取品目を保存しました' })
     } catch {
       msg({ type: 'error', text: '保存に失敗しました' })
@@ -220,7 +238,7 @@ export default function PurchaseItemManager({
         msg({ type: 'error', text: d.error || '追加に失敗しました' })
         return
       }
-      onChanged()
+      onChanged(changeFromResponse(await res.json().catch(() => null)))
       msg({ type: 'success', text: `${box.name}を追加しました` })
     } catch {
       msg({ type: 'error', text: '追加に失敗しました' })
@@ -229,11 +247,28 @@ export default function PurchaseItemManager({
     }
   }
 
+  /**
+   * 登録・更新のレスポンスを差分に変換する。
+   * サーバーは案件詳細GETと同じ shapePurchaseItem を通した品目を返すので、
+   * そのまま画面の state に差し込める。
+   */
+  function changeFromResponse(d: any): PurchaseItemChange {
+    if (!d?.item?.id) return { kind: 'reload' }
+    // 旧データ（訪問直下の品目）は訪問行の金額にも効くので再取得にフォールバック
+    if (d.item.visitScheduleId) return { kind: 'reload' }
+    return { kind: 'upsert', item: d.item as ManagedPurchaseItem, purchaseAmount: d.dealAmounts?.purchaseAmount ?? null }
+  }
+
   /** 削除したら true。確認をキャンセルしたら false（呼び出し側でフォームを閉じない） */
   async function deletePurchaseItem(id: string): Promise<boolean> {
     if (!confirm('この品目を削除しますか？')) return false
-    await fetch(`/api/purchase-items/${id}`, { method: 'DELETE' })
-    onChanged()
+    const res = await fetch(`/api/purchase-items/${id}`, { method: 'DELETE' })
+    if (!res.ok) { msg({ type: 'error', text: '削除に失敗しました' }); return false }
+    const d = await res.json().catch(() => null)
+    // 旧データ（訪問直下の品目）は訪問行の金額表示にも効くので再取得にフォールバックする
+    onChanged(d?.visitScheduleId
+      ? { kind: 'reload' }
+      : { kind: 'removed', id, purchaseAmount: d?.dealAmounts?.purchaseAmount ?? null })
     msg({ type: 'success', text: '品目を削除しました' })
     return true
   }
@@ -537,7 +572,15 @@ export default function PurchaseItemManager({
             itemName: convertItem.itemName, category: convertItem.category, purchasePrice: convertItem.purchasePrice,
             quantity: convertItem.quantity, janCode: convertItem.janCode, images: convertItem.imageUrls,
           })}
-          onSaved={() => { setConvertItem(null); onChanged() }}
+          onSaved={(created) => {
+            const target = convertItem
+            setConvertItem(null)
+            // 在庫化しても品目自体は変わらない。変わるのは「在庫化済み」リンクだけなので
+            // その1件だけを差し替える
+            onChanged(created?.id
+              ? { kind: 'upsert', item: { ...target, convertedInventoryId: created.id } }
+              : { kind: 'reload' })
+          }}
         />
       )}
 

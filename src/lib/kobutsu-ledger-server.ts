@@ -375,6 +375,57 @@ export async function fetchKobutsuLedgerGroup(
   return groups[0] ?? null
 }
 
+
+/**
+ * 案件詳細の「古物台帳」セクションぶんをまとめて返す。
+ *
+ * 案件詳細GET（`/api/deals/[id]`）が**すでに取得している行から**組み立てられるよう、
+ * 必要な項目を引数で受け取る形にしてある。専用エンドポイントを別に叩くと
+ * 同じ案件をもう一度引いたうえで、日本からは 0.3 秒の往復がまるごと1本増える。
+ */
+export async function buildDealLedgerSection(deal: {
+  id: string
+  storeId: string | null
+  paperContractImages: string | null
+  paperContractAgreedAt: Date | null
+  /** 案件直下の売買契約書ID（無ければ null） */
+  contractId: string | null
+  /** 案件に契約が直付けされていない旧データ用。訪問側の契約ID */
+  visitContractIds: (string | null | undefined)[]
+  store: { name: string; code: string; antiquePermitNumber: string | null } | null
+}) {
+  const empty = { group: null, entryKey: null, paperContract: null, store: null }
+  // 担当店舗が未割当の案件は台帳（営業所単位）に載らない
+  if (!deal.storeId) return empty
+
+  // 電子の売買契約書があればそれが台帳のキー。無い場合でも、紙で契約した案件
+  // （写真をアップロードした案件）は台帳の記載対象なので案件キーで引く。
+  const contractId = deal.contractId ?? deal.visitContractIds.find((v): v is string => !!v) ?? null
+
+  let paperImages: string[] = []
+  try { const a = JSON.parse(deal.paperContractImages || '[]'); if (Array.isArray(a)) paperImages = a } catch { /* ignore */ }
+  const hasPaperContract = paperImages.length > 0
+
+  const entryKey = contractId
+    ? contractEntryKey(contractId)
+    : hasPaperContract ? dealEntryKey(deal.id) : null
+  if (!entryKey) return empty
+
+  const group = await fetchKobutsuLedgerGroup(entryKey, deal.storeId)
+  return {
+    group,
+    entryKey,
+    // 紙契約の場合、取引年月日は案件詳細から入力する（未入力なら訪問日・案件発生日で暫定表示）
+    paperContract: contractId ? null : {
+      agreedAt: deal.paperContractAgreedAt?.toISOString() ?? null,
+      imageCount: paperImages.length,
+    },
+    store: deal.store
+      ? { name: deal.store.name, code: deal.store.code, antiquePermitNumber: deal.store.antiquePermitNumber }
+      : null,
+  }
+}
+
 /**
  * 買取品目が自店舗のものか検証する（補記の保存前チェック）。
  * 品目 → 案件 or 訪問 → storeId を辿る。

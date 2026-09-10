@@ -12,6 +12,9 @@ import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 import { deleteCalendarEvent } from '@/lib/google-calendar'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { createTimer } from '@/lib/api-timing'
+import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-item-shape'
+import { buildDealLedgerSection } from '@/lib/kobutsu-ledger-server'
+import { loadDealRecordings } from '@/lib/deal-recordings'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -106,12 +109,7 @@ export async function GET(
       // 案件直下の品目・書類（再ペアレント後の正）
       purchaseItems: {
         orderBy: { createdAt: 'asc' },
-        select: {
-          id: true, itemName: true, category: true, quantity: true, purchasePrice: true,
-          imageUrls: true, janCode: true, rakutenData: true, aiResearch: true, aiResearchedAt: true,
-          isAdditionalRequest: true, notes: true,
-          inventoryItem: { select: { id: true } },
-        },
+        select: PURCHASE_ITEM_SHAPE_SELECT,
       },
       workItems: {
         orderBy: { createdAt: 'asc' },
@@ -155,22 +153,9 @@ export async function GET(
     id: e.id, visitScheduleId: e.visitScheduleId, validUntil: e.validUntil, purchaseAmount: e.purchaseAmount, billingAmount: e.billingAmount,
     emailSentAt: e.emailSentAt, customerEmail: e.customerEmail, hasPdf: estimateHasPdf.has(e.id), hasInvoicePdf: estimateHasInvoice.has(e.id),
   } : null
-  // 案件直下の買取品目: 画像をプロキシURL化・JSONをパース（訪問詳細と同等のフォーム用）
-  const dealPurchaseItems = deal.purchaseItems.map((item) => {
-    let images: string[] = []
-    try { images = JSON.parse(item.imageUrls || '[]') } catch { /* ignore */ }
-    let rakutenData: any = null
-    if (item.rakutenData) { try { rakutenData = JSON.parse(item.rakutenData) } catch { /* ignore */ } }
-    let aiResearch: any = null
-    if (item.aiResearch) { try { aiResearch = JSON.parse(item.aiResearch) } catch { /* ignore */ } }
-    return {
-      id: item.id, itemName: item.itemName, category: item.category, quantity: item.quantity, purchasePrice: item.purchasePrice,
-      imageUrls: images.map((_: string, idx: number) => `/api/purchase-items/${item.id}/images/${idx}`),
-      janCode: item.janCode, rakutenData, aiResearch, aiResearchedAt: item.aiResearchedAt,
-      isAdditionalRequest: item.isAdditionalRequest, notes: item.notes,
-      convertedInventoryId: item.inventoryItem?.id ?? null,
-    }
-  })
+  // 案件直下の買取品目。登録・更新のレスポンスと**同じ整形**を通すこと
+  // （食い違うと差分更新した直後だけ画像が壊れる）
+  const dealPurchaseItems = deal.purchaseItems.map(shapePurchaseItem)
   // 紙契約書写真: 保存URLはプロキシURLに変換して返す
   let paperImages: string[] = []
   try { const a = JSON.parse(deal.paperContractImages || '[]'); if (Array.isArray(a)) paperImages = a } catch { /* ignore */ }
@@ -209,7 +194,25 @@ export async function GET(
     })),
   }
 
-  return t.json(shaped)
+  // 古物台帳と会話録音を同じレスポンスに畳み込む。
+  // どちらも専用エンドポイントを別に叩いていたが、とくに台帳は
+  // `deal.dealContract` の有無を見てから叩く**直列**だったので、
+  // 日本からは 0.3 秒がまるごと1段ぶん積み上がっていた。
+  // ここでは案件のクエリで取得済みの行から組み立てるので追加の往復はゼロ。
+  const [kobutsuLedger, recordings] = await Promise.all([
+    t.measure('ledger', () => buildDealLedgerSection({
+      id: deal.id,
+      storeId: deal.storeId,
+      paperContractImages: deal.paperContractImages,
+      paperContractAgreedAt: deal.paperContractAgreedAt,
+      contractId: dealContract?.id ?? null,
+      visitContractIds: deal.visitSchedules.map(v => v.salesContract?.id),
+      store: deal.store,
+    })),
+    t.measure('recordings', () => loadDealRecordings(deal.id)),
+  ])
+
+  return t.json({ ...shaped, kobutsuLedger, recordings })
 }
 
 // 案件更新（detail / status / storeId）

@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
 
   const where = { AND: conditions }
 
+  // 上限なしの全件取得だったので、他の一覧APIと同じ既定300・最大1000にそろえる
+  const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get('limit') || '300', 10)))
   const records = await prisma.deliveryShipment.findMany({
     where,
     include: {
@@ -75,6 +77,7 @@ export async function GET(request: NextRequest) {
       },
     },
     orderBy: [{ shipmentMonth: 'desc' }, { createdAt: 'desc' }],
+    take: limit,
   })
 
   // Count shipped (for notification badge)。受取確認できるのは自店舗ぶんだけなので横断させない

@@ -45,7 +45,16 @@ export async function GET(request: NextRequest) {
   const [schedules, total] = await Promise.all([
     prisma.visitSchedule.findMany({
       where,
-      include: {
+      // include ではなく select。include だと preConsentSignature（事前同意の署名画像 base64）と
+      // supplementaryDocs（@db.Text）まで最大200件ぶん返してしまう。
+      // 一覧の消費側5箇所（顧客マイページ／管理の顧客詳細／店舗スケジュール／カレンダー／週ピッカー）は
+      // どれもこの2つを使っていない。必要になったら詳細APIで取ること。
+      select: {
+        id: true, userId: true, storeId: true, visitDate: true, startTime: true, endTime: true,
+        status: true, note: true, purchaseAmount: true, billingAmount: true,
+        googleCalendarEventId: true, preConsentAt: true, staffName: true, memberId: true,
+        revisitDate: true, revisitStart: true, revisitEnd: true, revisitNote: true, revisitPending: true,
+        purposeId: true, purposeName: true, dealId: true, createdAt: true, updatedAt: true,
         user: { select: { id: true, name: true, address: true, phone: true } },
         store: { select: { id: true, name: true } },
         member: { select: { id: true, name: true } },

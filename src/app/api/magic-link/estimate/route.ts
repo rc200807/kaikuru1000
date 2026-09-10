@@ -37,10 +37,20 @@ export async function GET(request: NextRequest) {
 
   // 品目・見積は「案件」を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
   const docWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
-  const [purchaseItems, workItems, estimate] = await Promise.all([
-    prisma.purchaseItem.findMany({ where: docWhere, orderBy: { createdAt: 'asc' } }),
-    prisma.workItem.findMany({ where: docWhere, orderBy: { createdAt: 'asc' } }),
-    prisma.estimate.findUnique({ where: docWhere, select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, pdfBase64: true, invoicePdfBase64: true, createdAt: true } }),
+  const [purchaseItems, workItems, estimate, pdfCount, invoicePdfCount] = await Promise.all([
+    // 画面が使うのは品名・数量・金額だけ（select 無しだと rakutenData / notes まで全行引く）
+    prisma.purchaseItem.findMany({
+      where: docWhere, orderBy: { createdAt: 'asc' },
+      select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
+    }),
+    prisma.workItem.findMany({
+      where: docWhere, orderBy: { createdAt: 'asc' },
+      select: { id: true, workName: true, unitPrice: true, quantity: true },
+    }),
+    prisma.estimate.findUnique({ where: docWhere, select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, createdAt: true } }),
+    // PDFは数MBの base64。「入っているか」だけが必要なので本文は引かず count で判定する
+    prisma.estimate.count({ where: { ...docWhere, NOT: { pdfBase64: null } } }),
+    prisma.estimate.count({ where: { ...docWhere, NOT: { invoicePdfBase64: null } } }),
   ])
 
   if (!estimate) {
@@ -60,8 +70,8 @@ export async function GET(request: NextRequest) {
       billingAmount: estimate.billingAmount,
       createdAt: estimate.createdAt,
     },
-    hasPdf: !!estimate.pdfBase64,
-    hasInvoicePdf: !!estimate.invoicePdfBase64,
+    hasPdf: pdfCount > 0,
+    hasInvoicePdf: invoicePdfCount > 0,
     purchaseItems: purchaseItems.map((item) => ({
       id: item.id,
       itemName: item.itemName,

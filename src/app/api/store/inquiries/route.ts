@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { createTimer } from '@/lib/api-timing'
 
 /**
  * GET: 店舗の問い合わせ一覧（storeCode付き）。
@@ -21,14 +22,17 @@ export async function GET(request: NextRequest) {
   const sessionStoreId = user.id as string
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
-  const scope = await resolveStoreScope(sessionStoreId, searchParams.get('storeIds'))
+  // 上限なしの全件取得だったので、他の一覧APIと同じ既定300・最大1000にそろえる
+  const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get('limit') || '300', 10)))
+  const t = createTimer()
+  const scope = await t.measure('scope', () => resolveStoreScope(sessionStoreId, searchParams.get('storeIds')))
 
   const where: any = { storeId: scope.isMulti ? { in: scope.storeIds } : sessionStoreId }
   if (status && status !== 'all') {
     where.status = status
   }
 
-  const [inquiries, store] = await Promise.all([
+  const [inquiries, store] = await t.measure('list', () => Promise.all([
     prisma.inquiry.findMany({
       where,
       include: {
@@ -42,15 +46,16 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: limit,
     }),
     // 受付URL・QRはスコープ化しない（必ずログイン中の店舗のもの）
     prisma.store.findUnique({
       where: { id: sessionStoreId },
       select: { code: true, inquirySheetUrl: true, inquirySheetIssuedAt: true },
     }),
-  ])
+  ]))
 
-  return NextResponse.json({
+  return t.json({
     inquiries,
     storeCode: store?.code ?? '',
     inquirySheetUrl: store?.inquirySheetUrl ?? null,

@@ -11,6 +11,7 @@ import { deleteDealCascade } from '@/lib/delete-customer'
 import { isDealContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 import { deleteCalendarEvent } from '@/lib/google-calendar'
 import { storeSupportsAkikuru } from '@/lib/store-services'
+import { createTimer } from '@/lib/api-timing'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -32,9 +33,32 @@ export async function GET(
   if (!isStore && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
-  const deal = await prisma.deal.findUnique({
+  const t = createTimer()
+
+  // 書類PDF・署名は `@db.Text` の巨大な base64。用途は「入っているか」の真偽値だけなので、
+  // 本文は select せず、別クエリで「入っている行のID」だけを引いて Set で判定する。
+  // PostgreSQL は大きな TEXT を TOAST に外出しするため、IS NOT NULL は行ヘッダの
+  // null ビットマップだけで答えられ、base64 の実体は1バイトも読まれない。
+  // （以前は訪問3件の案件で 17 カラムぶんの base64 が DB→関数 を流れて `!!` に潰されていた）
+  // 同型の対処は visit-schedules/[id]/contract/route.ts と store-customer-overview.ts にもある。
+  //
+  // なお付随クエリは下の 403 判定より前に走るが、dealId でしか絞っておらず
+  // 403 のときは結果を捨てるだけなので情報は漏れない。
+  const docWhere = { OR: [{ dealId: id }, { visitSchedule: { dealId: id } }] }
+  const idSet = (rows: { id: string }[]) => new Set(rows.map(r => r.id))
+
+  const [deal, conPdfRows, conInvRows, estPdfRows, estInvRows, preConsentRow] = await Promise.all([
+    t.measure('deal', () => prisma.deal.findUnique({
     where: { id },
-    include: {
+    select: {
+      // Deal のスカラーは明示列挙する。include にすると preConsentSignature（署名画像の base64）
+      // まで毎回引いてしまい、用途は hasPreConsent の真偽値だけなので丸ごと無駄になる
+      id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
+      detail: true, status: true, category: true, occurredAt: true,
+      createdByType: true, createdById: true, createdByName: true, memberId: true,
+      purchaseAmount: true, billingAmount: true, purchaseUpliftPercent: true,
+      preConsentAt: true, paperContractImages: true, paperContractAgreedAt: true,
+      createdAt: true, updatedAt: true,
       user: {
         select: {
           id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true,
@@ -69,15 +93,12 @@ export async function GET(
             select: { id: true, workName: true, unitPrice: true, quantity: true, notes: true },
           },
           salesContract: {
-            select: {
-              id: true, agreedAt: true, emailSentAt: true, customerEmail: true,
-              pdfBase64: true, invoicePdfBase64: true,
-            },
+            select: { id: true, agreedAt: true, emailSentAt: true, customerEmail: true },
           },
           estimate: {
             select: {
               id: true, validUntil: true, purchaseAmount: true, billingAmount: true,
-              emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true,
+              emailSentAt: true, customerEmail: true,
             },
           },
         },
@@ -97,13 +118,24 @@ export async function GET(
         select: { id: true, workName: true, unitPrice: true, quantity: true, notes: true },
       },
       salesContract: {
-        select: { id: true, visitScheduleId: true, agreedAt: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
+        select: { id: true, visitScheduleId: true, agreedAt: true, emailSentAt: true, customerEmail: true },
       },
       estimate: {
-        select: { id: true, visitScheduleId: true, validUntil: true, purchaseAmount: true, billingAmount: true, emailSentAt: true, customerEmail: true, pdfBase64: true, invoicePdfBase64: true },
+        select: { id: true, visitScheduleId: true, validUntil: true, purchaseAmount: true, billingAmount: true, emailSentAt: true, customerEmail: true },
       },
     },
-  })
+    })),
+    t.measure('hasdoc', () => prisma.salesContract.findMany({ where: { ...docWhere, NOT: { pdfBase64: null } },        select: { id: true } })),
+    t.measure('hasdoc', () => prisma.salesContract.findMany({ where: { ...docWhere, NOT: { invoicePdfBase64: null } }, select: { id: true } })),
+    t.measure('hasdoc', () => prisma.estimate.findMany({      where: { ...docWhere, NOT: { pdfBase64: null } },        select: { id: true } })),
+    t.measure('hasdoc', () => prisma.estimate.findMany({      where: { ...docWhere, NOT: { invoicePdfBase64: null } }, select: { id: true } })),
+    t.measure('hasdoc', () => prisma.deal.findFirst({ where: { id, NOT: { preConsentSignature: null } }, select: { id: true } })),
+  ])
+
+  const contractHasPdf = idSet(conPdfRows)
+  const contractHasInvoice = idSet(conInvRows)
+  const estimateHasPdf = idSet(estPdfRows)
+  const estimateHasInvoice = idSet(estInvRows)
 
   if (!deal) return NextResponse.json({ error: '案件が見つかりません' }, { status: 404 })
   if (isStore && deal.storeId !== sessionUser.id) {
@@ -113,15 +145,15 @@ export async function GET(
   // 未採番の案件（トランザクション内で作られた訪問由来など）はここで案件番号を付ける
   const dealNumber = deal.dealNumber ?? (await ensureDealNumber(deal.id))
 
-  // PDF本体・署名base64は返さず有無のbooleanへ。案件直下の書類も同様に整形。
-  const { preConsentSignature, salesContract: dealContract, estimate: dealEstimate, ...dealRest } = deal
+  // 書類は「本文の有無」だけを boolean にして返す（本文は上の存在判定クエリで引いてある）
+  const { salesContract: dealContract, estimate: dealEstimate, ...dealRest } = deal
   const shapeContract = (c: typeof dealContract) => c ? {
     id: c.id, visitScheduleId: c.visitScheduleId, agreedAt: c.agreedAt, emailSentAt: c.emailSentAt, customerEmail: c.customerEmail,
-    hasPdf: !!c.pdfBase64, hasInvoicePdf: !!c.invoicePdfBase64,
+    hasPdf: contractHasPdf.has(c.id), hasInvoicePdf: contractHasInvoice.has(c.id),
   } : null
   const shapeEstimate = (e: typeof dealEstimate) => e ? {
     id: e.id, visitScheduleId: e.visitScheduleId, validUntil: e.validUntil, purchaseAmount: e.purchaseAmount, billingAmount: e.billingAmount,
-    emailSentAt: e.emailSentAt, customerEmail: e.customerEmail, hasPdf: !!e.pdfBase64, hasInvoicePdf: !!e.invoicePdfBase64,
+    emailSentAt: e.emailSentAt, customerEmail: e.customerEmail, hasPdf: estimateHasPdf.has(e.id), hasInvoicePdf: estimateHasInvoice.has(e.id),
   } : null
   // 案件直下の買取品目: 画像をプロキシURL化・JSONをパース（訪問詳細と同等のフォーム用）
   const dealPurchaseItems = deal.purchaseItems.map((item) => {
@@ -146,7 +178,7 @@ export async function GET(
     ...dealRest,
     dealNumber,
     purchaseItems: dealPurchaseItems,
-    hasPreConsent: !!preConsentSignature,
+    hasPreConsent: !!preConsentRow,
     paperContractImages: paperImages.map((_: string, idx: number) => `/api/deals/${deal.id}/contract-images/${idx}`),
     dealContract: shapeContract(dealContract),
     dealEstimate: shapeEstimate(dealEstimate),
@@ -158,8 +190,8 @@ export async function GET(
             agreedAt: vs.salesContract.agreedAt,
             emailSentAt: vs.salesContract.emailSentAt,
             customerEmail: vs.salesContract.customerEmail,
-            hasPdf: !!vs.salesContract.pdfBase64,
-            hasInvoicePdf: !!vs.salesContract.invoicePdfBase64,
+            hasPdf: contractHasPdf.has(vs.salesContract.id),
+            hasInvoicePdf: contractHasInvoice.has(vs.salesContract.id),
           }
         : null,
       estimate: vs.estimate
@@ -170,14 +202,14 @@ export async function GET(
             billingAmount: vs.estimate.billingAmount,
             emailSentAt: vs.estimate.emailSentAt,
             customerEmail: vs.estimate.customerEmail,
-            hasPdf: !!vs.estimate.pdfBase64,
-            hasInvoicePdf: !!vs.estimate.invoicePdfBase64,
+            hasPdf: estimateHasPdf.has(vs.estimate.id),
+            hasInvoicePdf: estimateHasInvoice.has(vs.estimate.id),
           }
         : null,
     })),
   }
 
-  return NextResponse.json(shaped)
+  return t.json(shaped)
 }
 
 // 案件更新（detail / status / storeId）

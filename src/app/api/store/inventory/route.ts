@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { buildInventoryWriteData, mapInventoryItem } from '@/lib/inventory-input'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { createTimer } from '@/lib/api-timing'
 
 const LISTINGS_SELECT = { select: { id: true, marketplace: true, listingStatus: true, url: true } } as const
 
@@ -20,16 +21,19 @@ export async function GET(request: NextRequest) {
   const storeId = user.id as string
   const { searchParams } = new URL(request.url)
   const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get('limit') || '300', 10)))
-  const scope = await resolveStoreScope(storeId, searchParams.get('storeIds'))
+  const t = createTimer()
+  const scope = await t.measure('scope', () => resolveStoreScope(storeId, searchParams.get('storeIds')))
 
-  const items = await prisma.inventoryItem.findMany({
+  // description / note（@db.Text）は編集モーダルが一覧の行データをそのまま使うため落とせない。
+  // 落とすには編集時に詳細取得の往復が1本増えるので、ここでは include のままにしている。
+  const items = await t.measure('list', () => prisma.inventoryItem.findMany({
     where: { storeId: scope.isMulti ? { in: scope.storeIds } : storeId },
     include: { listings: LISTINGS_SELECT, store: { select: { id: true, name: true, code: true } } },
     orderBy: { updatedAt: 'desc' },
     take: limit,
-  })
+  }))
 
-  return NextResponse.json({ items: items.map(mapInventoryItem) })
+  return t.json({ items: items.map(mapInventoryItem) })
 }
 
 // 在庫を手動登録（買取品目からの変換は /convert を使用）

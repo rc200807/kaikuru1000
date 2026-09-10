@@ -33,6 +33,8 @@ export async function GET(request: NextRequest) {
   }
   if (requestedBy) where.requestedBy = requestedBy
 
+  // 上限なしの全件取得だったので、他の一覧APIと同じ既定300・最大1000にそろえる
+  const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get('limit') || '300', 10)))
   const requests = await prisma.visitRequest.findMany({
     where,
     include: {
@@ -40,6 +42,7 @@ export async function GET(request: NextRequest) {
       store: { select: { id: true, name: true, code: true } },
     },
     orderBy: { createdAt: 'desc' },
+    take: limit,
   })
 
   // 顧客には「次回いつからリクエストできるか」も返す（マイページの案内に使う）

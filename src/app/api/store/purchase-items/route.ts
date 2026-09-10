@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { resolveStoreScope } from '@/lib/store-scope'
+import { createTimer } from '@/lib/api-timing'
 
 /**
  * 店舗の買取品目一覧。
@@ -22,19 +23,25 @@ export async function GET(request: NextRequest) {
   const sessionStoreId = user.id as string
   const { searchParams } = new URL(request.url)
   const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get('limit') || '300', 10)))
-  const scope = await resolveStoreScope(sessionStoreId, searchParams.get('storeIds'))
+  const t = createTimer()
+  const scope = await t.measure('scope', () => resolveStoreScope(sessionStoreId, searchParams.get('storeIds')))
   const storeFilter = scope.isMulti ? { in: scope.storeIds } : sessionStoreId
 
   const storeSelect = { select: { id: true, name: true, code: true } } as const
 
-  const items = await prisma.purchaseItem.findMany({
+  const items = await t.measure('list', () => prisma.purchaseItem.findMany({
     where: {
       OR: [
         { deal: { storeId: storeFilter } },
         { visitSchedule: { storeId: storeFilter } },
       ],
     },
-    include: {
+    // include ではなく select。include だと rakutenData（楽天商品検索APIの生JSON）・
+    // aiResearch・notes（いずれも @db.Text）まで最大1000件ぶん返してしまう。
+    // 下のマッパーが使うのはこれだけ。
+    select: {
+      id: true, itemName: true, category: true, quantity: true, purchasePrice: true,
+      janCode: true, imageUrls: true, createdAt: true,
       deal: {
         select: {
           id: true,
@@ -57,7 +64,7 @@ export async function GET(request: NextRequest) {
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
-  })
+  }))
 
   const mapped = items.map((it) => {
     let imageCount = 0
@@ -88,5 +95,5 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  return NextResponse.json({ items: mapped })
+  return t.json({ items: mapped })
 }

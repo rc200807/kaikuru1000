@@ -16,7 +16,7 @@ async function resolveDeal(id: string, sessionUser: any) {
   return { deal }
 }
 
-function serialize(r: any) {
+function serialize(r: any, hasTranscript: boolean) {
   let summary: unknown = null
   if (r.summary) { try { summary = JSON.parse(r.summary) } catch { summary = null } }
   return {
@@ -26,7 +26,8 @@ function serialize(r: any) {
     fileSize: r.fileSize,
     durationSec: r.durationSec,
     status: r.status,
-    transcript: r.transcript,
+    // 本文は返さない（数万文字 × ポーリング。開いたときに [recId] の GET で取る）
+    hasTranscript,
     summary,
     error: r.error,
     uploadedByName: r.uploadedByName,
@@ -46,8 +47,21 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const access = await resolveDeal(id, sessionUser)
   if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
 
-  const recordings = await prisma.dealRecording.findMany({ where: { dealId: id }, orderBy: { createdAt: 'desc' } })
-  return NextResponse.json({ recordings: recordings.map(serialize) })
+  const recordings = await prisma.dealRecording.findMany({
+    where: { dealId: id },
+    // transcript（@db.Text）は select しない。存在判定だけ別に引く
+    select: {
+      id: true, dealId: true, fileName: true, mimeType: true, fileSize: true, durationSec: true,
+      status: true, summary: true, error: true, uploadedByName: true, createdAt: true, processedAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  const withTranscript = new Set(
+    (await prisma.dealRecording.findMany({
+      where: { dealId: id, NOT: { transcript: null } }, select: { id: true },
+    })).map(r => r.id),
+  )
+  return NextResponse.json({ recordings: recordings.map(r => serialize(r, withTranscript.has(r.id))) })
 }
 
 // 録音アップロード完了後にメタデータを登録（status=pending でAI解析待ち）
@@ -84,5 +98,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     memberId: sessionUser.memberId ?? null, action: '会話録音をアップロード', req: request,
   })
 
-  return NextResponse.json(serialize(created), { status: 201 })
+  // 登録直後は status=pending で文字起こしはまだ無い
+  return NextResponse.json(serialize(created, false), { status: 201 })
 }

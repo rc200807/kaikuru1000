@@ -67,10 +67,21 @@ export async function GET(request: NextRequest) {
   // 品目・契約は「案件」を正とする（再ペアレント後）。dealId 基準で取得し、無ければ従来の訪問基準。
   const docWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
   const itemWhere = schedule.dealId ? { dealId: schedule.dealId } : { visitScheduleId: visitId }
-  const [purchaseItems, workItems, salesContract] = await Promise.all([
-    prisma.purchaseItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
-    prisma.workItem.findMany({ where: itemWhere, orderBy: { createdAt: 'asc' } }),
-    prisma.salesContract.findUnique({ where: docWhere, select: { id: true, agreedAt: true, signatureData: true, pdfBase64: true, invoicePdfBase64: true } }),
+  const [purchaseItems, workItems, salesContract, pdfCount, invoicePdfCount] = await Promise.all([
+    // 画面が使うのは品名・数量・金額だけ。select 無しだと rakutenData（楽天APIの生JSON）や
+    // notes まで全行ぶん引いてしまう
+    prisma.purchaseItem.findMany({
+      where: itemWhere, orderBy: { createdAt: 'asc' },
+      select: { id: true, itemName: true, category: true, quantity: true, purchasePrice: true },
+    }),
+    prisma.workItem.findMany({
+      where: itemWhere, orderBy: { createdAt: 'asc' },
+      select: { id: true, workName: true, unitPrice: true, quantity: true },
+    }),
+    prisma.salesContract.findUnique({ where: docWhere, select: { id: true, agreedAt: true, signatureData: true } }),
+    // PDFは数MBの base64。「入っているか」だけが必要なので本文は引かず count で判定する
+    prisma.salesContract.count({ where: { ...docWhere, NOT: { pdfBase64: null } } }),
+    prisma.salesContract.count({ where: { ...docWhere, NOT: { invoicePdfBase64: null } } }),
   ])
   const purchaseAmount = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
   const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -111,8 +122,8 @@ export async function GET(request: NextRequest) {
     salesContract: salesContract
       ? { id: salesContract.id, agreedAt: salesContract.agreedAt, signatureData: salesContract.signatureData }
       : null,
-    hasPdf: !!salesContract?.pdfBase64,
-    hasInvoicePdf: !!salesContract?.invoicePdfBase64,
+    hasPdf: pdfCount > 0,
+    hasInvoicePdf: invoicePdfCount > 0,
     createdAt: schedule.createdAt,
   })
 }

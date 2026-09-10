@@ -19,6 +19,26 @@ async function resolveRecording(dealId: string, recId: string, sessionUser: any)
   return { rec }
 }
 
+/**
+ * 文字起こし本文の取得。
+ *
+ * 一覧（../route.ts）は transcript を返さない。1件が数万文字になるうえ、
+ * 解析中は8秒ポーリングで一覧を取り直すので、完了済みの録音の本文を毎回
+ * ダウンロードし直すことになるため。画面で「文字起こしを表示」を開いたときだけ取る。
+ */
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string; recId: string }> }) {
+  const session = await getServerSession(authOptions)
+  const sessionUser = session?.user as any
+  if (!session || sessionUser.role === 'customer') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id, recId } = await params
+  const access = await resolveRecording(id, recId, sessionUser)
+  if ('error' in access) return NextResponse.json({ error: access.error }, { status: access.status })
+
+  const row = await prisma.dealRecording.findUnique({ where: { id: recId }, select: { transcript: true } })
+  return NextResponse.json({ transcript: row?.transcript ?? null })
+}
+
 // 録音の削除（音声Blobも削除）
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string; recId: string }> }) {
   const session = await getServerSession(authOptions)

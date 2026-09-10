@@ -71,7 +71,8 @@ type DealRecording = {
   fileSize: number | null
   durationSec: number | null
   status: 'pending' | 'processing' | 'done' | 'error'
-  transcript: string | null
+  /** 文字起こしの有無。本文は開いたときに別APIで取る（一覧に載せるとポーリングで毎回落ちてくる） */
+  hasTranscript: boolean
   summary: RecordingSummary | null
   error: string | null
   uploadedByName: string | null
@@ -241,6 +242,25 @@ export default function DealDetailView({
   const [recProgress, setRecProgress] = useState(0)
   const [recError, setRecError] = useState<string | null>(null)
   const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null)
+  // 文字起こし本文は開いたときだけ取得してキャッシュする（一覧レスポンスには含まれない）
+  const [transcripts, setTranscripts] = useState<Record<string, string | null>>({})
+  const [loadingTranscriptId, setLoadingTranscriptId] = useState<string | null>(null)
+
+  async function toggleTranscript(recId: string) {
+    if (openTranscriptId === recId) { setOpenTranscriptId(null); return }
+    setOpenTranscriptId(recId)
+    if (transcripts[recId] !== undefined) return
+    setLoadingTranscriptId(recId)
+    try {
+      const r = await fetch(`/api/deals/${dealId}/recordings/${recId}`)
+      const d = r.ok ? await r.json() : null
+      setTranscripts(prev => ({ ...prev, [recId]: d?.transcript ?? null }))
+    } catch {
+      setTranscripts(prev => ({ ...prev, [recId]: null }))
+    } finally {
+      setLoadingTranscriptId(null)
+    }
+  }
   // 古物台帳（売買契約が発行されている案件のみ記録がある）
   const [ledger, setLedger] = useState<KobutsuLedgerGroup | null>(null)
   // 台帳詳細へのリンクに使うキー（電子契約 "c:<id>" / 紙契約 "d:<dealId>"）
@@ -1823,17 +1843,19 @@ export default function DealDetailView({
                               )}
                             </div>
                           )}
-                          {rec.transcript && (
+                          {rec.hasTranscript && (
                             <div>
                               <button
                                 type="button"
-                                onClick={() => setOpenTranscriptId(openTranscriptId === rec.id ? null : rec.id)}
+                                onClick={() => toggleTranscript(rec.id)}
                                 className="text-xs text-[var(--portal-primary)] hover:underline"
                               >
                                 {openTranscriptId === rec.id ? '▾ 文字起こしを隠す' : '▸ 文字起こしを表示'}
                               </button>
                               {openTranscriptId === rec.id && (
-                                <pre className="mt-2 text-xs whitespace-pre-wrap leading-relaxed text-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-surface-container)] rounded-md p-3 max-h-80 overflow-y-auto font-sans">{rec.transcript}</pre>
+                                <pre className="mt-2 text-xs whitespace-pre-wrap leading-relaxed text-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-surface-container)] rounded-md p-3 max-h-80 overflow-y-auto font-sans">
+                                  {loadingTranscriptId === rec.id ? '読み込み中...' : (transcripts[rec.id] ?? '文字起こしを取得できませんでした')}
+                                </pre>
                               )}
                             </div>
                           )}

@@ -28,7 +28,7 @@ import {
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { formatYen } from '@/lib/currency'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { uploadImagesCompressed } from '@/lib/image-upload'
 import { upload } from '@vercel/blob/client'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
@@ -600,15 +600,15 @@ export default function DealDetailView({
     setUploadingContract(true)
     setMsg(null)
     try {
-      for (let i = 0; i < files.length; i++) {
-        const converted = await convertToJpegIfNeeded(files[i])
-        const fd = new FormData()
-        fd.append('file', converted)
-        const res = await fetch(`/api/deals/${dealId}/contract-images`, { method: 'POST', body: fd })
-        if (!res.ok) { setMsg({ type: 'error', text: '写真のアップロードに失敗しました' }); break }
-      }
+      // 原本のままだと1枚 4〜16 秒かかるのでクライアントで WebP へ落としてから送る。
+      // ただしこのAPIは「現在の配列を読む → push → 書き戻す」をするため、
+      // 同時に投げると read-modify-write が競合して写真が失われる。必ず concurrency: 1。
+      const { failed } = await uploadImagesCompressed(
+        Array.from(files), `/api/deals/${dealId}/contract-images`, { concurrency: 1 },
+      )
       await load()
-      setMsg({ type: 'success', text: '契約書の写真をアップロードしました' })
+      if (failed > 0) setMsg({ type: 'error', text: `${failed}枚の写真をアップロードできませんでした` })
+      else setMsg({ type: 'success', text: '契約書の写真をアップロードしました' })
     } catch {
       setMsg({ type: 'error', text: '写真のアップロードに失敗しました' })
     } finally {

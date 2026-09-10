@@ -18,6 +18,24 @@ export function thumbUrlFor(url: string | null | undefined): string {
   return query ? `${thumb}?${query}` : thumb
 }
 
+/**
+ * 一覧・小さな枠での**表示専用**サムネURL。
+ *
+ * 認証プロキシURL（`/api/.../images/0` 形式）のときだけ `?thumb=1` を付ける。
+ * プロキシ側（image-proxy.ts の serveImageFromBlob）がサムネの有無を見て、
+ * 無ければ本体にフォールバックしてくれるので、呼び出し側は常に付けてよい。
+ *
+ * ⚠ 戻り値を編集フォームの state や保存ペイロードに入れてはいけない。
+ *   resolveEditedImageUrls() は `^prefix/(\d+)$` の完全一致でプロキシURLを判定するため、
+ *   クエリが付いた値は「新規アップロードの実URL」と誤認され、
+ *   プロキシURL文字列そのものがDBに書き込まれて画像が壊れる。
+ */
+export function thumbSrc(url: string | null | undefined): string {
+  if (!url) return ''
+  if (!url.startsWith('/api/')) return url  // 実Blob URLは触らない（サムネが無いと404になるため）
+  return url.includes('?') ? `${url}&thumb=1` : `${url}?thumb=1`
+}
+
 /** サムネURLから本体URLに戻す（拡大表示用） */
 export function fullUrlFor(url: string | null | undefined): string {
   if (!url) return ''

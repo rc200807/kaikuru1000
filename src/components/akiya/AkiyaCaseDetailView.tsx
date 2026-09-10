@@ -13,7 +13,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import { AKIYA_PLAN_OPTIONS, AKIYA_PLAN_BADGE, akiyaPlanLabel } from '@/lib/akiya-plans'
 import { AKIYA_STATUS_OPTIONS, AKIYA_STATUS_BADGE, akiyaStatusLabel } from '@/lib/akiya-status'
 import { AKIYA_CASE_PHOTO_LIMIT, parsePhotoUrls } from '@/lib/akiya-items'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { uploadImagesCompressed } from '@/lib/image-upload'
 import { formatJstDate, formatJstDateTime, jstDateKey } from '@/lib/datetime'
 
 type RecordItem = {
@@ -233,20 +233,16 @@ export default function AkiyaCaseDetailView({
     setUploadingPhotos(true)
     setMsg(null)
     try {
+      // 原本のままだと1枚 4〜16 秒かかるのでクライアントで WebP へ落としてから送る。
+      // ただしこのAPIは「現在の配列を読む → push → 書き戻す」をするため、
+      // 同時に投げると read-modify-write が競合して写真が失われる。必ず concurrency: 1。
+      const { bodies, failed, error } = await uploadImagesCompressed(
+        files, `/api/akiya-cases/${caseId}/photos`, { concurrency: 1 },
+      )
+      if (failed > 0) setMsg({ type: 'error', text: error || '写真のアップロードに失敗しました' })
+      // 各レスポンスが「その時点の全写真」を返すので、成功した最後のものが最新
       let latest: string[] | null = null
-      for (const file of files) {
-        const converted = await convertToJpegIfNeeded(file)
-        const fd = new FormData()
-        fd.append('file', converted)
-        const res = await fetch(`/api/akiya-cases/${caseId}/photos`, { method: 'POST', body: fd })
-        if (!res.ok) {
-          const data = await res.json().catch(() => null)
-          setMsg({ type: 'error', text: data?.error || '写真のアップロードに失敗しました' })
-          break
-        }
-        const data = await res.json()
-        latest = data.photos ?? latest
-      }
+      for (const body of bodies) if (Array.isArray(body?.photos)) latest = body.photos
       if (latest) {
         const photos = latest
         setAkiyaCase(prev => prev ? { ...prev, photoUrls: JSON.stringify(photos) } : prev)

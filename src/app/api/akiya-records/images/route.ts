@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { saveImage } from '@/lib/image-server'
+import { createTimer } from '@/lib/api-timing'
 
 const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
@@ -31,10 +32,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'JPEG・PNG・WebP・HEICのみ対応しています' }, { status: 400 })
     }
 
+    const t = createTimer()
     const buffer = Buffer.from(await file.arrayBuffer())
-    const { url } = await saveImage(buffer, `akiya-records/${sessionUser.id}_${Date.now()}`, file.type)
+    const { url } = await t.measure('save', () => saveImage(buffer, `akiya-records/${sessionUser.id}_${Date.now()}`, file.type))
 
-    return NextResponse.json({ url })
+    return t.json({ url })
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json({ error: 'アップロードに失敗しました' }, { status: 500 })

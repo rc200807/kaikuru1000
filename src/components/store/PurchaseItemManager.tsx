@@ -7,7 +7,8 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Button from '@/components/Button'
 import Modal from '@/components/Modal'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { uploadImagesCompressed } from '@/lib/image-upload'
+import { thumbSrc } from '@/lib/image-url'
 import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
 import { formatYen } from '@/lib/currency'
 import { FIXED_PRICE_BOXES, fixedPriceBoxDuplicateMessage, isFixedPriceBox, type FixedPriceBox } from '@/lib/fixed-price-boxes'
@@ -160,17 +161,16 @@ export default function PurchaseItemManager({
     const remaining = 3 - form.imageUrls.length
     if (remaining <= 0) { msg({ type: 'error', text: '画像は最大3枚までです' }); return }
     setUploading(true)
-    const newUrls = [...form.imageUrls]
-    for (let i = 0; i < Math.min(files.length, remaining); i++) {
-      const converted = await convertToJpegIfNeeded(files[i])
-      const fd = new FormData()
-      fd.append('file', converted)
-      const res = await fetch('/api/purchase-items/images', { method: 'POST', body: fd })
-      if (res.ok) { const { url } = await res.json(); newUrls.push(url) }
-    }
-    // await をまたぐので、アップロード中に編集された他の項目を巻き戻さないよう関数形式で更新する
-    setForm(prev => ({ ...prev, imageUrls: newUrls }))
+    // 現場の写真は 4MB 級。クライアントで WebP へ落としてから**同時に**送る
+    // （以前は原本のまま1枚ずつ直列に送っており、日本から1枚 4〜16 秒かかっていた）。
+    // このAPIは Blob に書いて URL を返すだけで、サーバー側で配列を読み書きしないので同時実行して安全。
+    const picked = Array.from(files).slice(0, remaining)
+    const { urls, failed } = await uploadImagesCompressed(picked, '/api/purchase-items/images')
+    // await をまたぐので、アップロード中に編集された他の項目を巻き戻さないよう
+    // 直前の state を基点にする（呼び出し時点のクロージャを使うと removeImage が巻き戻る）
+    setForm(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...urls].slice(0, 3) }))
     setUploading(false)
+    if (failed > 0) msg({ type: 'error', text: `${failed}枚の写真をアップロードできませんでした` })
     e.target.value = ''
   }
 
@@ -229,11 +229,13 @@ export default function PurchaseItemManager({
     }
   }
 
-  async function deletePurchaseItem(id: string) {
-    if (!confirm('この品目を削除しますか？')) return
+  /** 削除したら true。確認をキャンセルしたら false（呼び出し側でフォームを閉じない） */
+  async function deletePurchaseItem(id: string): Promise<boolean> {
+    if (!confirm('この品目を削除しますか？')) return false
     await fetch(`/api/purchase-items/${id}`, { method: 'DELETE' })
     onChanged()
     msg({ type: 'success', text: '品目を削除しました' })
+    return true
   }
 
   async function handleAiResearch(itemId: string) {
@@ -330,7 +332,7 @@ export default function PurchaseItemManager({
                         title={`${item.itemName} の画像を拡大`}
                         aria-label={`${item.itemName} の画像${item.imageUrls.length > 1 ? ` ${i + 1}枚目` : ''}を拡大表示`}
                       >
-                        <img loading="lazy" decoding="async" src={url} alt="" className={`w-full h-full object-cover border border-[var(--md-sys-color-outline-variant)] rounded ${researchingItemId === item.id ? 'animate-pulse' : ''}`} />
+                        <img loading="lazy" decoding="async" src={thumbSrc(url)} alt="" className={`w-full h-full object-cover border border-[var(--md-sys-color-outline-variant)] rounded ${researchingItemId === item.id ? 'animate-pulse' : ''}`} />
                       </button>
                     ))}
                   </div>
@@ -474,7 +476,7 @@ export default function PurchaseItemManager({
             <div className="flex gap-2 mt-1 flex-wrap">
               {form.imageUrls.map((url, idx) => (
                 <div key={idx} className="relative">
-                  <img loading="lazy" decoding="async" src={url} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
+                  <img loading="lazy" decoding="async" src={thumbSrc(url)} alt="" className="w-16 h-16 object-cover rounded border border-[var(--md-sys-color-outline-variant)]" />
                   <button onClick={() => removeImage(idx)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--md-sys-color-error)] text-white text-xs flex items-center justify-center">×</button>
                 </div>
               ))}
@@ -507,7 +509,7 @@ export default function PurchaseItemManager({
           </div>
           <div className="flex gap-2 justify-between">
             {editingId ? (
-              <button onClick={() => { deletePurchaseItem(editingId); resetForm() }} className="text-xs text-[var(--md-sys-color-error)] hover:underline">この品目を削除</button>
+              <button onClick={async () => { if (await deletePurchaseItem(editingId)) resetForm() }} className="text-xs text-[var(--md-sys-color-error)] hover:underline">この品目を削除</button>
             ) : <span />}
             <div className="flex gap-2">
               <Button variant="text" size="sm" onClick={resetForm}>キャンセル</Button>

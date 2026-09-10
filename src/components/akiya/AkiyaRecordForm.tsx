@@ -11,7 +11,7 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { AKIYA_ITEM_PHOTO_LIMIT } from '@/lib/akiya-items'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { compressImageIfNeeded } from '@/lib/image-utils'
 
 type ManagementItem = { id: string; name: string; sortOrder: number; isActive: boolean }
 
@@ -114,10 +114,11 @@ export default function AkiyaRecordForm({
     setDrafts(prev => ({ ...prev, [itemId]: updater(prev[itemId] ?? { note: '', photos: [] }) }))
   }
 
-  // 1枚アップロード（HEIC変換 → /api/akiya-records/images）
+  // 1枚アップロード（圧縮 → /api/akiya-records/images）
+  // 現場の 4MB 級の写真を原本のまま送ると1枚 4〜16 秒かかるため、WebP へ落としてから送る
   async function uploadOne(itemId: string, key: string, file: File) {
     try {
-      const converted = await convertToJpegIfNeeded(file)
+      const converted = await compressImageIfNeeded(file)
       const fd = new FormData()
       fd.append('file', converted)
       const res = await fetch('/api/akiya-records/images', { method: 'POST', body: fd })
@@ -158,10 +159,9 @@ export default function AkiyaRecordForm({
       file,
     }))
     updateDraft(itemId, d => ({ ...d, photos: [...d.photos, ...entries] }))
-    // 逐次アップロード（多重POSTでのサーバ負荷・順序乱れを避ける）
-    for (const entry of entries) {
-      await uploadOne(itemId, entry.key, entry.file!)
-    }
+    // 同時アップロード。表示順は entry.key で管理していて完了順に依存しないうえ、
+    // このAPIは Blob に書いて URL を返すだけでサーバー側の配列を読み書きしないので安全
+    await Promise.all(entries.map(entry => uploadOne(itemId, entry.key, entry.file!)))
   }
 
   function retryPhoto(itemId: string, key: string) {

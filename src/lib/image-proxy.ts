@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { thumbUrlFor } from '@/lib/image-url'
 
 /**
@@ -21,12 +23,23 @@ export async function serveImageFromBlob(
     return NextResponse.json({ error: '画像データが破損しています。再アップロードしてください' }, { status: 404 })
   }
 
-  // ローカル開発（/uploads/...）: 静的ファイルにリダイレクト
+  const wantThumb = request.nextUrl.searchParams.get('thumb') === '1'
+
+  // ローカル開発（/uploads/...）: 静的ファイルにリダイレクト。
+  // サムネ判定より前にリダイレクトすると ?thumb=1 が黙って無視され、
+  // 本番（Blob）とローカルで挙動が食い違って検証にならないので、ここでも解決する。
   if (!blobUrl.startsWith('https://')) {
-    return NextResponse.redirect(new URL(blobUrl, request.url))
+    let localTarget = blobUrl
+    if (wantThumb) {
+      const thumb = thumbUrlFor(blobUrl)
+      // サムネが無い（WebP化する前に保存された）画像は本体にフォールバックする
+      if (thumb !== blobUrl && existsSync(join(process.cwd(), 'public', thumb.replace(/^\//, '')))) {
+        localTarget = thumb
+      }
+    }
+    return NextResponse.redirect(new URL(localTarget, request.url))
   }
 
-  const wantThumb = request.nextUrl.searchParams.get('thumb') === '1'
   const target = wantThumb ? thumbUrlFor(blobUrl) : blobUrl
 
   try {

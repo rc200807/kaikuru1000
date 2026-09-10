@@ -5,7 +5,7 @@ import BottomSheet from '@/components/BottomSheet'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
-import { convertToJpegIfNeeded } from '@/lib/image-utils'
+import { uploadImagesCompressed } from '@/lib/image-upload'
 import {
   INVENTORY_STATUSES, INVENTORY_STATUS_LABEL,
   INVENTORY_CONDITIONS, INVENTORY_CONDITION_LABEL,
@@ -130,23 +130,13 @@ export default function InventoryFormModal({ open, onClose, mode, itemId, purcha
       return
     }
     setUploading(true)
-    const newUrls = [...form.imageUrls]
-    for (let i = 0; i < Math.min(files.length, remaining); i++) {
-      try {
-        const converted = await convertToJpegIfNeeded(files[i])
-        const fd = new FormData()
-        fd.append('file', converted)
-        const res = await fetch('/api/store/inventory/images', { method: 'POST', body: fd })
-        if (res.ok) {
-          const { url } = await res.json()
-          newUrls.push(url)
-        }
-      } catch {
-        /* ignore individual failures */
-      }
-    }
-    setForm(f => ({ ...f, imageUrls: newUrls }))
+    // クライアントで WebP へ落としてから同時に送る（このAPIは Blob へ書いて URL を返すだけなので安全）
+    const picked = Array.from(files).slice(0, remaining)
+    const { urls, failed } = await uploadImagesCompressed(picked, '/api/store/inventory/images')
+    // await をまたぐので直前の state を基点にする
+    setForm(f => ({ ...f, imageUrls: [...f.imageUrls, ...urls].slice(0, 10) }))
     setUploading(false)
+    if (failed > 0) setError(`${failed}枚の画像をアップロードできませんでした`)
     e.target.value = ''
   }
 

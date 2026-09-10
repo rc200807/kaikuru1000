@@ -38,7 +38,7 @@ export async function createPreviewUrl(file: File): Promise<string> {
   return URL.createObjectURL(converted)
 }
 
-type CompressOptions = {
+export type CompressOptions = {
   /** 長辺の最大ピクセル数。これ以下なら拡大しない */
   maxDimension?: number
   /** 画質 (0-1) */
@@ -91,6 +91,7 @@ export async function compressImageIfNeeded(
   // ブラウザ外（SSR）では何もしない
   if (typeof window === 'undefined' || typeof document === 'undefined') return input
 
+  let objectUrl: string | null = null
   try {
     const blob: Blob = await new Promise((resolve, reject) => {
       const img = new Image()
@@ -119,7 +120,8 @@ export async function compressImageIfNeeded(
         )
       }
       img.onerror = () => reject(new Error('image decode failed'))
-      img.src = URL.createObjectURL(input)
+      objectUrl = URL.createObjectURL(input)
+      img.src = objectUrl
     })
     const ext = blob.type === 'image/webp' ? 'webp' : 'jpg'
     const newName = input.name.replace(/\.[^.]+$/, `.${ext}`) || `image.${ext}`
@@ -129,5 +131,8 @@ export async function compressImageIfNeeded(
   } catch (e) {
     console.warn('compressImageIfNeeded failed, falling back to original:', e)
     return input
+  } finally {
+    // 写真を何枚も連続で処理するので、blob URL は必ず解放する
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
   }
 }

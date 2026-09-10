@@ -5,7 +5,13 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import dynamic from 'next/dynamic'
+
+/** グラフは recharts に依存していて重いので遅延読み込みする（顧客詳細は2400行の重量級ページ） */
+const AreaTrendChart = dynamic(
+  () => import('@/components/store/charts/StoreCharts').then(m => m.AreaTrendChart),
+  { ssr: false, loading: () => <div className="w-full h-full rounded-lg animate-pulse bg-[var(--md-sys-color-surface-container-high)]" /> },
+)
 import AppBar from '@/components/AppBar'
 import Button from '@/components/Button'
 import CustomerMergeModal from '@/components/CustomerMergeModal'
@@ -2231,21 +2237,13 @@ export default function StoreCustomerDetailPage() {
                 <p className="text-sm text-center py-10 text-[var(--md-sys-color-on-surface-variant)]">買取実績がありません</p>
               ) : (
                 <div className="h-52 min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={monthlyTrend} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="custPurchaseGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={DASH_ACCENT} stopOpacity={0.14} />
-                          <stop offset="100%" stopColor={DASH_ACCENT} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={DASH_GRID} vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 10, fill: DASH_TICK }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: DASH_TICK }} axisLine={false} tickLine={false} tickFormatter={yenAxis} width={46} />
-                      <Tooltip formatter={(v) => [`¥${Number(v).toLocaleString()}`, '買取金額'] as [string, string]} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      <Area type="monotone" dataKey="amount" stroke={DASH_ACCENT} strokeWidth={2} fill="url(#custPurchaseGrad)" dot={false} activeDot={{ r: 4, fill: DASH_ACCENT, strokeWidth: 0 }} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <AreaTrendChart
+                    data={monthlyTrend} dataKey="amount" gradientId="custPurchaseGrad"
+                    tooltipFormatter={(v: number) => `¥${Number(v).toLocaleString()}`}
+                    tooltipSeriesName="買取金額"
+                    yTickFormatter={yenAxis} yWidth={46} marginLeft={8}
+                    accent={DASH_ACCENT} grid={DASH_GRID} tick={DASH_TICK}
+                  />
                 </div>
               )}
             </Section>

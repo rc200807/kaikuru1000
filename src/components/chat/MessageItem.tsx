@@ -4,7 +4,11 @@ import { useState } from 'react'
 import { formatJstDateTime } from '@/lib/datetime'
 import ChatAvatar from './ChatAvatar'
 import AttachmentView from './AttachmentView'
-import ChatRichInput from './ChatRichInput'
+import dynamic from 'next/dynamic'
+
+// 編集時にしか描画しないので、実質ほぼ読み込まれない。
+// Composer 側も dynamic にしないと同じチャンクに残るので両方セットで。
+const ChatRichInput = dynamic(() => import('./ChatRichInput'), { ssr: false })
 import { sanitizeChatHtml, isEmptyChatHtml } from '@/lib/chat-sanitize'
 import { QUICK_EMOJIS, type ChatMessage, type Participant } from './types'
 

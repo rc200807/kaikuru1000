@@ -3,11 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import {
-  AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import StorePage from '@/components/store/StorePage'
 import LoadingSpinner from '@/components/LoadingSpinner'
@@ -117,6 +113,24 @@ function momPct(cur: number, prev: number): number | null {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 // チャート系列はブランドアクセント（赤）。グリッド/目盛は faint グレー。
+/**
+ * グラフは recharts に依存していて重い。ダッシュボードは**ログイン直後の着地画面**なので、
+ * ここだけ遅延読み込みして初期JSから外す。
+ * ResponsiveContainer は親の実測高が要るため、loading のスケルトンにも
+ * 実チャートと同じ高さを持たせてレイアウトシフトを起こさないこと。
+ */
+const ChartSkeleton = () => (
+  <div className="w-full h-full rounded-lg animate-pulse bg-[var(--md-sys-color-surface-container-high)]" />
+)
+const AreaTrendChart = dynamic(
+  () => import('@/components/store/charts/StoreCharts').then(m => m.AreaTrendChart),
+  { ssr: false, loading: ChartSkeleton },
+)
+const DonutChart = dynamic(
+  () => import('@/components/store/charts/StoreCharts').then(m => m.DonutChart),
+  { ssr: false, loading: ChartSkeleton },
+)
+
 const ACCENT = '#b91c1c'
 const GRID = '#e5e5e5'
 const TICK = '#a3a3a3'
@@ -172,17 +186,6 @@ function KpiCard({ label, value, unit, sub, icon, deltaPct }: KpiProps) {
   )
 }
 
-function ChartTooltip({ active, payload, label, formatter }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-lg px-3 py-2 text-xs bg-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-3)]">
-      <p className="mb-1 text-[var(--md-sys-color-on-surface-variant)]">{label}</p>
-      <p className="font-semibold text-sm text-[var(--md-sys-color-on-surface)]">
-        {formatter ? formatter(payload[0].value) : payload[0].value}
-      </p>
-    </div>
-  )
-}
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
@@ -626,21 +629,11 @@ export default function StoreDashboardPage() {
           <p className="text-sm text-center py-12 text-[var(--md-sys-color-on-surface-faint)]">買取実績がありません</p>
         ) : (
           <div className="h-52 min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyPurchaseAmount} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="storePurchaseGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={ACCENT} stopOpacity={0.14} />
-                    <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} tickFormatter={yenAxis} width={46} />
-                <Tooltip content={<ChartTooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />} />
-                <Area type="monotone" dataKey="amount" stroke={ACCENT} strokeWidth={2} fill="url(#storePurchaseGrad)" dot={false} activeDot={{ r: 4, fill: ACCENT, strokeWidth: 0 }} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <AreaTrendChart
+              data={monthlyPurchaseAmount} dataKey="amount" gradientId="storePurchaseGrad"
+              tooltipFormatter={(v: number) => `¥${v.toLocaleString()}`}
+              yTickFormatter={yenAxis} yWidth={46} marginLeft={8}
+            />
           </div>
         )}
       </ChartCard>
@@ -653,21 +646,10 @@ export default function StoreDashboardPage() {
             <p className="text-sm text-center py-8 text-[var(--md-sys-color-on-surface-faint)]">訪問データがありません</p>
           ) : (
             <div className="h-44 min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyVisits} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="storeVisitGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={ACCENT} stopOpacity={0.14} />
-                      <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
-                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
-                  <Area type="monotone" dataKey="count" stroke={ACCENT} strokeWidth={2} fill="url(#storeVisitGrad)" dot={false} activeDot={{ r: 4, fill: ACCENT, strokeWidth: 0 }} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <AreaTrendChart
+                data={monthlyVisits} dataKey="count" gradientId="storeVisitGrad"
+                tooltipFormatter={(v: number) => `${v}件`} yWidth={28}
+              />
             </div>
           )}
         </ChartCard>
@@ -711,21 +693,10 @@ export default function StoreDashboardPage() {
             <p className="text-sm text-center py-8 text-[var(--md-sys-color-on-surface-faint)]">案件データがありません</p>
           ) : (
             <div className="h-44 min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyDeals} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="storeDealGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={ACCENT} stopOpacity={0.14} />
-                      <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: TICK }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
-                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v}件`} />} />
-                  <Area type="monotone" dataKey="count" stroke={ACCENT} strokeWidth={2} fill="url(#storeDealGrad)" dot={false} activeDot={{ r: 4, fill: ACCENT, strokeWidth: 0 }} />
-                </AreaChart>
-              </ResponsiveContainer>
+              <AreaTrendChart
+                data={monthlyDeals} dataKey="count" gradientId="storeDealGrad"
+                tooltipFormatter={(v: number) => `${v}件`} yWidth={28}
+              />
             </div>
           )}
         </ChartCard>
@@ -737,14 +708,7 @@ export default function StoreDashboardPage() {
           ) : (
             <div className="flex items-center gap-4">
               <div className="h-44 w-40 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={2}>
-                      {statusPie.map((e, i) => <Cell key={i} fill={e.color} />)}
-                    </Pie>
-                    <Tooltip formatter={(value: any, name: any) => [`${value}件`, name]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <DonutChart data={statusPie} />
               </div>
               <ul className="flex-1 space-y-1.5 min-w-0">
                 {statusPie.map((e, i) => (
@@ -769,14 +733,7 @@ export default function StoreDashboardPage() {
         ) : (
           <div className="flex items-center gap-6 flex-wrap">
             <div className="h-48 w-48 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={leadPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={76} paddingAngle={2}>
-                    {leadPie.map((e, i) => <Cell key={i} fill={e.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(value: any, name: any) => [`${value}名`, name]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                </PieChart>
-              </ResponsiveContainer>
+              <DonutChart data={leadPie} innerRadius={48} outerRadius={76} unit="名" />
             </div>
             <ul className="flex-1 space-y-2 min-w-[180px]">
               {(() => {

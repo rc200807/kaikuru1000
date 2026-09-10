@@ -1,9 +1,26 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { compressImageIfNeeded } from '@/lib/image-utils'
 import { isEmptyChatHtml } from '@/lib/chat-sanitize'
-import ChatRichInput from './ChatRichInput'
+import dynamic from 'next/dynamic'
+
+/**
+ * リッチ入力（TipTap）は @tiptap/pm 一式を伴って重い。
+ * チャット画面の初期JSから外すため遅延読み込みにする。
+ * **Composer と MessageItem の両方**を dynamic にしないと同じチャンクに残って効かない。
+ *
+ * 読み込み中は同じ高さのプレースホルダを出してレイアウトシフトを防ぎ、
+ * アイドル時に先読みしておくことで、クリックした瞬間には用意ができている状態にする。
+ */
+const ChatRichInput = dynamic(() => import('./ChatRichInput'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ minHeight: 40, padding: '8px 12px', color: 'var(--md-sys-color-on-surface-variant)', fontSize: 14 }}>
+      読み込み中…
+    </div>
+  ),
+})
 import type { ChatAttachment, Participant } from './types'
 
 type PendingAttachment = ChatAttachment & { uploading?: boolean; localId: string }
@@ -75,6 +92,14 @@ export default function Composer({
       setSending(false)
     }
   }
+
+  // アイドル時に先読みしておく（クリック→入力の間に間に合わせる）
+  useEffect(() => {
+    const w = window as any
+    const load = () => { import('./ChatRichInput') }
+    const id = w.requestIdleCallback ? w.requestIdleCallback(load, { timeout: 2000 }) : setTimeout(load, 600)
+    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id) }
+  }, [])
 
   return (
     <div

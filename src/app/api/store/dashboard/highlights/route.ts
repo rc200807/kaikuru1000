@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       take: 5,
       select: {
         id: true, dealId: true, visitDate: true, startTime: true, status: true,
+        storeId: true,
         user: { select: { name: true, address: true } },
         store: { select: { name: true } },
       },
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
       take: 5 - upcomingRaw.length,
       select: {
         id: true, dealId: true, visitDate: true, startTime: true, status: true,
+        storeId: true,
         user: { select: { name: true, address: true } },
         store: { select: { name: true } },
       },
@@ -122,6 +124,7 @@ export async function GET(request: NextRequest) {
         status: v.status,
         statusLabel: st?.label ?? v.status,
         statusColor: st?.color ?? '#6B7280',
+        storeId: scope.isMulti ? v.storeId : null,
         storeName: scope.isMulti ? (v.store?.name ?? null) : null,
       }
     }),

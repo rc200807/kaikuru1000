@@ -19,6 +19,7 @@ import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import ScheduleCalendar from '@/components/store/ScheduleCalendar'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
 type Schedule = {
@@ -551,9 +552,7 @@ export default function StoreSchedulePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
-                        {scope.isMulti && schedule.store && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{schedule.store.name}</span>
-                        )}
+                        <StoreChip storeId={schedule.store?.id} storeName={schedule.store?.name} />
                       </div>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{schedule.user.address}</p>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{schedule.user.phone}</p>
@@ -617,9 +616,7 @@ export default function StoreSchedulePage() {
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700">
                           後日引取
                         </span>
-                        {scope.isMulti && schedule.store && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{schedule.store.name}</span>
-                        )}
+                        <StoreChip storeId={schedule.store?.id} storeName={schedule.store?.name} />
                       </div>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-0.5">{schedule.user.address}</p>
                       <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{schedule.user.phone}</p>
@@ -672,6 +669,9 @@ export default function StoreSchedulePage() {
                     <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">訪問日</th>
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">顧客名</th>
+                      {scope.isMulti && (
+                        <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">店舗</th>
+                      )}
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden md:table-cell">住所</th>
                       <th className="text-left px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">ステータス</th>
                       <th className="text-right px-3 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider hidden sm:table-cell">買取金額</th>
@@ -691,10 +691,12 @@ export default function StoreSchedulePage() {
                         </td>
                         <td className="px-3 py-3 font-medium text-[var(--md-sys-color-on-surface)] whitespace-nowrap">
                           {schedule.user.name}
-                          {scope.isMulti && schedule.store && (
-                            <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] font-normal">{schedule.store.name}</span>
-                          )}
                         </td>
+                        {scope.isMulti && (
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <StoreChip storeId={schedule.store?.id} storeName={schedule.store?.name} />
+                          </td>
+                        )}
                         <td className="px-3 py-3 text-[var(--md-sys-color-on-surface-variant)] max-w-40 truncate hidden md:table-cell">{schedule.user.address}</td>
                         <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                           <select

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useBusinessHours } from '@/hooks/useBusinessHours'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip, { useStoreIdentity } from '@/components/store/StoreChip'
 
 // 店舗スケジュールのカレンダービュー（月間 / 週間 / 日間）。
 // 週間・日間は時間目盛り付きのタイムライン表示（開始時刻で配置・所要時間で高さ）。
@@ -23,6 +24,7 @@ type RawSchedule = {
   revisitNote: string | null
   staffName: string | null
   purposeName?: string | null
+  storeId?: string | null
   user?: { name: string; address?: string | null; phone?: string | null } | null
   store?: { id: string; name: string } | null
   member?: { id: string; name: string } | null
@@ -40,7 +42,10 @@ type CalEvent = {
   status: string
   dealId: string | null
   kind: 'visit' | 'revisit'
+  // 複数店舗表示中のみ入る。色と頭文字は store-identity.ts の中央定義で全画面共通
   storeName: string | null
+  storeColor: string | null
+  storeInitial: string | null
   /** 訪問担当者名（時間枠にも出す） */
   staffName: string | null
   purposeName: string | null
@@ -74,10 +79,40 @@ function statusStyle(status: string): string {
   }
 }
 
+/**
+ * 店舗色の左帯。予定の色はステータス色（statusStyle）を正としたいので、
+ * 店舗は「左端の帯」という別のチャンネルで示す。
+ * 色は動的なので Tailwind の任意値ではCSSが生成されない → inline style で当てる。
+ */
+function storeBarStyle(color: string | null): React.CSSProperties | undefined {
+  return color ? { borderLeft: `4px solid ${color}` } : undefined
+}
+
+/** 予定ブロック内に出す店舗の頭文字（丸） */
+function StoreDot({ e, className = '' }: { e: CalEvent; className?: string }) {
+  if (!e.storeColor) return null
+  return (
+    <span
+      title={e.storeName ?? ''}
+      className={`inline-flex items-center justify-center rounded-full text-white text-[8px] font-bold flex-shrink-0 align-middle ${className}`}
+      style={{ width: 12, height: 12, backgroundColor: e.storeColor }}
+      aria-hidden="true"
+    >
+      {e.storeInitial}
+    </span>
+  )
+}
+
+/** title 属性（ネイティブツールチップ）用の店舗名サフィックス */
+function storeTitle(e: CalEvent): string {
+  return e.storeName ? ` / ${e.storeName}` : ''
+}
+
 export default function ScheduleCalendar() {
   const router = useRouter()
   const biz = useBusinessHours()
   const scope = useStoreScope()
+  const resolveStore = useStoreIdentity()
   const [view, setView] = useState<View>('week')
   const [cursor, setCursor] = useState<Date>(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()) })
   const [schedules, setSchedules] = useState<RawSchedule[]>([])
@@ -110,19 +145,23 @@ export default function ScheduleCalendar() {
     for (const s of schedules) {
       const name = s.user?.name ?? '予定'
       const address = s.user?.address ?? null
-      const storeName = scope.isMulti ? (s.store?.name ?? null) : null
+      // 複数店舗を混ぜて表示しているときだけ、店舗の色・頭文字・名前を載せる
+      const identity = scope.isMulti ? resolveStore(s.storeId ?? s.store?.id, s.store?.name) : null
+      const storeName = identity?.name ?? null
+      const storeColor = identity?.color ?? null
+      const storeInitial = identity?.initial ?? null
       // 担当者は訪問行の staffName が正。未設定なら帰属メンバー名で補う
       const staffName = s.staffName || s.member?.name || null
       const purposeName = s.purposeName ?? null
       if (s.status !== 'cancelled') {
-        list.push({ id: s.id, dateKey: ymd(new Date(s.visitDate)), start: s.startTime, end: s.endTime, name, address, note: s.note, status: s.status, dealId: s.deal?.id ?? null, kind: 'visit', storeName, staffName, purposeName })
+        list.push({ id: s.id, dateKey: ymd(new Date(s.visitDate)), start: s.startTime, end: s.endTime, name, address, note: s.note, status: s.status, dealId: s.deal?.id ?? null, kind: 'visit', storeName, storeColor, storeInitial, staffName, purposeName })
       }
       if (s.revisitDate) {
-        list.push({ id: `${s.id}-rev`, dateKey: ymd(new Date(s.revisitDate)), start: s.revisitStart, end: s.revisitEnd, name, address, note: s.revisitNote, status: 'revisit', dealId: s.deal?.id ?? null, kind: 'revisit', storeName, staffName, purposeName })
+        list.push({ id: `${s.id}-rev`, dateKey: ymd(new Date(s.revisitDate)), start: s.revisitStart, end: s.revisitEnd, name, address, note: s.revisitNote, status: 'revisit', dealId: s.deal?.id ?? null, kind: 'revisit', storeName, storeColor, storeInitial, staffName, purposeName })
       }
     }
     return list
-  }, [schedules, scope.isMulti])
+  }, [schedules, scope.isMulti, resolveStore])
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, CalEvent[]> = {}
@@ -197,9 +236,7 @@ export default function ScheduleCalendar() {
             </div>
             <p className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">
               {popover.event.name} 様
-              {popover.event.storeName && (
-                <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] font-normal align-middle">{popover.event.storeName}</span>
-              )}
+              <StoreChip storeName={popover.event.storeName} className="ml-1.5 font-normal" />
             </p>
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
               {popover.event.start ? `${popover.event.start}${popover.event.end ? `〜${popover.event.end}` : ''}` : '時間未定'}
@@ -227,7 +264,13 @@ export default function ScheduleCalendar() {
 /* ───────────── 月間 ───────────── */
 function MonthChip({ e, onEvent }: { e: CalEvent; onEvent: (e: CalEvent, ev: React.MouseEvent) => void }) {
   return (
-    <button type="button" onClick={(ev) => onEvent(e, ev)} title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}`} className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}>
+    <button
+      type="button"
+      onClick={(ev) => onEvent(e, ev)}
+      title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${storeTitle(e)}`}
+      className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}
+      style={storeBarStyle(e.storeColor)}
+    >
       {e.start ? <span className="font-medium">{e.start} </span> : null}{e.name}{e.staffName ? <span className="opacity-70">・{e.staffName}</span> : null}
     </button>
   )
@@ -354,7 +397,16 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
             {days.map((d) => (
               <div key={ymd(d)} className="p-0.5 space-y-0.5 border-l border-[var(--md-sys-color-outline-variant)]">
                 {(eventsByDate[ymd(d)] ?? []).filter(e => toMin(e.start) === null).map(e => (
-                  <button key={e.id} type="button" onClick={(ev) => onEvent(e, ev)} className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}>{e.kind === 'revisit' ? '引取: ' : ''}{e.name}{e.staffName ? `（${e.staffName}）` : ''}</button>
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={(ev) => onEvent(e, ev)}
+                    title={`${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${storeTitle(e)}`}
+                    className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}
+                    style={storeBarStyle(e.storeColor)}
+                  >
+                    {e.kind === 'revisit' ? '引取: ' : ''}{e.name}{e.staffName ? `（${e.staffName}）` : ''}
+                  </button>
                 ))}
               </div>
             ))}
@@ -393,14 +445,17 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
                       key={e.id}
                       type="button"
                       onClick={(ev) => onEvent(e, ev)}
-                      title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${e.purposeName ? ` / ${e.purposeName}` : ''}${e.address ? ` / ${e.address}` : ''}${e.note ? ` / ${e.note}` : ''}`}
+                      title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${e.purposeName ? ` / ${e.purposeName}` : ''}${e.address ? ` / ${e.address}` : ''}${e.note ? ` / ${e.note}` : ''}${storeTitle(e)}`}
                       className={`absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left leading-tight hover:opacity-90 hover:z-10 shadow-sm ${statusStyle(e.status)}`}
-                      style={{ top, height, left: `calc(${pos.left * 100}% + 2px)`, width: `calc(${pos.width * 100}% - 4px)` }}
+                      style={{ top, height, left: `calc(${pos.left * 100}% + 2px)`, width: `calc(${pos.width * 100}% - 4px)`, ...storeBarStyle(e.storeColor) }}
                     >
                       <div className="text-[10px] font-semibold truncate">
                         {e.start}{e.end ? `〜${e.end}` : ''}{e.kind === 'revisit' ? '（引取）' : ''}
                       </div>
-                      <div className="text-[11px] font-medium truncate">{e.name} 様</div>
+                      <div className="text-[11px] font-medium truncate flex items-center gap-1">
+                        <StoreDot e={e} />
+                        <span className="truncate">{e.name} 様</span>
+                      </div>
                       {/* 訪問担当者は時間枠で最初に知りたい情報なので、高さが足りなくても必ず出す */}
                       <div className="text-[9px] font-medium truncate">
                         {e.staffName ? `担当 ${e.staffName}` : '担当 未設定'}

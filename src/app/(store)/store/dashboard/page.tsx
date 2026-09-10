@@ -15,6 +15,7 @@ import VideoThumbnail from '@/components/VideoThumbnail'
 import StoreReleaseNotesCard from '@/components/store/ReleaseNotesCard'
 import { AnnouncementCategoryIcon } from '@/components/announcement/categoryIcons'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip, { useStoreIdentity } from '@/components/store/StoreChip'
 import { useStoreBadges } from '@/components/store/StoreBadgesContext'
 import { DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { formatJstDate } from '@/lib/datetime'
@@ -39,6 +40,7 @@ type DashboardData = {
     occurredAt: string
     purchaseAmount: number | null
     billingAmount: number | null
+    storeId?: string | null
     storeName?: string | null
   }[]
   // 複数店舗スコープ時のみ
@@ -95,6 +97,7 @@ type HighlightVisit = {
   status: string
   statusLabel: string
   statusColor: string
+  storeId?: string | null
   storeName?: string | null
 }
 type Highlights = {
@@ -319,9 +322,7 @@ function HighlightsRow({ highlights }: { highlights: Highlights }) {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] truncate">{v.customerName} 様</span>
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: `${v.statusColor}20`, color: v.statusColor }}>{v.statusLabel}</span>
-                    {v.storeName && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">{v.storeName}</span>
-                    )}
+                    <StoreChip storeId={v.storeId} storeName={v.storeName} />
                   </div>
                   <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">
                     {formatJstDate(v.visitDate, { year: undefined, month: 'numeric', day: 'numeric', weekday: 'short' })}{v.startTime ? ` ${v.startTime}` : ''}
@@ -346,6 +347,9 @@ export default function StoreDashboardPage() {
   const [highlights, setHighlights] = useState<Highlights | null>(null)
   const [loading, setLoading] = useState(true)
   const scope = useStoreScope()
+  const resolveStore = useStoreIdentity()
+  // 店舗別比較のバーは店舗色で塗る（一覧・カレンダーと同じ色）
+  const storeBarColor = (storeId: string) => resolveStore(storeId)?.color ?? ACCENT
   // 未対応の訪問リクエスト件数（ナビのバッジと共有。60秒ごとに更新される）
   const { visitRequests: pendingVisitRequests } = useStoreBadges()
   const scopeKey = scope.selectedIds.join(',')
@@ -446,19 +450,6 @@ export default function StoreDashboardPage() {
   return (
     <StorePage title="ダッシュボード" subtitle={storeName} width="full">
       <div className="max-w-[1400px] mx-auto space-y-6">
-      {/* ── 複数店舗表示中バナー ── */}
-      {scope.isMulti && (
-        <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 rounded-2xl bg-[var(--store-primary-container)]/40 border border-[var(--store-primary)]/20">
-          <svg className="w-4 h-4 text-[var(--store-primary)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35" />
-          </svg>
-          <span className="text-xs font-semibold text-[var(--store-primary)]">{scope.selectedIds.length}店舗の合算を表示中:</span>
-          {scope.availableStores.filter(s => scope.selectedIds.includes(s.id)).map(s => (
-            <span key={s.id} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] shadow-sm">{s.name}</span>
-          ))}
-        </div>
-      )}
-
       {/* ── 訪問リクエストの通知（未対応があるときだけ出す） ── */}
       {pendingVisitRequests > 0 && (
         <Link
@@ -497,7 +488,10 @@ export default function StoreDashboardPage() {
               <div className="space-y-1 max-h-20 overflow-y-auto thin-scrollbar">
                 {data.myStoreRanks!.map(r => (
                   <div key={r.storeId} className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate">{r.name}</span>
+                    <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate flex items-center gap-1 min-w-0">
+                      <StoreChip storeId={r.storeId} variant="initial" />
+                      <span className="truncate">{r.name}</span>
+                    </span>
                     <span className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] shrink-0">{r.rank != null ? `${r.rank}位` : '—'}</span>
                   </div>
                 ))}
@@ -538,9 +532,12 @@ export default function StoreDashboardPage() {
                   return rows.map(r => (
                     <tr key={r.storeId} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
                       <td className="py-2.5 pr-3">
-                        <div className="text-xs font-semibold text-[var(--md-sys-color-on-surface)]">{r.name}</div>
+                        <div className="text-xs font-semibold text-[var(--md-sys-color-on-surface)] flex items-center gap-1.5">
+                          <StoreChip storeId={r.storeId} variant="initial" size="sm" />
+                          <span className="truncate">{r.name}</span>
+                        </div>
                         <div className="mt-1 h-1.5 rounded-full bg-[var(--md-sys-color-outline-variant)]/60 max-w-[160px]">
-                          <div className="h-1.5 rounded-full" style={{ width: `${Math.max((r.currentMonthAmount / maxAmount) * 100, 2)}%`, background: ACCENT }} />
+                          <div className="h-1.5 rounded-full" style={{ width: `${Math.max((r.currentMonthAmount / maxAmount) * 100, 2)}%`, background: storeBarColor(r.storeId) }} />
                         </div>
                       </td>
                       <td className="py-2.5 text-right font-semibold text-[var(--md-sys-color-on-surface)] whitespace-nowrap">{fmtYen(r.currentMonthAmount)}</td>
@@ -593,11 +590,7 @@ export default function StoreDashboardPage() {
                         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: badge.bg, color: badge.fg }}>
                           {DEAL_STATUS_LABEL[c.status as DealStatus] ?? c.status}
                         </span>
-                        {c.storeName && (
-                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
-                            {c.storeName}
-                          </span>
-                        )}
+                        <StoreChip storeId={c.storeId} storeName={c.storeName} />
                       </div>
                       <p className="text-xs truncate mt-0.5 text-[var(--md-sys-color-on-surface-variant)]">{c.address}</p>
                       <p className="text-[11px] mt-0.5 text-[var(--md-sys-color-on-surface-faint)]">発生日: {new Date(c.occurredAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' })}</p>

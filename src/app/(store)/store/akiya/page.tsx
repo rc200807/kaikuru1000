@@ -9,6 +9,7 @@ import Button from '@/components/Button'
 import EmptyState from '@/components/EmptyState'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 import { AKIYA_STATUS_OPTIONS, AKIYA_STATUS_BADGE, akiyaStatusLabel } from '@/lib/akiya-status'
 import { AKIYA_PLAN_BADGE, akiyaPlanLabel } from '@/lib/akiya-plans'
 import { formatJstDate } from '@/lib/datetime'
@@ -168,11 +169,7 @@ export default function StoreAkiyaPage() {
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: planBadge.bg, color: planBadge.fg }}>
                         {akiyaPlanLabel(c.plan)}
                       </span>
-                      {scope.isMulti && c.store && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
-                          {c.store.name}
-                        </span>
-                      )}
+                      <StoreChip storeId={c.store?.id} storeName={c.store?.name} size="sm" />
                     </div>
                     <span className="text-xs text-[var(--md-sys-color-outline)] whitespace-nowrap">
                       記録 {c._count?.records ?? 0}件

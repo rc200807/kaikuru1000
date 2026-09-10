@@ -191,7 +191,7 @@ export async function buildStoreDashboard(storeIdInput: string | string[], opts:
     occurredAt: d.occurredAt,
     purchaseAmount: d.purchaseAmount,
     billingAmount: d.billingAmount,
-    ...(isMulti ? { storeName: d.store?.name ?? null } : {}),
+    ...(isMulti ? { storeId: d.storeId, storeName: d.store?.name ?? null } : {}),
   }))
 
   // ── 当月訪問件数 / 当月完了件数 ──

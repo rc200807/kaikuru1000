@@ -12,6 +12,8 @@ import {
   INVENTORY_STATUSES, INVENTORY_STATUS_LABEL, INVENTORY_STATUS_BADGE,
   INVENTORY_CONDITION_LABEL, type InventoryStatus, type InventoryCondition,
 } from '@/lib/inventory-status'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 
 type InventoryItem = {
   id: string
@@ -37,6 +39,8 @@ type InventoryItem = {
   note: string
   images: string[]
   listings?: { id: string; marketplace: string; listingStatus: string; url: string | null }[]
+  storeId: string
+  store?: { id: string; name: string; code: string } | null
   createdAt: string
   updatedAt: string
 }
@@ -47,6 +51,7 @@ export default function StoreInventoryPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
   const { success } = useToast()
+  const scope = useStoreScope()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
@@ -59,15 +64,18 @@ export default function StoreInventoryPage() {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
+  // scopeKey を依存に入れないと、店舗を切り替えても再取得されない
+  const scopeKey = scope.selectedIds.join(',')
   useEffect(() => {
-    if (authStatus === 'authenticated') fetchItems()
+    if (authStatus === 'authenticated' && !scope.loading) fetchItems()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus])
+  }, [authStatus, scope.loading, scopeKey])
 
   async function fetchItems() {
     setLoading(true)
     try {
-      const res = await fetch('/api/store/inventory?limit=500')
+      const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
+      const res = await fetch(`/api/store/inventory?limit=500${scopeQs}`)
       if (res.ok) {
         const data = await res.json()
         setItems(data.items ?? [])
@@ -84,7 +92,7 @@ export default function StoreInventoryPage() {
     return items.filter(i => {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false
       if (q) {
-        const hay = [i.title, i.categoryName, i.brand ?? '', i.janCode ?? '', i.managementCode ?? ''].join(' ').toLowerCase()
+        const hay = [i.title, i.categoryName, i.brand ?? '', i.janCode ?? '', i.managementCode ?? '', i.store?.name ?? ''].join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -98,7 +106,10 @@ export default function StoreInventoryPage() {
     setEditing(null)
     setModalOpen(true)
   }
+  /** 在庫の編集は自店舗のみ（API 側も他店舗は403）。他店舗の行はモーダルを開かせない */
+  const canEdit = (item: InventoryItem) => !scope.sessionStoreId || item.storeId === scope.sessionStoreId
   function openEdit(item: InventoryItem) {
+    if (!canEdit(item)) return
     setEditing(item)
     setModalOpen(true)
   }
@@ -128,7 +139,9 @@ export default function StoreInventoryPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">{fmtYen(totalCost)}</div>
-            <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">合計仕入れ値</div>
+            <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+              合計仕入れ値{scope.isMulti ? `（${scope.selectedIds.length}店舗合計）` : ''}
+            </div>
           </div>
           <div>
             <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">{fmtYen(totalListing)}</div>
@@ -183,7 +196,9 @@ export default function StoreInventoryPage() {
                 <button
                   key={item.id}
                   onClick={() => openEdit(item)}
-                  className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-3 flex gap-3 hover:bg-[var(--md-sys-color-surface-container)] transition-colors animate-fade-in-up"
+                  disabled={!canEdit(item)}
+                  title={canEdit(item) ? undefined : '他店舗の在庫は編集できません'}
+                  className="text-left rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-3 flex gap-3 transition-colors animate-fade-in-up enabled:hover:bg-[var(--md-sys-color-surface-container)] disabled:cursor-default"
                   style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
                 >
                   <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-[var(--md-sys-color-surface-container)] flex items-center justify-center">
@@ -208,6 +223,7 @@ export default function StoreInventoryPage() {
                           {item.categoryName && (
                             <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{item.categoryName}</span>
                           )}
+                          <StoreChip storeId={item.storeId} storeName={item.store?.name} />
                         </div>
                       </div>
                       <div className="text-right shrink-0">

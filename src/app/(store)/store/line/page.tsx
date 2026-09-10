@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 
 type LastMessage = {
   content: string | null
@@ -41,7 +42,6 @@ export default function StoreLinePage() {
   const router = useRouter()
   const scope = useStoreScope()
   const [users, setUsers] = useState<TalkUser[]>([])
-  const [isMulti, setIsMulti] = useState(false)
   const [storeCode, setStoreCode] = useState('')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -66,7 +66,6 @@ export default function StoreLinePage() {
       if (res.ok) {
         const data = await res.json()
         setUsers(data.users ?? [])
-        setIsMulti(!!data.isMulti)
         setStoreCode(data.storeCode ?? '')
       }
     } finally {
@@ -241,11 +240,7 @@ export default function StoreLinePage() {
                             )}
                           </div>
                         </div>
-                        {isMulti && u.store && (
-                          <span className="inline-block text-[10px] font-semibold text-[var(--store-primary)] bg-[var(--md-sys-color-surface-container)] rounded-full px-2 py-0.5 my-0.5 max-w-[140px] truncate">
-                            {u.store.name}
-                          </span>
-                        )}
+                        <StoreChip storeId={u.store?.id} storeName={u.store?.name} className="my-0.5" />
                         <p className="text-xs truncate text-[var(--md-sys-color-on-surface-variant)]">
                           {u.lastMessage ? (u.lastMessage.content ?? `[${u.lastMessage.messageType}]`) : '— メッセージなし —'}
                         </p>
@@ -279,6 +274,7 @@ export default function StoreLinePage() {
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate text-[var(--md-sys-color-on-surface)]">
                       {selectedUser.linkedUser?.name ?? selectedUser.displayName}
+                      <StoreChip storeId={selectedUser.store?.id} storeName={selectedUser.store?.name} className="ml-1.5 font-normal" />
                     </p>
                     <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate">
                       {selectedUser.linkedUser

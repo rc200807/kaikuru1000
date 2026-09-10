@@ -9,6 +9,8 @@ import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import InventoryFormModal, { purchaseItemToForm } from '@/components/store/InventoryFormModal'
 import { useToast } from '@/components/Toast'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 
 type Item = {
   id: string
@@ -25,6 +27,10 @@ type Item = {
     status: string
     user: { id: string; name: string } | null
   } | null
+  /** 案件直下に登録された品目（visitSchedule が無い）はこちらから顧客・案件を辿る */
+  deal: { id: string; user: { id: string; name: string } | null } | null
+  storeId: string | null
+  store: { id: string; name: string; code: string } | null
   convertedInventoryId: string | null
 }
 
@@ -34,6 +40,7 @@ export default function StorePurchaseItemsPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
   const { success } = useToast()
+  const scope = useStoreScope()
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [searchText, setSearchText] = useState('')
@@ -44,15 +51,18 @@ export default function StorePurchaseItemsPage() {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
+  // scopeKey を依存に入れないと、店舗を切り替えても再取得されない
+  const scopeKey = scope.selectedIds.join(',')
   useEffect(() => {
-    if (authStatus === 'authenticated') fetchItems()
+    if (authStatus === 'authenticated' && !scope.loading) fetchItems()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus])
+  }, [authStatus, scope.loading, scopeKey])
 
   async function fetchItems() {
     setLoading(true)
     try {
-      const res = await fetch('/api/store/purchase-items?limit=500')
+      const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
+      const res = await fetch(`/api/store/purchase-items?limit=500${scopeQs}`)
       if (res.ok) {
         const data = await res.json()
         setItems(data.items ?? [])
@@ -76,7 +86,8 @@ export default function StorePurchaseItemsPage() {
     return items.filter(i => {
       if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
       if (q) {
-        const hay = [i.itemName, i.category, i.janCode ?? '', i.visitSchedule?.user?.name ?? ''].join(' ').toLowerCase()
+        const customerName = i.deal?.user?.name ?? i.visitSchedule?.user?.name ?? ''
+        const hay = [i.itemName, i.category, i.janCode ?? '', customerName, i.store?.name ?? ''].join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -106,7 +117,9 @@ export default function StorePurchaseItemsPage() {
           </div>
           <div>
             <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">{fmtYen(totalAmount)}</div>
-            <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">合計買取額（数量×単価）</div>
+            <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+              合計買取額（数量×単価）{scope.isMulti ? `・${scope.selectedIds.length}店舗合計` : ''}
+            </div>
           </div>
         </div>
 
@@ -186,6 +199,7 @@ export default function StorePurchaseItemsPage() {
                         {item.janCode && (
                           <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">JAN: {item.janCode}</span>
                         )}
+                        <StoreChip storeId={item.storeId} storeName={item.store?.name} />
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -196,27 +210,40 @@ export default function StorePurchaseItemsPage() {
 
                   {/* メタ情報 */}
                   <div className="flex items-center gap-3 mt-2 text-[11px] text-[var(--md-sys-color-on-surface-variant)] flex-wrap">
-                    {item.visitSchedule?.user && (
-                      <button
-                        onClick={() => item.visitSchedule?.user && router.push(`/store/customers/${item.visitSchedule.user.id}`)}
-                        className="text-[var(--store-primary)] hover:underline"
-                      >
-                        {item.visitSchedule.user.name}
-                      </button>
-                    )}
-                    {item.visitSchedule && (
+                    {(() => {
+                      const customer = item.deal?.user ?? item.visitSchedule?.user
+                      if (!customer) return null
+                      return (
+                        <button
+                          onClick={() => router.push(`/store/customers/${customer.id}`)}
+                          className="text-[var(--store-primary)] hover:underline"
+                        >
+                          {customer.name}
+                        </button>
+                      )
+                    })()}
+                    {item.visitSchedule ? (
                       <button
                         onClick={() => item.visitSchedule && router.push(`/store/schedule/${item.visitSchedule.id}`)}
                         className="hover:underline"
                       >
                         訪問: {format(new Date(item.visitSchedule.visitDate), 'yyyy/M/d', { locale: ja })}
                       </button>
-                    )}
+                    ) : item.deal ? (
+                      <button
+                        onClick={() => item.deal && router.push(`/store/deals/${item.deal.id}`)}
+                        className="hover:underline"
+                      >
+                        案件を開く
+                      </button>
+                    ) : null}
                   </div>
 
-                  {/* 在庫化 */}
+                  {/* 在庫化。他店舗の品目は在庫化できない（在庫はログイン中の店舗に作られるため） */}
                   <div className="mt-2 flex justify-end">
-                    {item.convertedInventoryId ? (
+                    {item.storeId && scope.sessionStoreId && item.storeId !== scope.sessionStoreId ? (
+                      <span className="text-[11px] text-[var(--md-sys-color-on-surface-faint)]">他店舗の品目</span>
+                    ) : item.convertedInventoryId ? (
                       <button
                         onClick={() => router.push('/store/inventory')}
                         className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-highest)] transition-colors"

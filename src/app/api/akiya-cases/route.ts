@@ -13,7 +13,7 @@ const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
 const LIST_SELECT = {
   id: true, propertyAddress: true, startDate: true, endDate: true,
-  plan: true, status: true, photoUrls: true,
+  plan: true, status: true, photoUrls: true, storeId: true,
   lastVisitedAt: true, nextVisitAt: true, createdAt: true,
   user: { select: { id: true, name: true, phone: true } },
   store: { select: { id: true, name: true, code: true } },

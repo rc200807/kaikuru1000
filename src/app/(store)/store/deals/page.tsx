@@ -17,6 +17,7 @@ import PageNav from '@/components/list/PageNav'
 import BulkDealModal from './BulkDealModal'
 import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 import {
   storeDealChips,
   storeDealAdvFields,
@@ -85,6 +86,8 @@ const BASE_COLUMN_OPTIONS = [
 const DEFAULT_COLS = ['nextVisit', 'dealNumber', 'occurredAt', 'category', 'amount', 'member']
 /** 既存ユーザーの保存済み列に後から必須にした列を1回だけ足すためのキー */
 const COLS_MIGRATION_KEY = 'kk-store-deals-cols-migrated-occurredAt'
+/** 複数店舗を表示しているのに店舗列が出ていない状態を解消するための1回きりの差し込み */
+const COLS_MIGRATION_STORE_KEY = 'kk-store-deals-cols-migrated-store'
 
 // テーブル列キー → サーバーソートフィールド
 const SORT_FIELD_BY_COL: Record<string, string> = { createdAt: 'createdAt', occurredAt: 'occurredAt', amount: 'purchaseAmount', nextVisit: 'nextVisit' }
@@ -149,6 +152,9 @@ function StoreDealsContent() {
     [scope.isMulti],
   )
   const columnKeys = useMemo(() => columnOptions.map(c => c.key), [columnOptions])
+  // 保存済み設定の検証用。columnOptions はスコープで増減するので、
+  // これで検証すると単一店舗のときに保存済みの store 列が捨てられてしまう
+  const ALL_COLUMN_KEYS = useMemo(() => [...BASE_COLUMN_OPTIONS.map(c => c.key), 'store'], [])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/store/login')
@@ -193,7 +199,7 @@ function StoreDealsContent() {
       if (raw) {
         const arr = JSON.parse(raw)
         if (Array.isArray(arr)) {
-          let cols = arr.filter((k: string) => columnKeys.includes(k))
+          let cols = arr.filter((k: string) => ALL_COLUMN_KEYS.includes(k))
           // 「案件発生日」は常に見えるようにしたい列。保存済みの表示設定には入っていないので、
           // 初回だけ差し込む（以降はユーザーが外したらそのまま尊重する）
           if (!localStorage.getItem(COLS_MIGRATION_KEY)) {
@@ -203,6 +209,15 @@ function StoreDealsContent() {
               localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(cols))
             }
             localStorage.setItem(COLS_MIGRATION_KEY, '1')
+          }
+          // 複数店舗を表示しているのにどの店舗の案件か分からない状態だったので、店舗列も初回だけ差し込む
+          // （occurredAt と同じ扱い。以降ユーザーが外したらそのまま尊重する）
+          if (!localStorage.getItem(COLS_MIGRATION_STORE_KEY)) {
+            if (!cols.includes('store')) {
+              cols = ['store', ...cols]
+              localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(cols))
+            }
+            localStorage.setItem(COLS_MIGRATION_STORE_KEY, '1')
           }
           setVisibleCols(cols)
         }
@@ -378,15 +393,17 @@ function StoreDealsContent() {
     ) },
     { key: 'leadSource', header: '流入経路', render: (d: Deal) => <span className="text-sm">{d.user?.leadSource || '—'}</span> },
     { key: 'customerType', header: '顧客種別', render: (d: Deal) => <span className="text-sm">{d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '—'}</span> },
-    { key: 'store', header: '店舗', render: (d: Deal) => <span className="text-sm">{d.store?.name ?? '未割当'}</span> },
+    { key: 'store', header: '店舗', render: (d: Deal) => <StoreChip storeId={d.store?.id} storeName={d.store?.name ?? '未割当'} size="sm" /> },
   ]), [])
 
   const displayedColumns = useMemo(() => {
     const first = allColumns.filter(c => c.key === 'name')
     const statusCol = allColumns.filter(c => c.key === 'status')
-    const optional = visibleCols.map(k => allColumns.find(c => c.key === k)).filter(Boolean) as typeof allColumns
+    // 店舗列は複数店舗のときだけ。保存済み設定に入っていても単一店舗では出さない
+    const keys = scope.isMulti ? visibleCols : visibleCols.filter(k => k !== 'store')
+    const optional = keys.map(k => allColumns.find(c => c.key === k)).filter(Boolean) as typeof allColumns
     return [...first, ...optional, ...statusCol]
-  }, [allColumns, visibleCols])
+  }, [allColumns, visibleCols, scope.isMulti])
 
   if (status === 'loading') return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
 
@@ -575,7 +592,7 @@ function StoreDealsContent() {
                     次回訪問: {nv ? `${fmtMd(nv.visitDate)}${nv.startTime ? ` ${nv.startTime}` : ''}` : 'なし'}
                   </span>
                   {(d.assigneeName ?? d.member?.name) && <span>担当 {d.assigneeName ?? d.member?.name}</span>}
-                  {scope.isMulti && d.store?.name && <span>{d.store.name}</span>}
+                  {d.store?.name && <StoreChip storeId={d.store.id} storeName={d.store.name} />}
                   {!d.preConsentAt && <span style={{ color: 'var(--status-pending-text)' }}>事前同意 未取得</span>}
                 </div>
               </button>

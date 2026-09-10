@@ -1,5 +1,7 @@
 'use client'
 
+import StoreScopeBar from '@/components/store/StoreScopeBar'
+
 type AppBarProps = {
   title: string
   subtitle?: string
@@ -30,6 +32,12 @@ export default function AppBar({ title, subtitle, actions, className = '' }: App
           </div>
         )}
       </div>
+      {/*
+        店舗ポータルで複数店舗を表示しているときだけ出るスコープ帯。
+        単一店舗のとき、および店舗ポータル以外（StoreScopeProvider の外）では何も描画しない。
+        店舗ポータルのページはほぼ全て AppBar を直接使っているので、ここに置くと全画面に行き渡る。
+      */}
+      <StoreScopeBar />
     </header>
   )
 }

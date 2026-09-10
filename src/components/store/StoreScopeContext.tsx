@@ -16,6 +16,8 @@ export type ScopeStore = {
 }
 
 type StoreScopeValue = {
+  /** ログイン中の店舗ID。書き込みは常にこの店舗に帰属するので、行の「自店舗か」判定に使う */
+  sessionStoreId: string | null
   /** 運営者配下の店舗（セッション店舗含む）。運営者なしなら [] */
   availableStores: ScopeStore[]
   /** 選択中の店舗ID。常にセッション店舗を含む */
@@ -36,6 +38,7 @@ type StoreScopeValue = {
 }
 
 const StoreScopeContext = createContext<StoreScopeValue>({
+  sessionStoreId: null,
   availableStores: [],
   selectedIds: [],
   toggleStore: () => {},
@@ -164,6 +167,7 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
   const value = useMemo<StoreScopeValue>(() => {
     const isMulti = selectedIds.length > 1
     return {
+      sessionStoreId: sessionStoreId ?? null,
       availableStores,
       selectedIds,
       toggleStore,
@@ -177,7 +181,7 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
       navKeys,
       loading,
     }
-  }, [availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, navKeys, loading])
+  }, [sessionStoreId, availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, navKeys, loading])
 
   return <StoreScopeContext.Provider value={value}>{children}</StoreScopeContext.Provider>
 }

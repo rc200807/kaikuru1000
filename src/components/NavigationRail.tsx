@@ -5,6 +5,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { useStoreIdentity } from '@/components/store/StoreChip'
 import { useStoreBadges } from '@/components/store/StoreBadgesContext'
 import { storeNavItemsFromKeys, passesStoreNavGate } from '@/lib/store-nav'
 import { STORE_NAV_ICONS } from '@/components/store/storeNavIcons'
@@ -19,6 +20,7 @@ export default function NavigationRail() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const scope = useStoreScope()
+  const resolveStore = useStoreIdentity()
   // 未読件数・リンク店舗はレイアウトの Provider が1回だけ取得し、BottomNav と共有する
   const { announcements: unreadCount, releaseNotes: releaseUnread, chat: chatUnread, visitRequests: visitRequestCount, storeAccounts: linkedStores } = useStoreBadges()
 
@@ -122,6 +124,8 @@ export default function NavigationRail() {
                   {scope.availableStores.map(store => {
                     const isSelf = store.id === user?.id
                     const checked = scope.selectedIds.includes(store.id)
+                    // 一覧やカレンダーで使う店舗色と同じものをここでも使う（色の意味を画面間で揃える）
+                    const identity = resolveStore(store.id)
                     return (
                       <button
                         key={store.id}
@@ -140,8 +144,11 @@ export default function NavigationRail() {
                         {store.avatar ? (
                           <img loading="lazy" decoding="async" src={store.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" alt="" />
                         ) : (
-                          <div className="w-6 h-6 rounded-full bg-[var(--store-primary)] flex items-center justify-center shrink-0">
-                            <span className="text-white text-[9px] font-semibold">{store.name[0]}</span>
+                          <div
+                            className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: identity?.color ?? 'var(--store-primary)' }}
+                          >
+                            <span className="text-white text-[9px] font-semibold">{identity?.initial ?? '?'}</span>
                           </div>
                         )}
                         <p className="text-xs text-[var(--md-sys-color-on-surface)] truncate flex-1">

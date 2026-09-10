@@ -4,10 +4,13 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { recordAccessLog } from '@/lib/access-log'
 import { buildInventoryWriteData, mapInventoryItem } from '@/lib/inventory-input'
+import { resolveStoreScope } from '@/lib/store-scope'
 
 const LISTINGS_SELECT = { select: { id: true, marketplace: true, listingStatus: true, url: true } } as const
 
-// 店舗の在庫一覧
+// 店舗の在庫一覧。
+// 運営者配下の複数店舗を表示中はその全店舗ぶんを返す（表示のみ）。
+// 在庫の作成・編集・削除は自店舗のみ（POST はセッション店舗固定、[id] 側で帰属チェック）。
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -17,10 +20,11 @@ export async function GET(request: NextRequest) {
   const storeId = user.id as string
   const { searchParams } = new URL(request.url)
   const limit = Math.max(1, Math.min(1000, parseInt(searchParams.get('limit') || '300', 10)))
+  const scope = await resolveStoreScope(storeId, searchParams.get('storeIds'))
 
   const items = await prisma.inventoryItem.findMany({
-    where: { storeId },
-    include: { listings: LISTINGS_SELECT },
+    where: { storeId: scope.isMulti ? { in: scope.storeIds } : storeId },
+    include: { listings: LISTINGS_SELECT, store: { select: { id: true, name: true, code: true } } },
     orderBy: { updatedAt: 'desc' },
     take: limit,
   })

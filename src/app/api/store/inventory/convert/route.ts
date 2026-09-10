@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
 import { Prisma } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -31,16 +32,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '買取品目が指定されていません' }, { status: 400 })
   }
 
-  // 変換元の買取品目を取得（所有権は visitSchedule.storeId で判定）
+  // 変換元の買取品目を取得。所有権は案件・訪問の両方から見る。
+  // visitSchedule だけを見ると、案件直下に登録された品目（visitScheduleId=null）は
+  // 自店舗のものでも必ず 403 になり、在庫化できなくなる（purchase-item-access.ts 参照）
   const src = await prisma.purchaseItem.findUnique({
     where: { id: purchaseItemId },
     include: {
-      visitSchedule: { select: { storeId: true } },
+      ...PURCHASE_ITEM_OWNER_SELECT,
       inventoryItem: { select: { id: true } },
     },
   })
   if (!src) return NextResponse.json({ error: '買取品目が見つかりません' }, { status: 404 })
-  if (src.visitSchedule?.storeId !== storeId) {
+  // 在庫はログイン中の店舗に作られるので、他店舗の品目は在庫化させない
+  if (!storeOwnsPurchaseItem(src, storeId)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   if (src.inventoryItem) {

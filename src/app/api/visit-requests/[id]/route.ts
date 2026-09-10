@@ -69,6 +69,27 @@ async function notifyVisitConfirmed(params: {
   }
 }
 
+/**
+ * 訪問リクエストの帰属チェック。店舗は自店舗のリクエストのみ、顧客は自分のリクエストのみ扱える。
+ *
+ * 表示スコープ（運営者配下の複数店舗）で他店舗のリクエストが一覧に出るようになるため、
+ * サーバー側で必ず弾く。特に承認は visitRequest.storeId で VisitSchedule を作るので、
+ * ここが抜けていると「他店舗に帰属する書き込み」が1クリックで成立してしまう
+ * （書き込みは常にセッション店舗に帰属、が店舗ポータルの不変条件。src/lib/store-scope.ts 参照）。
+ */
+function ownershipError(
+  visitRequest: { storeId: string; userId: string },
+  sessionUser: { id: string; role?: string },
+): NextResponse | null {
+  if (sessionUser.role === 'store' && visitRequest.storeId !== sessionUser.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (sessionUser.role === 'customer' && visitRequest.userId !== sessionUser.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  return null
+}
+
 // 訪問リクエスト詳細
 export async function GET(
   request: NextRequest,
@@ -77,6 +98,7 @@ export async function GET(
   const { id } = await params
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = session.user as any
 
   const visitRequest = await prisma.visitRequest.findUnique({
     where: { id },
@@ -89,6 +111,8 @@ export async function GET(
   if (!visitRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+  const forbidden = ownershipError(visitRequest, sessionUser)
+  if (forbidden) return forbidden
 
   return NextResponse.json(visitRequest)
 }
@@ -116,6 +140,8 @@ export async function PATCH(
   if (!visitRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+  const forbidden = ownershipError(visitRequest, sessionUser)
+  if (forbidden) return forbidden
 
   // 店舗アクション: 承認
   if (action === 'approve' && sessionUser.role === 'store') {

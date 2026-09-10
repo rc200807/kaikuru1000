@@ -174,9 +174,16 @@ export function buildAdminUsersWhere(searchParams: URLSearchParams): any {
   return where
 }
 
-/** 店舗向け担当顧客一覧のwhere条件（一覧・CSVエクスポート・一括操作で共用） */
-export function buildStoreCustomersWhere(storeId: string, searchParams: URLSearchParams): any {
-  const where: any = { storeId, mergedIntoUserId: null } // 統合で吸収された顧客は一覧に出さない
+/**
+ * 店舗向け担当顧客一覧のwhere条件（一覧・CSVエクスポート・一括操作で共用）。
+ * 表示スコープ（運営者配下の複数店舗）に対応するため配列も受ける。
+ * 店舗の絞り込みは必ずトップレベルに置き、フィルタ条件では上書きできないようにする
+ * （buildStoreDealsWhere と同じ方針）。
+ */
+export function buildStoreCustomersWhere(storeId: string | string[], searchParams: URLSearchParams): any {
+  const ids = Array.isArray(storeId) ? storeId : [storeId]
+  // 統合で吸収された顧客は一覧に出さない
+  const where: any = { storeId: ids.length > 1 ? { in: ids } : ids[0], mergedIntoUserId: null }
   const and = buildCustomerFilterConditions(searchParams, { admin: false })
   if (and.length > 0) where.AND = and
   return where

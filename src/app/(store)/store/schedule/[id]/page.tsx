@@ -72,6 +72,7 @@ const INPUT_CLS = 'w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-s
 /* ─── メイン ─── */
 export default function VisitDetailPage() {
   const { data: session } = useSession()
+  const sessionUserId = (session?.user as any)?.id as string | undefined
   const router = useRouter()
   const params = useParams()
   const bizHours = useBusinessHours()
@@ -107,9 +108,11 @@ export default function VisitDetailPage() {
     setLoading(false)
   }, [scheduleId])
 
+  // 依存には session オブジェクトではなく id（string）を入れる。オブジェクトを入れると、
+  // 店舗切替の useSession().update() で参照が変わった瞬間に取得が走り直す
   useEffect(() => {
-    if (session) fetchVisit()
-  }, [session, fetchVisit])
+    if (sessionUserId) fetchVisit()
+  }, [sessionUserId, fetchVisit])
 
   useEffect(() => {
     fetch('/api/visit-statuses')

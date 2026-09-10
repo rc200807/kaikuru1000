@@ -20,6 +20,9 @@ function dateLabel(iso: string) {
   return formatJstDate(iso, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })
 }
 
+/** ポーリング間隔の倍率。変化が無いほど後ろへ進む（6s → 15s → 30s → 60s） */
+const POLL_BACKOFF = [1, 2.5, 5, 10]
+
 type RenderItem =
   | { kind: 'date'; id: string; label: string }
   | { kind: 'msg'; id: string; message: ChatMessage; grouped: boolean }
@@ -70,14 +73,32 @@ export default function ChatConversation({
     return () => { cancelled = true }
   }, [participantsUrl])
 
+  // 「今の会話の状態」を表す指紋。変化検知（ポーリング間隔の調整）と
+  // 既読POSTを打つかどうかの判定に使う
+  const signatureRef = useRef('')
+  const readSignatureRef = useRef('')
+  // 変化が無い状態が続いたら段階的に間隔を伸ばす（0 が最短）
+  const idleStepRef = useRef(0)
+
   const fetchMessages = useCallback(async () => {
     try {
       const res = await fetch(messagesUrl)
       if (!res.ok) return
       const data = await res.json()
-      setMessages(data.messages ?? [])
+      const list: ChatMessage[] = data.messages ?? []
+      setMessages(list)
       setOtherReadAt(data.otherReadAt ?? null)
-      if (!document.hidden) {
+
+      const signature = `${list.length}:${list[list.length - 1]?.id ?? ''}:${data.otherReadAt ?? ''}`
+      if (signature !== signatureRef.current) idleStepRef.current = 0
+      else idleStepRef.current = Math.min(idleStepRef.current + 1, POLL_BACKOFF.length - 1)
+      signatureRef.current = signature
+
+      // 既読POSTは会話に変化があったときだけ。
+      // 以前は何も変わっていなくてもポーリングのたびに必ず飛んでおり、
+      // アイドルのタブ1枚で 6 秒ごとに 2 本（≒1,200 req/時）のリクエストになっていた
+      if (!document.hidden && signature !== readSignatureRef.current) {
+        readSignatureRef.current = signature
         fetch(readUrl, { method: 'POST' }).then(() => onActivityRef.current?.()).catch(() => {})
       }
     } finally {
@@ -88,19 +109,44 @@ export default function ChatConversation({
     }
   }, [messagesUrl, readUrl])
 
-  // 初回ロード＋ポーリング＋フォーカス更新（room が変わる＝messagesUrl が変わると再構築）
+  // 初回ロード＋ポーリング（room が変わる＝messagesUrl が変わると再構築）。
+  // 日本から1往復 0.3 秒＋毎回 getServerSession が走るので、静かなときは間隔を伸ばし、
+  // 動きがあった瞬間・フォーカス・タブ復帰では即座に最短へ戻す。
   useEffect(() => {
     hasLoadedRef.current = false
     setLoading(true)
     setMessages([])
     atBottomRef.current = true
-    fetchMessages()
-    const timer = setInterval(() => { if (!document.hidden) fetchMessages() }, pollMs)
-    const onFocus = () => fetchMessages()
-    window.addEventListener('focus', onFocus)
+    signatureRef.current = ''
+    readSignatureRef.current = ''
+    idleStepRef.current = 0
+
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const schedule = () => {
+      if (cancelled) return
+      const wait = Math.round(pollMs * POLL_BACKOFF[idleStepRef.current])
+      timer = setTimeout(async () => {
+        if (!document.hidden) await fetchMessages()
+        schedule()
+      }, wait)
+    }
+    const wake = () => {
+      if (cancelled || document.hidden) return
+      idleStepRef.current = 0
+      if (timer) clearTimeout(timer)
+      fetchMessages().finally(schedule)
+    }
+
+    fetchMessages().finally(schedule)
+    window.addEventListener('focus', wake)
+    // hidden 中はスキップしているだけだったので、復帰しても次のティックまで最大 pollMs 待っていた
+    document.addEventListener('visibilitychange', wake)
     return () => {
-      clearInterval(timer)
-      window.removeEventListener('focus', onFocus)
+      cancelled = true
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('focus', wake)
+      document.removeEventListener('visibilitychange', wake)
     }
   }, [fetchMessages, pollMs])
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getStoreContext } from '@/lib/chat'
+import { masterJson } from '@/lib/api-cache'
 
 /** メンション候補: 本部管理者（非sysadmin）＋ 自店舗のメンバー */
 export async function GET() {
@@ -20,5 +21,6 @@ export async function GET() {
     }),
   ])
 
-  return NextResponse.json({ admins, members })
+  // メンション候補は滅多に変わらないので短期キャッシュ（チャットは6秒ポーリングのホットパス）
+  return masterJson({ admins, members })
 }

@@ -135,7 +135,11 @@ export default function ScheduleCalendar() {
     return { from: gridStart, to: addDays(gridStart, 41) }
   }, [view, cursor])
 
+  // スコープ確定前に叩かないこと。確定前は scopeQuery が '' なので、
+  // 複数店舗のユーザーだと「自店舗だけで1回 → 確定後に全店舗でもう1回」と
+  // 同じAPIを2度叩くことになる（他の一覧ページと同じく scope.loading でゲートする）
   const fetchRange = useCallback(async () => {
+    if (scope.loading) return
     setLoading(true)
     try {
       const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
@@ -143,7 +147,7 @@ export default function ScheduleCalendar() {
       if (res.ok) { const data = await res.json(); setSchedules(data.schedules ?? []) }
     } catch { /* ignore */ }
     setLoading(false)
-  }, [range.from, range.to, scope.scopeQuery])
+  }, [range.from, range.to, scope.loading, scope.scopeQuery])
 
   useEffect(() => { fetchRange() }, [fetchRange])
 

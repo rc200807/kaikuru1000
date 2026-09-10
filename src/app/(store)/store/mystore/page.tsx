@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
@@ -12,6 +12,7 @@ import SummaryCard from '@/components/SummaryCard'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import { useStoreBadges } from '@/components/store/StoreBadgesContext'
 
 type StoreInfo = {
   id: string
@@ -66,8 +67,16 @@ function MyStoreContent() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Linked accounts state
-  const [linkedStores, setLinkedStores] = useState<LinkedStoreInfo[]>([])
-  const [linkedLoading, setLinkedLoading] = useState(true)
+  // リンク済み店舗はナビのバッジAPI（/api/store/badges）が currentStore + linkedStores を
+  // まったく同じ内容で既に返している。専用の /api/store/linked-accounts を別に叩くと
+  // 同じ問い合わせで往復が1本増えるだけなので、Context から読む。
+  const badges = useStoreBadges()
+  const sessionStoreId = (session?.user as any)?.id as string | undefined
+  const linkedStores = useMemo<LinkedStoreInfo[]>(
+    () => badges.storeAccounts.filter(s => s.id !== sessionStoreId),
+    [badges.storeAccounts, sessionStoreId],
+  )
+  const linkedLoading = !badges.loaded
   const [showLinkForm, setShowLinkForm] = useState(false)
   const [linkEmail, setLinkEmail] = useState('')
   const [linkPassword, setLinkPassword] = useState('')
@@ -128,17 +137,6 @@ function MyStoreContent() {
     }
   }, [])
 
-  const fetchLinkedAccounts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/store/linked-accounts')
-      if (res.ok) {
-        const data = await res.json()
-        setLinkedStores(data.linkedStores || [])
-      }
-    } catch { /* ignore */ }
-    finally { setLinkedLoading(false) }
-  }, [])
-
   const fetchBusinessHours = useCallback(async () => {
     try {
       const res = await fetch('/api/store/business-hours')
@@ -171,7 +169,7 @@ function MyStoreContent() {
         setLinkEmail('')
         setLinkPassword('')
         setShowLinkForm(false)
-        fetchLinkedAccounts()
+        badges.refresh()
       } else {
         setMessage({ type: 'error', text: data.error || 'リンクに失敗しました' })
       }
@@ -193,7 +191,7 @@ function MyStoreContent() {
       })
       if (res.ok) {
         setMessage({ type: 'success', text: `「${targetName}」のリンクを解除しました` })
-        fetchLinkedAccounts()
+        badges.refresh()
       } else {
         setMessage({ type: 'error', text: 'リンク解除に失敗しました' })
       }
@@ -209,8 +207,8 @@ function MyStoreContent() {
   }, [status, router])
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      const storeId = (session.user as any).id
+    if (status === 'authenticated' && sessionStoreId) {
+      const storeId = sessionStoreId
       fetch(`/api/stores/${storeId}`)
         .then(async r => {
           if (!r.ok) { setLoading(false); return }
@@ -220,7 +218,7 @@ function MyStoreContent() {
         })
         .catch(() => setLoading(false))
       fetchGcalConfig()
-      fetchLinkedAccounts()
+      // リンク済み店舗は StoreBadgesProvider が既に取得している（ここで refresh しない）
       fetchBusinessHours()
       // Notification emails
       fetch('/api/store/profile')
@@ -237,7 +235,7 @@ function MyStoreContent() {
         .then(data => { setLockPinHas(data.hasPin); setLockPinLoading(false) })
         .catch(() => setLockPinLoading(false))
     }
-  }, [status, session])
+  }, [status, sessionStoreId])
 
   // Handle gcal query params from OAuth callback
   useEffect(() => {

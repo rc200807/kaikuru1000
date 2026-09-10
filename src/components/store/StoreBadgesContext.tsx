@@ -34,6 +34,8 @@ type StoreBadges = {
   visitRequests: number
   /** 現在の店舗を先頭に含む配列（2件以上ならアカウント切替を表示する） */
   storeAccounts: LinkedStore[]
+  /** 初回取得が終わったか（店舗情報ページのリンク済みアカウント欄のスケルトン判定に使う） */
+  loaded: boolean
   refresh: () => void
 }
 
@@ -43,6 +45,7 @@ const EMPTY: StoreBadges = {
   chat: 0,
   visitRequests: 0,
   storeAccounts: [],
+  loaded: false,
   refresh: () => {},
 }
 
@@ -64,6 +67,7 @@ export function StoreBadgesProvider({ children }: { children: React.ReactNode })
     chat: 0,
     visitRequests: 0,
     storeAccounts: [],
+    loaded: false,
   })
   const lastFetchedAt = useRef(0)
   const inFlight = useRef(false)
@@ -84,6 +88,7 @@ export function StoreBadgesProvider({ children }: { children: React.ReactNode })
         chat: data?.chat ?? 0,
         visitRequests: data?.visitRequests ?? 0,
         storeAccounts: accounts,
+        loaded: true,
       })
       lastFetchedAt.current = Date.now()
     } catch {

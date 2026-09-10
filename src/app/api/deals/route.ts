@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const isAdmin = ADMIN_ROLES.includes(sessionUser.role)
   if (!isStore && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const t = createTimer()
   const { searchParams } = new URL(request.url)
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
   const maxLimit = isAdmin ? 2000 : 200
@@ -41,10 +42,10 @@ export async function GET(request: NextRequest) {
   const where: any = { ...baseWhere }
   if (conditions.length > 0) where.AND = conditions
 
-  // 集計モード（フィルタ連動サマリー）。
+  // 集計（フィルタ連動サマリー）。
   // countsByStatus はステータス絞り以外の条件を反映（チップ件数・成約率用）、
   // filtered は全条件を反映（件数・買取合計・平均）。
-  if (searchParams.get('stats') === '1') {
+  async function computeStats() {
     const spNoStatus = new URLSearchParams(searchParams.toString())
     spNoStatus.delete('statuses')
     spNoStatus.delete('status')
@@ -64,8 +65,20 @@ export async function GET(request: NextRequest) {
     const count = agg._count._all
     const purchaseSum = agg._sum.purchaseAmount || 0
     const purchaseAvg = count > 0 ? Math.round(purchaseSum / count) : 0
-    return NextResponse.json({ stats: { counts, total: statsTotal, won, winRate, filtered: { count, purchaseSum, purchaseAvg } } })
+    return { counts, total: statsTotal, won, winRate, filtered: { count, purchaseSum, purchaseAvg } }
   }
+
+  // 集計だけを返す旧モード（CSV・一括操作の経路が使う）
+  if (searchParams.get('stats') === '1') {
+    return NextResponse.json({ stats: await t.measure('stats', computeStats) })
+  }
+
+  // 一覧と同じフィルタで集計も返すモード。
+  // 案件一覧は「一覧」と「サマリー」で同じルートを同じ条件で2回叩いていた。
+  // 日本からは1往復 0.3 秒かかる一方、groupBy + aggregate は関数と同一リージョンで数ms。
+  // ページ送りのたびに集計し直すコストを払ってでも、往復を1本減らすほうが速い。
+  const withStats = searchParams.get('withStats') === '1'
+  const statsPromise = withStats ? t.measure('stats', computeStats) : null
 
   // include ではなく select。preConsentSignature（base64署名）や paperContractImages を
   // 一覧のレスポンスに載せないため。
@@ -90,7 +103,6 @@ export async function GET(request: NextRequest) {
     _count: { select: { visitSchedules: true } },
   } as const
 
-  const t = createTimer()
 
   // 「次回訪問」順は、対象ID一覧→VisitScheduleを別途集計→JSで並べ替え、という専用経路を使う
   // （フィルタ済みto-many関連の最小値では通常のorderByが表現できないため）。
@@ -124,7 +136,7 @@ export async function GET(request: NextRequest) {
     const rowById = new Map(rows.map(r => [r.id, r]))
     const ordered = pageIds.map(id => rowById.get(id)).filter((d): d is NonNullable<typeof d> => !!d)
     const deals = await t.measure('list', () => withAssigneeNames(ordered))
-    return t.json({ deals, total: idList.length, page, limit })
+    return t.json({ deals, total: idList.length, page, limit, ...(statsPromise ? { stats: await statsPromise } : {}) })
   }
 
   const [rows, total] = await t.measure('list', () => Promise.all([
@@ -141,7 +153,7 @@ export async function GET(request: NextRequest) {
   // メンバー未解決の案件は訪問の担当者名で補完して「担当」列に出す。
   const deals = await t.measure('list', () => withAssigneeNames(rows))
 
-  return t.json({ deals, total, page, limit })
+  return t.json({ deals, total, page, limit, ...(statsPromise ? { stats: await statsPromise } : {}) })
 }
 
 // 案件作成（店舗・管理者のみ）

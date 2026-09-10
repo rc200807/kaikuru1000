@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { masterJson } from '@/lib/api-cache'
 
 /**
  * 請求項目マスタの一覧（店舗・管理で共用）。
@@ -26,5 +27,7 @@ export async function GET(request: NextRequest) {
       },
     },
   })
-  return NextResponse.json(items)
+  // 純粋なマスタなので短期のブラウザキャッシュを効かせる（案件詳細を開くたびに1往復していた）。
+  // ただし ?all=1 は管理ポータルの設定画面が編集直後に読み直す経路なので素で返す。
+  return all ? NextResponse.json(items) : masterJson(items)
 }

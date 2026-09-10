@@ -156,9 +156,13 @@ export default function StoreSchedulePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, scope.loading, scopeKey])
 
+  // 依存には session オブジェクトではなく id（string）を入れる。オブジェクトを入れると、
+  // 店舗切替の useSession().update() で参照が変わった瞬間に画面中の取得が一斉に走り直す
+  const sessionStoreId = (session?.user as any)?.id as string | undefined
+
   useEffect(() => {
-    if (status === 'authenticated' && !scope.loading) {
-      const storeId = (session.user as any).id
+    if (status === 'authenticated' && !scope.loading && sessionStoreId) {
+      const storeId = sessionStoreId
       Promise.all([
         fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}${scheduleScopeQs}`).then(r => r.json()),
         // 訪問予定の登録先はログイン中の店舗なので、顧客の選択肢も自店舗のみ。
@@ -176,7 +180,7 @@ export default function StoreSchedulePage() {
       }).catch(() => setLoading(false))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, scope.loading, scopeKey])
+  }, [status, sessionStoreId, scope.loading, scopeKey])
 
   async function loadMoreSchedules() {
     setLoadingMore(true)

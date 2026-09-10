@@ -62,6 +62,7 @@ function openPdfBase64(base64: string) {
 /* ─── メイン ─── */
 export default function EstimatePage() {
   const { data: session } = useSession()
+  const sessionUserId = (session?.user as any)?.id as string | undefined
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -133,7 +134,9 @@ export default function EstimatePage() {
     setLoading(false)
   }, [scheduleId])
 
-  useEffect(() => { if (session) fetchData() }, [session, fetchData])
+  // 依存には session オブジェクトではなく id（string）を入れる。オブジェクトを入れると、
+  // 店舗切替の useSession().update() で参照が変わった瞬間に取得が走り直す
+  useEffect(() => { if (sessionUserId) fetchData() }, [sessionUserId, fetchData])
 
   const fmtYen = (n: number) => `¥${n.toLocaleString()}`
   const purchaseBase = visit?.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0) ?? 0

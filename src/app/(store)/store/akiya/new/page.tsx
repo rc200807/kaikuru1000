@@ -27,6 +27,7 @@ type Customer = {
 
 export default function StoreAkiyaNewPage() {
   const { data: session, status: authStatus } = useSession()
+  const sessionUserId = (session?.user as any)?.id as string | undefined
   const router = useRouter()
   const scope = useStoreScope()
   const supportsAkikuru = scope.services.includes('akikuru')
@@ -76,7 +77,7 @@ export default function StoreAkiyaNewPage() {
         .finally(() => { if (!cancelled) setSearchingCustomers(false) })
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [authStatus, session, customerQuery])
+  }, [authStatus, sessionUserId, customerQuery])
 
   async function handleSave() {
     if (saving) return

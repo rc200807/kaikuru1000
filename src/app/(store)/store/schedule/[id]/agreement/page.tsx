@@ -571,6 +571,7 @@ function IdDocumentUploadModal({
 /* ─── メイン ─── */
 export default function AgreementPage() {
   const { data: session } = useSession()
+  const sessionUserId = (session?.user as any)?.id as string | undefined
   const router = useRouter()
   const bizHours = useBusinessHours()
   const params = useParams()
@@ -692,9 +693,11 @@ export default function AgreementPage() {
     finally { setSavingDocs(false) }
   }
 
+  // 依存には session オブジェクトではなく id（string）を入れる。オブジェクトを入れると、
+  // 店舗切替の useSession().update() で参照が変わった瞬間に取得が走り直す
   useEffect(() => {
-    if (session) fetchVisit()
-  }, [session, fetchVisit])
+    if (sessionUserId) fetchVisit()
+  }, [sessionUserId, fetchVisit])
 
   const fmtYen = (n: number) => `¥${n.toLocaleString()}`
 

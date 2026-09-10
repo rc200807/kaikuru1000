@@ -231,33 +231,29 @@ function StoreDealsContent() {
     try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(cols)) } catch { /* ignore */ }
   }
 
-  // 一覧取得（サーバー側検索・絞り込み・ソート。検索はデバウンス）
+  // 一覧取得（サーバー側検索・絞り込み・ソート。検索はデバウンス）。
+  // サマリーは withStats=1 で同じレスポンスに載せる。以前は一覧用とサマリー用で
+  // 同じルートを同じ条件で2回叩いており、日本からは1往復 0.3 秒ぶん丸ごと無駄だった。
   useEffect(() => {
     if (status !== 'authenticated' || !ready || scope.loading) return
     const handle = setTimeout(() => {
       const sp = new URLSearchParams(filterQuery)
       sp.set('page', String(page))
       sp.set('limit', String(LIMIT))
+      sp.set('withStats', '1')
       fetch(`/api/deals?${sp.toString()}${scopeQs}${userIdQs}`)
         .then(r => r.json())
-        .then(data => { setDeals(data?.deals ?? []); setTotal(data?.total ?? 0); setLoading(false) })
+        .then(data => {
+          setDeals(data?.deals ?? [])
+          setTotal(data?.total ?? 0)
+          setStats(data?.stats ?? null)
+          setLoading(false)
+        })
         .catch(() => setLoading(false))
     }, params.search?.trim() ? 300 : 0)
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, ready, scope.loading, scopeKey, filterQuery, page, userId])
-
-  // フィルタ連動サマリー
-  useEffect(() => {
-    if (status !== 'authenticated' || !ready || scope.loading) return
-    const sp = new URLSearchParams(filterQuery)
-    sp.set('stats', '1')
-    fetch(`/api/deals?${sp.toString()}${scopeQs}${userIdQs}`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => setStats(d?.stats ?? null))
-      .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, ready, scope.loading, scopeKey, filterQuery, userId])
 
   // フィルタ・ページ・スコープ変更で選択解除
   useEffect(() => { setSelectedIds(new Set()); setAllMatching(false) }, [filterQuery, page, scopeKey])

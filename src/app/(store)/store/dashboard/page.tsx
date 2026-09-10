@@ -358,10 +358,15 @@ export default function StoreDashboardPage() {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
 
+  // 依存には session オブジェクトではなく id（string）を入れる。
+  // オブジェクトを入れると、店舗切替の useSession().update() で参照が変わった瞬間に
+  // 画面中の取得が一斉に走り直す
+  const sessionUserId = (session?.user as any)?.id as string | undefined
+  const sessionRole = (session?.user as any)?.role as string | undefined
+
   useEffect(() => {
     if (status !== 'authenticated' || scope.loading) return
-    const user = session.user as any
-    if (user.role !== 'store') { router.push('/'); return }
+    if (sessionRole !== 'store') { router.push('/'); return }
     const qs = scope.scopeQuery ? `?${scope.scopeQuery}` : ''
     Promise.all([
       fetch(`/api/store/dashboard${qs}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
@@ -372,7 +377,7 @@ export default function StoreDashboardPage() {
       setLoading(false)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, router, scope.loading, scopeKey])
+  }, [status, sessionUserId, sessionRole, router, scope.loading, scopeKey])
 
   if (loading || !data) return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
 

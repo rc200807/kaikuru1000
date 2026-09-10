@@ -70,6 +70,7 @@ const SORT_FIELD_BY_COL: Record<string, string> = { name: 'furigana', createdAt:
 
 export default function StoreCustomersPage() {
   const { data: session, status } = useSession()
+  const sessionUserId = (session?.user as any)?.id as string | undefined
   const router = useRouter()
   const scope = useStoreScope()
   // scopeKey を依存に入れないと、店舗を切り替えても再取得されない
@@ -196,9 +197,12 @@ export default function StoreCustomersPage() {
   }
 
   // 一覧取得（フィルタ・ソート・ページが変わるたびに全担当顧客対象でサーバー側絞り込み。検索はデバウンス）
+  // 依存には session オブジェクトではなく id（string）を入れる。
+  // オブジェクトを入れると、店舗切替の useSession().update() で参照が変わった瞬間に
+  // 画面中の取得が一斉に走り直す
   useEffect(() => {
-    if (status !== 'authenticated' || !ready || scope.loading) return
-    const storeId = (session!.user as any).id
+    if (status !== 'authenticated' || !ready || scope.loading || !sessionUserId) return
+    const storeId = sessionUserId
     const handle = setTimeout(() => {
       setSearching(true)
       fetch(`/api/stores/${storeId}/customers?page=${page}&limit=${CUSTOMERS_LIMIT}${filterQuery ? `&${filterQuery}` : ''}${scopeQs}`)
@@ -213,7 +217,7 @@ export default function StoreCustomersPage() {
     }, params.search?.trim() ? 300 : 0)
     return () => clearTimeout(handle)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, ready, filterQuery, page, scope.loading, scopeKey])
+  }, [status, sessionUserId, ready, filterQuery, page, scope.loading, scopeKey])
 
   // フィルタ・ページが変わったら行選択を解除
   useEffect(() => {

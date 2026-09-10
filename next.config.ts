@@ -63,9 +63,13 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       'recharts',
       'date-fns',
+      // 'date-fns' とは別バレル。全箇所が `import { ja } from 'date-fns/locale'` の形なので
+      // パッケージ名だけ登録しても効いていなかった
+      'date-fns/locale',
       '@tiptap/react',
       '@tiptap/starter-kit',
-      'lucide-react',
+      // lucide-react は package.json にも node_modules にも src の参照にも存在しない
+      // 死んだ設定だったので削除した
     ],
   },
   async redirects() {

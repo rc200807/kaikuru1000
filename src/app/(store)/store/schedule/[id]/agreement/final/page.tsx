@@ -345,6 +345,7 @@ function SignaturePad({
 /* ─── メイン ─── */
 export default function FinalAgreementPage() {
   const { data: session } = useSession()
+  const sessionUserId = (session?.user as any)?.id as string | undefined
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
@@ -496,9 +497,10 @@ export default function FinalAgreementPage() {
     setLoading(false)
   }, [scheduleId])
 
+  // 依存には session オブジェクトではなく id（string）を入れる（店舗切替の update() で一斉再取得になるため）
   useEffect(() => {
-    if (session) fetchVisit()
-  }, [session, fetchVisit])
+    if (sessionUserId) fetchVisit()
+  }, [sessionUserId, fetchVisit])
 
   // ガード: 身分証未提出なら前のページへ（staff未指定は許容）
   useEffect(() => {

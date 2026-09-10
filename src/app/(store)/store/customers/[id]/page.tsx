@@ -2343,6 +2343,7 @@ export default function StoreCustomerDetailPage() {
           base={{ id: customer.id, name: customer.name, furigana: customer.furigana, email: customer.email, phone: customer.phone, address: customer.address, birthDate: (customer as any).birthDate }}
           onSearch={async (q) => {
             const storeId = (session?.user as any).id
+            // 統合先の候補は自店舗の顧客のみ（storeIds を渡さない）
             const res = await fetch(`/api/stores/${storeId}/customers?search=${encodeURIComponent(q)}&limit=20`)
             const data = await res.json()
             const list = data?.customers ?? (Array.isArray(data) ? data : [])

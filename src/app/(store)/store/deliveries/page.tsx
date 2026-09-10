@@ -8,6 +8,8 @@ import Card from '@/components/Card'
 import Button from '@/components/Button'
 import TextField from '@/components/TextField'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 import EmptyState from '@/components/EmptyState'
 import MessageBanner from '@/components/MessageBanner'
 
@@ -46,12 +48,16 @@ type ShipmentRecord = {
     furigana: string
     phone: string
     email: string | null
+    // 宅配は店舗を直接持たず、顧客の担当店舗が帰属になる
+    storeId: string | null
+    store?: { id: string; name: string; code: string } | null
   }
 }
 
 export default function StoreDeliveriesPage() {
   const { data: session, status: authStatus } = useSession()
   const router = useRouter()
+  const scope = useStoreScope()
 
   const [records, setRecords] = useState<ShipmentRecord[]>([])
   const [shippedCount, setShippedCount] = useState(0)
@@ -63,11 +69,14 @@ export default function StoreDeliveriesPage() {
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
 
+  // scopeQs を依存に入れないと、店舗を切り替えても再取得されない
+  const scopeQs = scope.scopeQuery
   const fetchData = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (search) params.set('q', search)
+    if (scopeQs) params.set('storeIds', scopeQs.replace('storeIds=', ''))
 
     const res = await fetch(`/api/store/delivery-shipments?${params}`)
     if (res.ok) {
@@ -76,9 +85,9 @@ export default function StoreDeliveriesPage() {
       setShippedCount(data.shippedCount)
     }
     setLoading(false)
-  }, [statusFilter, search])
+  }, [statusFilter, search, scopeQs])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { if (!scope.loading) fetchData() }, [fetchData, scope.loading])
 
   if (authStatus === 'loading') return <LoadingSpinner size="lg" className="min-h-screen flex items-center justify-center" />
   if (!session) { router.replace('/store/login'); return null }
@@ -144,19 +153,25 @@ export default function StoreDeliveriesPage() {
         />
       ) : (
         <div className="space-y-3">
-          {records.map(r => (
+          {records.map(r => {
+            // 詳細APIは自店舗のみ許可（403）。他店舗の行はエラー画面に飛ばさず開かせない
+            const isOwn = !scope.sessionStoreId || r.user.storeId === scope.sessionStoreId
+            return (
             <Card
               key={r.id}
               variant="outlined"
               padding="md"
-              className="cursor-pointer hover:border-[var(--portal-primary)] transition-colors"
-              onClick={() => router.push(`/store/deliveries/${r.id}`)}
+              className={isOwn ? 'cursor-pointer hover:border-[var(--portal-primary)] transition-colors' : 'opacity-80'}
+              onClick={isOwn ? () => router.push(`/store/deliveries/${r.id}`) : undefined}
             >
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0">
                   <div>
                     <p className="text-sm font-mono font-semibold text-[var(--md-sys-color-on-surface)]">{r.shipmentNumber}</p>
-                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{r.user.name}({r.user.furigana})</p>
+                    <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                      {r.user.name}({r.user.furigana})
+                      <StoreChip storeId={r.user.storeId} storeName={r.user.store?.name} className="ml-1.5" />
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -167,13 +182,18 @@ export default function StoreDeliveriesPage() {
                     {STATUS_OPTIONS.find(o => o.value === r.status)?.label || r.status}
                   </span>
                   <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{r.shipmentMonth.replace('-', '年')}月</span>
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  {isOwn ? (
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  ) : (
+                    <span className="text-[10px] text-[var(--md-sys-color-on-surface-faint)] whitespace-nowrap">他店舗</span>
+                  )}
                 </div>
               </div>
             </Card>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

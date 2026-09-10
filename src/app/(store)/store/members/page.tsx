@@ -12,6 +12,8 @@ import Modal from '@/components/Modal'
 import TextField from '@/components/TextField'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 import EmptyState from '@/components/EmptyState'
 import ImageCropper from '@/components/ImageCropper'
 import { appendImageToFormData } from '@/lib/image-utils'
@@ -22,6 +24,8 @@ type Member = {
   email: string
   avatar: string | null
   createdAt: string
+  storeId: string
+  store?: { id: string; name: string; code: string } | null
 }
 
 /** 顔写真の丸表示（なければ頭文字） */
@@ -43,6 +47,7 @@ function MemberAvatar({ name, avatar, size = 40 }: { name: string; avatar: strin
 export default function StoreMembersPage() {
   const { data: session, status, update } = useSession()
   const router = useRouter()
+  const scope = useStoreScope()
   const sessionUser = session?.user as any
   const isOwner = !sessionUser?.memberId
   const myMemberId: string | null = sessionUser?.memberId ?? null
@@ -74,9 +79,12 @@ export default function StoreMembersPage() {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
 
+  // scopeKey を依存に入れないと、店舗を切り替えても再取得されない
+  const scopeKey = scope.selectedIds.join(',')
   useEffect(() => {
-    if (status === 'authenticated') {
-      fetch('/api/store/members')
+    if (status === 'authenticated' && !scope.loading) {
+      const scopeQs = scope.scopeQuery ? `?${scope.scopeQuery}` : ''
+      fetch(`/api/store/members${scopeQs}`)
         .then(r => r.json())
         .then(data => {
           setMembers(Array.isArray(data) ? data : [])
@@ -84,7 +92,8 @@ export default function StoreMembersPage() {
         })
         .catch(() => setLoading(false))
     }
-  }, [status])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, scope.loading, scopeKey])
 
   function resetAddForm() {
     setForm({ name: '', email: '' })
@@ -127,7 +136,11 @@ export default function StoreMembersPage() {
       } catch { /* 写真アップロード失敗は致命的ではない */ }
     }
     setSaving(false)
-    setMembers(prev => [...prev, { id: created.id, name: created.name, email: created.email, avatar, createdAt: created.createdAt }])
+    // 追加先は必ずログイン中の店舗（サーバー側で storeId を固定している）
+    setMembers(prev => [...prev, {
+      id: created.id, name: created.name, email: created.email, avatar, createdAt: created.createdAt,
+      storeId: scope.sessionStoreId ?? '',
+    }])
     setPasswordResult({ name: created.name, email: created.email, password: created.password })
     setShowForm(false)
     resetAddForm()
@@ -192,7 +205,9 @@ export default function StoreMembersPage() {
     }
   }
 
-  const canEdit = (member: Member) => isOwner || member.id === myMemberId
+  /** メンバーの追加・編集・削除は自店舗のみ（サーバー側も他店舗は拒否する） */
+  const isOwnStore = (member: Member) => !scope.sessionStoreId || member.storeId === scope.sessionStoreId
+  const canEdit = (member: Member) => isOwnStore(member) && (isOwner || member.id === myMemberId)
 
   if (status === 'loading' || loading) {
     return <LoadingSpinner size="lg" fullPage label="読み込み中..." />
@@ -257,6 +272,11 @@ export default function StoreMembersPage() {
                 <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">
                   追加メンバー（{members.length}名）
                 </p>
+                {scope.isMulti && (
+                  <p className="text-[11px] text-[var(--md-sys-color-on-surface-faint)] mt-1 normal-case">
+                    他店舗のメンバーは閲覧のみです。追加・編集・削除は各店舗のメンバーページから行ってください。
+                  </p>
+                )}
               </div>
               {members.map(member => (
                 <div key={member.id} className="px-4 sm:px-6 py-4 flex items-center gap-4 border-b border-[var(--md-sys-color-surface-container-high)] last:border-0 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors">
@@ -267,6 +287,7 @@ export default function StoreMembersPage() {
                       {member.id === myMemberId && (
                         <span className="text-[10px] font-semibold bg-[var(--status-scheduled-bg)] text-[var(--portal-primary)] px-1.5 py-0.5 rounded-full">あなた</span>
                       )}
+                      <StoreChip storeId={member.storeId} storeName={member.store?.name} />
                     </p>
                     <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{member.email}</p>
                   </div>
@@ -278,7 +299,7 @@ export default function StoreMembersPage() {
                       {member.id === myMemberId && !isOwner ? '写真・情報を編集' : '編集'}
                     </Button>
                   )}
-                  {isOwner && (
+                  {isOwner && isOwnStore(member) && (
                     <Button variant="text" size="sm" danger disabled={deletingId === member.id} onClick={() => setDeleteTarget({ id: member.id, name: member.name })}>
                       削除
                     </Button>

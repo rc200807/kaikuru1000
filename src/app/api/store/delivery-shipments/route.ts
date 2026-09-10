@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveStoreScope } from '@/lib/store-scope'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -21,6 +22,11 @@ function toClient(s: any) {
  *   q      - 送付番号 or 顧客名で検索
  *   from   - 送付月の開始 (YYYY-MM)
  *   to     - 送付月の終了 (YYYY-MM)
+ *   storeIds - 表示スコープ（運営者配下の複数店舗）
+ *
+ * 宅配は店舗を直接持たず、顧客（User.storeId）経由で帰属が決まる。
+ * shippedCount（受取確認バナー）は表示スコープに関わらずログイン中の店舗ぶんだけ数える。
+ * 受取確認できるのは自店舗の送付だけなので、他店舗ぶんを混ぜると押しても何もできない通知になる。
  */
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -36,10 +42,11 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get('q')
   const from = searchParams.get('from')
   const to = searchParams.get('to')
+  const scope = await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
 
   // Build where clause with AND conditions
   const conditions: any[] = [
-    { user: { storeId: sessionUser.id } },
+    { user: { storeId: scope.isMulti ? { in: scope.storeIds } : sessionUser.id } },
     { status: { not: 'draft' } },
   ]
   if (status) conditions.push({ status })
@@ -60,13 +67,17 @@ export async function GET(request: NextRequest) {
     where,
     include: {
       user: {
-        select: { id: true, name: true, furigana: true, phone: true, email: true },
+        select: {
+          id: true, name: true, furigana: true, phone: true, email: true,
+          storeId: true,
+          store: { select: { id: true, name: true, code: true } },
+        },
       },
     },
     orderBy: [{ shipmentMonth: 'desc' }, { createdAt: 'desc' }],
   })
 
-  // Count shipped (for notification badge)
+  // Count shipped (for notification badge)。受取確認できるのは自店舗ぶんだけなので横断させない
   const shippedCount = await prisma.deliveryShipment.count({
     where: { user: { storeId: sessionUser.id }, status: 'shipped' },
   })

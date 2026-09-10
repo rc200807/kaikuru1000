@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveStoreScope } from '@/lib/store-scope'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -23,18 +24,34 @@ const createMemberSchema = z.object({
   password: z.string().min(MIN_PASSWORD_LENGTH, `パスワードは${MIN_PASSWORD_LENGTH}文字以上にしてください`).optional(),
 })
 
-// 店舗メンバー一覧取得
-export async function GET() {
+/**
+ * 店舗メンバー一覧。
+ *
+ * ?storeIds= を渡したときだけ、運営者配下の複数店舗ぶんを返す（閲覧のみ）。
+ * 追加・編集・削除は自店舗に限る（POST は storeId をセッション店舗に固定、
+ * [id] 側は member.storeId !== sessionUser.id を拒否）。
+ *
+ * 注意: このAPIは「担当者の選択肢」としても使われている
+ * （案件一覧のフィルタ・顧客追加ウィザード・顧客詳細）。
+ * そちらからは storeIds を渡さないこと。渡すと他店舗のメンバーを担当に設定できてしまう。
+ */
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
   if (!session || sessionUser.role !== 'store') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const scope = await resolveStoreScope(sessionUser.id, new URL(request.url).searchParams.get('storeIds'))
+
   const members = await prisma.storeMember.findMany({
-    where: { storeId: sessionUser.id },
-    select: { id: true, name: true, email: true, avatar: true, createdAt: true },
-    orderBy: { createdAt: 'asc' },
+    where: { storeId: scope.isMulti ? { in: scope.storeIds } : sessionUser.id },
+    select: {
+      id: true, name: true, email: true, avatar: true, createdAt: true,
+      storeId: true,
+      store: { select: { id: true, name: true, code: true } },
+    },
+    orderBy: [{ storeId: 'asc' }, { createdAt: 'asc' }],
   })
 
   return NextResponse.json(members)

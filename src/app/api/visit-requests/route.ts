@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { enqueueEmail } from '@/lib/email-queue'
 import { intervalNoticeText, visitRequestAvailability } from '@/lib/request-interval'
+import { resolveStoreScope } from '@/lib/store-scope'
 import type { VisitRequestCandidate } from '@/lib/mailer'
 
 // 訪問リクエスト一覧
@@ -19,7 +20,10 @@ export async function GET(request: NextRequest) {
   const where: any = {}
   if (sessionUser.role === 'customer') where.userId = sessionUser.id
   if (sessionUser.role === 'store') {
-    where.storeId = sessionUser.id
+    // 表示スコープ（運営者配下の複数店舗）に対応。承認・逆提案は自店舗のみで、
+    // それは api/visit-requests/[id] のサーバー側ガードとUI側の両方で担保している
+    const scope = await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
+    where.storeId = scope.isMulti ? { in: scope.storeIds } : sessionUser.id
     const userId = searchParams.get('userId')
     if (userId) where.userId = userId
   }
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
     where,
     include: {
       user: { select: { name: true, email: true, phone: true, address: true, customerType: true } },
-      store: { select: { name: true } },
+      store: { select: { id: true, name: true, code: true } },
     },
     orderBy: { createdAt: 'desc' },
   })

@@ -7,6 +7,8 @@ import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import AppBar from '@/components/AppBar'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 
 type PurchaseMemo = {
   id: string
@@ -17,6 +19,8 @@ type PurchaseMemo = {
 
 type Inquiry = {
   id: string
+  storeId: string
+  store?: { id: string; name: string; code: string } | null
   name: string
   furigana: string
   phone: string
@@ -48,6 +52,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }>
 export default function StoreInquiriesPage() {
   const { data: session, status: authStatus } = useSession()
   const router = useRouter()
+  const scope = useStoreScope()
   const [inquiries, setInquiries] = useState<Inquiry[]>([])
   const [storeCode, setStoreCode] = useState('')
   const [inquirySheetUrl, setInquirySheetUrl] = useState<string | null>(null)
@@ -63,15 +68,19 @@ export default function StoreInquiriesPage() {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
+  // scopeKey を依存に入れないと、店舗を切り替えても再取得されない
+  const scopeKey = scope.selectedIds.join(',')
   useEffect(() => {
-    if (authStatus === 'authenticated') fetchInquiries()
-  }, [authStatus, filterStatus])
+    if (authStatus === 'authenticated' && !scope.loading) fetchInquiries()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, filterStatus, scope.loading, scopeKey])
 
   async function fetchInquiries() {
     setLoading(true)
     try {
       const params = new URLSearchParams()
       if (filterStatus !== 'all') params.set('status', filterStatus)
+      if (scope.scopeQuery) params.set('storeIds', scope.selectedIds.join(','))
       const res = await fetch(`/api/store/inquiries?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -298,6 +307,7 @@ export default function StoreInquiriesPage() {
                       </span>
                     </div>
                     <div className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] truncate">{inq.name}</div>
+                    <StoreChip storeId={inq.storeId} storeName={inq.store?.name} />
                     <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] truncate">{inq.furigana}</div>
                     <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex justify-between gap-2 mt-1">
                       <span className="truncate">{typeLabel}</span>
@@ -316,6 +326,7 @@ export default function StoreInquiriesPage() {
             <DetailPane
               inquiry={selected}
               updating={updatingId === selected.id}
+              canEdit={!scope.sessionStoreId || selected.storeId === scope.sessionStoreId}
               onStatusChange={(s) => handleStatusChange(selected.id, s)}
               onOpenCustomer={(uid) => router.push(`/store/customers/${uid}`)}
             />
@@ -334,11 +345,14 @@ export default function StoreInquiriesPage() {
 function DetailPane({
   inquiry,
   updating,
+  canEdit,
   onStatusChange,
   onOpenCustomer,
 }: {
   inquiry: Inquiry
   updating: boolean
+  /** 他店舗の問い合わせはステータスを変更できない（サーバーも404で拒否する） */
+  canEdit: boolean
   onStatusChange: (status: string) => void
   onOpenCustomer: (userId: string) => void
 }) {
@@ -366,19 +380,28 @@ function DetailPane({
         <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
           {typeLabel}
         </span>
+        <StoreChip storeId={inquiry.storeId} storeName={inquiry.store?.name} size="sm" />
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">ステータス:</span>
-          <select
-            value={inquiry.status}
-            onChange={(e) => onStatusChange(e.target.value)}
-            disabled={updating}
-            className="text-xs rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)] disabled:opacity-50"
-          >
-            <option value="new">新規</option>
-            <option value="contacted">対応中</option>
-            <option value="completed">完了</option>
-          </select>
-          {updating && <LoadingSpinner size="sm" />}
+          {canEdit ? (
+            <>
+              <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">ステータス:</span>
+              <select
+                value={inquiry.status}
+                onChange={(e) => onStatusChange(e.target.value)}
+                disabled={updating}
+                className="text-xs rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--store-primary)] disabled:opacity-50"
+              >
+                <option value="new">新規</option>
+                <option value="contacted">対応中</option>
+                <option value="completed">完了</option>
+              </select>
+              {updating && <LoadingSpinner size="sm" />}
+            </>
+          ) : (
+            <span className="text-xs text-[var(--md-sys-color-on-surface-faint)]">
+              他店舗の問い合わせのため変更できません
+            </span>
+          )}
         </div>
       </div>
 

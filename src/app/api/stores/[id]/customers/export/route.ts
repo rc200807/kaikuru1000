@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildStoreCustomersWhere, parseCustomerSort } from '@/lib/customer-list-query'
 import { customersToCsv, csvFileName, CSV_EXPORT_LIMIT } from '@/lib/customer-csv'
+import { resolveStoreScope } from '@/lib/store-scope'
 
 // 担当顧客CSVエクスポート（店舗）
 // フィルタ条件は一覧APIと同じクエリパラメータ。ids指定時は選択された顧客のみ出力。
@@ -25,9 +26,17 @@ export async function GET(
   const { searchParams } = new URL(request.url)
   const ids = (searchParams.get('ids') || '').split(',').map(s => s.trim()).filter(Boolean)
 
+  // 表示スコープ（運営者配下の複数店舗）。ids 指定でもスコープを必ず AND して、
+  // 選択IDに他店舗が混ざっていても出力されないようにする
+  const scope = sessionUser.role === 'store'
+    ? await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
+    : null
+  const scopeStoreFilter = scope?.isMulti ? { in: scope.storeIds } : id
+  const withStore = !!scope?.isMulti
+
   const where = ids.length > 0
-    ? { id: { in: ids }, storeId: id, mergedIntoUserId: null }
-    : buildStoreCustomersWhere(id, searchParams)
+    ? { id: { in: ids }, storeId: scopeStoreFilter, mergedIntoUserId: null }
+    : buildStoreCustomersWhere(scope?.isMulti ? scope.storeIds : id, searchParams)
 
   const customers = await prisma.user.findMany({
     where,
@@ -35,15 +44,18 @@ export async function GET(
       name: true, furigana: true, email: true, phone: true, address: true,
       customerType: true, customerTypes: true, visitFrequencyMonths: true,
       leadSource: true, createdAt: true,
+      ...(withStore ? { store: { select: { name: true } } } : {}),
     },
     orderBy: parseCustomerSort(searchParams, { name: 'asc' }),
     take: CSV_EXPORT_LIMIT,
   })
 
   // 個人情報を含む出力のため監査用にログを残す
-  console.log(`[CustomerExport] store=${id} by=${sessionUser.id} rows=${customers.length} ids=${ids.length > 0}`)
+  const scopeLog = withStore ? ` scope=${scope!.storeIds.join('|')}` : ''
+  console.log(`[CustomerExport] store=${id} by=${sessionUser.id} rows=${customers.length} ids=${ids.length > 0}${scopeLog}`)
 
-  const csv = customersToCsv(customers, { includeStore: false })
+  // 複数店舗を表示中のときだけ「担当店舗」列を足す（単一店舗のCSVは従来どおり）
+  const csv = customersToCsv(customers, { includeStore: withStore })
   return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',

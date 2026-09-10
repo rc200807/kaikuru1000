@@ -23,6 +23,8 @@ type DataTableProps<T> = {
   className?: string
   /** 行選択（チェックボックス）を有効にする */
   selectable?: boolean
+  /** 行ごとに選択可否を制御する（他店舗の行など、一括操作の対象外にしたいとき） */
+  rowSelectable?: (row: T) => boolean
   selectedKeys?: Set<string>
   onSelectionChange?: (keys: Set<string>) => void
   /** サーバーサイドソート。指定するとクライアント側ソートは無効になる */
@@ -43,6 +45,7 @@ export default function DataTable<T>({
   emptyDescription,
   className = '',
   selectable = false,
+  rowSelectable,
   selectedKeys,
   onSelectionChange,
   serverSort,
@@ -76,7 +79,8 @@ export default function DataTable<T>({
 
   // 選択状態
   const selected = selectedKeys ?? new Set<string>()
-  const pageKeys = data.map(rowKey)
+  // 選択できる行のキーだけを「全選択」の対象にする
+  const pageKeys = data.filter(r => !rowSelectable || rowSelectable(r)).map(rowKey)
   const allChecked = pageKeys.length > 0 && pageKeys.every(k => selected.has(k))
   const someChecked = pageKeys.some(k => selected.has(k))
 
@@ -230,8 +234,9 @@ export default function DataTable<T>({
                       type="checkbox"
                       aria-label="行を選択"
                       checked={selected.has(key)}
+                      disabled={!!rowSelectable && !rowSelectable(row)}
                       onChange={() => toggleRow(key)}
-                      className="w-4 h-4 accent-[var(--portal-primary,#374151)] cursor-pointer align-middle"
+                      className="w-4 h-4 accent-[var(--portal-primary,#374151)] cursor-pointer align-middle disabled:cursor-not-allowed disabled:opacity-40"
                     />
                   </td>
                 )}

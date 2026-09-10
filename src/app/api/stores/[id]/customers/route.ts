@@ -4,7 +4,18 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildStoreCustomersWhere, parseCustomerSort } from '@/lib/customer-list-query'
 import { createTimer } from '@/lib/api-timing'
+import { resolveStoreScope } from '@/lib/store-scope'
 
+/**
+ * 店舗の担当顧客一覧。
+ *
+ * URL の [id] は「ログイン中の店舗」の再宣言で、店舗ロールは自分以外を指定できない（403）。
+ * 表示スコープ（運営者配下の複数店舗）は ?storeIds= で渡し、サーバー側で検証する。
+ *
+ * この形にしている理由: 同じAPIを「顧客ピッカー」としても使っている画面がある
+ * （訪問予定の作成・空き家案件の作成・顧客統合）。それらは書き込みフローの入力なので、
+ * storeIds を渡さない限り自店舗固定のまま残る＝スコープが漏れ込む事故が起きない。
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -25,7 +36,10 @@ export async function GET(
   const limit = Math.max(1, Math.min(200, parseInt(searchParams.get('limit') || '50', 10)))
 
   // 検索・タイプ・登録日・訪問状況などの絞り込みは共有ヘルパーで解釈（全担当顧客対象）
-  const where = buildStoreCustomersWhere(id, searchParams)
+  const scope = sessionUser.role === 'store'
+    ? await resolveStoreScope(sessionUser.id, searchParams.get('storeIds'))
+    : null
+  const where = buildStoreCustomersWhere(scope?.isMulti ? scope.storeIds : id, searchParams)
   const orderBy = parseCustomerSort(searchParams, { name: 'asc' })
 
   const t = createTimer()
@@ -48,6 +62,8 @@ export async function GET(
       // 振込先口座情報
       bankName: true, branchName: true, accountType: true,
       accountNumber: true, accountHolder: true,
+      storeId: true,
+      store: { select: { id: true, name: true, code: true } },
       visitSchedules: {
         where: { visitDate: { gte: new Date() }, status: 'scheduled' },
         orderBy: { visitDate: 'asc' },

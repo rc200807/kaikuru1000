@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AppBar from '@/components/AppBar'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
 import Button from '@/components/Button'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
@@ -51,6 +52,7 @@ function presetRange(kind: 'thisMonth' | 'lastMonth' | 'last3' | 'thisYear'): { 
 export default function KobutsuLedgerPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
+  const scope = useStoreScope()
 
   const initial = useMemo(() => presetRange('thisMonth'), [])
   const [from, setFrom] = useState(initial.from)
@@ -120,6 +122,21 @@ export default function KobutsuLedgerPage() {
       />
 
       <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-3">
+        {/*
+          古物台帳は法令上、営業所（店舗）単位で備えるもの。
+          複数店舗を表示中でも、この画面だけは常にログイン中の店舗の記録しか出さない。
+          スコープ帯と食い違って見えるので、その理由を明示する。
+        */}
+        {scope.isMulti && (
+          <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+            古物台帳は営業所（店舗）ごとに備えるものなので、この画面は
+            <span className="font-semibold text-[var(--md-sys-color-on-surface)] mx-1">
+              {scope.availableStores.find(s => s.id === scope.sessionStoreId)?.name ?? 'ログイン中の店舗'}
+            </span>
+            の記録のみを表示しています。
+          </div>
+        )}
+
         {/* 期間・検索 */}
         <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3 flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-3">

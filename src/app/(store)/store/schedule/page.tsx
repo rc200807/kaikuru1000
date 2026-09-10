@@ -141,24 +141,28 @@ export default function StoreSchedulePage() {
   }, [])
 
   useEffect(() => {
-    if (status !== 'authenticated') return
+    if (status !== 'authenticated' || scope.loading) return
+    const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
     // 顧客からの訪問リクエスト
-    fetch('/api/visit-requests?status=pending,counter_proposed&requestedBy=customer')
+    fetch(`/api/visit-requests?status=pending,counter_proposed&requestedBy=customer${scopeQs}`)
       .then(r => r.ok ? r.json() : { requests: [] })
       .then(data => { setVisitRequests(data.requests || []); setVisitRequestsLoading(false) })
       .catch(() => setVisitRequestsLoading(false))
     // 店舗からの訪問提案
-    fetch('/api/visit-requests?requestedBy=store')
+    fetch(`/api/visit-requests?requestedBy=store${scopeQs}`)
       .then(r => r.ok ? r.json() : { requests: [] })
       .then(data => { setStoreProposals(data.requests || []); setStoreProposalsLoading(false) })
       .catch(() => setStoreProposalsLoading(false))
-  }, [status])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, scope.loading, scopeKey])
 
   useEffect(() => {
     if (status === 'authenticated' && !scope.loading) {
       const storeId = (session.user as any).id
       Promise.all([
         fetch(`/api/visit-schedules?storeId=${storeId}&page=1&limit=${SCHEDULES_LIMIT}${scheduleScopeQs}`).then(r => r.json()),
+        // 訪問予定の登録先はログイン中の店舗なので、顧客の選択肢も自店舗のみ。
+        // ここに storeIds を渡すと他店舗の顧客に訪問予定を作れてしまう
         fetch(`/api/stores/${storeId}/customers`).then(r => r.json()),
       ]).then(([schedData, custData]) => {
         const schedList = schedData?.schedules ?? (Array.isArray(schedData) ? schedData : [])
@@ -404,12 +408,19 @@ export default function StoreSchedulePage() {
               </span>
             </h3>
             <div className="space-y-3">
-              {visitRequests.map(req => (
+              {visitRequests.map(req => {
+                // 承認・逆提案は自店舗のリクエストのみ（サーバー側も403で拒否する）。
+                // 承認すると req.storeId で訪問予定が作られるため、他店舗ぶんは操作させない
+                const canAct = !scope.sessionStoreId || req.storeId === scope.sessionStoreId
+                return (
                 <Card key={req.id} variant="elevated" padding="none">
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div>
-                        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{req.user?.name || req.customerName} 様</p>
+                        <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] flex items-center gap-1.5 flex-wrap">
+                          {req.user?.name || req.customerName} 様
+                          <StoreChip storeId={req.storeId} storeName={req.store?.name} />
+                        </p>
                         {(req.user?.phone || req.customerPhone) && (
                           <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{req.user?.phone || req.customerPhone}</p>
                         )}
@@ -439,7 +450,7 @@ export default function StoreSchedulePage() {
                             <span className="text-sm text-[var(--md-sys-color-on-surface)]">
                               第{n}希望: {format(new Date(d), 'M/d（E）', { locale: ja })} {s}〜{e}
                             </span>
-                            {req.status !== 'counter_proposed' && (
+                            {req.status !== 'counter_proposed' && canAct && (
                               <Button size="sm" onClick={() => handleApprove(req.id, n)}>
                                 この日程で承認
                               </Button>
@@ -450,18 +461,25 @@ export default function StoreSchedulePage() {
                     </div>
                     {req.status !== 'counter_proposed' && (
                       <div className="mt-3">
-                        <Button
-                          variant="outlined"
-                          size="sm"
-                          onClick={() => setCounterModal({ requestId: req.id, customerName: req.user?.name || req.customerName })}
-                        >
-                          別の日程を提案
-                        </Button>
+                        {canAct ? (
+                          <Button
+                            variant="outlined"
+                            size="sm"
+                            onClick={() => setCounterModal({ requestId: req.id, customerName: req.user?.name || req.customerName })}
+                          >
+                            別の日程を提案
+                          </Button>
+                        ) : (
+                          <p className="text-xs text-[var(--md-sys-color-on-surface-faint)]">
+                            他店舗宛のリクエストのため、この画面からは承認・提案できません
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
                 </Card>
-              ))}
+                )
+              })}
             </div>
           </section>
         )}
@@ -489,7 +507,10 @@ export default function StoreSchedulePage() {
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div>
-                          <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{req.user?.name} 様</p>
+                          <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)] flex items-center gap-1.5 flex-wrap">
+                            {req.user?.name} 様
+                            <StoreChip storeId={req.storeId} storeName={req.store?.name} />
+                          </p>
                           {req.user?.phone && (
                             <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">{req.user.phone}</p>
                           )}

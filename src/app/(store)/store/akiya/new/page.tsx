@@ -61,6 +61,7 @@ export default function StoreAkiyaNewPage() {
     setSearchingCustomers(true)
     const timer = setTimeout(() => {
       const q = customerQuery.trim()
+      // 空き家案件の登録先はログイン中の店舗なので、顧客の選択肢も自店舗のみ（storeIds を渡さない）
       fetch(`/api/stores/${storeId}/customers?limit=100${q ? `&search=${encodeURIComponent(q)}` : ''}`)
         .then(r => (r.ok ? r.json() : { customers: [] }))
         .then(data => {

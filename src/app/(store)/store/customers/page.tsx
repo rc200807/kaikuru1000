@@ -14,6 +14,8 @@ import { useBusinessHours } from '@/hooks/useBusinessHours'
 import DataTable from '@/components/DataTable'
 import type { Column } from '@/components/DataTable'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import { useStoreScope } from '@/components/store/StoreScopeContext'
+import StoreChip from '@/components/store/StoreChip'
 import MessageBanner from '@/components/MessageBanner'
 import FilterChipBar from '@/components/list/FilterChipBar'
 import BulkActionBar from '@/components/list/BulkActionBar'
@@ -34,6 +36,8 @@ type Customer = {
   phone: string
   address: string
   customerType: string
+  storeId?: string | null
+  store?: { id: string; name: string; code: string } | null
   createdAt?: string | null
   lastVisitDate?: string | null
   nextVisit?: { visitDate: string; startTime?: string | null } | null
@@ -67,6 +71,10 @@ const SORT_FIELD_BY_COL: Record<string, string> = { name: 'furigana', createdAt:
 export default function StoreCustomersPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const scope = useStoreScope()
+  // scopeKey を依存に入れないと、店舗を切り替えても再取得されない
+  const scopeKey = scope.selectedIds.join(',')
+  const scopeQs = scope.scopeQuery ? `&${scope.scopeQuery}` : ''
   const bizHours = useBusinessHours()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
@@ -189,11 +197,11 @@ export default function StoreCustomersPage() {
 
   // 一覧取得（フィルタ・ソート・ページが変わるたびに全担当顧客対象でサーバー側絞り込み。検索はデバウンス）
   useEffect(() => {
-    if (status !== 'authenticated' || !ready) return
+    if (status !== 'authenticated' || !ready || scope.loading) return
     const storeId = (session!.user as any).id
     const handle = setTimeout(() => {
       setSearching(true)
-      fetch(`/api/stores/${storeId}/customers?page=${page}&limit=${CUSTOMERS_LIMIT}${filterQuery ? `&${filterQuery}` : ''}`)
+      fetch(`/api/stores/${storeId}/customers?page=${page}&limit=${CUSTOMERS_LIMIT}${filterQuery ? `&${filterQuery}` : ''}${scopeQs}`)
         .then(r => r.json())
         .then(data => {
           const list = data?.customers ?? (Array.isArray(data) ? data : [])
@@ -205,7 +213,7 @@ export default function StoreCustomersPage() {
     }, params.search?.trim() ? 300 : 0)
     return () => clearTimeout(handle)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, session, ready, filterQuery, page])
+  }, [status, session, ready, filterQuery, page, scope.loading, scopeKey])
 
   // フィルタ・ページが変わったら行選択を解除
   useEffect(() => {
@@ -215,7 +223,7 @@ export default function StoreCustomersPage() {
 
   async function refreshCustomers() {
     const storeId = (session?.user as any).id
-    const listRes = await fetch(`/api/stores/${storeId}/customers?page=${page}&limit=${CUSTOMERS_LIMIT}${filterQuery ? `&${filterQuery}` : ''}`)
+    const listRes = await fetch(`/api/stores/${storeId}/customers?page=${page}&limit=${CUSTOMERS_LIMIT}${filterQuery ? `&${filterQuery}` : ''}${scopeQs}`)
     const listData = await listRes.json()
     const list = listData?.customers ?? (Array.isArray(listData) ? listData : [])
     setCustomers(list)
@@ -270,14 +278,18 @@ export default function StoreCustomersPage() {
   }
 
   // ---- 一括操作 ----
+  // 一括変更（タイプ変更）はサーバー側でログイン中の店舗に固定されている。
+  // 他店舗の行を選ばせると「変更したのに反映されない」ように見えるので、選択自体をさせない
+  const isOwnCustomer = (c: Customer) => !scope.sessionStoreId || (c.storeId ?? null) === scope.sessionStoreId
   const effectiveSelectedCount = allMatching ? customersTotal : selectedIds.size
 
   function handleBulkAction(key: string) {
     const storeId = (session?.user as any).id
     if (key === 'export') {
-      const qs = allMatching || selectedIds.size === 0
+      const base = allMatching || selectedIds.size === 0
         ? filterQuery
         : `ids=${encodeURIComponent([...selectedIds].join(','))}`
+      const qs = [base, scope.scopeQuery].filter(Boolean).join('&')
       window.location.href = `/api/stores/${storeId}/customers/export${qs ? `?${qs}` : ''}`
       return
     }
@@ -451,6 +463,11 @@ export default function StoreCustomersPage() {
       sortValue: (c) => c.furigana,
     },
     {
+      key: 'store',
+      header: '店舗',
+      render: (c) => <StoreChip storeId={c.storeId} storeName={c.store?.name} size="sm" />,
+    },
+    {
       key: 'contact',
       header: '連絡先',
       hideOnMobile: true,
@@ -511,12 +528,15 @@ export default function StoreCustomersPage() {
     },
   ]
 
-  // 「列を編集」の設定を反映（氏名は常に先頭固定）
+  // 「列を編集」の設定を反映（氏名は常に先頭固定）。
+  // 店舗列は複数店舗を表示しているときだけ、氏名の直後に固定で差し込む
+  const storeColumn = customerColumns.find(c => c.key === 'store')!
   const displayedColumns = [
     customerColumns[0],
+    ...(scope.isMulti ? [storeColumn] : []),
     ...visibleCols
       .map(k => customerColumns.find(c => c.key === k))
-      .filter(Boolean) as Column<Customer>[],
+      .filter((c): c is Column<Customer> => !!c && c.key !== 'store'),
   ]
 
   return (
@@ -632,6 +652,7 @@ export default function StoreCustomersPage() {
             { key: 'setType', label: 'タイプ変更' },
             { key: 'export', label: 'CSVエクスポート' },
           ]}
+          scopeNote={scope.isMulti ? 'タイプ変更はログイン中の店舗の顧客にのみ適用されます。' : null}
           onAction={handleBulkAction}
           busyAction={bulkBusy}
         />
@@ -641,10 +662,11 @@ export default function StoreCustomersPage() {
             columns={displayedColumns}
             data={customers}
             rowKey={(c) => c.id}
-            onRowClick={(c) => router.push(`/store/customers/${c.id}`)}
+            onRowClick={(c) => { if (isOwnCustomer(c)) router.push(`/store/customers/${c.id}`) }}
             emptyTitle={filterQuery ? '検索結果がありません' : '担当顧客がいません'}
             selectable
-            selectedKeys={allMatching ? new Set(customers.map(c => c.id)) : selectedIds}
+            rowSelectable={isOwnCustomer}
+            selectedKeys={allMatching ? new Set(customers.filter(isOwnCustomer).map(c => c.id)) : selectedIds}
             onSelectionChange={(keys) => { setSelectedIds(keys); setAllMatching(false) }}
             serverSort={serverSort}
             onSortChange={handleSortChange}

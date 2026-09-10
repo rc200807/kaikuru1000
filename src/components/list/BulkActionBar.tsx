@@ -22,12 +22,14 @@ type Props = {
   onAction: (key: string) => void
   /** 実行中のアクションキー（ボタンをdisableする） */
   busyAction?: string | null
+  /** 複数店舗を表示中に「適用範囲はログイン中の店舗だけ」を伝える注記 */
+  scopeNote?: string | null
 }
 
 export default function BulkActionBar({
   selectedCount, totalCount, allMatching,
   onSelectAllMatching, onClearSelection,
-  actions, onAction, busyAction,
+  actions, onAction, busyAction, scopeNote,
 }: Props) {
   const effectiveCount = allMatching ? totalCount : selectedCount
   if (effectiveCount === 0) return null
@@ -37,6 +39,9 @@ export default function BulkActionBar({
       <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)] whitespace-nowrap">
         {allMatching ? `該当する全${totalCount.toLocaleString()}件を選択中` : `${selectedCount.toLocaleString()}件を選択中`}
       </span>
+      {scopeNote && (
+        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{scopeNote}</span>
+      )}
       {!allMatching && selectedCount < totalCount && (
         <button
           type="button"

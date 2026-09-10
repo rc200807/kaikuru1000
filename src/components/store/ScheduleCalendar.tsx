@@ -66,15 +66,22 @@ const STATUS_LABEL: Record<string, string> = {
   scheduled: '予定', pending: '未対応', completed: '対応完了', rescheduled: 'リスケ', absent: '不在', cancelled: 'キャンセル', revisit: '後日引取',
 }
 
-// ステータス別の色（チップ・ブロック）
+/**
+ * ステータス別の色（チップ・ブロック）。
+ *
+ * Tailwind の `dark:` は使わないこと。店舗ポータルは data-portal でライト固定なのに、
+ * `dark:` は OS の配色設定（prefers-color-scheme）で切り替わるため、
+ * OSがダークの端末では「白地に 40% の濃紺（＝中間色）＋ ほぼ白の文字」になって読めなくなる。
+ * 淡い背景＋濃い文字（-100 / -900）で固定し、どの端末でも同じコントラストにする。
+ */
 function statusStyle(status: string): string {
   switch (status) {
-    case 'completed': return 'bg-green-100 text-green-900 border-green-300 dark:bg-green-900/40 dark:text-green-200 dark:border-green-700'
-    case 'scheduled': return 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700'
-    case 'rescheduled': return 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700'
-    case 'absent': return 'bg-gray-200 text-gray-800 border-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600'
-    case 'revisit': return 'bg-orange-100 text-orange-900 border-orange-300 dark:bg-orange-900/40 dark:text-orange-200 dark:border-orange-700'
-    case 'pending': return 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-900/40 dark:text-purple-200 dark:border-purple-700'
+    case 'completed': return 'bg-green-100 text-green-900 border-green-400'
+    case 'scheduled': return 'bg-blue-100 text-blue-900 border-blue-400'
+    case 'rescheduled': return 'bg-amber-100 text-amber-900 border-amber-400'
+    case 'absent': return 'bg-gray-200 text-gray-900 border-gray-400'
+    case 'revisit': return 'bg-orange-100 text-orange-900 border-orange-400'
+    case 'pending': return 'bg-purple-100 text-purple-900 border-purple-400'
     default: return 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)] border-[var(--md-sys-color-outline-variant)]'
   }
 }
@@ -268,10 +275,10 @@ function MonthChip({ e, onEvent }: { e: CalEvent; onEvent: (e: CalEvent, ev: Rea
       type="button"
       onClick={(ev) => onEvent(e, ev)}
       title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${storeTitle(e)}`}
-      className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[10px] leading-tight border hover:opacity-80 ${statusStyle(e.status)}`}
+      className={`block w-full text-left truncate rounded px-1.5 py-0.5 text-[11px] leading-tight border font-medium hover:ring-2 hover:ring-black/20 ${statusStyle(e.status)}`}
       style={storeBarStyle(e.storeColor)}
     >
-      {e.start ? <span className="font-medium">{e.start} </span> : null}{e.name}{e.staffName ? <span className="opacity-70">・{e.staffName}</span> : null}
+      {e.start ? <span className="font-bold tabular-nums">{e.start} </span> : null}{e.name}{e.staffName ? <span className="font-normal">・{e.staffName}</span> : null}
     </button>
   )
 }
@@ -393,7 +400,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
         {/* 時間未定ストリップ */}
         {hasUntimed && (
           <div className="grid border-y border-[var(--md-sys-color-outline-variant)]" style={{ gridTemplateColumns: `48px repeat(${days.length}, 1fr)` }}>
-            <div className="text-[9px] text-[var(--md-sys-color-on-surface-variant)] flex items-center justify-end pr-1">未定</div>
+            <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] flex items-center justify-end pr-1">未定</div>
             {days.map((d) => (
               <div key={ymd(d)} className="p-0.5 space-y-0.5 border-l border-[var(--md-sys-color-outline-variant)]">
                 {(eventsByDate[ymd(d)] ?? []).filter(e => toMin(e.start) === null).map(e => (
@@ -402,7 +409,7 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
                     type="button"
                     onClick={(ev) => onEvent(e, ev)}
                     title={`${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${storeTitle(e)}`}
-                    className={`block w-full text-left truncate rounded px-1 py-0.5 text-[10px] border ${statusStyle(e.status)}`}
+                    className={`block w-full text-left truncate rounded px-1 py-0.5 text-[11px] font-medium leading-tight border hover:ring-2 hover:ring-black/20 ${statusStyle(e.status)}`}
                     style={storeBarStyle(e.storeColor)}
                   >
                     {e.kind === 'revisit' ? '引取: ' : ''}{e.name}{e.staffName ? `（${e.staffName}）` : ''}
@@ -439,31 +446,35 @@ function TimeGrid({ days, eventsByDate, todayKey, bizStartH, bizEndH, hourHeight
                   const top = ((s - startH * 60) / 60) * hourHeight
                   const height = Math.max(20, ((en - s) / 60) * hourHeight - 2)
                   const pos = lay[e.id] ?? { left: 0, width: 1 }
-                  const tall = height >= 46
+                  // 何行まで入るか。leading-tight で 1行 ≈ 13px なので、
+                  // 3行（時刻・顧客名・担当）が 46px、4行目が 58px、5行目が 72px の目安
+                  const tall = height >= 58
+                  const taller = height >= 72
                   return (
                     <button
                       key={e.id}
                       type="button"
                       onClick={(ev) => onEvent(e, ev)}
                       title={`${e.start ?? ''}${e.end ? `〜${e.end}` : ''} ${e.name}${e.staffName ? ` / 担当 ${e.staffName}` : ''}${e.purposeName ? ` / ${e.purposeName}` : ''}${e.address ? ` / ${e.address}` : ''}${e.note ? ` / ${e.note}` : ''}${storeTitle(e)}`}
-                      className={`absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left leading-tight hover:opacity-90 hover:z-10 shadow-sm ${statusStyle(e.status)}`}
+                      className={`absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left leading-tight hover:z-10 hover:ring-2 hover:ring-black/20 shadow-sm ${statusStyle(e.status)}`}
                       style={{ top, height, left: `calc(${pos.left * 100}% + 2px)`, width: `calc(${pos.width * 100}% - 4px)`, ...storeBarStyle(e.storeColor) }}
                     >
-                      <div className="text-[10px] font-semibold truncate">
+                      <div className="text-[11px] font-bold tabular-nums truncate">
                         {e.start}{e.end ? `〜${e.end}` : ''}{e.kind === 'revisit' ? '（引取）' : ''}
                       </div>
-                      <div className="text-[11px] font-medium truncate flex items-center gap-1">
+                      <div className="text-[12px] font-semibold truncate flex items-center gap-1">
                         <StoreDot e={e} />
                         <span className="truncate">{e.name} 様</span>
                       </div>
                       {/* 訪問担当者は時間枠で最初に知りたい情報なので、高さが足りなくても必ず出す */}
-                      <div className="text-[9px] font-medium truncate">
+                      <div className="text-[10px] font-medium truncate">
                         {e.staffName ? `担当 ${e.staffName}` : '担当 未設定'}
                       </div>
+                      {/* 下段も opacity で薄めない（背景が淡色なので薄めると一気に読めなくなる） */}
                       {tall && (
-                        <div className="text-[9px] opacity-80 truncate">{STATUS_LABEL[e.status] ?? e.status}{e.purposeName ? ` ・ ${e.purposeName}` : ''}{e.address ? ` ・ ${e.address}` : ''}</div>
+                        <div className="text-[10px] truncate">{STATUS_LABEL[e.status] ?? e.status}{e.purposeName ? ` ・ ${e.purposeName}` : ''}{e.address ? ` ・ ${e.address}` : ''}</div>
                       )}
-                      {tall && e.note && <div className="text-[9px] opacity-70 truncate">{e.note}</div>}
+                      {taller && e.note && <div className="text-[10px] truncate">{e.note}</div>}
                     </button>
                   )
                 })}

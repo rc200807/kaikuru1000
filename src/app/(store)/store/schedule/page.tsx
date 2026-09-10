@@ -626,7 +626,7 @@ export default function StoreSchedulePage() {
               {upcomingRevisits.map(schedule => (
                 <Card key={`revisit-${schedule.id}`} variant="elevated" padding="none">
                   <div className="flex items-start gap-4 p-4">
-                    <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-[var(--md-sys-shape-medium)] p-3 text-center min-w-16 flex-shrink-0">
+                    <div className="bg-orange-100 text-orange-900 rounded-[var(--md-sys-shape-medium)] p-3 text-center min-w-16 flex-shrink-0">
                       <div className="text-xs font-medium">{format(new Date(schedule.revisitDate!), 'M月', { locale: ja })}</div>
                       <div className="text-2xl font-bold leading-none">{format(new Date(schedule.revisitDate!), 'd', { locale: ja })}</div>
                       <div className="text-xs">{format(new Date(schedule.revisitDate!), '（E）', { locale: ja })}</div>
@@ -634,7 +634,7 @@ export default function StoreSchedulePage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{schedule.user.name} 様</p>
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700">
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-900 border border-orange-400">
                           後日引取
                         </span>
                         <StoreChip storeId={schedule.store?.id} storeName={schedule.store?.name} />
@@ -648,7 +648,7 @@ export default function StoreSchedulePage() {
                         )}
                       </p>
                       {schedule.revisitNote && (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{schedule.revisitNote}</p>
+                        <p className="text-xs text-orange-800 mt-1">{schedule.revisitNote}</p>
                       )}
                       <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                         <Button
@@ -830,7 +830,7 @@ export default function StoreSchedulePage() {
         <form id="add-schedule-form" onSubmit={handleAddSchedule} className="space-y-4">
           {/* 複数店舗表示中でも、登録は常にログイン中の店舗に帰属する（帰属事故防止の明示） */}
           {scope.isMulti && (
-            <div className="px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-200">
+            <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900">
               登録先: <span className="font-semibold">{(session?.user as any)?.name ?? 'ログイン中の店舗'}</span>（複数店舗を表示中ですが、新しい予定はログイン中の店舗に登録されます）
             </div>
           )}

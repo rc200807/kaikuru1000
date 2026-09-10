@@ -7,6 +7,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { DEFAULT_STORE_NAV_KEYS, STORE_NAV_KEYS } from '@/lib/store-nav'
+import type { StoreScopeBootstrap } from '@/lib/store-bootstrap'
 
 export type ScopeStore = {
   id: string
@@ -61,10 +62,6 @@ function storageKey(storeId: string) {
   return `storeScope:${storeId}`
 }
 
-function navStorageKey(storeId: string) {
-  return `storeNavKeys:${storeId}`
-}
-
 /** 未知キーを除いた文字列配列に正規化 */
 function sanitizeNavKeys(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null
@@ -72,34 +69,66 @@ function sanitizeNavKeys(value: unknown): string[] | null {
   return keys.length > 0 ? keys : null
 }
 
-export function StoreScopeProvider({ children }: { children: React.ReactNode }) {
+/** localStorage から選択店舗を復元する（無効IDを除き、セッション店舗を必ず含める） */
+function readSelection(sessionStoreId: string, stores: ScopeStore[]): string[] {
+  const valid = new Set(stores.map(s => s.id))
+  let restored: string[] = []
+  try {
+    const raw = localStorage.getItem(storageKey(sessionStoreId))
+    if (raw) restored = (JSON.parse(raw) as string[]).filter(id => valid.has(id))
+  } catch { /* ignore */ }
+  if (!restored.includes(sessionStoreId)) restored = [sessionStoreId, ...restored]
+  return restored
+}
+
+/**
+ * @param initial サーバー（layout.tsx）が解決した初期値。
+ *   これがあると `/api/store/organization` のクライアント往復（実測 0.3 秒）が丸ごと消える。
+ *   null のとき（ロール不一致・取得失敗）は従来どおりクライアントで取得する。
+ */
+export function StoreScopeProvider({ initial, children }: { initial?: StoreScopeBootstrap | null; children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const user = session?.user as any
   const sessionStoreId: string | null = user?.role === 'store' ? (user.id as string) : null
 
-  const [availableStores, setAvailableStores] = useState<ScopeStore[]>([])
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [isOrgAdmin, setIsOrgAdmin] = useState(false)
-  const [operatorName, setOperatorName] = useState<string | null>(null)
-  const [services, setServices] = useState<string[]>([])
-  // メニュー構成は API 取得までのチラつきを避けるため localStorage のキャッシュ→既定値の順でフォールバックする
-  const [navKeys, setNavKeys] = useState<string[]>([...DEFAULT_STORE_NAV_KEYS])
-  const [loading, setLoading] = useState(true)
+  const [availableStores, setAvailableStores] = useState<ScopeStore[]>(initial?.availableStores ?? [])
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    initial?.sessionStoreId ? [initial.sessionStoreId] : [],
+  )
+  const [isOrgAdmin, setIsOrgAdmin] = useState(initial?.isOrgAdmin ?? false)
+  const [operatorName, setOperatorName] = useState<string | null>(initial?.operatorName ?? null)
+  const [services, setServices] = useState<string[]>(initial?.services ?? [])
+  // サーバー初期値があればそれが正。無いときだけ既定値から始める
+  // （以前は localStorage キャッシュで繋いでいたが、初期値が render 0 から正しいので不要になった）
+  const [navKeys, setNavKeys] = useState<string[]>(initial?.navKeys ?? [...DEFAULT_STORE_NAV_KEYS])
 
-  // 組織情報の取得（セッション店舗が変わるたびに再取得＝StoreLink切替にも追随）
+  // 複数店舗を持ちうるか。**サーバーで確定する値**なので、サーバーレンダーと
+  // 第1クライアントレンダーで必ず一致する（ハイドレーション不一致を構造的に避ける鍵）
+  const canMulti = (initial?.availableStores.length ?? 0) > 1
+  // 選択店舗だけは localStorage 由来でサーバーが知り得ないため、復元済みかを別に持つ。
+  // 単一店舗（大多数）は復元の必要が無いので **render 0 の時点で確定済み** とみなす
+  const [restored, setRestored] = useState(!!initial && !canMulti)
+  const [loading, setLoading] = useState(!initial)
+
+  // localStorage の復元はハイドレート後の effect の中だけで行う（同期・ネットワーク往復ゼロ）
+  useEffect(() => {
+    if (!initial || !canMulti || !initial.sessionStoreId) return
+    setSelectedIds(readSelection(initial.sessionStoreId, initial.availableStores))
+    setRestored(true)
+  }, [initial, canMulti])
+
+  // 組織情報の取得。サーバー初期値がある初回はスキップし、
+  // 店舗切替（StoreLink で sessionStoreId が変わる）や初期値なしのときだけ走る
+  const initialStoreId = initial?.sessionStoreId ?? null
   useEffect(() => {
     if (status !== 'authenticated' || !sessionStoreId) {
-      if (status !== 'loading') setLoading(false)
+      if (status !== 'loading') { setLoading(false); setRestored(true) }
       return
     }
+    // サーバーが解決済みの店舗と同じなら取得不要
+    if (initialStoreId && initialStoreId === sessionStoreId) return
     let cancelled = false
     setLoading(true)
-    // 前回のメニュー構成をキャッシュから即反映（API 応答までの初期表示ズレを抑える）
-    try {
-      const cachedNav = localStorage.getItem(navStorageKey(sessionStoreId))
-      const parsedNav = cachedNav ? sanitizeNavKeys(JSON.parse(cachedNav)) : null
-      if (parsedNav) setNavKeys(parsedNav)
-    } catch { /* ignore */ }
     fetch('/api/store/organization')
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
@@ -112,20 +141,8 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
         setOperatorName(data?.operator?.name ?? null)
         setServices(Array.isArray(data?.services) ? data.services : [])
         const resolvedNav = sanitizeNavKeys(data?.navKeys)
-        if (resolvedNav) {
-          setNavKeys(resolvedNav)
-          try { localStorage.setItem(navStorageKey(sessionStoreId), JSON.stringify(resolvedNav)) } catch { /* ignore */ }
-        }
-
-        // localStorage から復元（無効IDを除去し、セッション店舗を必ず含める）
-        const validIds = new Set(stores.map(s => s.id))
-        let restored: string[] = []
-        try {
-          const raw = localStorage.getItem(storageKey(sessionStoreId))
-          if (raw) restored = (JSON.parse(raw) as string[]).filter(id => validIds.has(id))
-        } catch { /* ignore */ }
-        if (!restored.includes(sessionStoreId)) restored = [sessionStoreId, ...restored]
-        setSelectedIds(restored)
+        if (resolvedNav) setNavKeys(resolvedNav)
+        setSelectedIds(readSelection(sessionStoreId, stores))
       })
       .catch(() => {
         if (!cancelled) {
@@ -133,9 +150,9 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
           setSelectedIds(sessionStoreId ? [sessionStoreId] : [])
         }
       })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .finally(() => { if (!cancelled) { setLoading(false); setRestored(true) } })
     return () => { cancelled = true }
-  }, [status, sessionStoreId])
+  }, [status, sessionStoreId, initialStoreId])
 
   const persist = useCallback((ids: string[]) => {
     if (!sessionStoreId) return
@@ -179,9 +196,12 @@ export function StoreScopeProvider({ children }: { children: React.ReactNode }) 
       operatorName,
       services,
       navKeys,
-      loading,
+      // 「スコープ未確定」の意味。サーバー初期値がある場合は
+      // ネットワーク待ちではなく localStorage 復元待ち（1レンダー・往復ゼロ）になる。
+      // 各ページのゲート（`if (... || scope.loading) return`）はそのまま使える
+      loading: loading || !restored,
     }
-  }, [sessionStoreId, availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, navKeys, loading])
+  }, [sessionStoreId, availableStores, selectedIds, toggleStore, selectAll, resetToSelf, isOrgAdmin, operatorName, services, navKeys, loading, restored])
 
   return <StoreScopeContext.Provider value={value}>{children}</StoreScopeContext.Provider>
 }

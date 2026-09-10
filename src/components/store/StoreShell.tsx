@@ -8,6 +8,7 @@ import BottomNav from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
 import { StoreScopeProvider } from '@/components/store/StoreScopeContext'
 import { StoreBadgesProvider } from '@/components/store/StoreBadgesContext'
+import type { StoreScopeBootstrap } from '@/lib/store-bootstrap'
 
 /**
  * 店舗ポータルの外枠。
@@ -17,9 +18,12 @@ import { StoreBadgesProvider } from '@/components/store/StoreBadgesContext'
  */
 export default function StoreShell({
   session,
+  scope,
   children,
 }: {
   session: Session | null
+  /** サーバー（layout.tsx）で解決した表示スコープ。null なら Provider がクライアントで取得する */
+  scope?: StoreScopeBootstrap | null
   children: React.ReactNode
 }) {
   const pathname = usePathname()
@@ -48,7 +52,9 @@ export default function StoreShell({
   ) : (
     <div data-portal="store" className="flex min-h-screen" style={{ background: 'var(--md-sys-color-surface)' }}>
       <ToastProvider>
-        <StoreScopeProvider>
+        {/* key に店舗IDを入れて、店舗切替（router.refresh() で新しい scope が来る）のときに
+            Provider ごと作り直す。localStorage のキーも切り替わり、古い選択が残らない */}
+        <StoreScopeProvider key={scope?.sessionStoreId ?? 'anon'} initial={scope}>
           {/* ナビのバッジは Rail と BottomNav で共有する（別々に取ると同じAPIを二重に叩く） */}
           <StoreBadgesProvider>
             <NavigationRail />

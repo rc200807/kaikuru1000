@@ -2,9 +2,8 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getOperatorStores, isOrgAdmin } from '@/lib/store-scope'
-import { parseStoreServices } from '@/lib/store-services'
-import { resolveStoreNavKeys } from '@/lib/store-nav'
+import { isOrgAdmin } from '@/lib/store-scope'
+import { loadStoreOrganization } from '@/lib/store-bootstrap'
 import { autoSyncOperatorRows, autoSyncStoreRows } from '@/lib/sheet-sync'
 import { OPERATOR_INHERITED_FIELDS, syncStoresForOperator } from '@/lib/operator-store-sync'
 
@@ -20,42 +19,11 @@ export async function GET() {
   }
   const sessionStoreId = user.id as string
 
-  const [{ operator, stores }, orgAdmin, self, navSettings, navOverride] = await Promise.all([
-    getOperatorStores(sessionStoreId),
-    isOrgAdmin({ id: sessionStoreId, memberId: user.memberId ?? null }),
-    prisma.store.findUnique({ where: { id: sessionStoreId }, select: { supportedServices: true, isTestStore: true } }),
-    prisma.storeNavSetting.findMany({ select: { key: true, sortOrder: true, visible: true, testStoreOnly: true } }),
-    prisma.storeNavOverride.findUnique({
-      where: { storeId: sessionStoreId },
-      select: { showAll: true, items: true },
-    }),
-  ])
-
-  return NextResponse.json({
-    operator,
-    stores: stores.map(s => ({
-      id: s.id,
-      name: s.name,
-      code: s.code,
-      avatar: s.avatar,
-      address: s.address,
-      phone: s.phone,
-      storeStatus: s.storeStatus,
-      memberCount: s._count.members,
-    })),
-    isOrgAdmin: operator ? orgAdmin : false,
-    // セッション店舗の対応サービス（機能ゲート用。例: ['kaikuru','akikuru']）
-    services: parseStoreServices(self?.supportedServices),
-    // サイドメニューの表示キー（管理ポータルの共通設定＋この店舗の特例を解決済み・並び順つき）
-    navKeys: resolveStoreNavKeys({
-      settings: navSettings,
-      override: navOverride,
-      // テスト店舗にだけ表示する項目（管理ポータルの店舗メニュー設定）を解決するため
-      isTestStore: !!self?.isTestStore,
-    }),
-    isTestStore: !!self?.isTestStore,
-    sessionStoreId,
-  })
+  // 中身は src/lib/store-bootstrap.ts に集約している。
+  // (store)/layout.tsx がサーバー側で同じ関数を呼んで Provider の初期値に注ぐため、
+  // ここと食い違わないよう単一の実装を共有する。
+  // このルートは「店舗切替後のクライアント再取得」と /store/organization ページ用に残す。
+  return NextResponse.json(await loadStoreOrganization(sessionStoreId, user.memberId ?? null))
 }
 
 /** PATCH: 運営者の連絡系フィールドのみ更新（組織管理者のみ）。構造変更（店舗紐付け等）は管理ポータル専用。 */

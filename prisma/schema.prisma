@@ -406,8 +406,10 @@ model PurchaseItem {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([visitScheduleId])
-  @@index([dealId])
+  // 買取品目は必ず「親（案件 or 訪問）配下を createdAt 順」で読む。
+  // 単独列インデックスは下の複合が先頭列として完全に含むので張らない（書き込みコストのみ）
+  @@index([dealId, createdAt])
+  @@index([visitScheduleId, createdAt])
 }
 
 // 作業品目（案件ごとの請求作業）
@@ -621,7 +623,7 @@ model DeliveryShipment {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@index([userId])
+  @@index([userId, shipmentMonth]) // 宅配一覧（user経由で絞り shipmentMonth 降順）
   @@index([shipmentMonth])
 }
 
@@ -666,6 +668,10 @@ model SalesContract {
   agreedAt              DateTime      @default(now())
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
+
+  // 古物台帳（agreedAt の期間指定＋降順）・管理ダッシュボード・売上/案件分析が
+  // すべてここを叩くが、このモデルは明示インデックスが1本も無かった
+  @@index([agreedAt])
 }
 
 // パスワードリセットトークン
@@ -792,6 +798,7 @@ model Inquiry {
   @@index([storeId])
   @@index([status])
   @@index([storeId, createdAt])   // 問い合わせ一覧（新しい順）
+  @@index([storeId, status, createdAt]) // ステータス絞り込み時（(storeId, createdAt) は効かない）
 }
 
 // 案件（買取案件・商談）
@@ -837,6 +844,9 @@ model Deal {
   @@index([memberId])
   @@index([storeId, createdAt])   // 案件一覧の既定並び（新しい順）
   @@index([storeId, status])      // ステータス絞り込み・件数サマリー
+  // 案件一覧の既定ソートは occurredAt（deal-list-query.ts の DEFAULT_ORDER）。
+  // 店舗ダッシュボードの「直近の案件」も occurredAt desc なので (storeId, createdAt) では効かない
+  @@index([storeId, occurredAt])
 }
 
 // 案件に紐づく会話録音（音声）。AIで文字起こし＋要約を非同期生成する。
@@ -861,8 +871,8 @@ model DealRecording {
   processedAt   DateTime?
   updatedAt     DateTime  @updatedAt
 
-  @@index([dealId])
-  @@index([status])
+  @@index([dealId, createdAt])    // 案件詳細の録音一覧（新しい順）
+  @@index([status])               // cron が解析待ちを拾う
 }
 
 // 在庫（店舗の販売商品。買取品目から変換可。将来のマーケット自動出品を見据えた設計）
@@ -906,6 +916,7 @@ model InventoryItem {
   @@index([storeId])
   @@index([status])
   @@index([storeId, status])
+  @@index([storeId, updatedAt])   // 在庫一覧（更新の新しい順）
 }
 
 // マーケットプレイス出品状態（在庫1:Nマーケット。将来のAPI同期状態を保持）

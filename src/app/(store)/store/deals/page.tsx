@@ -17,6 +17,7 @@ import PageNav from '@/components/list/PageNav'
 import BulkDealModal from './BulkDealModal'
 import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 import StoreChip from '@/components/store/StoreChip'
 import {
   storeDealChips,
@@ -121,8 +122,15 @@ function StoreDealsContent() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const [leadSources, setLeadSources] = useState<{ name: string }[]>([])
-  const [members, setMembers] = useState<{ id: string; name: string }[]>([])
+  // マスタと担当者候補はサーバー（layout.tsx）が解決済みのものを Context から読む。
+  // 以前はこの2本を個別に叩いており、日本からは1本あたり 0.3 秒の往復だった。
+  // 担当者候補は Context の時点で自店舗のみ（他店舗メンバーを担当に設定できない）
+  const masters = useStoreMasters()
+  const leadSources = masters?.leadSources ?? []
+  const members = useMemo(
+    () => (masters?.assignees ?? []).map(m => ({ id: m.id, name: m.name })),
+    [masters],
+  )
   const [customerName, setCustomerName] = useState<string | null>(null)
 
   const { params, setParams, replaceParams, ready } = useListQueryState(QUERY_PARAM_KEYS)
@@ -160,17 +168,6 @@ function StoreDealsContent() {
     if (status === 'unauthenticated') router.push('/store/login')
   }, [status, router])
 
-  // フィルタ選択肢（流入経路・店舗メンバー）
-  useEffect(() => {
-    if (status !== 'authenticated') return
-    Promise.all([
-      fetch('/api/lead-sources').then(r => (r.ok ? r.json() : [])),
-      fetch('/api/store/members').then(r => (r.ok ? r.json() : [])),
-    ]).then(([leadData, memberData]) => {
-      setLeadSources(Array.isArray(leadData) ? leadData : [])
-      setMembers(Array.isArray(memberData) ? memberData.map((m: any) => ({ id: m.id, name: m.name })) : [])
-    }).catch(() => {})
-  }, [status])
 
   // 顧客絞り込み中の顧客名（バナー表示用）
   useEffect(() => {

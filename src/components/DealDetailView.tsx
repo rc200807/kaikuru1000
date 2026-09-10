@@ -30,6 +30,7 @@ import { storeSupportsAkikuru } from '@/lib/store-services'
 import { formatYen } from '@/lib/currency'
 import { uploadImagesCompressed } from '@/lib/image-upload'
 import { upload } from '@vercel/blob/client'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
@@ -275,6 +276,8 @@ export default function DealDetailView({
   // 折りたたみの既定開閉（共有フック）
   const initialOpen = useOpenLatch()
 
+  const masters = useStoreMasters()
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
@@ -294,30 +297,35 @@ export default function DealDetailView({
 
   useEffect(() => { load() }, [load])
 
-  // 担当者候補（店舗ポータルのみ）
+  // マスタと担当者候補。
+  // 店舗ポータルはサーバー（layout.tsx）が解決済みのものを Context から読むので取得ゼロ。
+  // このコンポーネントは管理ポータルと共用で、管理側には Provider が無いため
+  // Context が null のときだけ /api/form-masters（1本）にフォールバックする。
+  // ＝管理ポータルの挙動は変えないまま、従来の2本を1本に減らしている。
   useEffect(() => {
-    if (isAdmin) return
-    fetch('/api/store/members')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setMembers(Array.isArray(d) ? d.map((m: any) => ({ id: m.id, name: m.name })) : []))
+    if (masters) {
+      setCategories(masters.purchaseCategories)
+      setVisitPurposes(masters.visitPurposes)
+      // 担当者候補は Context の時点で自店舗のみ（他店舗メンバーを担当に設定できない）
+      if (!isAdmin) setMembers(masters.assignees.map(m => ({ id: m.id, name: m.name })))
+      return
+    }
+    fetch('/api/form-masters')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d) return
+        setCategories(Array.isArray(d.purchaseCategories) ? d.purchaseCategories : [])
+        setVisitPurposes(Array.isArray(d.visitPurposes) ? d.visitPurposes : [])
+      })
       .catch(() => {})
-  }, [isAdmin])
-
-  // 買取品目カテゴリ
-  useEffect(() => {
-    fetch('/api/purchase-categories')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setCategories(Array.isArray(d) ? d : []))
-      .catch(() => {})
-  }, [])
-
-  // 訪問目的の選択肢（管理ポータルのマスタ）
-  useEffect(() => {
-    fetch('/api/visit-purposes')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setVisitPurposes(Array.isArray(d) ? d : []))
-      .catch(() => {})
-  }, [])
+    // 店舗ポータルで Provider が無い経路（想定外）でも担当者だけは従来どおり取る
+    if (!isAdmin) {
+      fetch('/api/store/members')
+        .then(r => (r.ok ? r.json() : []))
+        .then(d => setMembers(Array.isArray(d) ? d.map((m: any) => ({ id: m.id, name: m.name })) : []))
+        .catch(() => {})
+    }
+  }, [masters, isAdmin])
 
   // 請求項目マスタ（管理ポータルで設定された選択肢）
   useEffect(() => {

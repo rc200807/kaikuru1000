@@ -13,6 +13,7 @@ import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import { useStoreBadges } from '@/components/store/StoreBadgesContext'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 
 type StoreInfo = {
   id: string
@@ -137,7 +138,18 @@ function MyStoreContent() {
     }
   }, [])
 
+  // 営業時間はサーバー（layout.tsx）が解決済みのものを Context から読む。
+  // Context が無い経路のためにAPI取得のフォールバックは残す（保存は従来どおり PATCH）
+  const masters = useStoreMasters()
   const fetchBusinessHours = useCallback(async () => {
+    if (masters) {
+      setBizHoursStart(masters.businessHours.businessHoursStart || '10:00')
+      setBizHoursEnd(masters.businessHours.businessHoursEnd || '19:00')
+      try { setBizDays(JSON.parse(masters.businessHours.businessDays || '[0,1,2,3,4,5,6]')) }
+      catch { setBizDays([0, 1, 2, 3, 4, 5, 6]) }
+      setBizHoursLoading(false)
+      return
+    }
     try {
       const res = await fetch('/api/store/business-hours')
       if (res.ok) {
@@ -152,7 +164,7 @@ function MyStoreContent() {
       }
     } catch { /* ignore */ }
     finally { setBizHoursLoading(false) }
-  }, [])
+  }, [masters])
 
   async function handleLinkAccount() {
     if (!linkEmail || !linkPassword) return

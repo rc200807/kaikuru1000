@@ -19,6 +19,7 @@ import type { Status } from '@/components/StatusBadge'
 import EmptyState from '@/components/EmptyState'
 import ScheduleCalendar from '@/components/store/ScheduleCalendar'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 import StoreChip from '@/components/store/StoreChip'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 
@@ -88,7 +89,9 @@ export default function StoreSchedulePage() {
   const [storeProposalsLoading, setStoreProposalsLoading] = useState(true)
 
   // 訪問ステータス（動的取得）
-  const [visitStatuses, setVisitStatuses] = useState<{key:string,label:string,color:string}[]>([])
+  // マスタはサーバー（layout.tsx）が解決済みのものを Context から読む（クライアント往復ゼロ）
+  const masters = useStoreMasters()
+  const visitStatuses = masters?.visitStatuses ?? []
   const STATUS_OPTIONS = filterSelectableStatusOptions(
     visitStatuses.length > 0
       ? visitStatuses.map(s => ({ value: s.key, label: s.label }))
@@ -133,12 +136,6 @@ export default function StoreSchedulePage() {
     return () => document.removeEventListener('click', handler)
   }, [openMenuId])
 
-  useEffect(() => {
-    fetch('/api/visit-statuses')
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setVisitStatuses(Array.isArray(data) ? data : []))
-      .catch(() => {})
-  }, [])
 
   useEffect(() => {
     if (status !== 'authenticated' || scope.loading) return

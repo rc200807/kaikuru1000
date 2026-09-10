@@ -11,6 +11,7 @@ import Card from '@/components/Card'
 import MessageBanner from '@/components/MessageBanner'
 import TimeSelect from '@/components/TimeSelect'
 import { useBusinessHours } from '@/hooks/useBusinessHours'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 import { isSelectableVisitStatus } from '@/lib/visit-status'
 
 /**
@@ -82,9 +83,11 @@ export default function VisitDetailPage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const [visitStatuses, setVisitStatuses] = useState<{ key: string; label: string; color: string }[]>([])
-  const [members, setMembers] = useState<StoreMember[]>([])
-  const [purposes, setPurposes] = useState<VisitPurpose[]>([])
+  // マスタはサーバー（layout.tsx）が解決済みのものを Context から読む（クライアント往復ゼロ）
+  const masters = useStoreMasters()
+  const visitStatuses = masters?.visitStatuses ?? []
+  const members = masters?.assignees ?? []
+  const purposes = masters?.visitPurposes ?? []
 
   // メモ編集
   const [editNote, setEditNote] = useState('')
@@ -114,20 +117,6 @@ export default function VisitDetailPage() {
     if (sessionUserId) fetchVisit()
   }, [sessionUserId, fetchVisit])
 
-  useEffect(() => {
-    fetch('/api/visit-statuses')
-      .then(res => (res.ok ? res.json() : []))
-      .then(data => setVisitStatuses(Array.isArray(data) ? data : []))
-      .catch(() => {})
-    fetch('/api/store/members')
-      .then(res => (res.ok ? res.json() : []))
-      .then(data => setMembers(Array.isArray(data) ? data : []))
-      .catch(() => {})
-    fetch('/api/visit-purposes')
-      .then(res => (res.ok ? res.json() : []))
-      .then(data => setPurposes(Array.isArray(data) ? data : []))
-      .catch(() => {})
-  }, [])
 
   async function patchVisit(body: Record<string, unknown>): Promise<boolean> {
     const res = await fetch(`/api/visit-schedules/${scheduleId}`, {

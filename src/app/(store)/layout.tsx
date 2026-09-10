@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import StoreShell from '@/components/store/StoreShell'
-import { buildStoreScopeBootstrap, type StoreScopeBootstrap } from '@/lib/store-bootstrap'
+import { buildStoreBootstrap, type StoreScopeBootstrap, type StoreMasters } from '@/lib/store-bootstrap'
 
 /**
  * 店舗ポータルの共通レイアウト（サーバーコンポーネント）。
@@ -24,14 +24,18 @@ export default async function StoreLayout({ children }: { children: React.ReactN
 
   // 店舗ロール以外（ログイン前・顧客・管理者）ではクエリを一切走らせない
   let scope: StoreScopeBootstrap | null = null
+  let masters: StoreMasters | null = null
   if (user?.role === 'store' && user.id) {
     try {
-      scope = await buildStoreScopeBootstrap(user.id, user.memberId ?? null)
+      const boot = await buildStoreBootstrap(user.id, user.memberId ?? null)
+      scope = boot.scope
+      masters = boot.masters
     } catch {
       // 失敗しても画面は出す（Provider が従来どおりクライアントで取得しにいく）
       scope = null
+      masters = null
     }
   }
 
-  return <StoreShell session={session} scope={scope}>{children}</StoreShell>
+  return <StoreShell session={session} scope={scope} masters={masters}>{children}</StoreShell>
 }

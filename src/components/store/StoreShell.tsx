@@ -8,7 +8,8 @@ import BottomNav from '@/components/BottomNav'
 import { ToastProvider } from '@/components/Toast'
 import { StoreScopeProvider } from '@/components/store/StoreScopeContext'
 import { StoreBadgesProvider } from '@/components/store/StoreBadgesContext'
-import type { StoreScopeBootstrap } from '@/lib/store-bootstrap'
+import { StoreMastersProvider } from '@/components/store/StoreMastersContext'
+import type { StoreScopeBootstrap, StoreMasters } from '@/lib/store-bootstrap'
 
 /**
  * 店舗ポータルの外枠。
@@ -19,11 +20,14 @@ import type { StoreScopeBootstrap } from '@/lib/store-bootstrap'
 export default function StoreShell({
   session,
   scope,
+  masters,
   children,
 }: {
   session: Session | null
   /** サーバー（layout.tsx）で解決した表示スコープ。null なら Provider がクライアントで取得する */
   scope?: StoreScopeBootstrap | null
+  /** サーバーで解決した共通マスタ。null なら各画面が従来どおり自分で取得する */
+  masters?: StoreMasters | null
   children: React.ReactNode
 }) {
   const pathname = usePathname()
@@ -55,6 +59,7 @@ export default function StoreShell({
         {/* key に店舗IDを入れて、店舗切替（router.refresh() で新しい scope が来る）のときに
             Provider ごと作り直す。localStorage のキーも切り替わり、古い選択が残らない */}
         <StoreScopeProvider key={scope?.sessionStoreId ?? 'anon'} initial={scope}>
+          <StoreMastersProvider value={masters ?? null}>
           {/* ナビのバッジは Rail と BottomNav で共有する（別々に取ると同じAPIを二重に叩く） */}
           <StoreBadgesProvider>
             <NavigationRail />
@@ -63,6 +68,7 @@ export default function StoreShell({
             </main>
             <BottomNav />
           </StoreBadgesProvider>
+          </StoreMastersProvider>
         </StoreScopeProvider>
       </ToastProvider>
     </div>

@@ -13,6 +13,7 @@ import Card from '@/components/Card'
 import TextField from '@/components/TextField'
 import TimeSelect from '@/components/TimeSelect'
 import { useBusinessHours } from '@/hooks/useBusinessHours'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 import BottomSheet from '@/components/BottomSheet'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
@@ -315,14 +316,9 @@ export default function StoreCustomerDetailPage() {
   const [showMerge, setShowMerge] = useState(false)
   const [editDraft, setEditDraft] = useState<EditDraft>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', postalCode: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
   const [savingEdit, setSavingEdit] = useState(false)
-  const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
-
-  useEffect(() => {
-    fetch('/api/lead-sources')
-      .then(r => r.ok ? r.json() : [])
-      .then(d => { if (Array.isArray(d)) setLeadSources(d) })
-      .catch(() => {})
-  }, [])
+  // マスタと担当者候補はサーバー（layout.tsx）が解決済みのものを Context から読む（クライアント往復ゼロ）
+  const masters = useStoreMasters()
+  const leadSources = masters?.leadSources ?? []
 
   function openEditModal() {
     if (!customer) return
@@ -461,8 +457,8 @@ export default function StoreCustomerDetailPage() {
   const [scheduleForDeal, setScheduleForDeal] = useState<DealItem | null>(null)
   const [dealScheduleForm, setDealScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' })
   // 訪問担当者・訪問目的の選択肢（案件に訪問を紐づける流れでそのまま指定できるようにする）
-  const [storeMembers, setStoreMembers] = useState<{ id: string; name: string }[]>([])
-  const [visitPurposes, setVisitPurposes] = useState<{ id: string; name: string }[]>([])
+  const storeMembers = masters?.assignees ?? []
+  const visitPurposes = masters?.visitPurposes ?? []
   const [creatingDealSchedule, setCreatingDealSchedule] = useState(false)
   const [memoStoreNotes, setMemoStoreNotes] = useState<Record<string, string>>({})
   const [savingMemoNote, setSavingMemoNote] = useState<string | null>(null)
@@ -504,18 +500,6 @@ export default function StoreCustomerDetailPage() {
     if (authStatus === 'unauthenticated') router.push('/store/login')
   }, [authStatus, router])
 
-  // 訪問担当者・訪問目的の選択肢（訪問予定の作成モーダルで使う）
-  useEffect(() => {
-    if (authStatus !== 'authenticated') return
-    fetch('/api/store/members')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setStoreMembers(Array.isArray(d) ? d : []))
-      .catch(() => {})
-    fetch('/api/visit-purposes')
-      .then(r => (r.ok ? r.json() : []))
-      .then(d => setVisitPurposes(Array.isArray(d) ? d : []))
-      .catch(() => {})
-  }, [authStatus])
 
   // 1画面ぶんのデータを1本のAPIでまとめて取得する。
   // 以前は 顧客／案件／訪問予定／書類／買取希望品／問い合わせ／宅配／日程提案 で

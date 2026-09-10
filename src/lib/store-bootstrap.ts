@@ -61,6 +61,71 @@ export async function loadStoreOrganization(sessionStoreId: string, memberId: st
 }
 
 /**
+ * 店舗ポータルの全画面で使い回すマスタ。
+ *
+ * これらは画面ごとに個別の API を叩いており、たとえば `useBusinessHours()` は
+ * キャッシュを持たず**コンポーネントごとに毎回 fetch する**ため、
+ * スケジュール画面はページ本体とカレンダーで同じURLを2回叩いていた。
+ * サーバーで一度に解決してしまえば、これらのクライアント往復は全部ゼロになる。
+ *
+ * 変わる頻度が極めて低く、いずれも小さい（数十行）ので RSC ペイロードへの影響は無視できる。
+ * `work-item-masters` は options をネストして持ち重いうえ案件詳細でしか使わないので、
+ * ここには載せず `masterJson` の短期キャッシュに任せている。
+ */
+export type StoreMasters = {
+  leadSources: { id: string; name: string; sortOrder: number }[]
+  visitPurposes: { id: string; name: string; sortOrder: number }[]
+  visitStatuses: { id: string; key: string; label: string; color: string; sortOrder: number; isDefault: boolean }[]
+  purchaseCategories: { id: string; name: string; sortOrder: number }[]
+  businessHours: { businessHoursStart: string; businessHoursEnd: string; businessDays: string }
+  /**
+   * 担当者の選択肢。**必ずセッション店舗のぶんだけ**。
+   * `/api/store/members` は「メンバー管理一覧（スコープ対応）」と
+   * 「担当者の選択肢（自店舗限定）」の2役を兼ねており、後者に storeIds を渡すと
+   * 他店舗のメンバーを案件の担当に設定できてしまう。
+   * Context には自店舗のメンバーしか入れないことで、その規約を構造的に破れなくする。
+   */
+  assignees: { id: string; name: string; avatar: string | null }[]
+}
+
+export async function buildStoreMasters(sessionStoreId: string): Promise<StoreMasters> {
+  const [leadSources, visitPurposes, visitStatuses, purchaseCategories, store, assignees] = await Promise.all([
+    prisma.leadSource.findMany({ orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, sortOrder: true } }),
+    prisma.visitPurpose.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, sortOrder: true },
+    }),
+    prisma.visitStatus.findMany({
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, key: true, label: true, color: true, sortOrder: true, isDefault: true },
+    }),
+    prisma.purchaseCategory.findMany({ orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, sortOrder: true } }),
+    prisma.store.findUnique({
+      where: { id: sessionStoreId },
+      select: { businessHoursStart: true, businessHoursEnd: true, businessDays: true },
+    }),
+    prisma.storeMember.findMany({
+      where: { storeId: sessionStoreId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, avatar: true },
+    }),
+  ])
+  return {
+    leadSources,
+    visitPurposes,
+    visitStatuses,
+    purchaseCategories,
+    businessHours: {
+      businessHoursStart: store?.businessHoursStart ?? '09:00',
+      businessHoursEnd: store?.businessHoursEnd ?? '18:00',
+      businessDays: store?.businessDays ?? '[0,1,2,3,4,5,6]',
+    },
+    assignees,
+  }
+}
+
+/**
  * クライアント（StoreScopeProvider）へ渡す初期値。
  * RSC ペイロードに載るので、Context が実際に使う項目だけに絞る
  * （`/store/organization` ページが使う address / phone / memberCount 等は含めない）。
@@ -87,4 +152,13 @@ export async function buildStoreScopeBootstrap(
     services: org.services,
     navKeys: org.navKeys,
   }
+}
+
+/** レイアウトから1回だけ呼ぶ。スコープとマスタを同じ並列ウェーブで解決する */
+export async function buildStoreBootstrap(sessionStoreId: string, memberId: string | null) {
+  const [scope, masters] = await Promise.all([
+    buildStoreScopeBootstrap(sessionStoreId, memberId),
+    buildStoreMasters(sessionStoreId),
+  ])
+  return { scope, masters }
 }

@@ -15,6 +15,7 @@ import DataTable from '@/components/DataTable'
 import type { Column } from '@/components/DataTable'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
 import StoreChip from '@/components/store/StoreChip'
 import MessageBanner from '@/components/MessageBanner'
 import FilterChipBar from '@/components/list/FilterChipBar'
@@ -90,7 +91,10 @@ export default function StoreCustomersPage() {
   const filterQuery = serializeParams(params, FILTER_PARAM_KEYS)
 
   // マスタ（流入経路）・保存ビュー
-  const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
+  // マスタと担当者候補はサーバー（layout.tsx）が解決済みのものを Context から読む
+  // （担当者候補は Context の時点で自店舗のみ）
+  const masters = useStoreMasters()
+  const leadSources = masters?.leadSources ?? []
   const [savedViews, setSavedViews] = useState<ListView[]>([])
 
   // 行選択・一括操作
@@ -115,8 +119,8 @@ export default function StoreCustomersPage() {
   const [createdDealId, setCreatedDealId] = useState<string | null>(null)
   const [scheduleForm, setScheduleForm] = useState({ visitDate: '', startTime: '', endTime: '', memberId: '', purposeId: '', note: '' })
   // 訪問担当者・訪問目的の選択肢（案件作成の一連の流れでそのまま指定できるようにする）
-  const [storeMembers, setStoreMembers] = useState<{ id: string; name: string }[]>([])
-  const [visitPurposes, setVisitPurposes] = useState<{ id: string; name: string }[]>([])
+  const storeMembers = masters?.assignees ?? []
+  const visitPurposes = masters?.visitPurposes ?? []
   const [addCustomerSubmitting, setAddCustomerSubmitting] = useState(false)
   const [addCustomerMsg, setAddCustomerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [zipLooking, setZipLooking] = useState(false)
@@ -153,28 +157,15 @@ export default function StoreCustomersPage() {
     window.history.replaceState({}, '', url.toString())
   }, [])
 
-  // マスタ（流入経路）・保存ビューを取得
+  // 保存ビューを取得（流入経路・担当者・訪問目的のマスタはサーバーが解決済みのものを Context から読む）
   useEffect(() => {
     if (status !== 'authenticated') return
-    fetch('/api/lead-sources')
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setLeadSources(Array.isArray(d) ? d : []))
-      .catch(() => {})
     fetch('/api/list-views?portal=store')
       .then(r => r.ok ? r.json() : { views: [] })
       .then(d => setSavedViews((d.views || []).map((v: any) => ({
         id: v.id, name: v.name, filters: v.filters,
         columns: v.columns ? JSON.parse(v.columns) : null,
       }))))
-      .catch(() => {})
-    // 訪問担当者・訪問目的の選択肢（新規顧客ウィザードの訪問予定ステップで使う）
-    fetch('/api/store/members')
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setStoreMembers(Array.isArray(d) ? d : []))
-      .catch(() => {})
-    fetch('/api/visit-purposes')
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setVisitPurposes(Array.isArray(d) ? d : []))
       .catch(() => {})
   }, [status])
 

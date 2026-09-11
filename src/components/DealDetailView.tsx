@@ -16,7 +16,7 @@ import PurchaseItemManager, { type ManagedPurchaseItem, type PurchaseItemChange 
 import DocumentPdfPreview from '@/components/DocumentPdfPreview'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { dealCreatorLabel } from '@/lib/deal-creator'
-import Section, { SECTION_CLS, useOpenLatch } from '@/components/detail/SectionCard'
+import Section, { SECTION_CLS } from '@/components/detail/SectionCard'
 import { PropRow, Row } from '@/components/detail/PropRow'
 import { formatDealNumber } from '@/lib/deal-number'
 import {
@@ -273,7 +273,6 @@ export default function DealDetailView({
   const paperInputRef = useRef<HTMLInputElement>(null)
   const recInputRef = useRef<HTMLInputElement>(null)
   // 折りたたみの既定開閉（共有フック）
-  const initialOpen = useOpenLatch()
 
   const masters = useStoreMasters()
 
@@ -981,8 +980,8 @@ export default function DealDetailView({
 
         {/* ── ゾーンA: 案件ヘッダー（全幅） ───────────────────────── */}
         <div className={SECTION_CLS}>
-          <div className="px-4 sm:px-5 pt-4 sm:pt-5">
-          <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-4 sm:pb-5">
+          <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold" style={{ background: badge.bg, color: badge.fg }}>
                 {DEAL_STATUS_LABEL[deal.status as DealStatus] ?? deal.status}
@@ -1028,9 +1027,9 @@ export default function DealDetailView({
           </div>
           </div>
           {/* ステータス（最頻の書き込み。全幅なので7値が折り返さず並ぶ） */}
-          <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-3 mt-1 border-t border-[var(--md-sys-color-outline-variant)]">
-            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">ステータス</label>
-            <div className="flex flex-wrap gap-1.5 mb-4">
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-2">ステータス</label>
+            <div className="flex flex-wrap gap-1.5">
               {DEAL_STATUS_ORDER.map(s => {
                 const active = deal.status === s
                 const c = DEAL_STATUS_BADGE[s]
@@ -1240,7 +1239,7 @@ export default function DealDetailView({
 
             {/* L4 問い合わせ由来 */}
             {deal.inquiry && (
-              <Section title="問い合わせ由来" collapsible defaultOpen={initialOpen('inquiry', false)}>
+              <Section title="問い合わせ由来" collapsible>
             <Row label="種別" value={deal.inquiry.inquiryType} />
             <Row label="受付日時" value={fmtDateTime(deal.inquiry.createdAt)} />
             {deal.inquiry.details && <Row label="内容" value={<span className="whitespace-pre-wrap">{deal.inquiry.details}</span>} />}
@@ -1252,7 +1251,6 @@ export default function DealDetailView({
               title="進捗タイムライン"
               meta={`${timeline.length}件`}
               collapsible
-              defaultOpen={initialOpen('timeline', timeline.length > 1)}
             >
             <ol className="relative border-l border-[var(--md-sys-color-outline-variant)] ml-1.5 space-y-3">
               {timeline.map((t, i) => (
@@ -1396,7 +1394,7 @@ export default function DealDetailView({
                 </span>
               </div>
               <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1.5">
-                色帯の付いた4つのセクションが、お客様のお宅で上から順に操作する項目です。
+                STEP バッジの付いた4つのセクションが、お客様のお宅で上から順に操作する項目です。
                 その下のセクション（売買契約書・見積／紙の売買契約書／会話の録音）は、作業の結果が残る記録です。
               </p>
               {contractIssued && (
@@ -1565,7 +1563,6 @@ export default function DealDetailView({
 
             {/* R6 売買契約書・見積 */}
             <Section
-              tone="record"
               title="売買契約書・見積"
               meta={`見積 ${dealEstimate ? 1 : 0} / 契約 ${dealContract ? 1 : 0}`}
             >
@@ -1626,7 +1623,6 @@ export default function DealDetailView({
                   </span>
                 ) : undefined}
                 collapsible
-                defaultOpen={initialOpen('ledger', ledgerMissingCount > 0, !!ledger)}
                 actions={!isAdmin && ledgerEntryKey ? (
               <Link href={`/store/kobutsu-ledger/${encodeURIComponent(ledgerEntryKey)}`} className="text-xs text-[var(--portal-primary,#374151)] hover:underline whitespace-nowrap">
                 台帳詳細を開く →
@@ -1737,11 +1733,9 @@ export default function DealDetailView({
 
             {/* R8 紙の売買契約書（写真） */}
             <Section
-              tone="record"
               title="紙の売買契約書（写真）"
               meta={`${deal.paperContractImages.length}枚`}
               collapsible
-              defaultOpen={initialOpen('paper', deal.paperContractImages.length > 0)}
               actions={editable ? (
                 // summary 内では preventDefault が入るため label 直包みだとファイル選択が開けない。
                 // hidden input（本文側）を programmatic click する
@@ -1785,7 +1779,6 @@ export default function DealDetailView({
 
             {/* R9 会話の録音・AI解析 */}
             <Section
-              tone="record"
               title="会話の録音・AI解析"
               meta={`${recordings.length}件`}
               badge={recordingBusy > 0 ? (
@@ -1794,7 +1787,6 @@ export default function DealDetailView({
                 </span>
               ) : undefined}
               collapsible
-              defaultOpen={initialOpen('rec', false)}
               actions={
                 <button
                   type="button"

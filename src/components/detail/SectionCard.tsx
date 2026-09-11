@@ -7,7 +7,6 @@
  * collapsible のときは state を持たない <details> で折りたたむ。
  * 注意: 管理ポータルは globals.css が header に背景を !important で強制するため header は使わない。
  */
-import { useRef } from 'react'
 
 export const SECTION_CLS =
   'rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest,#fff)]'
@@ -20,7 +19,7 @@ export default function Section({
   children,
   collapsible = false,
   defaultOpen = true,
-  bodyClassName = 'px-4 sm:px-5 pb-4 sm:pb-5',
+  bodyClassName,
   id,
   className = '',
   step,
@@ -38,20 +37,25 @@ export default function Section({
   className?: string
   /** 訪問時に順番に操作するセクションの手順番号（Step1〜）。指定すると見出しに STEP バッジが出る */
   step?: number
-  /** work = 訪問時に手を動かすセクション（左に色帯＋見出しに淡い下地）。record = 実施後の記録 */
-  tone?: 'default' | 'work' | 'record'
+  /**
+   * work = 訪問時に手を動かすセクション（見出しに淡い下地）。
+   * 以前は左に太い色帯も出していたが、STEP バッジと見出しの下地で十分区別できるため外した。
+   */
+  tone?: 'default' | 'work'
 }) {
   // 色は --step-* トークン（ポータルごとに globals.css で定義）。
-  // 店舗=赤／管理=白の主色と衝突させず、作業セクションだけを別系統の色で見分けられるようにする
-  // overflow-hidden は色帯・見出しの下地が角丸からはみ出さないようにするためのもの。
+  // 店舗=赤／管理=白の主色と衝突させず、作業セクションだけを別系統の色で見分けられるようにする。
+  // overflow-hidden は見出しの下地が角丸からはみ出さないようにするためのもの。
   // tone 無しの既存セクション（顧客詳細など）に付けると内部のポップオーバーを切りかねないので付けない
-  const toneCls =
-    tone === 'work' ? 'border-l-[3px] border-l-[var(--step-accent)] overflow-hidden'
-    : tone === 'record' ? 'border-l-[3px] border-l-[var(--md-sys-color-outline)] overflow-hidden'
-    : ''
-  const headerCls =
-    tone === 'work' ? 'bg-[var(--step-surface)]'
-    : ''
+  const toneCls = tone === 'work' ? 'overflow-hidden' : ''
+  const headerCls = tone === 'work' ? 'bg-[var(--step-surface)]' : ''
+  // 本文の上余白。見出しに下地がある work では、その下地の pb は「帯の内側」に見えるので
+  // 本文側で改めて間隔を取らないと、色の帯に本文が張り付いて見える
+  const bodyCls = bodyClassName ?? (
+    tone === 'work'
+      ? 'px-4 sm:px-5 pt-4 sm:pt-4.5 pb-4 sm:pb-5'
+      : 'px-4 sm:px-5 pt-3 pb-4 sm:pb-5'
+  )
   const header = (
     // 狭い幅では actions を次行に折り返す（min-w-0 のままだと見出しが1文字ずつ縦に潰れる）
     <div className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 ${headerCls}`}>
@@ -91,21 +95,13 @@ export default function Section({
     </div>
   )
   if (!collapsible) {
-    return <div id={id} className={`${SECTION_CLS} ${toneCls} ${className}`}>{header}<div className={bodyClassName}>{children}</div></div>
+    return <div id={id} className={`${SECTION_CLS} ${toneCls} ${className}`}>{header}<div className={bodyCls}>{children}</div></div>
   }
   return (
     <details id={id} open={defaultOpen} className={`${SECTION_CLS} ${toneCls} ${className} group`}>
       <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer">{header}</summary>
-      <div className={bodyClassName}>{children}</div>
+      <div className={bodyCls}>{children}</div>
     </details>
   )
 }
 
-/** 折りたたみの既定開閉。データ到着後に一度だけ確定させ、以降はユーザー操作（DOM）に任せる */
-export function useOpenLatch() {
-  const latch = useRef<Record<string, boolean>>({})
-  return (key: string, value: boolean, ready = true) => {
-    if (ready && !(key in latch.current)) latch.current[key] = value
-    return latch.current[key] ?? value
-  }
-}

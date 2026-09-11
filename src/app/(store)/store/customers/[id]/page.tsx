@@ -28,7 +28,7 @@ import MessageBanner from '@/components/MessageBanner'
 import EmptyState from '@/components/EmptyState'
 import Modal from '@/components/Modal'
 import DocumentPdfPreview from '@/components/DocumentPdfPreview'
-import Section, { SECTION_CLS, useOpenLatch } from '@/components/detail/SectionCard'
+import Section, { SECTION_CLS } from '@/components/detail/SectionCard'
 import { PropRow } from '@/components/detail/PropRow'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
@@ -498,7 +498,6 @@ export default function StoreCustomerDetailPage() {
   const [activityFilter, setActivityFilter] = useState('all')
   const [activityLimit, setActivityLimit] = useState(20)
   // 折りたたみセクションの既定開閉（データ到着後に一度だけ確定）
-  const initialOpen = useOpenLatch()
   // 旧タブURLからのスクロールを1回だけ行うためのフラグ
   const anchorScrolled = useRef(false)
 
@@ -1184,7 +1183,7 @@ export default function StoreCustomerDetailPage() {
             </Section>
 
             {/* L6 システム情報 */}
-            <Section title="システム情報" collapsible defaultOpen={false}>
+            <Section title="システム情報" collapsible>
               <PropRow label="顧客ID" value={<span className="text-[11px] break-all">{customer.id}</span>} />
               <PropRow label="登録日" value={format(new Date(customer.createdAt), 'yyyy年M月d日', { locale: ja })} />
             </Section>
@@ -1409,7 +1408,6 @@ export default function StoreCustomerDetailPage() {
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]">未確認 {pendingMemoCount}</span>
               ) : undefined}
               collapsible
-              defaultOpen={initialOpen('memos', memosList.length > 0, memosLoaded)}
             >
               {memosList.length === 0 ? (
                 <EmptyState
@@ -1536,7 +1534,6 @@ export default function StoreCustomerDetailPage() {
               title="発行済み書類"
               meta={`${issuedDocRows.length}件`}
               collapsible
-              defaultOpen={initialOpen('docs', issuedDocRows.length > 0, schedulesLoaded)}
             >
               {issuedDocRows.length === 0 ? (
                 <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">発行済みの見積書・売買契約書はありません</p>
@@ -1585,7 +1582,6 @@ export default function StoreCustomerDetailPage() {
                 title="訪問予定を追加"
                 meta={nextVisit ? `次回 ${fmtMD(nextVisit.visitDate)}` : '次回未設定'}
                 collapsible
-                defaultOpen={initialOpen('next', tabFromUrl === 'add')}
               >
               <form onSubmit={handleAddSchedule} className="space-y-4">
                 <TextField
@@ -1638,7 +1634,6 @@ export default function StoreCustomerDetailPage() {
               title="訪問予定"
               meta={`${schedules.length}件`}
               collapsible
-              defaultOpen={initialOpen('visits', schedules.length > 0, schedulesLoaded)}
             >
               {sortedSchedules.length === 0 ? (
                 <EmptyState
@@ -1741,7 +1736,6 @@ export default function StoreCustomerDetailPage() {
                 title="宅配送付"
                 meta={`${shipmentsList.length}件`}
                 collapsible
-                defaultOpen={initialOpen('shipments', shipmentsList.length > 0, shipmentsLoaded)}
               >
               {shipmentsList.length === 0 ? (
                 <EmptyState title="送付履歴がありません" description="顧客が送付を登録すると表示されます" />
@@ -2063,7 +2057,6 @@ export default function StoreCustomerDetailPage() {
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]">未対応 {newInquiryCount}</span>
               ) : undefined}
               collapsible
-              defaultOpen={initialOpen('inquiries', inquiriesList.length > 0, inquiriesLoaded)}
             >
               {inquiriesList.length === 0 ? (
                 <Card className="p-6 text-center">
@@ -2115,7 +2108,7 @@ export default function StoreCustomerDetailPage() {
 
             {/* 訪問日程を提案 */}
             {!isDelivery && (
-              <Section id="cust-proposals" className="scroll-mt-20" title="訪問日程を提案" meta={storeProposals.length > 0 ? `${storeProposals.length}件` : undefined} collapsible defaultOpen={initialOpen('proposals', false)}>
+              <Section id="cust-proposals" className="scroll-mt-20" title="訪問日程を提案" meta={storeProposals.length > 0 ? `${storeProposals.length}件` : undefined} collapsible>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">訪問日程を提案</h2>
                 <Button size="sm" variant={showProposalForm ? 'tonal' : 'filled'} onClick={() => { setShowProposalForm(v => !v); setProposalMsg(null) }}>
@@ -2232,7 +2225,7 @@ export default function StoreCustomerDetailPage() {
             )}
 
             {/* 買取金額の推移 */}
-            <Section title="買取金額の推移（月別・直近12ヶ月）" collapsible defaultOpen={initialOpen('trend', false)}>
+            <Section title="買取金額の推移（月別・直近12ヶ月）" collapsible>
               {!hasTrend ? (
                 <p className="text-sm text-center py-10 text-[var(--md-sys-color-on-surface-variant)]">買取実績がありません</p>
               ) : (
@@ -2249,7 +2242,7 @@ export default function StoreCustomerDetailPage() {
             </Section>
 
             {/* 顧客の削除（取り返しがつかない操作なので最後に置く） */}
-            <Section title="顧客の削除" collapsible defaultOpen={false}>
+            <Section title="顧客の削除" collapsible>
               <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
                 この顧客を完全に削除します。紐づく<strong>案件・訪問予定・見積書・売買契約書・買取品目・宅配の送付記録</strong>も
                 すべて一緒に削除され、元に戻すことはできません。

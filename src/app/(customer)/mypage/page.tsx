@@ -1173,14 +1173,16 @@ function MyPageContent() {
 
                   if (allDone) return null
 
+                  // 親コンテナが -mt-4 でヒーローに食い込ませているため、
+                  // ここを mt-4 にすると相殺されてヘッダーに張り付く。実際に空けたい間隔ぶんを足す
                   return (
-                    <div className="bg-white rounded-2xl p-4 shadow-sm mt-4">
-                      <div className="flex items-center justify-between mb-3">
+                    <div className="bg-white rounded-2xl p-4 shadow-sm mt-8">
+                      <div className="flex items-center justify-between mb-3.5">
                         <h3 className="text-sm font-bold text-gray-900">はじめにやること</h3>
                         <span className="text-xs text-gray-500">{completedCount}/{tasks.length}</span>
                       </div>
                       {/* Progress bar */}
-                      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
+                      <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-4">
                         <div
                           className="h-full bg-[#B91C1C] rounded-full transition-all duration-500"
                           style={{ width: `${(completedCount / tasks.length) * 100}%` }}

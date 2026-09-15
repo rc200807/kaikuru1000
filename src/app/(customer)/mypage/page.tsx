@@ -3657,6 +3657,18 @@ function ShipmentCard({
   const [submitting, setSubmitting] = useState(false)
   const boxInputRef = useRef<HTMLInputElement>(null)
 
+  // 保存するたびにサーバー側の配列は詰め直され、認証プロキシURL（/api/.../images/0）の添字も振り直される。
+  // 親から新しい shipment を受け取ったら編集用の state も作り直さないと、写真を1枚消して保存したあとに
+  // 古い添字（.../1）が state に残り、存在しない添字を指してサムネイルが壊れる。
+  // さらにその状態でもう一度保存すると、解決できなかった添字が resolveEditedImageUrls() で捨てられ、
+  // 残っていた写真まで消えてしまう。
+  const boxUrlsKey = (shipment.imageUrls || []).join('|')
+  const slipUrlsKey = (shipment.trackingImageUrls || []).join('|')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setBoxImages(shipment.imageUrls || []) }, [boxUrlsKey])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setSlipImages(shipment.trackingImageUrls || []) }, [slipUrlsKey])
+
   // Lightbox state
   const allImages = [...(shipment.imageUrls || []), ...(shipment.trackingImageUrls || [])]
   const [showImages, setShowImages] = useState(false)

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calcAge, isMinorBlockedFromDelivery } from '@/lib/age'
-import { resolveEditedImageUrls } from '@/lib/image-url'
+import { resolveEditedImageUrls, StaleImageReferenceError } from '@/lib/image-url'
 import { toClientShipment } from '@/lib/delivery-shipment'
 import { deliveryShipmentAvailability, intervalNoticeText } from '@/lib/request-interval'
 
@@ -109,8 +109,18 @@ export async function POST(request: NextRequest) {
     try { currentImageUrls = JSON.parse(existing.imageUrls || '[]') } catch { /* ignore */ }
     try { currentTrackingUrls = JSON.parse(existing.trackingImageUrls || '[]') } catch { /* ignore */ }
   }
-  const resolvedImageUrls = resolveEditedImageUrls(currentImageUrls, imageUrls, `/api/delivery-shipments/${existing?.id}/images`)
-  const resolvedTrackingUrls = resolveEditedImageUrls(currentTrackingUrls, trackingImageUrls, `/api/delivery-shipments/${existing?.id}/tracking-images`)
+  let resolvedImageUrls: string[]
+  let resolvedTrackingUrls: string[]
+  try {
+    resolvedImageUrls = resolveEditedImageUrls(currentImageUrls, imageUrls, `/api/delivery-shipments/${existing?.id}/images`)
+    resolvedTrackingUrls = resolveEditedImageUrls(currentTrackingUrls, trackingImageUrls, `/api/delivery-shipments/${existing?.id}/tracking-images`)
+  } catch (e) {
+    // 画面が古い添字を送ってきた場合。黙って読み飛ばすと残っている写真まで消えるので保存しない
+    if (e instanceof StaleImageReferenceError) {
+      return NextResponse.json({ error: e.message }, { status: 409 })
+    }
+    throw e
+  }
 
   // ステップ2: 既存の下書きに送付情報を追加 → registered に昇格。
   // registered以降の再編集（handleSaveEditedStep）で箱の写真も一緒に送られてくるので、

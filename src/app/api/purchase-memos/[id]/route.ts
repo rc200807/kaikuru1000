@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { resolveEditedImageUrls } from '@/lib/image-url'
+import { resolveEditedImageUrls, StaleImageReferenceError } from '@/lib/image-url'
 
 const VALID_STATUSES = ['pending', 'reviewed', 'completed']
 
@@ -54,9 +54,17 @@ export async function PATCH(
       // 編集フォームは既存画像を認証プロキシURLのまま送り返してくるので実URLに解決してから保存する
       let current: string[] = []
       try { current = JSON.parse(memo.imageUrls || '[]') } catch { /* ignore */ }
-      updateData.imageUrls = JSON.stringify(
-        resolveEditedImageUrls(current, body.imageUrls, `/api/purchase-memos/${id}/images`),
-      )
+      try {
+        updateData.imageUrls = JSON.stringify(
+          resolveEditedImageUrls(current, body.imageUrls, `/api/purchase-memos/${id}/images`),
+        )
+      } catch (e) {
+        // 画面が古い添字を送ってきた場合。黙って読み飛ばすと残っている写真まで消えるので保存しない
+        if (e instanceof StaleImageReferenceError) {
+          return NextResponse.json({ error: e.message }, { status: 409 })
+        }
+        throw e
+      }
     }
   } else if (sessionUser.role === 'store' || ['admin','superadmin','hr'].includes(sessionUser.role)) {
     // 店舗・管理者はステータスとstoreNoteを更新可

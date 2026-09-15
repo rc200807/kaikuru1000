@@ -58,7 +58,19 @@ export function fullUrlFor(url: string | null | undefined): string {
  * これをせずクライアントの配列をそのまま保存すると、一度も画像を変更していない編集保存でも
  * プロキシURL文字列そのものがDBに書き込まれてしまい、次にプロキシへアクセスすると
  * 自分自身にリダイレクトし続けて画像が壊れる（実際に発生した不具合）。
+ *
+ * プロキシURLの添字は「保存時点の配列の並び」に依存する。画面が古い添字を送ってきた場合
+ * （1枚消して保存したあと、画面のstateが更新されないまま再度保存した等）は、黙って読み飛ばすと
+ * 残っていた写真まで消えてしまうため StaleImageReferenceError を投げる。呼び出し側は 409 で返して
+ * 「画面を再読み込みしてから保存し直す」よう促すこと。
  */
+export class StaleImageReferenceError extends Error {
+  constructor(message = '画像の情報が古くなっています。画面を再読み込みしてから、もう一度保存してください') {
+    super(message)
+    this.name = 'StaleImageReferenceError'
+  }
+}
+
 export function resolveEditedImageUrls(
   currentUrls: string[],
   incoming: unknown,
@@ -72,7 +84,8 @@ export function resolveEditedImageUrls(
     const m = item.match(proxyRe)
     if (m) {
       const original = currentUrls[Number(m[1])]
-      if (original) resolved.push(original)
+      if (!original) throw new StaleImageReferenceError()
+      resolved.push(original)
       continue
     }
     resolved.push(item)

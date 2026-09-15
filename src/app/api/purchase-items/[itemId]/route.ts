@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { recomputeDealAmounts } from '@/lib/deal-amounts'
 import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-item-shape'
 import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
-import { resolveEditedImageUrls } from '@/lib/image-url'
+import { resolveEditedImageUrls, StaleImageReferenceError } from '@/lib/image-url'
 import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
@@ -51,9 +51,17 @@ export async function PATCH(
     // 画像が壊れるため、現在の実URLに解決してから保存する
     let current: string[] = []
     try { current = JSON.parse(access.item!.imageUrls || '[]') } catch { /* ignore */ }
-    updateData.imageUrls = JSON.stringify(
-      resolveEditedImageUrls(current, body.imageUrls, `/api/purchase-items/${itemId}/images`),
-    )
+    try {
+      updateData.imageUrls = JSON.stringify(
+        resolveEditedImageUrls(current, body.imageUrls, `/api/purchase-items/${itemId}/images`),
+      )
+    } catch (e) {
+      // 画面が古い添字を送ってきた場合。黙って読み飛ばすと残っている写真まで消えるので保存しない
+      if (e instanceof StaleImageReferenceError) {
+        return NextResponse.json({ error: e.message }, { status: 409 })
+      }
+      throw e
+    }
   }
   if (body.quantity !== undefined) updateData.quantity = body.quantity
   if (body.purchasePrice !== undefined) updateData.purchasePrice = body.purchasePrice

@@ -83,7 +83,8 @@ export default function PurchaseItemManager({
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ itemName: '', category: '', quantity: 1, purchasePrice: '' as number | '', imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null, isAdditionalRequest: false, notes: '' })
+  // 数量は既定で空欄（何も入っていない状態）。買取金額は数量と独立して入力する
+  const [form, setForm] = useState({ itemName: '', category: '', quantity: '' as number | '', purchasePrice: '' as number | '', imageUrls: [] as string[], janCode: '', rakutenData: null as RakutenProduct | null, isAdditionalRequest: false, notes: '' })
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
@@ -111,7 +112,7 @@ export default function PurchaseItemManager({
 
   /** 入力内容ごと破棄して閉じる（保存後・明示的な「キャンセル」時のみ） */
   function resetForm() {
-    setForm({ itemName: '', category: '', quantity: 1, purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null, isAdditionalRequest: false, notes: '' })
+    setForm({ itemName: '', category: '', quantity: '', purchasePrice: '', imageUrls: [], janCode: '', rakutenData: null, isAdditionalRequest: false, notes: '' })
     setEditingId(null)
     setShowForm(false)
     setJanLookupError(null)
@@ -197,7 +198,7 @@ export default function PurchaseItemManager({
     if (!form.itemName || !form.category) { msg({ type: 'error', text: '品名とカテゴリーは必須です' }); return }
     setSaving(true)
     const payload = {
-      itemName: form.itemName, category: form.category, quantity: form.quantity,
+      itemName: form.itemName, category: form.category, quantity: Number(form.quantity) || 1,
       purchasePrice: Number(form.purchasePrice) || 0, imageUrls: form.imageUrls,
       janCode: form.janCode || null, rakutenData: form.rakutenData || null,
       isAdditionalRequest: form.isAdditionalRequest, notes: form.notes.trim() || null,
@@ -380,7 +381,7 @@ export default function PurchaseItemManager({
                     {item.janCode && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono" style={{ background: 'var(--status-scheduled-bg)', color: 'var(--status-scheduled-text)' }}>JAN: {item.janCode}</span>}
                   </div>
                   <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
-                    数量: {item.quantity} × {formatYen(item.purchasePrice)} = <strong>{formatYen(item.purchasePrice * item.quantity)}</strong>
+                    数量: {item.quantity} ／ 買取金額: <strong>{formatYen(item.purchasePrice)}</strong>
                   </div>
                   {item.notes && (
                     <div className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-0.5 whitespace-pre-wrap break-words">備考: {item.notes}</div>
@@ -499,7 +500,7 @@ export default function PurchaseItemManager({
             </div>
             <div>
               <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">数量</label>
-              <input type="number" min={1} className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 1 })} />
+              <input type="number" min={1} className="w-full mt-0.5 text-sm border border-[var(--md-sys-color-outline-variant)] rounded px-2 py-1.5 bg-[var(--md-sys-color-surface-container-low)]" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value === '' ? '' : (parseInt(e.target.value) || 1) })} placeholder="未入力なら1" />
             </div>
             <div>
               <label className="text-xs text-[var(--md-sys-color-on-surface-variant)]">買取金額（円）</label>

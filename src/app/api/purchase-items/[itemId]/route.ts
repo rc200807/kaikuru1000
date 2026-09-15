@@ -7,6 +7,7 @@ import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-it
 import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchase-item-access'
 import { resolveEditedImageUrls, StaleImageReferenceError } from '@/lib/image-url'
 import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
+import { sumPurchaseItems } from '@/lib/purchase-item-amount'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.purchaseItem.findUnique({
@@ -85,7 +86,7 @@ export async function PATCH(
         where: { visitScheduleId: result.visitScheduleId },
         select: { purchasePrice: true, quantity: true },
       })
-      const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
+      const total = sumPurchaseItems(allItems)
       await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { purchaseAmount: total } })
     }
 
@@ -131,7 +132,7 @@ export async function DELETE(
         where: { visitScheduleId },
         select: { purchasePrice: true, quantity: true },
       })
-      const total = allItems.reduce((sum, i) => sum + i.purchasePrice * i.quantity, 0)
+      const total = sumPurchaseItems(allItems)
       await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { purchaseAmount: total } })
     }
     return amounts

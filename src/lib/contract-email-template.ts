@@ -92,7 +92,7 @@ function addDays(d: Date, days: number): Date {
 
 /** 売買契約書 + 請求書 + 特商法書面 + 同意の記録 を1つの HTML 文字列にする */
 export function buildContractBodyHtml(p: ContractEmailParams): string {
-  const purchaseTotal = p.purchaseItems.reduce((s, i) => s + i.price * i.quantity, 0)
+  const purchaseTotal = p.purchaseItems.reduce((s, i) => s + i.price, 0) // 買取金額は数量を掛けない
   const workTotal = p.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const coolingOffEnd = addDays(p.contractDate, 7)
   const sellerName = p.operator ? formalName(p.operator) : p.storeName
@@ -164,8 +164,7 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
           <th style="${cellTh}">品名</th>
           <th style="${cellTh}">カテゴリー</th>
           <th style="${cellThR}">数量</th>
-          <th style="${cellThR}">単価</th>
-          <th style="${cellThR}">小計</th>
+          <th style="${cellThR}">買取金額</th>
         </tr>
       </thead>
       <tbody>
@@ -174,14 +173,13 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
             <td style="${cellTd}">${escape(i.itemName)}</td>
             <td style="${cellTd}color:#6b7280;">${escape(i.category || '')}</td>
             <td style="${cellTdR}">${i.quantity}</td>
-            <td style="${cellTdR}">${fmtYen(i.price)}</td>
-            <td style="${cellTdR}font-weight:600;">${fmtYen(i.price * i.quantity)}</td>
+            <td style="${cellTdR}font-weight:600;">${fmtYen(i.price)}</td>
           </tr>
         `).join('')}
       </tbody>
       <tfoot>
         <tr style="background:#fef2f2;">
-          <td colspan="4" style="${cellTfR}">買取金額合計</td>
+          <td colspan="3" style="${cellTfR}">買取金額合計</td>
           <td style="${cellTfR}color:#991b1b;font-size:14px;">${fmtYen(purchaseTotal)}</td>
         </tr>
       </tfoot>
@@ -347,7 +345,7 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
 
 /** プレーンテキスト版（HTMLが表示できないメーラ用） */
 export function buildContractBodyText(p: ContractEmailParams): string {
-  const purchaseTotal = p.purchaseItems.reduce((s, i) => s + i.price * i.quantity, 0)
+  const purchaseTotal = p.purchaseItems.reduce((s, i) => s + i.price, 0) // 買取金額は数量を掛けない
   const workTotal = p.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const coolingOffEnd = addDays(p.contractDate, 7)
   const sellerName = p.operator ? formalName(p.operator) : p.storeName
@@ -390,7 +388,7 @@ export function buildContractBodyText(p: ContractEmailParams): string {
   if (p.purchaseItems.length === 0) lines.push('(なし)')
   else {
     p.purchaseItems.forEach(i => {
-      lines.push(`・${i.itemName}${i.category ? `（${i.category}）` : ''}  ${i.quantity} × ${fmtYen(i.price)} = ${fmtYen(i.price * i.quantity)}`)
+      lines.push(`・${i.itemName}${i.category ? `（${i.category}）` : ''}  数量${i.quantity}  ${fmtYen(i.price)}`)
     })
     lines.push(`買取金額合計: ${fmtYen(purchaseTotal)}`)
   }

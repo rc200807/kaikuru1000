@@ -109,7 +109,7 @@ function EstimateViewContent() {
     )
   }
 
-  const purchaseBase = data.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const purchaseBase = data.purchaseItems.reduce((s, i) => s + i.purchasePrice, 0) // 買取金額は数量を掛けない
   const upliftPct = data.purchaseUpliftPercent ?? 0
   const upliftAmount = Math.round(purchaseBase * upliftPct / 100)
   const purchaseTotal = purchaseBase + upliftAmount
@@ -147,8 +147,7 @@ function EstimateViewContent() {
                   <tr className="border-b border-gray-200 text-gray-500">
                     <th className="py-1.5 text-left font-medium">品名</th>
                     <th className="py-1.5 text-right font-medium w-12">数量</th>
-                    <th className="py-1.5 text-right font-medium w-20">単価</th>
-                    <th className="py-1.5 text-right font-medium w-24">小計</th>
+                    <th className="py-1.5 text-right font-medium w-24">買取金額</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -156,8 +155,7 @@ function EstimateViewContent() {
                     <tr key={i.id} className="border-b border-gray-100">
                       <td className="py-1.5 text-gray-900">{i.itemName || '（品名未設定）'}{i.category && <span className="text-[10px] text-gray-400 ml-1">/ {i.category}</span>}</td>
                       <td className="py-1.5 text-right text-gray-600">{i.quantity}</td>
-                      <td className="py-1.5 text-right text-gray-600">{yen(i.purchasePrice)}</td>
-                      <td className="py-1.5 text-right font-medium text-gray-900">{yen(i.purchasePrice * i.quantity)}</td>
+                      <td className="py-1.5 text-right font-medium text-gray-900">{yen(i.purchasePrice)}</td>
                     </tr>
                   ))}
                 </tbody>

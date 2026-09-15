@@ -551,12 +551,15 @@ export async function sendEstimateEmail(params: {
   const staffName = escapeHtml(params.staffName)
 
   // 明細セクション（品目テーブル＋その直下に合計）
+  // 買取品目は「金額そのもの」（数量を掛けない）、請求項目は「単価 × 数量」。
+  // 同じテーブル部品を使い回すので、行の金額の出し方だけ切り替える
   const sectionHtml = (
     title: string,
     items: { name: string; quantity: number; price: number }[],
     totalLabel: string,
     totalAmount: number,
     totalColor: string,
+    multiplyByQuantity: boolean,
   ) => {
     const hasItems = items && items.length > 0
     if (!hasItems && !totalAmount) return ''
@@ -564,16 +567,16 @@ export async function sendEstimateEmail(params: {
       <tr>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;">${escapeHtml(i.name)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${i.quantity}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${yen(i.price)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;text-align:right;font-weight:600;">${yen(i.price * i.quantity)}</td>
+        ${multiplyByQuantity ? `<td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${yen(i.price)}</td>` : ''}
+        <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;text-align:right;font-weight:600;">${yen(multiplyByQuantity ? i.price * i.quantity : i.price)}</td>
       </tr>`).join('')
     const itemsTable = hasItems ? `
       <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:8px;">
         <tr style="background-color:#f9fafb;">
           <td style="padding:8px 12px;font-size:11px;color:#9ca3af;">品名</td>
           <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">数量</td>
-          <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">単価</td>
-          <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">小計</td>
+          ${multiplyByQuantity ? `<td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">単価</td>` : ''}
+          <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">${multiplyByQuantity ? '小計' : '買取金額'}</td>
         </tr>
         ${rows}
       </table>` : ''
@@ -585,8 +588,8 @@ export async function sendEstimateEmail(params: {
       </table>`
   }
   const itemsHtml =
-    sectionHtml('買取品目', params.purchaseItems ?? [], '買取金額 合計', params.purchaseAmount, '#991b1b') +
-    sectionHtml('請求項目（作業・サービス）', params.workItems ?? [], '請求金額 合計', params.billingAmount, '#111827')
+    sectionHtml('買取品目', params.purchaseItems ?? [], '買取金額 合計', params.purchaseAmount, '#991b1b', false) +
+    sectionHtml('請求項目（作業・サービス）', params.workItems ?? [], '請求金額 合計', params.billingAmount, '#111827', true)
 
   const html = `
 <!DOCTYPE html>
@@ -652,7 +655,7 @@ export async function sendEstimateEmail(params: {
       '',
       '【買取品目】',
       ...((params.purchaseItems && params.purchaseItems.length > 0)
-        ? params.purchaseItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`)
+        ? params.purchaseItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price)}`)
         : []),
       `買取金額 合計: ${yen(params.purchaseAmount)}`,
       '',

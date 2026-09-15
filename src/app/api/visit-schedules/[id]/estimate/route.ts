@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { sendEstimateEmail } from '@/lib/mailer'
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
+import { sumPurchaseItems } from '@/lib/purchase-item-amount'
 
 /** 見積書を保存してメール送信 */
 export async function POST(
@@ -60,7 +61,7 @@ export async function POST(
   }
 
   // 金額はサーバー側で品目から算出（クライアントの値は信用しない）。買取は上乗せ率を反映。
-  const purchaseBase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const purchaseBase = sumPurchaseItems(purchaseItems)
   const upliftPct = dealId ? (await prisma.deal.findUnique({ where: { id: dealId }, select: { purchaseUpliftPercent: true } }))?.purchaseUpliftPercent ?? 0 : 0
   const purchaseAmount = purchaseBase + Math.round(purchaseBase * upliftPct / 100)
   const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)

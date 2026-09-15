@@ -206,7 +206,7 @@ function ContractViewContent() {
   coolingOffDate.setDate(coolingOffDate.getDate() + 8)
 
   const purchaseTotal = contract.purchaseItems.reduce(
-    (sum, item) => sum + item.purchasePrice * item.quantity,
+    (sum, item) => sum + item.purchasePrice, // 買取金額は数量を掛けない
     0
   )
   const upliftPct = contract.purchaseUpliftPercent ?? 0
@@ -376,8 +376,7 @@ function ContractViewContent() {
                         <th className="text-left px-3 py-2 text-gray-600 font-medium">品名</th>
                         <th className="text-left px-3 py-2 text-gray-600 font-medium">カテゴリ</th>
                         <th className="text-right px-3 py-2 text-gray-600 font-medium">数量</th>
-                        <th className="text-right px-3 py-2 text-gray-600 font-medium">単価</th>
-                        <th className="text-right px-3 py-2 text-gray-600 font-medium">小計</th>
+                        <th className="text-right px-3 py-2 text-gray-600 font-medium">買取金額</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -386,8 +385,7 @@ function ContractViewContent() {
                           <td className="px-3 py-2 text-gray-900">{item.itemName}</td>
                           <td className="px-3 py-2 text-gray-600">{item.category}</td>
                           <td className="px-3 py-2 text-gray-900 text-right">{item.quantity}</td>
-                          <td className="px-3 py-2 text-gray-900 text-right">{formatCurrency(item.purchasePrice)}円</td>
-                          <td className="px-3 py-2 text-gray-900 text-right font-medium">{formatCurrency(item.purchasePrice * item.quantity)}円</td>
+                          <td className="px-3 py-2 text-gray-900 text-right font-medium">{formatCurrency(item.purchasePrice)}円</td>
                         </tr>
                       ))}
                     </tbody>
@@ -395,17 +393,17 @@ function ContractViewContent() {
                       {upliftPct > 0 && (
                         <>
                           <tr>
-                            <td colSpan={4} className="px-3 py-1 text-right text-gray-600">小計</td>
+                            <td colSpan={3} className="px-3 py-1 text-right text-gray-600">小計</td>
                             <td className="px-3 py-1 text-right text-gray-800">{formatCurrency(purchaseTotal)}円</td>
                           </tr>
                           <tr>
-                            <td colSpan={4} className="px-3 py-1 text-right text-gray-600">買取金額 {upliftPct}%上乗せ</td>
+                            <td colSpan={3} className="px-3 py-1 text-right text-gray-600">買取金額 {upliftPct}%上乗せ</td>
                             <td className="px-3 py-1 text-right text-gray-800">＋{formatCurrency(purchaseUpliftAmount)}円</td>
                           </tr>
                         </>
                       )}
                       <tr className="bg-white/30 border-t border-white/60">
-                        <td colSpan={4} className="px-3 py-2 text-right font-bold text-gray-700">買取合計</td>
+                        <td colSpan={3} className="px-3 py-2 text-right font-bold text-gray-700">買取合計</td>
                         <td className="px-3 py-2 text-right font-bold text-[#B91C1C]">{formatCurrency(purchaseTotalWithUplift)}円</td>
                       </tr>
                     </tfoot>

@@ -953,7 +953,7 @@ export default function DealDetailView({
   const purchaseItems = deal.purchaseItems ?? []
   const workItems = deal.workItems ?? []
   const upliftPct = deal.purchaseUpliftPercent ?? 0
-  const basePurchase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const basePurchase = purchaseItems.reduce((s, i) => s + i.purchasePrice, 0) // 買取金額は数量を掛けない
   const upliftAmount = Math.round(basePurchase * upliftPct / 100)
   const totalPurchase = basePurchase + upliftAmount
   const totalBilling = deal.billingAmount ?? workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
@@ -2060,8 +2060,7 @@ export default function DealDetailView({
                     <tr className="border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]">
                       <th className="text-left px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">品名</th>
                       <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">数量</th>
-                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">単価</th>
-                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">小計</th>
+                      <th className="text-right px-2 py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">買取金額</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2076,8 +2075,7 @@ export default function DealDetailView({
                           {it.notes && <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words">備考: {it.notes}</div>}
                         </td>
                         <td className="px-2 py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{it.quantity}</td>
-                        <td className="px-2 py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{formatYen(it.purchasePrice)}</td>
-                        <td className="px-2 py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(it.purchasePrice * it.quantity)}</td>
+                        <td className="px-2 py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{formatYen(it.purchasePrice)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2085,17 +2083,17 @@ export default function DealDetailView({
                     {upliftPct > 0 && (
                       <>
                         <tr>
-                          <td colSpan={3} className="px-2 py-1 text-right text-[var(--md-sys-color-on-surface-variant)]">小計</td>
+                          <td colSpan={2} className="px-2 py-1 text-right text-[var(--md-sys-color-on-surface-variant)]">小計</td>
                           <td className="px-2 py-1 text-right text-[var(--md-sys-color-on-surface)]">{formatYen(basePurchase)}</td>
                         </tr>
                         <tr>
-                          <td colSpan={3} className="px-2 py-1 text-right text-[var(--portal-primary)]">買取金額 {upliftPct}%上乗せ</td>
+                          <td colSpan={2} className="px-2 py-1 text-right text-[var(--portal-primary)]">買取金額 {upliftPct}%上乗せ</td>
                           <td className="px-2 py-1 text-right text-[var(--portal-primary)]">＋{formatYen(upliftAmount)}</td>
                         </tr>
                       </>
                     )}
                     <tr className="bg-[var(--md-sys-color-surface-container-low)]">
-                      <td colSpan={3} className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取合計</td>
+                      <td colSpan={2} className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取合計</td>
                       <td className="px-2 py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">{formatYen(totalPurchase)}</td>
                     </tr>
                   </tfoot>

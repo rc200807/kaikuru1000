@@ -193,7 +193,7 @@ export type KobutsuLedgerRow = {
   internalCategory: string | null
   itemName: string
   quantity: number
-  /** 代価（単価×数量） */
+  /** 代価（買取金額そのもの。数量は掛けない） */
   price: number
   unitPrice: number
   features: string

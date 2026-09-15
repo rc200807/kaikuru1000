@@ -22,6 +22,7 @@ import {
   verificationMethod,
   type KobutsuLedgerRow,
 } from '@/lib/kobutsu-ledger'
+import { purchaseItemAmount } from '@/lib/purchase-item-amount'
 
 export type KobutsuLedgerQuery = {
   storeId: string
@@ -136,7 +137,7 @@ function buildLedgerRow(args: {
     itemName: item.itemName,
     quantity: item.quantity,
     unitPrice: item.purchasePrice,
-    price: item.purchasePrice * item.quantity,
+    price: purchaseItemAmount(item), // 代価は買取金額そのもの（数量は掛けない）
     features,
     featuresManual: !!manualFeatures,
     note: entry?.note?.trim() || null,

@@ -139,7 +139,7 @@ export default function EstimatePage() {
   useEffect(() => { if (sessionUserId) fetchData() }, [sessionUserId, fetchData])
 
   const fmtYen = (n: number) => `¥${n.toLocaleString()}`
-  const purchaseBase = visit?.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0) ?? 0
+  const purchaseBase = visit?.purchaseItems.reduce((s, i) => s + i.purchasePrice, 0) ?? 0 // 買取金額は数量を掛けない
   const upliftPct = visit?.purchaseUpliftPercent ?? 0
   const upliftAmount = Math.round(purchaseBase * upliftPct / 100)
   const purchaseTotal = purchaseBase + upliftAmount
@@ -307,8 +307,7 @@ export default function EstimatePage() {
                 <tr className="border-b border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]">
                   <th className="py-1.5 text-left font-medium">品名</th>
                   <th className="py-1.5 text-right font-medium w-12">数量</th>
-                  <th className="py-1.5 text-right font-medium w-20">単価</th>
-                  <th className="py-1.5 text-right font-medium w-24">小計</th>
+                  <th className="py-1.5 text-right font-medium w-24">買取金額</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,8 +315,7 @@ export default function EstimatePage() {
                   <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
                     <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{i.itemName || '（品名未設定）'}{i.category && <span className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] ml-1">/ {i.category}</span>}</td>
                     <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
-                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.purchasePrice)}</td>
-                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.purchasePrice * i.quantity)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.purchasePrice)}</td>
                   </tr>
                 ))}
               </tbody>

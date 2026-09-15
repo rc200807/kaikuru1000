@@ -11,6 +11,7 @@ import {
   NON_TEST_STORE_ESTIMATE, NON_TEST_STORE_SALES_CONTRACT,
   NON_TEST_STORE_SHIPMENT, NON_TEST_STORE_PURCHASE_ITEM,
 } from '@/lib/test-store'
+import { purchaseItemAmount } from '@/lib/purchase-item-amount'
 
 export const dynamic = 'force-dynamic'
 
@@ -106,14 +107,14 @@ export async function GET(request: NextRequest) {
     return point
   })
 
-  // 品目カテゴリー別 金額 TOP15（purchasePrice × quantity）
+  // 品目カテゴリー別 金額 TOP15（金額は買取金額そのもの。数量は掛けない）
   const categoryNameMap = new Map(categories.map(c => [c.id, c.name]))
   const itemCatAgg = new Map<string, { count: number; amount: number }>()
   for (const item of purchaseItems) {
     const name = (item.categoryId ? categoryNameMap.get(item.categoryId) : null) ?? item.category ?? '未分類'
     const cur = itemCatAgg.get(name) ?? { count: 0, amount: 0 }
     cur.count += item.quantity
-    cur.amount += item.purchasePrice * item.quantity
+    cur.amount += purchaseItemAmount(item)
     itemCatAgg.set(name, cur)
   }
   const itemCategories = [...itemCatAgg.entries()]

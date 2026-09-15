@@ -88,7 +88,7 @@ export default function AdminVisitDetailPage() {
     )
   }
 
-  const purchaseTotal = visit.purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const purchaseTotal = visit.purchaseItems.reduce((s, i) => s + i.purchasePrice, 0) // 買取金額は数量を掛けない
   const workTotal = visit.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
 
   return (
@@ -152,8 +152,7 @@ export default function AdminVisitDetailPage() {
                   <th className="text-left py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">品名</th>
                   <th className="text-left py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">カテゴリー</th>
                   <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">数量</th>
-                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">単価</th>
-                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">小計</th>
+                  <th className="text-right py-1.5 font-medium text-[var(--md-sys-color-on-surface-variant)]">買取金額</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,14 +161,13 @@ export default function AdminVisitDetailPage() {
                     <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{item.itemName}</td>
                     <td className="py-1.5 text-[var(--md-sys-color-on-surface-variant)]">{item.category}</td>
                     <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{item.quantity}</td>
-                    <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{fmt(item.purchasePrice)}</td>
-                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmt(item.purchasePrice * item.quantity)}</td>
+                    <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmt(item.purchasePrice)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} className="py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取金額合計</td>
+                  <td colSpan={3} className="py-2 text-right font-bold text-[var(--md-sys-color-on-surface)]">買取金額合計</td>
                   <td className="py-2 text-right font-bold text-lg text-[var(--portal-primary)]">{fmt(purchaseTotal)}</td>
                 </tr>
               </tfoot>

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
+import { sumPurchaseItems } from '@/lib/purchase-item-amount'
 
 type Client = Prisma.TransactionClient | typeof prisma
 
@@ -15,11 +16,11 @@ export function applyUplift(base: number, percent: number | null | undefined): n
 
 export async function recomputeDealAmounts(client: Client, dealId: string) {
   const [purchaseItems, workItems, deal] = await Promise.all([
-    client.purchaseItem.findMany({ where: { dealId }, select: { purchasePrice: true, quantity: true } }),
+    client.purchaseItem.findMany({ where: { dealId }, select: { purchasePrice: true } }),
     client.workItem.findMany({ where: { dealId }, select: { unitPrice: true, quantity: true } }),
     client.deal.findUnique({ where: { id: dealId }, select: { purchaseUpliftPercent: true } }),
   ])
-  const basePurchase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const basePurchase = sumPurchaseItems(purchaseItems) // 買取金額は数量を掛けない（purchase-item-amount.ts）
   const purchaseAmount = applyUplift(basePurchase, deal?.purchaseUpliftPercent) // 上乗せ込みの買取合計
   const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   await client.deal.update({ where: { id: dealId }, data: { purchaseAmount, billingAmount } })

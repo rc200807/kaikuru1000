@@ -96,7 +96,7 @@ export default function StorePurchaseItemsPage() {
 
   // 表示中の合計件数・合計買取額
   const totalAmount = useMemo(
-    () => filtered.reduce((sum, i) => sum + (i.purchasePrice || 0) * (i.quantity || 0), 0),
+    () => filtered.reduce((sum, i) => sum + (i.purchasePrice || 0), 0), // 買取金額は数量を掛けない
     [filtered],
   )
 
@@ -118,7 +118,7 @@ export default function StorePurchaseItemsPage() {
           <div>
             <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface)] leading-none">{fmtYen(totalAmount)}</div>
             <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
-              合計買取額（数量×単価）{scope.isMulti ? `・${scope.selectedIds.length}店舗合計` : ''}
+              合計買取額{scope.isMulti ? `・${scope.selectedIds.length}店舗合計` : ''}
             </div>
           </div>
         </div>
@@ -203,8 +203,8 @@ export default function StorePurchaseItemsPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{fmtYen(item.purchasePrice * item.quantity)}</div>
-                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{item.quantity}点 × {fmtYen(item.purchasePrice)}</div>
+                      <div className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{fmtYen(item.purchasePrice)}</div>
+                      <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{item.quantity}点</div>
                     </div>
                   </div>
 

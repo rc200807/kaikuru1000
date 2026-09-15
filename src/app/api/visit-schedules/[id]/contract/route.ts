@@ -6,6 +6,7 @@ import { enqueueEmail } from '@/lib/email-queue'
 import { buildContractBodyHtml, buildContractBodyText } from '@/lib/contract-email-template'
 import { recordAccessLog } from '@/lib/access-log'
 import { DEAL_AUTO_ADVANCE_FROM } from '@/lib/deal-status'
+import { sumPurchaseItems } from '@/lib/purchase-item-amount'
 
 /** 売買契約書を保存してメール送信 */
 export async function POST(
@@ -271,7 +272,7 @@ export async function POST(
     const notifyTo = schedule.store.contractNotifyEmail || schedule.store.email
     if (notifyTo) {
       const baseUrl = process.env.NEXTAUTH_URL || 'https://system.rcinc.jp'
-      const purchaseBase = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+      const purchaseBase = sumPurchaseItems(purchaseItems)
       const upliftPct = dealId ? (await prisma.deal.findUnique({ where: { id: dealId }, select: { purchaseUpliftPercent: true } }))?.purchaseUpliftPercent ?? 0 : 0
       const purchaseTotal = purchaseBase + Math.round(purchaseBase * upliftPct / 100)
       const billingTotal = workItems.reduce((s, w) => s + w.unitPrice * w.quantity, 0)

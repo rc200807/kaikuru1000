@@ -191,7 +191,7 @@ export default function KobutsuLedgerDetailPage() {
             <table className="w-full text-xs">
               <thead className="bg-[var(--md-sys-color-surface-container-low)]">
                 <tr>
-                  {['#', '品目（法定13品目）', '品名', '特徴', '数量', '単価', '代価', '備考', ''].map(h => (
+                  {['#', '品目（法定13品目）', '品名', '特徴', '数量', '代価', '備考', ''].map(h => (
                     <th key={h} className="px-2.5 py-2 text-left font-semibold text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -216,7 +216,6 @@ export default function KobutsuLedgerDetailPage() {
                       {r.featuresManual && <span className="ml-1 text-[10px] text-[var(--md-sys-color-on-surface-faint)]">手入力</span>}
                     </td>
                     <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{r.quantity}</td>
-                    <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(r.unitPrice)}</td>
                     <td className="px-2.5 py-2 whitespace-nowrap font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(r.price)}</td>
                     <td className="px-2.5 py-2 max-w-[160px] text-[var(--md-sys-color-on-surface-variant)] break-words">{r.note || '—'}</td>
                     <td className="px-2.5 py-2 whitespace-nowrap">
@@ -229,7 +228,6 @@ export default function KobutsuLedgerDetailPage() {
                 <tr className="border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]">
                   <td className="px-2.5 py-2 font-semibold text-[var(--md-sys-color-on-surface-variant)]" colSpan={4}>合計</td>
                   <td className="px-2.5 py-2 font-semibold text-[var(--md-sys-color-on-surface)]">{group.quantity}</td>
-                  <td />
                   <td className="px-2.5 py-2 font-semibold text-[var(--md-sys-color-on-surface)]">{fmtYen(group.total)}</td>
                   <td colSpan={2} />
                 </tr>

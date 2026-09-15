@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { sumPurchaseItems } from '@/lib/purchase-item-amount'
 
 /** 契約データを取得する（NextAuthセッション or userIdパラメータ） */
 export async function GET(request: NextRequest) {
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
     prisma.salesContract.count({ where: { ...docWhere, NOT: { pdfBase64: null } } }),
     prisma.salesContract.count({ where: { ...docWhere, NOT: { invoicePdfBase64: null } } }),
   ])
-  const purchaseAmount = purchaseItems.reduce((s, i) => s + i.purchasePrice * i.quantity, 0)
+  const purchaseAmount = sumPurchaseItems(purchaseItems)
   const billingAmount = workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
 
   return NextResponse.json({

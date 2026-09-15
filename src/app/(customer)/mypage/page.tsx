@@ -3337,13 +3337,13 @@ function MyPageContent() {
                                   {visit.purchaseItems.map(item => (
                                     <div key={item.id} className="flex justify-between text-xs text-gray-600">
                                       <span>{item.itemName} <span className="text-gray-400">({item.category})</span> ×{item.quantity}</span>
-                                      <span className="font-medium">¥{(item.purchasePrice * item.quantity).toLocaleString()}</span>
+                                      <span className="font-medium">¥{item.purchasePrice.toLocaleString()}</span>
                                     </div>
                                   ))}
                                 </div>
                                 <div className="flex justify-between text-xs font-bold text-gray-800 mt-2 pt-2 border-t border-gray-200">
                                   <span>買取合計</span>
-                                  <span>¥{visit.purchaseItems.reduce((sum, it) => sum + it.purchasePrice * it.quantity, 0).toLocaleString()}</span>
+                                  <span>¥{visit.purchaseItems.reduce((sum, it) => sum + it.purchasePrice, 0).toLocaleString()}</span>
                                 </div>
                               </div>
 

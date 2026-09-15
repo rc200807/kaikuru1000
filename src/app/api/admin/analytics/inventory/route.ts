@@ -5,6 +5,7 @@ import { buildBuckets, fillSeries } from '@/lib/analytics/period'
 import type { AnalyticsResponse, SeriesPoint } from '@/lib/analytics/types'
 import { resolveAnalyticsParams, dateWhere, buildMeta, fetchStoreMap } from '../_lib/params'
 import { NON_TEST_STORE_INVENTORY, NON_TEST_STORE_PURCHASE_ITEM } from '@/lib/test-store'
+import { purchaseItemAmount } from '@/lib/purchase-item-amount'
 
 export const dynamic = 'force-dynamic'
 
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
     const name = (item.categoryId ? categoryNameMap.get(item.categoryId) : null) ?? item.category ?? '未分類'
     const cur = catAgg.get(name) ?? { count: 0, amount: 0 }
     cur.count += item.quantity
-    cur.amount += item.purchasePrice * item.quantity
+    cur.amount += purchaseItemAmount(item)
     catAgg.set(name, cur)
   }
   const itemCategories = [...catAgg.entries()]

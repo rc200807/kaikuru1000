@@ -219,6 +219,11 @@ export default function DealDetailView({
   const [rescheduleForm, setRescheduleForm] = useState({ visitDate: '', startTime: '', endTime: '' })
   const [savingReschedule, setSavingReschedule] = useState(false)
 
+  // 後日引取の日時設定・変更モーダル（売買契約書の発行後も調整できる必要がある）
+  const [revisitTarget, setRevisitTarget] = useState<VisitSchedule | null>(null)
+  const [revisitForm, setRevisitForm] = useState({ date: '', start: '', end: '', note: '' })
+  const [savingRevisit, setSavingRevisit] = useState(false)
+
   // 買取品目（PurchaseItemManager に委譲）／請求項目の登録（案件キー）
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [showAddWork, setShowAddWork] = useState(false)
@@ -798,6 +803,65 @@ export default function DealDetailView({
     }
   }
 
+  function openRevisit(v: VisitSchedule) {
+    setRevisitTarget(v)
+    setRevisitForm({
+      date: v.revisitDate ? toDateInput(v.revisitDate) : '',
+      start: v.revisitStart ?? '',
+      end: v.revisitEnd ?? '',
+      note: v.revisitNote ?? '',
+    })
+  }
+
+  /** 後日引取の日程を保存する。日付を空にすれば「日時未定（後日調整）」に戻せる */
+  async function handleSaveRevisit() {
+    if (!revisitTarget) return
+    setSavingRevisit(true)
+    setMsg(null)
+    const res = await fetch(`/api/visit-schedules/${revisitTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        revisitPending: true,
+        revisitDate: revisitForm.date || null,
+        revisitStart: revisitForm.date ? (revisitForm.start || null) : null,
+        revisitEnd: revisitForm.date ? (revisitForm.end || null) : null,
+        revisitNote: revisitForm.note || null,
+      }),
+    })
+    setSavingRevisit(false)
+    if (res.ok) {
+      setRevisitTarget(null)
+      setMsg({ type: 'success', text: revisitForm.date ? '後日引取の日時を保存しました' : '後日引取を日時未定に戻しました' })
+      load()
+    } else {
+      const d = await res.json().catch(() => null)
+      setMsg({ type: 'error', text: d?.error || '後日引取の保存に失敗しました' })
+    }
+  }
+
+  /** 後日引取そのものを取り消す（予定が無くなった場合） */
+  async function handleClearRevisit() {
+    if (!revisitTarget) return
+    if (!confirm('後日引取の登録を取り消しますか？')) return
+    setSavingRevisit(true)
+    setMsg(null)
+    const res = await fetch(`/api/visit-schedules/${revisitTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisitPending: false, revisitDate: null, revisitStart: null, revisitEnd: null, revisitNote: null }),
+    })
+    setSavingRevisit(false)
+    if (res.ok) {
+      setRevisitTarget(null)
+      setMsg({ type: 'success', text: '後日引取を取り消しました' })
+      load()
+    } else {
+      const d = await res.json().catch(() => null)
+      setMsg({ type: 'error', text: d?.error || '後日引取の取り消しに失敗しました' })
+    }
+  }
+
   async function changeStatus(status: string) {
     if (!deal || status === deal.status) return
     setSavingStatus(true)
@@ -1342,20 +1406,26 @@ export default function DealDetailView({
                         別の訪問レコードにはならないが、案件からも予定として見えるようにする） */}
                     {(v.revisitDate || v.revisitPending) && (
                       <div className="mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
-                            後日引取
-                          </span>
-                          {v.revisitDate ? (
-                            <>
-                              <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{fmtDate(v.revisitDate)}</span>
-                              {(v.revisitStart || v.revisitEnd) && (
-                                <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{timeRange(v.revisitStart, v.revisitEnd)}</span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">日時未定（後日調整）</span>
-                          )}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
+                              後日引取
+                            </span>
+                            {v.revisitDate ? (
+                              <>
+                                <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">{fmtDate(v.revisitDate)}</span>
+                                {(v.revisitStart || v.revisitEnd) && (
+                                  <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{timeRange(v.revisitStart, v.revisitEnd)}</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">日時未定（後日調整）</span>
+                            )}
+                          </div>
+                          {/* 後日引取の日時は契約後に決まることが多いので、ここから調整できるようにする */}
+                          <button type="button" onClick={() => openRevisit(v)} className="text-xs text-[var(--portal-primary,#374151)] hover:underline flex-shrink-0">
+                            {v.revisitDate ? '日時を変更' : '日時を設定'}
+                          </button>
                         </div>
                         {v.revisitNote && <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mt-1 whitespace-pre-wrap">{v.revisitNote}</p>}
                       </div>
@@ -2181,6 +2251,48 @@ export default function DealDetailView({
               <Button onClick={handleReschedule} loading={savingReschedule} disabled={savingReschedule || !rescheduleForm.visitDate}>
                 変更を保存
               </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 後日引取の日時（契約時は未定でも、決まったタイミングでここから設定・変更できる） */}
+      <Modal open={!!revisitTarget} onClose={() => setRevisitTarget(null)} title="後日引取の日時" size="md">
+        {revisitTarget && (
+          <div className="space-y-4">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+              現在: {revisitTarget.revisitDate
+                ? `${fmtDate(revisitTarget.revisitDate)}${timeRange(revisitTarget.revisitStart, revisitTarget.revisitEnd) ? ` ${timeRange(revisitTarget.revisitStart, revisitTarget.revisitEnd)}` : ''}`
+                : '日時未定（後日調整）'}
+            </div>
+            <TextField
+              label="引取日（任意）"
+              type="date"
+              value={revisitForm.date}
+              onChange={v => setRevisitForm(prev => ({ ...prev, date: v }))}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <TimeSelect label="開始時間（任意）" value={revisitForm.start} onChange={v => setRevisitForm(prev => ({ ...prev, start: v }))} />
+              <TimeSelect label="終了時間（任意）" value={revisitForm.end} onChange={v => setRevisitForm(prev => ({ ...prev, end: v }))} />
+            </div>
+            <TextField
+              label="メモ（任意）"
+              value={revisitForm.note}
+              onChange={v => setRevisitForm(prev => ({ ...prev, note: v }))}
+              rows={2}
+              placeholder="引取予定の品物・集荷時の注意点など"
+            />
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              引取日を空欄のまま保存すると「日時未定（後日調整）」に戻ります。発行済みの売買契約書PDFの記載は更新されません。
+            </p>
+            <div className="flex justify-between gap-3 pt-1">
+              <button type="button" onClick={handleClearRevisit} disabled={savingRevisit} className="text-xs text-[var(--md-sys-color-error)] hover:underline disabled:opacity-50">
+                後日引取を取り消す
+              </button>
+              <div className="flex gap-3">
+                <Button variant="outlined" type="button" onClick={() => setRevisitTarget(null)} disabled={savingRevisit}>キャンセル</Button>
+                <Button onClick={handleSaveRevisit} loading={savingRevisit} disabled={savingRevisit}>保存</Button>
+              </div>
             </div>
           </div>
         )}

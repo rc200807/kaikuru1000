@@ -20,6 +20,7 @@ import { calcAge, needsFamilyConsent, isMinorBlockedFromDelivery } from '@/lib/a
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 import { getSplitName } from '@/lib/name-utils'
 import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
+import { validateBankAccount, normalizeAccountHolder, normalizeAccountNumber, isYuchoBank, YUCHO_HINT, type BankAccountErrors } from '@/lib/bank-account'
 
 type UserData = {
   id: string
@@ -136,6 +137,8 @@ function MyPageContent() {
   })
   const [savingBank, setSavingBank] = useState(false)
   const [bankEditing, setBankEditing] = useState(false)
+  // 入力チェックの結果（項目ごとのエラーメッセージ）
+  const [bankErrors, setBankErrors] = useState<BankAccountErrors>({})
 
   // 訪問履歴
   const [visits, setVisits] = useState<VisitRecord[]>([])
@@ -677,6 +680,22 @@ function MyPageContent() {
   // 口座情報保存
   async function handleSaveBank(e: React.FormEvent) {
     e.preventDefault()
+    // 入力の形式チェック。口座そのものの実在は金融機関の照会APIが必要なため、
+    // ここでは「振込データとして成立する形か」までを見る（サーバー側でも同じ検査をする）
+    const cleaned = {
+      bankName:      bankForm.bankName.trim(),
+      branchName:    bankForm.branchName.trim(),
+      accountType:   bankForm.accountType,
+      accountNumber: normalizeAccountNumber(bankForm.accountNumber),
+      accountHolder: normalizeAccountHolder(bankForm.accountHolder),
+    }
+    const errors = validateBankAccount(cleaned)
+    setBankErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setMessage({ type: 'error', text: '口座情報の入力内容をご確認ください' })
+      return
+    }
+    setBankForm(cleaned)
     setSavingBank(true)
     setMessage(null)
     const userId = (session?.user as any).id
@@ -684,20 +703,31 @@ function MyPageContent() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        bankName:      bankForm.bankName      || null,
-        branchName:    bankForm.branchName    || null,
-        accountType:   bankForm.accountType   || null,
-        accountNumber: bankForm.accountNumber || null,
-        accountHolder: bankForm.accountHolder || null,
+        bankName:      cleaned.bankName      || null,
+        branchName:    cleaned.branchName    || null,
+        accountType:   cleaned.accountType   || null,
+        accountNumber: cleaned.accountNumber || null,
+        accountHolder: cleaned.accountHolder || null,
       }),
     })
     setSavingBank(false)
     if (res.ok) {
-      setUser(prev => prev ? { ...prev, ...bankForm } : null)
+      const saved = await res.json().catch(() => null)
+      // 口座番号のゼロ埋めなど、サーバー側で整えた値を画面にも反映する
+      const applied = saved ? {
+        bankName: saved.bankName ?? '', branchName: saved.branchName ?? '',
+        accountType: saved.accountType ?? '', accountNumber: saved.accountNumber ?? '',
+        accountHolder: saved.accountHolder ?? '',
+      } : cleaned
+      setBankForm(applied)
+      setUser(prev => prev ? { ...prev, ...applied } : null)
+      setBankErrors({})
       setBankEditing(false)
       setMessage({ type: 'success', text: '口座情報を保存しました' })
     } else {
-      setMessage({ type: 'error', text: '口座情報の保存に失敗しました' })
+      const d = await res.json().catch(() => null)
+      if (d?.fieldErrors) setBankErrors(d.fieldErrors)
+      setMessage({ type: 'error', text: d?.error || '口座情報の保存に失敗しました' })
     }
   }
 
@@ -2884,38 +2914,58 @@ function MyPageContent() {
               ) : (
                 /* 編集フォーム（口座情報がない場合、または編集モードの場合） */
                 <form onSubmit={handleSaveBank} className="space-y-5 max-w-lg">
-                  <BankSearch
-                    bankName={bankForm.bankName}
-                    branchName={bankForm.branchName}
-                    onChange={({ bankName, bankCode, branchName, branchCode }) => {
-                      setBankForm(f => ({ ...f, bankName, branchName }))
-                    }}
-                  />
+                  <div>
+                    <BankSearch
+                      bankName={bankForm.bankName}
+                      branchName={bankForm.branchName}
+                      onChange={({ bankName, bankCode, branchName, branchCode }) => {
+                        setBankForm(f => ({ ...f, bankName, branchName }))
+                        setBankErrors(e => ({ ...e, bankName: undefined, branchName: undefined }))
+                      }}
+                    />
+                    {(bankErrors.bankName || bankErrors.branchName) && (
+                      <p className="mt-1.5 text-xs text-red-600">{bankErrors.bankName || bankErrors.branchName}</p>
+                    )}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-[var(--md-sys-color-on-surface)] mb-1">口座種別</label>
                     <select
                       value={bankForm.accountType}
-                      onChange={e => setBankForm(f => ({ ...f, accountType: e.target.value }))}
+                      onChange={e => { setBankForm(f => ({ ...f, accountType: e.target.value })); setBankErrors(x => ({ ...x, accountType: undefined })) }}
                       className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)] px-3 py-2.5 bg-[var(--md-sys-color-surface)] focus:outline-none focus:border-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
                     >
                       <option value="">選択してください</option>
                       <option value="普通">普通</option>
                       <option value="当座">当座</option>
                     </select>
+                    {bankErrors.accountType && <p className="mt-1.5 text-xs text-red-600">{bankErrors.accountType}</p>}
                   </div>
-                  <TextField
-                    label="口座番号"
-                    value={bankForm.accountNumber}
-                    onChange={v => setBankForm(f => ({ ...f, accountNumber: v }))}
-                    placeholder="例：1234567"
-                    type="text"
-                  />
-                  <TextField
-                    label="口座名義"
-                    value={bankForm.accountHolder}
-                    onChange={v => setBankForm(f => ({ ...f, accountHolder: v }))}
-                    placeholder="例：ヤマダ タロウ"
-                  />
+                  <div>
+                    <TextField
+                      label="口座番号"
+                      value={bankForm.accountNumber}
+                      onChange={v => { setBankForm(f => ({ ...f, accountNumber: v })); setBankErrors(x => ({ ...x, accountNumber: undefined })) }}
+                      placeholder="例：1234567"
+                      type="text"
+                    />
+                    {bankErrors.accountNumber
+                      ? <p className="mt-1.5 text-xs text-red-600">{bankErrors.accountNumber}</p>
+                      : <p className="mt-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">半角数字・ハイフンなしで入力してください（7桁未満の口座は先頭に0を補って保存します）</p>}
+                  </div>
+                  {isYuchoBank(bankForm.bankName) && (
+                    <p className="text-xs rounded-lg px-3 py-2 bg-amber-50 border border-amber-200 text-amber-900">{YUCHO_HINT}</p>
+                  )}
+                  <div>
+                    <TextField
+                      label="口座名義"
+                      value={bankForm.accountHolder}
+                      onChange={v => { setBankForm(f => ({ ...f, accountHolder: v })); setBankErrors(x => ({ ...x, accountHolder: undefined })) }}
+                      placeholder="例：ヤマダ タロウ"
+                    />
+                    {bankErrors.accountHolder
+                      ? <p className="mt-1.5 text-xs text-red-600">{bankErrors.accountHolder}</p>
+                      : <p className="mt-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">通帳どおりのカタカナで入力してください（ひらがな・半角カナは自動でカタカナに直します）</p>}
+                  </div>
                   <div className="flex gap-3">
                     <Button type="submit" disabled={savingBank} loading={savingBank} size="lg">
                       {savingBank ? '保存中...' : '保存する'}

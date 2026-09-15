@@ -8,6 +8,8 @@ import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
 import { normalizePostalCode } from '@/lib/postal'
+import { validateBankAccount, firstBankAccountError, normalizeAccountHolder, padAccountNumber } from '@/lib/bank-account'
+import { verifyBankAndBranch } from '@/lib/zengin-server'
 
 const VALID_CUSTOMER_TYPES = ['visit', 'delivery', 'regular', 'akikuru'] as const
 
@@ -140,12 +142,44 @@ export async function PATCH(
     if (occupation !== undefined) updateData.occupation = occupation ? occupation.trim() : null
     if (leadSource !== undefined) updateData.leadSource = leadSource ? leadSource.trim() : null
   }
-  // 振込先口座情報
+  // 振込先口座情報。
+  // 実在確認（口座名義照会）は金融機関のAPI契約が必要でここではできないため、
+  // 形式チェックと「金融機関・支店が全銀データにあるか」までを行う。
+  const bankTouched = [bankName, branchName, accountType, accountNumber, accountHolder]
+    .some(v => v !== undefined)
+  if (bankTouched) {
+    // 一部だけ送られてきた場合も「保存後の状態」で判定する
+    const merged = {
+      bankName:      bankName      !== undefined ? bankName      : user.bankName,
+      branchName:    branchName    !== undefined ? branchName    : user.branchName,
+      accountType:   accountType   !== undefined ? accountType   : user.accountType,
+      accountNumber: accountNumber !== undefined ? accountNumber : user.accountNumber,
+      accountHolder: accountHolder !== undefined ? accountHolder : user.accountHolder,
+    }
+    const errors = validateBankAccount(merged)
+    const message = firstBankAccountError(errors)
+    if (message) return NextResponse.json({ error: message, fieldErrors: errors }, { status: 400 })
+
+    // 金融機関・支店は変更されたときだけ突き合わせる
+    // （マスタに無い表記で登録された古いデータが、他項目の更新で保存できなくなるのを避ける）
+    const bankChanged = !!merged.bankName &&
+      (merged.bankName !== user.bankName || merged.branchName !== user.branchName)
+    if (bankChanged && merged.bankName && merged.branchName) {
+      const verified = await verifyBankAndBranch(merged.bankName, merged.branchName)
+      if (!verified.ok) {
+        return NextResponse.json(
+          { error: verified.message, fieldErrors: { [verified.field]: verified.message } },
+          { status: 400 },
+        )
+      }
+    }
+  }
   if (bankName      !== undefined) updateData.bankName      = bankName
   if (branchName    !== undefined) updateData.branchName    = branchName
   if (accountType   !== undefined) updateData.accountType   = accountType
-  if (accountNumber !== undefined) updateData.accountNumber = accountNumber
-  if (accountHolder !== undefined) updateData.accountHolder = accountHolder
+  // 口座番号は7桁ゼロ埋め・口座名義は全角カナに揃えて保存する（振込データの形に合わせる）
+  if (accountNumber !== undefined) updateData.accountNumber = accountNumber ? padAccountNumber(accountNumber) : null
+  if (accountHolder !== undefined) updateData.accountHolder = accountHolder ? normalizeAccountHolder(accountHolder) : null
 
   // パスワード変更
   if (newPassword && currentPassword) {

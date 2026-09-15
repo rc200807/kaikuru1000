@@ -194,6 +194,14 @@ export default function BankSearch({ bankName = '', branchName = '', onChange, t
     setSelectedBranch(null)
     setBranchQuery('')
     setUserCleared(false) // 新しい銀行を選択したのでフラグリセット
+    // 銀行を変えた時点で親にも知らせる。支店は選び直しになるので空にする。
+    // （知らせないと、親が持つ前の銀行の支店名が残り、支店欄に差し戻されてしまう）
+    onChange({
+      bankName: bank.normalize?.name || bank.name,
+      bankCode: bank.code,
+      branchName: '',
+      branchCode: '',
+    })
   }
 
   // Select branch

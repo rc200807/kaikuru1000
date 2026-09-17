@@ -82,6 +82,19 @@ type DealRecording = {
   audioUrl: string
 }
 
+/** 対応状況メモ（店舗が案件詳細から自由記入で残す記録。進捗タイムラインにも並ぶ） */
+type ProgressNote = {
+  id: string
+  title: string
+  body: string
+  createdByType: string | null
+  createdByName: string | null
+  createdAt: string
+  updatedAt: string
+  /** 記入後に編集されたか（画面に「編集済み」と出す） */
+  edited: boolean
+}
+
 type Deal = {
   id: string
   /** 案件番号（例: 20260824001）。旧データは未採番の可能性あり */
@@ -242,6 +255,13 @@ export default function DealDetailView({
   const [showConsentModal, setShowConsentModal] = useState(false)
   const [consentDraft, setConsentDraft] = useState<string | null>(null)
 
+  // 対応状況（店舗が自由記入で残す記録。進捗タイムラインにも並ぶ）
+  const [progressNotes, setProgressNotes] = useState<ProgressNote[]>([])
+  const [noteForm, setNoteForm] = useState({ title: '', body: '' })
+  /** 'new' = 新規記入フォームを開いている / メモID = そのメモを編集中 / null = 閉じている */
+  const [noteEditing, setNoteEditing] = useState<string | null>(null)
+  const [savingNote, setSavingNote] = useState(false)
+
   // 会話録音（AI文字起こし・要約）
   const [recordings, setRecordings] = useState<DealRecording[]>([])
   const [recUploading, setRecUploading] = useState(false)
@@ -288,7 +308,7 @@ export default function DealDetailView({
       if (res.status === 403) { setError('この案件を閲覧する権限がありません'); setLoading(false); return }
       if (res.status === 404) { setError('案件が見つかりません'); setLoading(false); return }
       if (!res.ok) { setError('案件の取得に失敗しました'); setLoading(false); return }
-      const data: Deal & { kobutsuLedger?: any; recordings?: DealRecording[] } = await res.json()
+      const data: Deal & { kobutsuLedger?: any; recordings?: DealRecording[]; progressNotes?: ProgressNote[] } = await res.json()
       setDeal(data)
       setDetailEdit(data.detail ?? '')
       setOccurredEdit(toDateInput(data.occurredAt ?? data.createdAt))
@@ -299,6 +319,7 @@ export default function DealDetailView({
         setPaperLedger(data.kobutsuLedger.paperContract ?? null)
       }
       if (Array.isArray(data.recordings)) setRecordings(data.recordings)
+      if (Array.isArray(data.progressNotes)) setProgressNotes(data.progressNotes)
     } catch {
       setError('案件の取得に失敗しました')
     }
@@ -585,6 +606,61 @@ export default function DealDetailView({
   async function handleRetryRecording(recId: string) {
     const res = await fetch(`/api/deals/${dealId}/recordings/${recId}`, { method: 'POST' })
     if (res.ok) loadRecordings()
+  }
+
+  // ── 対応状況（自由記入の記録） ───────────────────────────
+  // 案件まるごとの再取得（load）はスピナーで画面が戻るため、追加・編集・削除は
+  // 返ってきた1件だけを手元の配列に当てる（買取品目の差分反映と同じ流儀）。
+  function openNewNote() {
+    setNoteEditing('new')
+    setNoteForm({ title: '', body: '' })
+  }
+
+  function startEditNote(note: ProgressNote) {
+    setNoteEditing(note.id)
+    setNoteForm({ title: note.title, body: note.body })
+  }
+
+  function cancelNote() {
+    setNoteEditing(null)
+    setNoteForm({ title: '', body: '' })
+  }
+
+  async function saveNote() {
+    if (!noteEditing || !noteForm.title.trim()) return
+    setSavingNote(true)
+    setMsg(null)
+    const isNew = noteEditing === 'new'
+    const res = await fetch(
+      isNew ? `/api/deals/${dealId}/progress-notes` : `/api/deals/${dealId}/progress-notes/${noteEditing}`,
+      {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: noteForm.title.trim(), body: noteForm.body.trim() }),
+      },
+    )
+    setSavingNote(false)
+    if (res.ok) {
+      const saved: ProgressNote = await res.json()
+      // 一覧は新しい順。新規は先頭に積み、編集は同じ位置のまま差し替える
+      setProgressNotes(prev => isNew ? [saved, ...prev] : prev.map(n => n.id === saved.id ? saved : n))
+      cancelNote()
+      setMsg({ type: 'success', text: isNew ? '対応状況を記録しました' : '対応状況を更新しました' })
+    } else {
+      const data = await res.json().catch(() => ({} as any))
+      setMsg({ type: 'error', text: data?.error || '対応状況の保存に失敗しました' })
+    }
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!confirm('この対応状況を削除しますか？（進捗タイムラインからも消えます）')) return
+    const res = await fetch(`/api/deals/${dealId}/progress-notes/${noteId}`, { method: 'DELETE' })
+    if (res.ok) {
+      setProgressNotes(prev => prev.filter(n => n.id !== noteId))
+      if (noteEditing === noteId) cancelNote()
+    } else {
+      setMsg({ type: 'error', text: '対応状況の削除に失敗しました' })
+    }
   }
 
 
@@ -974,7 +1050,8 @@ export default function DealDetailView({
   // 進捗タイムライン（取得可能な日時を時系列で）。
   // showTime=false の項目は「日付だけが意味を持つ」もの（訪問日・引取日など）。
   // 時刻は訪問予定の startTime/endTime を持つので、そちらを sub に添える。
-  const timeline: { label: string; at: string; sub?: string; timeText?: string; showTime?: boolean }[] = [
+  // tag は自動記録と手書きの対応状況を見分けるための小さなラベル、note は対応状況の本文。
+  const timeline: { label: string; at: string; sub?: string; timeText?: string; showTime?: boolean; tag?: string; note?: string }[] = [
     { label: '案件発生', at: deal.occurredAt ?? deal.createdAt, showTime: true },
     ...deal.visitSchedules.map(v => ({
       label: '訪問',
@@ -993,6 +1070,16 @@ export default function DealDetailView({
       })),
     ...(dealEstimate ? [{ label: '見積作成', at: dealEstimate.validUntil, sub: `有効期限 ${fmtDate(dealEstimate.validUntil)}` }] : []),
     ...(dealContract ? [{ label: '契約締結', at: dealContract.agreedAt, showTime: true }] : []),
+    // 店舗が自由記入した対応状況（記入日時で時系列に混ざる）
+    ...progressNotes.map(n => ({
+      label: n.title,
+      at: n.createdAt,
+      showTime: true,
+      tag: '対応状況',
+      sub: [n.createdByName ? `記入 ${n.createdByName}` : null, n.edited ? '編集済み' : null]
+        .filter(Boolean).join(' ／ ') || undefined,
+      note: n.body || undefined,
+    })),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
 
   const pdfUrl = (type: 'contract' | 'estimate', visitId: string, kind: 'sale' | 'invoice') =>
@@ -1310,7 +1397,80 @@ export default function DealDetailView({
               </Section>
             )}
 
-            {/* L5 進捗タイムライン */}
+            {/* L5 対応状況（店舗が自由記入で残す記録。管理ポータルは閲覧のみ） */}
+            <Section
+              title="対応状況"
+              meta={`${progressNotes.length}件`}
+              collapsible
+            >
+            {/* 追加ボタンは本文側に置く（折りたたみが閉じたまま押せてしまうのを避ける） */}
+            {editable && (
+              noteEditing === 'new' ? (
+                <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3 mb-3">
+                  <NoteForm
+                    form={noteForm}
+                    onChange={setNoteForm}
+                    onSave={saveNote}
+                    onCancel={cancelNote}
+                    saving={savingNote}
+                    submitLabel="記録する"
+                  />
+                </div>
+              ) : (
+                <div className="mb-3">
+                  <Button size="sm" variant="outlined" onClick={openNewNote}>＋ 対応状況を記録</Button>
+                </div>
+              )
+            )}
+            {progressNotes.length === 0 ? (
+              <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                {editable
+                  ? 'まだ記録はありません。連絡した内容や現場の状況など、経過を自由に残せます（進捗タイムラインにも並びます）。'
+                  : 'まだ記録はありません。'}
+              </p>
+            ) : (
+              <ul className="space-y-2.5">
+                {progressNotes.map(n => (
+                  <li key={n.id} className="rounded-xl border border-[var(--md-sys-color-outline-variant)] p-3">
+                    {noteEditing === n.id ? (
+                      <NoteForm
+                        form={noteForm}
+                        onChange={setNoteForm}
+                        onSave={saveNote}
+                        onCancel={cancelNote}
+                        saving={savingNote}
+                        submitLabel="更新する"
+                      />
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[var(--md-sys-color-on-surface)] break-words">{n.title}</p>
+                            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+                              <span className="tabular-nums">{fmtDateTime(n.createdAt)}</span>
+                              {n.createdByName && <span className="ml-2">{n.createdByName}</span>}
+                              {n.edited && <span className="ml-2">編集済み</span>}
+                            </p>
+                          </div>
+                          {editable && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button type="button" onClick={() => startEditNote(n)} className="text-xs text-[var(--portal-primary,#374151)] hover:underline">編集</button>
+                              <button type="button" onClick={() => deleteNote(n.id)} className="text-xs text-[var(--md-sys-color-error)] hover:underline">削除</button>
+                            </div>
+                          )}
+                        </div>
+                        {n.body && (
+                          <p className="text-sm text-[var(--md-sys-color-on-surface)] mt-1.5 whitespace-pre-wrap leading-relaxed break-words">{n.body}</p>
+                        )}
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            </Section>
+
+            {/* L6 進捗タイムライン */}
             <Section
               title="進捗タイムライン"
               meta={`${timeline.length}件`}
@@ -1321,8 +1481,14 @@ export default function DealDetailView({
                 <li key={i} className="ml-4">
                   <span className="absolute -left-[5px] w-2.5 h-2.5 rounded-full" style={{ background: 'var(--portal-primary,#374151)' }} />
                   <div className="text-sm text-[var(--md-sys-color-on-surface)]">
+                    {/* 手書きの対応状況は、訪問・契約などの自動記録と見分けられるよう小さな札を付ける */}
+                    {t.tag && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full mr-1.5 align-[1px] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                        {t.tag}
+                      </span>
+                    )}
                     <span className="font-medium">{t.label}</span>
-                    {/* 日時を必ず出す。記録の日時（発生・締結）は時刻まで、
+                    {/* 日時を必ず出す。記録の日時（発生・締結・対応状況）は時刻まで、
                         予定（訪問・引取）は日付＋その予定の時間帯を並べる */}
                     <span className="text-[var(--md-sys-color-on-surface-variant)] ml-2 text-xs tabular-nums">
                       {t.showTime ? fmtDateTime(t.at) : fmtDate(t.at)}
@@ -1332,6 +1498,12 @@ export default function DealDetailView({
                     )}
                   </div>
                   {t.sub && <div className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{t.sub}</div>}
+                  {/* 対応状況の本文。長文でタイムラインが埋まらないよう4行で畳む（全文は対応状況セクション） */}
+                  {t.note && (
+                    <p className="text-xs text-[var(--md-sys-color-on-surface)] mt-0.5 whitespace-pre-wrap leading-relaxed line-clamp-4">
+                      {t.note}
+                    </p>
+                  )}
                 </li>
               ))}
             </ol>
@@ -2447,6 +2619,45 @@ export default function DealDetailView({
 }
 
 // 録音要約の箇条書きブロック
+/**
+ * 対応状況の記入フォーム（新規・編集で共用）。
+ * DealDetailView の中で定義すると親の再レンダーごとに別コンポーネント扱いになり、
+ * 1文字打つたびに input がアンマウントされてフォーカスが飛ぶため、トップレベルに置く。
+ */
+function NoteForm({
+  form, onChange, onSave, onCancel, saving, submitLabel,
+}: {
+  form: { title: string; body: string }
+  onChange: (next: { title: string; body: string }) => void
+  onSave: () => void
+  onCancel: () => void
+  saving: boolean
+  submitLabel: string
+}) {
+  return (
+    <div className="space-y-3">
+      <TextField
+        label="タイトル"
+        value={form.title}
+        onChange={v => onChange({ ...form, title: v })}
+        placeholder="例: お客様へ折り返しのお電話"
+        required
+      />
+      <TextField
+        label="内容"
+        value={form.body}
+        onChange={v => onChange({ ...form, body: v })}
+        placeholder="対応した内容・お客様の反応・次にやることなど"
+        rows={4}
+      />
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="text" onClick={onCancel} disabled={saving}>取消</Button>
+        <Button size="sm" onClick={onSave} loading={saving} disabled={saving || !form.title.trim()}>{submitLabel}</Button>
+      </div>
+    </div>
+  )
+}
+
 function RecList({ title, items }: { title: string; items: string[] }) {
   return (
     <div>

@@ -15,6 +15,7 @@ import { createTimer } from '@/lib/api-timing'
 import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-item-shape'
 import { buildDealLedgerSection } from '@/lib/kobutsu-ledger-server'
 import { loadDealRecordings } from '@/lib/deal-recordings'
+import { loadDealProgressNotes } from '@/lib/deal-progress-notes'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -199,7 +200,7 @@ export async function GET(
   // `deal.dealContract` の有無を見てから叩く**直列**だったので、
   // 日本からは 0.3 秒がまるごと1段ぶん積み上がっていた。
   // ここでは案件のクエリで取得済みの行から組み立てるので追加の往復はゼロ。
-  const [kobutsuLedger, recordings] = await Promise.all([
+  const [kobutsuLedger, recordings, progressNotes] = await Promise.all([
     t.measure('ledger', () => buildDealLedgerSection({
       id: deal.id,
       storeId: deal.storeId,
@@ -210,9 +211,11 @@ export async function GET(
       store: deal.store,
     })),
     t.measure('recordings', () => loadDealRecordings(deal.id)),
+    // 対応状況メモ（店舗の手書き記録。進捗タイムラインにも並べる）
+    t.measure('notes', () => loadDealProgressNotes(deal.id)),
   ])
 
-  return t.json({ ...shaped, kobutsuLedger, recordings })
+  return t.json({ ...shaped, kobutsuLedger, recordings, progressNotes })
 }
 
 // 案件更新（detail / status / storeId）

@@ -833,6 +833,7 @@ model Deal {
   salesContract  SalesContract?            // 案件の売買契約書（1:1）
   estimate       Estimate?                 // 案件の見積（1:1）
   recordings     DealRecording[]           // 会話の録音音声（AI文字起こし・要約）
+  progressNotes  DealProgressNote[]        // 対応状況の記録（店舗が自由記入。進捗タイムラインに並ぶ）
   akikuruInvoice AkikuruInvoice?           // アキクル案件のStripe請求書（1:1）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -873,6 +874,24 @@ model DealRecording {
 
   @@index([dealId, createdAt])    // 案件詳細の録音一覧（新しい順）
   @@index([status])               // cron が解析待ちを拾う
+}
+
+// 案件の対応状況メモ（店舗が案件詳細から自由記入で残す。タイトル＋本文＋記入日時）。
+// 進捗タイムライン（訪問・契約などの自動記録）に、手書きの経過として並べて表示する。
+model DealProgressNote {
+  id            String   @id @default(cuid())
+  dealId        String
+  deal          Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  title         String                       // 見出し（例: お客様へ折り返し連絡）
+  body          String   @db.Text            // 本文（自由記入・改行可）
+  // 記入者スナップショット（Deal.createdBy* と同じ流儀。店舗名やメンバー名が後から変わっても記録は残る）
+  createdByType String?                      // store / admin / superadmin / hr
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime @default(now())     // 記入日時（タイムラインの並び順・表示に使う）
+  updatedAt     DateTime @updatedAt
+
+  @@index([dealId, createdAt])  // 案件詳細の対応状況一覧（新しい順）
 }
 
 // 在庫（店舗の販売商品。買取品目から変換可。将来のマーケット自動出品を見据えた設計）

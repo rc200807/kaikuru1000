@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import MessageBanner from '@/components/MessageBanner'
 import GlassOrbsBackground from '@/components/customer/GlassOrbsBackground'
+import { loginErrorMessage } from '@/lib/login-error'
 
 
 export default function CustomerLoginPage() {
@@ -49,7 +50,7 @@ export default function CustomerLoginPage() {
     setLoading(false)
 
     if (result?.error) {
-      setError('メールアドレス（または電話番号）かパスワードが間違っています')
+      setError(loginErrorMessage(result.error, 'メールアドレス（または電話番号）かパスワードが間違っています'))
     } else {
       // ログイン直後はハード遷移する。
       // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、

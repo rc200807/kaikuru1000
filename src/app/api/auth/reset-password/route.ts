@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { revokeAllDeviceSessions } from '@/lib/device-session'
+import { clearStoreLoginBlocks } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   try {
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
         // パスワード変更 → 全デバイスの長期セッションを失効
         for (const store of stores) {
           await revokeAllDeviceSessions('store', store.id)
+          await clearStoreLoginBlocks(store.id, resetToken.email)
         }
       } else if (resetToken.storeId) {
         // オーナーではなくスタッフアカウントのリセット
@@ -94,6 +96,7 @@ export async function POST(req: Request) {
         }
         await prisma.storeMember.update({ where: { id: member.id }, data: { password: hashedPassword } })
         await revokeAllDeviceSessions('storeMember', member.id)
+        await clearStoreLoginBlocks(resetToken.storeId, resetToken.email)
       } else {
         return NextResponse.json({ error: 'アカウントが見つかりません' }, { status: 400 })
       }

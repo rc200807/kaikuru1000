@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { loginErrorMessage } from '@/lib/login-error'
 
 export default function LinkPartnerLoginPage() {
   const router = useRouter()
@@ -32,7 +33,7 @@ export default function LinkPartnerLoginPage() {
     const result = await signIn('linkpartner', { redirect: false, email, password })
     setLoading(false)
     if (result?.error) {
-      setError(result.error === 'CredentialsSignin' ? 'メールまたはパスワードが正しくありません' : result.error)
+      setError(loginErrorMessage(result.error, 'メールまたはパスワードが正しくありません'))
     } else if (result?.ok) {
       // mustChangePassword の場合は middleware が onboarding へ誘導する
       // ログイン直後はハード遷移する。

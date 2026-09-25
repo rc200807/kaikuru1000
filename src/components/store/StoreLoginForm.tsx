@@ -17,6 +17,7 @@ import TextField from '@/components/TextField'
 import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import PasskeyLoginButton from '@/components/PasskeyLoginButton'
+import { loginErrorMessage } from '@/lib/login-error'
 
 /** ログイン後にこの店舗をログイン画面の初期選択として覚えておくキー */
 export const LAST_STORE_CODE_KEY = 'storeLoginLastCode'
@@ -75,7 +76,7 @@ export default function StoreLoginForm({ store }: { store: { code: string; name:
     setLoading(false)
 
     if (result?.error) {
-      setError('メールアドレスまたはパスワードが間違っています')
+      setError(loginErrorMessage(result.error, 'メールアドレスまたはパスワードが間違っています'))
     } else {
       // 次回このログイン画面を開いたときの初期選択に使う
       try { localStorage.setItem(LAST_STORE_CODE_KEY, store.code) } catch { /* プライベートモード等は無視 */ }

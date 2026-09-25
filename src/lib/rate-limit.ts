@@ -75,3 +75,16 @@ export async function getRemainingAttempts(key: string): Promise<number> {
   if (!record) return MAX_FAILURES
   return Math.max(0, MAX_FAILURES - record.failCount)
 }
+
+/**
+ * 店舗アカウントのログインブロックを解除する（パスワードを再発行したとき用）。
+ * 再発行前の失敗でブロック中のままだと、新しいパスワードを正しく入れても
+ * ブロックが明けるまで入れない。キーは auth.ts の店舗ログインと同じ形式
+ * （店舗専用ログイン画面: store:{storeId}:{email} ／ 店舗未指定: store:{email}）。
+ */
+export async function clearStoreLoginBlocks(storeId: string, email: string | null | undefined): Promise<void> {
+  if (!email) return
+  await prisma.loginAttempt.deleteMany({
+    where: { key: { in: [`store:${storeId}:${email}`, `store:${email}`] } },
+  })
+}

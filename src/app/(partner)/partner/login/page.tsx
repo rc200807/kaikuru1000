@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { loginErrorMessage } from '@/lib/login-error'
 
 export default function PartnerLoginPage() {
   const router = useRouter()
@@ -32,7 +33,7 @@ export default function PartnerLoginPage() {
     const result = await signIn('partner', { redirect: false, email, password })
     setLoading(false)
     if (result?.error) {
-      setError(result.error === 'CredentialsSignin' ? 'メールまたはパスワードが正しくありません' : result.error)
+      setError(loginErrorMessage(result.error, 'メールまたはパスワードが正しくありません'))
     } else if (result?.ok) {
       // ログイン直後はハード遷移する。
       // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、

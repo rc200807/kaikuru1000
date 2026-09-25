@@ -8,6 +8,7 @@ import { deleteFile } from '@/lib/storage'
 import { saveImage } from '@/lib/image-server'
 import { recordAccessLog } from '@/lib/access-log'
 import { revokeAllDeviceSessions } from '@/lib/device-session'
+import { clearStoreLoginBlocks } from '@/lib/rate-limit'
 
 const MIN_PASSWORD_LENGTH = 8
 
@@ -83,7 +84,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   })
 
   // パスワード変更時は該当メンバーの全デバイス長期セッションを失効
-  if (updateData.password) await revokeAllDeviceSessions('storeMember', id)
+  if (updateData.password) {
+    await revokeAllDeviceSessions('storeMember', id)
+    // 変更前の失敗でログインがブロック中なら解除する（新しいパスワードで即入れるように）
+    await clearStoreLoginBlocks(member.storeId, updated.email)
+  }
 
   await recordAccessLog({
     userType: sessionUser.role,

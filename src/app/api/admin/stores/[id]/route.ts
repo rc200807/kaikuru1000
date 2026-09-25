@@ -7,6 +7,8 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
 import { sendStorePasswordResetNotification } from '@/lib/mailer'
+import { clearStoreLoginBlocks } from '@/lib/rate-limit'
+import { revokeAllDeviceSessions } from '@/lib/device-session'
 import { operatorInheritedValues } from '@/lib/operator-store-sync'
 import { parseStoreServices, stringifyStoreServices } from '@/lib/store-services'
 
@@ -38,6 +40,10 @@ export async function PATCH(
       where: { id },
       data: { password: hashedPassword },
     })
+    // 再発行前の失敗でブロック中だと、新しいパスワードでも解除まで入れないので解除する
+    await clearStoreLoginBlocks(store.id, store.email)
+    // パスワード変更 → 全デバイスの長期セッションを失効
+    await revokeAllDeviceSessions('store', store.id)
     return NextResponse.json({ password: plainPassword, hasEmail: !!store.email })
   }
 

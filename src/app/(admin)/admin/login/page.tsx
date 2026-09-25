@@ -9,6 +9,7 @@ import Button from '@/components/Button'
 import MessageBanner from '@/components/MessageBanner'
 import PasskeyLoginButton from '@/components/PasskeyLoginButton'
 import LoginFooter from '@/components/LoginFooter'
+import { loginErrorMessage } from '@/lib/login-error'
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('')
@@ -29,7 +30,7 @@ export default function AdminLoginPage() {
     setLoading(false)
 
     if (result?.error) {
-      setError('メールアドレスまたはパスワードが間違っています')
+      setError(loginErrorMessage(result.error, 'メールアドレスまたはパスワードが間違っています'))
     } else {
       // ログイン直後はハード遷移する。
       // SessionProvider がルート(providers.tsx)と各Shellで入れ子になっており、

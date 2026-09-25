@@ -30,7 +30,7 @@ import Modal from '@/components/Modal'
 import DocumentPdfPreview from '@/components/DocumentPdfPreview'
 import Section, { SECTION_CLS } from '@/components/detail/SectionCard'
 import { PropRow } from '@/components/detail/PropRow'
-import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, type CustomerType } from '@/lib/customer-types'
+import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, customerTypePill, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
@@ -168,12 +168,6 @@ function getStoreStepsDone(status: string): number {
     case 'transferred': return 6
     default: return 0
   }
-}
-
-const TYPE_MAP: Record<string, { label: string; cls: string }> = {
-  delivery: { label: '宅配型', cls: 'bg-blue-100 text-blue-700' },
-  regular: { label: '通常買取', cls: 'bg-purple-100 text-purple-700' },
-  visit: { label: '訪問型', cls: 'bg-green-100 text-green-700' },
 }
 
 type TabKey = 'info' | 'memos' | 'add' | 'history' | 'shipments' | 'inquiries' | 'deals'
@@ -790,7 +784,7 @@ export default function StoreCustomerDetailPage() {
   }
 
   const isDelivery = customer.customerType === 'delivery'
-  const typeInfo = TYPE_MAP[customer.customerType] ?? TYPE_MAP.visit
+  const typeInfo = customerTypePill(customer.customerType)
 
   // ───── ダッシュボード集計 ─────
   // 買取金額の正は案件（Deal.purchaseAmount）。買取品目は案件に紐づくため、

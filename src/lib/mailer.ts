@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/encrypt'
 import { buildInvoiceNotesHtml, buildTokushohoHtml, buildLegalNoticeText } from '@/lib/legal-texts'
+import { customerTypePill } from '@/lib/customer-types'
 
 /**
  * HTMLエスケープ（メール本文に動的値を差し込む際に使用）
@@ -1324,7 +1325,7 @@ export async function sendStoreAssignmentNotification(params: {
 
   const { transporter, from } = result
 
-  const typeLabel = params.customerType === 'delivery' ? '宅配型' : params.customerType === 'visit' ? '訪問型' : '通常買取'
+  const typeLabel = customerTypePill(params.customerType).label
 
   const html = `
 <!DOCTYPE html>

@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { prisma } from './prisma'
 import { encrypt, decrypt } from './encrypt'
+import { customerTypePill } from '@/lib/customer-types'
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? ''
@@ -156,9 +157,7 @@ export async function createCalendarEvent(
       endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000)
     }
 
-    const typeLabel = visitSchedule.customerType === 'delivery' ? '宅配型'
-      : visitSchedule.customerType === 'regular' ? '通常買取'
-      : '訪問型'
+    const typeLabel = customerTypePill(visitSchedule.customerType).label
 
     const descriptionParts: string[] = []
     if (visitSchedule.startTime || visitSchedule.endTime) {
@@ -230,9 +229,7 @@ export async function updateCalendarEvent(
     const startTime = new Date(visitSchedule.visitDate)
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000)
 
-    const typeLabel = visitSchedule.customerType === 'delivery' ? '宅配型'
-      : visitSchedule.customerType === 'regular' ? '通常買取'
-      : '訪問型'
+    const typeLabel = customerTypePill(visitSchedule.customerType).label
 
     const descriptionParts: string[] = []
     if (share.visitNote && visitSchedule.note) {

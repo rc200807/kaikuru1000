@@ -25,6 +25,7 @@ import ColumnPicker from '@/components/list/ColumnPicker'
 import PageNav from '@/components/list/PageNav'
 import AdvancedFilterPanel from '@/components/list/AdvancedFilterPanel'
 import { useListQueryState, serializeParams } from '@/hooks/useListQueryState'
+import { customerTypePill } from '@/lib/customer-types'
 import {
   storeChips, storeAdvFields, STORE_PRESET_VIEWS, FILTER_PARAM_KEYS, parseFilterString, TYPE_OPTIONS,
 } from '@/components/list/customer-filter-defs'
@@ -486,12 +487,7 @@ export default function StoreCustomersPage() {
       header: 'タイプ',
       hideOnMobile: true,
       render: (c) => {
-        const typeMap: Record<string, { label: string; cls: string }> = {
-          delivery: { label: '宅配型', cls: 'bg-blue-100 text-blue-700' },
-          regular:  { label: '通常買取', cls: 'bg-purple-100 text-purple-700' },
-          visit:    { label: '訪問型', cls: 'bg-green-100 text-green-700' },
-        }
-        const t = typeMap[c.customerType] ?? typeMap.visit
+        const t = customerTypePill(c.customerType)
         return <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${t.cls}`}>{t.label}</span>
       },
     },

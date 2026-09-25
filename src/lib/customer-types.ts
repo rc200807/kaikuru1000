@@ -21,6 +21,24 @@ export const CUSTOMER_TYPE_BADGE: Record<CustomerType, { bg: string; fg: string 
   akikuru:  { bg: 'rgba(251,191,36,0.15)',  fg: '#fbbf24' },
 }
 
+/** Tailwind のピル用クラス（店舗ポータルの一覧・詳細のバッジ） */
+export const CUSTOMER_TYPE_PILL_CLASS: Record<CustomerType, string> = {
+  visit:    'bg-green-100 text-green-700',
+  delivery: 'bg-blue-100 text-blue-700',
+  regular:  'bg-purple-100 text-purple-700',
+  akikuru:  'bg-amber-100 text-amber-700',
+}
+
+/**
+ * 表示用のラベル＋ピルクラス。画面ごとに独自の対応表を持つと種別追加時に漏れる
+ * （アキクルが対応表に無く「訪問型」にフォールバック表示されていた）ので、ここを通す。
+ * 不明な値は訪問型に寄せず、値そのものをグレーで出す。
+ */
+export function customerTypePill(t: string | null | undefined): { label: string; cls: string } {
+  if (isCustomerType(t)) return { label: CUSTOMER_TYPE_LABEL[t], cls: CUSTOMER_TYPE_PILL_CLASS[t] }
+  return { label: t || '未設定', cls: 'bg-gray-100 text-gray-600' }
+}
+
 /** 文字列が有効な customerType か判定 */
 export function isCustomerType(v: string | null | undefined): v is CustomerType {
   return typeof v === 'string' && (CUSTOMER_TYPES as readonly string[]).includes(v)

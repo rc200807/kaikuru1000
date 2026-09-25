@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
 import { normalizePostalCode } from '@/lib/postal'
+import { customerTypesForPrimary } from '@/lib/customer-types'
 import { validateBankAccount, firstBankAccountError, normalizeAccountHolder, padAccountNumber } from '@/lib/bank-account'
 import { verifyBankAndBranch } from '@/lib/zengin-server'
 
@@ -137,6 +138,9 @@ export async function PATCH(
       const primary = customerType ?? user.customerType
       const set = Array.from(new Set([...(customerTypes ?? []), primary]))
       updateData.customerTypes = JSON.stringify(set)
+    } else if (customerType !== undefined && customerType !== user.customerType) {
+      // 主タイプだけの変更: 表示・絞り込みに使う customerTypes も新しい主タイプに揃える
+      updateData.customerTypes = customerTypesForPrimary(customerType)
     }
     if (visitFrequencyMonths !== undefined) updateData.visitFrequencyMonths = visitFrequencyMonths
     if (occupation !== undefined) updateData.occupation = occupation ? occupation.trim() : null

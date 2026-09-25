@@ -30,7 +30,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import StatusBadge from '@/components/StatusBadge'
 import BankSearch from '@/components/customer/BankSearch'
 import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
-import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, isCustomerType, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
 import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
@@ -743,9 +743,13 @@ export default function AdminCustomersPage() {
     })
     setChangingType(null)
     if (res.ok) {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, customerType: newType } : u))
-      setDetailUser(prev => prev && prev.id === userId ? { ...prev, customerType: newType } : prev)
-      setMessage({ type: 'success', text: `顧客タイプを「${newType === 'delivery' ? '宅配型' : newType === 'regular' ? '通常買取' : '訪問型'}」に変更しました` })
+      // サーバーで customerTypes（バッジ表示の元）も揃えているので、返り値で両方を反映する
+      const updated: { customerType: string; customerTypes: string } = await res.json()
+      const patch = { customerType: updated.customerType, customerTypes: updated.customerTypes }
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...patch } : u))
+      setDetailUser(prev => prev && prev.id === userId ? { ...prev, ...patch } : prev)
+      const label = isCustomerType(updated.customerType) ? CUSTOMER_TYPE_LABEL[updated.customerType] : updated.customerType
+      setMessage({ type: 'success', text: `顧客タイプを「${label}」に変更しました` })
     } else {
       setMessage({ type: 'error', text: 'タイプ変更に失敗しました' })
     }

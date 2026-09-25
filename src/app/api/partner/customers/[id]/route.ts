@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePartner } from '@/lib/partner-auth'
 import { z } from 'zod'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
+import { customerTypesForPrimary } from '@/lib/customer-types'
 
 const updateSchema = z.object({
   name:                 z.string().min(1).max(120).optional(),
@@ -70,7 +71,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   // ライセンスキー所有のみ編集可
   const customer = await prisma.user.findFirst({
     where: { id, licenseKeyId: { not: null } },
-    select: { id: true },
+    select: { id: true, customerType: true },
   })
   if (!customer) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -86,6 +87,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     ...buildUserNameUpdateData({ name, furigana, lastName, firstName, lastNameKana, firstNameKana }),
   }
   if (data.email === '') data.email = null
+  // 主タイプを変えたら表示・絞り込みに使う customerTypes も揃える
+  if (data.customerType && data.customerType !== customer.customerType) {
+    data.customerTypes = customerTypesForPrimary(data.customerType)
+  }
 
   const updated = await prisma.user.update({
     where: { id },

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { CUSTOMER_TYPES, isCustomerType, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
+import { CUSTOMER_TYPES, customerTypesForPrimary, isCustomerType, stringifyCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { recordAccessLog } from '@/lib/access-log'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
 import { autoSyncCustomerRows, autoSyncCustomerRowsDeleted } from '@/lib/sheet-sync'
@@ -64,6 +64,9 @@ export async function PATCH(
       data.customerTypes = stringifyCustomerTypes(types, primary)
       // 主タイプ未指定なら配列の先頭を主タイプに昇格
       if (!data.customerType && types.length > 0) data.customerType = types[0]
+    } else if (data.customerType) {
+      // 主タイプだけの変更: 表示・絞り込みに使う customerTypes も新しい主タイプに揃える
+      data.customerTypes = customerTypesForPrimary(data.customerType as CustomerType)
     }
     const updated = await prisma.user.update({
       where: { id },
@@ -120,6 +123,8 @@ export async function PATCH(
       const primary = (data.customerType as string) ?? user.customerType
       data.customerTypes = stringifyCustomerTypes(types, primary)
       if (!data.customerType && types.length > 0) data.customerType = types[0]
+    } else if (data.customerType && data.customerType !== user.customerType) {
+      data.customerTypes = customerTypesForPrimary(data.customerType as CustomerType)
     }
 
     if (typeof body.visitFrequencyMonths === 'number') {

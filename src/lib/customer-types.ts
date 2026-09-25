@@ -50,6 +50,16 @@ export function stringifyCustomerTypes(types: CustomerType[], primary?: string |
 }
 
 /**
+ * 主タイプだけを変更するときの customerTypes（JSON文字列）。
+ * 主タイプの置き換えは「そのタイプの顧客にする」操作なので、表示バッジ・一覧の絞り込みに使う
+ * customerTypes も [新しい主タイプ] に揃える（揃えないと旧タイプのバッジが残り、絞り込みも旧タイプでヒットする）。
+ * 一括変更（admin/users/bulk・stores/[id]/customers/bulk）と同じ規則。
+ */
+export function customerTypesForPrimary(primary: CustomerType): string {
+  return JSON.stringify([primary])
+}
+
+/**
  * マイページ表示判定: アキクルは通常買取と同じビューを表示する。
  * 戻り値は表示用の "ビューキー"。delivery / visit / regular のいずれか。
  */

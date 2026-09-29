@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { sendWelcomeWithPasswordEmail } from '@/lib/mailer'
 import { generateSecurePassword } from '@/lib/password-utils'
 import { ADMIN_ROLES } from '@/lib/admin-auth'
+import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 
 const createMemberSchema = z.object({
   name:  z.string().min(1, '氏名は必須です').max(100),
@@ -21,6 +22,10 @@ const createIdpassMemberSchema = z.object({
   loginId: z.string().min(4, 'ログインIDは4文字以上で入力してください').max(50)
     .regex(/^[a-zA-Z0-9._-]+$/, 'ログインIDは半角英数字と . _ - のみ使用できます'),
   role:    z.enum(['admin', 'hr']).optional(),
+  // 任意指定の初期パスワード（空・未指定なら自動生成）
+  password: z.string().max(128).optional()
+    .transform(v => (v && v.length > 0 ? v : undefined))
+    .refine(v => v === undefined || PASSWORD_REGEX.test(v), PASSWORD_ERROR),
 })
 
 async function requireAnyAdmin() {
@@ -63,14 +68,14 @@ export async function POST(request: NextRequest) {
     if (!p.success) {
       return NextResponse.json({ error: p.error.issues[0]?.message ?? 'バリデーションエラー' }, { status: 400 })
     }
-    const { name, loginId, role } = p.data
+    const { name, loginId, role, password } = p.data
 
     const dup = await prisma.admin.findUnique({ where: { loginId } })
     if (dup) {
       return NextResponse.json({ error: 'このログインIDはすでに使用されています' }, { status: 409 })
     }
 
-    const rawPassword = generateSecurePassword()
+    const rawPassword = password ?? generateSecurePassword()
     const hashed = await bcrypt.hash(rawPassword, 10)
     const member = await prisma.admin.create({
       data: {

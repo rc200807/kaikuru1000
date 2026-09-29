@@ -20,6 +20,7 @@ import {
   describeUserAgent,
 } from '@/components/admin/LoginRequests'
 import type { AdminLoginRequestItem } from '@/app/api/admin/login-requests/route'
+import { PASSWORD_REGEX, PASSWORD_RULE, PASSWORD_ERROR } from '@/lib/passwordValidation'
 
 type AdminRole = 'admin' | 'superadmin' | 'hr'
 
@@ -84,7 +85,12 @@ export default function AdminMembersPage() {
   const [inviteMethod, setInviteMethod] = useState<'email' | 'idpass'>('email')
   const [loginId, setLoginId] = useState('')
   const [idpassRole, setIdpassRole] = useState<'admin' | 'hr'>('admin')
+  // 初期パスワード: 'auto'（自動生成） | 'custom'（任意に指定）
+  const [idpassPwMode, setIdpassPwMode] = useState<'auto' | 'custom'>('auto')
+  const [idpassPassword, setIdpassPassword] = useState('')
+  const [idpassPasswordConfirm, setIdpassPasswordConfirm] = useState('')
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -139,16 +145,30 @@ export default function AdminMembersPage() {
     setForm({ name: '', email: '' })
     setLoginId('')
     setIdpassRole('admin')
+    setIdpassPwMode('auto')
+    setIdpassPassword('')
+    setIdpassPasswordConfirm('')
+    setFormError('')
     setInviteMethod('email')
   }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true)
     setMessage(null)
+    setFormError('')
+
+    const customPw = inviteMethod === 'idpass' && idpassPwMode === 'custom'
+    if (customPw) {
+      if (!PASSWORD_REGEX.test(idpassPassword)) { setFormError(PASSWORD_ERROR); return }
+      if (idpassPassword !== idpassPasswordConfirm) { setFormError('確認用パスワードが一致しません'); return }
+    }
+    setSaving(true)
 
     const payload = inviteMethod === 'idpass'
-      ? { authMethod: 'idpass', name: form.name, loginId, role: idpassRole }
+      ? {
+          authMethod: 'idpass', name: form.name, loginId, role: idpassRole,
+          ...(customPw ? { password: idpassPassword } : {}),
+        }
       : form
 
     const res = await fetch('/api/admin/members', {
@@ -174,8 +194,9 @@ export default function AdminMembersPage() {
       setShowForm(false)
       resetForm()
     } else {
-      const d = await res.json()
-      setMessage({ type: 'error', text: d.error || 'アカウントの作成に失敗しました' })
+      const d = await res.json().catch(() => ({}))
+      // モーダルを開いたまま入力を直せるよう、エラーはモーダル内に出す
+      setFormError(d.error || 'アカウントの作成に失敗しました')
     }
   }
 
@@ -819,16 +840,63 @@ export default function AdminMembersPage() {
                   <option value="hr">HR（人事）</option>
                 </select>
               </div>
+              {/* 初期パスワード: 自動生成 / 任意に指定 */}
+              <div>
+                <span className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">初期パスワード</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { v: 'auto', label: '自動生成' },
+                    { v: 'custom', label: '任意に指定' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => { setIdpassPwMode(opt.v); setFormError('') }}
+                      className={`text-sm font-medium px-3 py-2 rounded-lg border transition-colors ${
+                        idpassPwMode === opt.v
+                          ? 'border-[var(--portal-primary,#374151)] bg-[color-mix(in_srgb,var(--portal-primary,#374151)_12%,transparent)] text-[var(--md-sys-color-on-surface)]'
+                          : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-low)]'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {idpassPwMode === 'custom' && (
+                <>
+                  <TextField
+                    label="パスワード"
+                    type="password"
+                    value={idpassPassword}
+                    onChange={setIdpassPassword}
+                    required
+                    autoComplete="new-password"
+                    helper={PASSWORD_RULE}
+                  />
+                  <TextField
+                    label="パスワード（確認）"
+                    type="password"
+                    value={idpassPasswordConfirm}
+                    onChange={setIdpassPasswordConfirm}
+                    required
+                    autoComplete="new-password"
+                    error={idpassPasswordConfirm && idpassPassword !== idpassPasswordConfirm ? '確認用パスワードが一致しません' : undefined}
+                  />
+                </>
+              )}
               <div className="bg-[var(--md-sys-color-surface-container-low)] rounded-lg p-3 flex gap-3 items-start">
                 <svg className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-                  メール不要。初期パスワードを発行して本人へ手渡します。パスキーは不要で、本人がID・パスワードでログインするたびに<strong>ログインリクエスト</strong>が届き、<strong>管理者以上の誰かが承認</strong>するとログインできます。
+                  メール不要。初期パスワード（自動生成または任意に指定）を本人へ手渡します。パスキーは不要で、本人がID・パスワードでログインするたびに<strong>ログインリクエスト</strong>が届き、<strong>管理者以上の誰かが承認</strong>するとログインできます。
                 </p>
               </div>
             </>
           )}
+          {/* 送信ボタン（フッター）の直上に出す。上に置くとスクロールで見えない */}
+          {formError && <MessageBanner severity="error">{formError}</MessageBanner>}
         </form>
       </Modal>
 

@@ -58,7 +58,7 @@ export async function GET(
       // Deal のスカラーは明示列挙する。include にすると preConsentSignature（署名画像の base64）
       // まで毎回引いてしまい、用途は hasPreConsent の真偽値だけなので丸ごと無駄になる
       id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
-      detail: true, status: true, category: true, occurredAt: true,
+      detail: true, status: true, category: true, leadSource: true, occurredAt: true,
       createdByType: true, createdById: true, createdByName: true, memberId: true,
       purchaseAmount: true, billingAmount: true, purchaseUpliftPercent: true,
       preConsentAt: true, paperContractImages: true, paperContractAgreedAt: true,
@@ -67,7 +67,7 @@ export async function GET(
         select: {
           id: true, name: true, furigana: true, email: true, phone: true, address: true, customerType: true,
           // 顧客情報セクションに出す属性（生年月日は身分証OCR由来、職業は売買契約書作成時に取得）
-          birthDate: true, idBirthDate: true, idDocumentType: true, occupation: true,
+          birthDate: true, idBirthDate: true, idDocumentType: true, occupation: true, lineName: true,
         },
       },
       store: {
@@ -230,7 +230,7 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category, paperContractAgreedAt } = body
+  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category, paperContractAgreedAt, leadSource } = body
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -258,6 +258,10 @@ export async function PATCH(
   if (detail !== undefined) updateData.detail = detail || null
   if (status !== undefined) updateData.status = status
   if (category !== undefined) updateData.category = category
+  // 流入経路（案件ごとに編集可。空文字/null で未設定に戻す）
+  if (leadSource !== undefined) {
+    updateData.leadSource = typeof leadSource === 'string' && leadSource.trim() ? leadSource.trim().slice(0, 100) : null
+  }
   // 担当店舗の変更は管理者のみ
   if (storeId !== undefined && isAdmin) updateData.storeId = storeId || null
   // 案件発生日（管理・店舗とも編集可）。不正値は無視。

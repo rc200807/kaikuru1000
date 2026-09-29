@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     take: EXPORT_LIMIT,
     select: {
       id: true, memberId: true,
-      dealNumber: true, createdAt: true, occurredAt: true, status: true, category: true,
+      dealNumber: true, createdAt: true, occurredAt: true, status: true, category: true, leadSource: true,
       purchaseAmount: true, billingAmount: true, preConsentAt: true, inquiryId: true,
       user: { select: { name: true, phone: true, customerType: true, leadSource: true } },
       store: { select: { name: true } },
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     d.preConsentAt ? '取得済み' : '未取得',
     d.salesContract ? 'あり' : 'なし',
     d._count.visitSchedules,
-    d.user?.leadSource ?? '',
+    d.leadSource ?? '',
     d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '',
     d.assigneeName ?? '',
     d.inquiryId ? '問い合わせ由来' : '手動作成',

@@ -61,6 +61,7 @@ type User = {
   customerTypes?: string  // JSON配列（複数可）
   visitFrequencyMonths: number
   leadSource?: string | null  // 流入経路（手入力）
+  lineName?: string | null  // LINEアカウント名（手入力）
   trackedChannel?: string | null  // 計測流入元（アクセス解析の初回セッションchannel。紐付けなしはnull）
   tags?: CustomerTagView[]        // 顧客タグ（フォーム由来の自動付与＋手動付与）
   // 振込先口座情報
@@ -295,7 +296,7 @@ export default function AdminCustomersPage() {
 
   // 顧客情報編集
   const [editMode, setEditMode] = useState(false)
-  const [editForm, setEditForm] = useState<{ lastName: string; firstName: string; lastNameKana: string; firstNameKana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number; leadSource: string }>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1, leadSource: '' })
+  const [editForm, setEditForm] = useState<{ lastName: string; firstName: string; lastNameKana: string; firstNameKana: string; email: string; phone: string; phone2: string; phone3: string; address: string; internalNote: string; customerType: string; customerTypes: string[]; visitFrequencyMonths: number; leadSource: string; lineName: string }>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', address: '', internalNote: '', customerType: 'visit', customerTypes: ['visit'], visitFrequencyMonths: 1, leadSource: '', lineName: '' })
   const [leadSources, setLeadSources] = useState<{ id: string; name: string }[]>([])
   // 絞り込みの選択肢用（使われている顧客タグ）
   const [allTags, setAllTags] = useState<{ label: string; count: number }[]>([])
@@ -318,7 +319,7 @@ export default function AdminCustomersPage() {
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [addStep, setAddStep] = useState<1 | 2>(1)
   const [addForm, setAddForm] = useState({
-    lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '',
+    lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '', lineName: '',
   })
   const [addSubmitting, setAddSubmitting] = useState(false)
   const [addStoreSearch, setAddStoreSearch] = useState('')
@@ -787,6 +788,7 @@ export default function AdminCustomersPage() {
       customerTypes: types.length > 0 ? types : [detailUser.customerType],
       visitFrequencyMonths: detailUser.visitFrequencyMonths ?? 1,
       leadSource: (detailUser as any).leadSource || '',
+      lineName: (detailUser as any).lineName || '',
     })
     setEditMode(true)
   }
@@ -865,6 +867,7 @@ export default function AdminCustomersPage() {
           customerTypes: editForm.customerTypes,
           visitFrequencyMonths: editForm.visitFrequencyMonths,
           leadSource: editForm.leadSource || null,
+          lineName: editForm.lineName.trim() || null,
         }),
       })
       if (res.ok) {
@@ -885,6 +888,7 @@ export default function AdminCustomersPage() {
           customerType: updated.customerType ?? editForm.customerType,
           visitFrequencyMonths: updated.visitFrequencyMonths ?? editForm.visitFrequencyMonths,
           leadSource: updated.leadSource ?? editForm.leadSource,
+          lineName: updated.lineName ?? (editForm.lineName.trim() || null),
         }
         setDetailUser(prev => prev ? { ...prev, ...patch } : null)
         setUsers(prev => prev.map(u => u.id === detailUser.id ? { ...u, ...patch } : u))
@@ -1045,6 +1049,7 @@ export default function AdminCustomersPage() {
           // パスワードは未指定にしてAPI側で自動生成させる
           customerType: addForm.customerType,
           leadSource: addForm.leadSource || undefined,
+          lineName: addForm.lineName.trim() || undefined,
           skipLicenseKey: true,
         }),
       })
@@ -1133,7 +1138,7 @@ export default function AdminCustomersPage() {
     setWizardDealDetail('')
     setWizardDealId(null)
     setWizardSchedule({ storeId: '', visitDate: '', startTime: '', endTime: '', note: '' })
-    setAddForm({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '' })
+    setAddForm({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', customerType: 'regular', storeId: '', leadSource: '', lineName: '' })
     setAddStoreSearch('')
     setAddStoreOpen(false)
     setMessage({ type: 'success', text: `${name} を追加しました` })
@@ -1909,6 +1914,12 @@ export default function AdminCustomersPage() {
                         ))}
                       </select>
                     </div>
+                    <TextField
+                      label="LINEアカウント名"
+                      value={editForm.lineName}
+                      onChange={v => setEditForm(prev => ({ ...prev, lineName: v }))}
+                      placeholder="LINEに表示されている名前"
+                    />
                     <div className="flex justify-end gap-3 pt-2">
                       <Button variant="outlined" onClick={() => setEditMode(false)} disabled={editSubmitting}>
                         キャンセル
@@ -1933,6 +1944,7 @@ export default function AdminCustomersPage() {
                       { label: 'ライセンスキー', value: detailUser.licenseKey?.key || '—', mono: true },
                       { label: '担当店舗', value: detailUser.store?.name || '未割り当て' },
                       ...(detailUser.leadSource ? [{ label: '流入経路', value: detailUser.leadSource }] : []),
+                      ...(detailUser.lineName ? [{ label: 'LINE名', value: detailUser.lineName }] : []),
                       { label: '登録日', value: format(new Date(detailUser.createdAt), 'yyyy年M月d日', { locale: ja }) },
                     ].map(item => (
                       <div key={item.label} className="flex gap-3">
@@ -2897,6 +2909,12 @@ export default function AdminCustomersPage() {
                 ))}
               </select>
             </div>
+            <TextField
+              label="LINEアカウント名（任意）"
+              value={addForm.lineName}
+              onChange={v => setAddForm(prev => ({ ...prev, lineName: v }))}
+              placeholder="LINEに表示されている名前"
+            />
             <div>
               <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
                 担当店舗（任意）

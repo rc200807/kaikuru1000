@@ -117,6 +117,7 @@ export async function DELETE(
       idAddress:          null,
       idLicenseNumber:    null,
       idExpiryDate:       null,
+      idFurigana:         null,
       idOcrIssueReport:   null,
       idDocumentBackPath: null,
       idBackAddress:      null,
@@ -144,6 +145,9 @@ export async function POST(
     const formData = await request.formData()
     const file = formData.get('file') as File
     const documentType = formData.get('documentType') as string | null
+    // 店舗の確認画面から呼ぶときは、顧客情報への反映を確認画面のチェックに任せる。
+    // 顧客本人のアップロード（新規登録・マイページ）は確認画面が無いので従来どおり住所を採用する
+    const deferProfile = formData.get('deferProfile') === '1'
 
     if (!file) {
       return NextResponse.json({ error: 'ファイルが選択されていません' }, { status: 400 })
@@ -193,7 +197,8 @@ export async function POST(
     let addressVerifiedFlag = false
     // 訪問型/宅配型は登録時に住所を入力しないため、住所未登録なら
     // 身分証OCRで読み取った住所をユーザーの住所として採用する。
-    const adoptIdAddress = !!ocrResult?.idAddress && !hasRegisteredAddress
+    // 確認画面で「住所を顧客情報に反映」を選んだときだけ、confirm API が住所を書く（deferProfile 時はここでは書かない）
+    const adoptIdAddress = !deferProfile && !!ocrResult?.idAddress && !hasRegisteredAddress
     if (ocrResult?.idAddress && hasRegisteredAddress) {
       const matched = isAddressMatch(currentUser!.address, ocrResult.idAddress)
       addressMismatchFlag = !matched

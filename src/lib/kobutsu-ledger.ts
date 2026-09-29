@@ -16,6 +16,8 @@
  * 注意: 'use client' を付けないこと（サーバー・クライアント共用）
  */
 
+import { toWareki } from '@/lib/wareki'
+
 /** 古物営業法の法定13品目 */
 export const KOBUTSU_CATEGORY_KEYS = [
   'art',        // 美術品類
@@ -107,7 +109,8 @@ export function buildFeatures(item: {
 }
 
 /**
- * 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD" に、
+ * 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD（平成12年1月23日）" のように
+ * 西暦に和暦を併記する（身分証は和暦表記のため、突き合わせやすいように両方出す）。
  * 和暦テキスト等はそのまま返す（idBirthDate は和暦の可能性がある）。
  */
 export function formatBirthDate(birthDate: string | null | undefined): string | null {
@@ -115,7 +118,9 @@ export function formatBirthDate(birthDate: string | null | undefined): string | 
   if (!v) return null
   const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v)
   if (!m) return v
-  return `${m[1]}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}`
+  const seireki = `${m[1]}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}`
+  const wareki = toWareki(Number(m[1]), Number(m[2]), Number(m[3]))
+  return wareki ? `${seireki}（${wareki}）` : seireki
 }
 
 /** 取引日時点の年齢。生年月日が "YYYY-MM-DD" 形式でないときは null */

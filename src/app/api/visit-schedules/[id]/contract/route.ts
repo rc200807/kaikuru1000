@@ -75,6 +75,8 @@ export async function POST(
 
   const body = await request.json()
   const { signatureData, invoiceSignatureData, pdfBase64, invoicePdfBase64, email: inputEmail, occupation, phone: inputPhone } = body
+  // 備考（書類に印字される）。空なら null にして消せるようにする
+  const remarks: string | null = typeof body.remarks === 'string' && body.remarks.trim() ? body.remarks.trim().slice(0, 2000) : null
 
   if (!signatureData) {
     return NextResponse.json({ error: '売買契約への署名が必要です' }, { status: 400 })
@@ -149,6 +151,7 @@ export async function POST(
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
       customerEmail,
+      remarks,
       agreedAt: new Date(),
     },
     update: {
@@ -157,6 +160,7 @@ export async function POST(
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
       customerEmail,
+      remarks,
       agreedAt: new Date(),
       emailSentAt: null, // 再送信可能にリセット
     },
@@ -217,6 +221,7 @@ export async function POST(
     revisitStart: schedule.revisitStart || null,
     revisitEnd: schedule.revisitEnd || null,
     revisitNote: schedule.revisitNote || null,
+    remarks,
     contractDate: new Date(contract.agreedAt),
     contractNo: `KK-${id.slice(-8).toUpperCase()}`,
     invoiceNo: `INV-${id.slice(-8).toUpperCase()}`,
@@ -327,7 +332,7 @@ export async function GET(
   const [contract, pdfCount, invoicePdfCount] = await Promise.all([
     prisma.salesContract.findUnique({
       where,
-      select: { id: true, agreedAt: true, emailSentAt: true, customerEmail: true, createdAt: true },
+      select: { id: true, agreedAt: true, emailSentAt: true, customerEmail: true, remarks: true, createdAt: true },
     }),
     prisma.salesContract.count({ where: { ...where, NOT: { pdfBase64: null } } }),
     prisma.salesContract.count({ where: { ...where, NOT: { invoicePdfBase64: null } } }),

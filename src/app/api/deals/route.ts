@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
   // 一覧のレスポンスに載せないため。
   const dealSelect = {
     id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
-    detail: true, status: true, category: true,
+    detail: true, status: true, category: true, leadSource: true,
     occurredAt: true, createdAt: true, updatedAt: true,
     purchaseAmount: true, billingAmount: true,
     memberId: true, preConsentAt: true,

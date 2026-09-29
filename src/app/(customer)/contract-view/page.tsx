@@ -50,6 +50,8 @@ interface ContractData {
     id: string
     agreedAt: string
     signatureData: string
+    /** 備考（売買契約書・請求書に記載） */
+    remarks?: string | null
   } | null
   hasPdf?: boolean
   hasInvoicePdf?: boolean
@@ -412,6 +414,18 @@ function ContractViewContent() {
               </div>
             )}
 
+            {/* 備考 */}
+            {contract.salesContract?.remarks?.trim() && (
+              <div>
+                <h2 className="text-sm font-bold text-red-500 mb-3 uppercase tracking-wider">
+                  備考
+                </h2>
+                <div className="bg-white/40 rounded-xl px-4 py-3 text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                  {contract.salesContract.remarks.trim()}
+                </div>
+              </div>
+            )}
+
             {/* Signature */}
             {contract.salesContract?.signatureData && (
               <div>
@@ -567,6 +581,12 @@ function ContractViewContent() {
                 </tfoot>
               </table>
             </div>
+            {contract.salesContract?.remarks?.trim() && (
+              <div className="mt-4 bg-white/40 rounded-xl px-4 py-3">
+                <p className="text-xs font-bold text-gray-700 mb-1">備考</p>
+                <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">{contract.salesContract.remarks.trim()}</p>
+              </div>
+            )}
             {contract.hasInvoicePdf && (
               <div className="text-center mt-5">
                 <a

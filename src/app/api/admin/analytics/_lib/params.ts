@@ -92,7 +92,8 @@ export function dealWhere(range: DateRange, filters: AnalyticsFilters) {
   if (filters.dealCategory) where.category = filters.dealCategory
   const userWhere: Record<string, unknown> = {}
   if (filters.customerType) userWhere.customerType = filters.customerType
-  if (filters.leadSource) userWhere.leadSource = filters.leadSource
+  // 流入経路は案件自身の値で絞る（案件ごとに編集できるため、顧客の値とは別）
+  if (filters.leadSource) where.leadSource = filters.leadSource
   if (Object.keys(userWhere).length > 0) where.user = userWhere
   return where
 }

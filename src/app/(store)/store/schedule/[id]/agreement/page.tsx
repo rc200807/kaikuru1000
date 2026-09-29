@@ -16,6 +16,9 @@ import { useBusinessHours } from '@/hooks/useBusinessHours'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import { PROOF_DOCUMENT_TYPES } from '@/lib/document-types'
 import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
+import { warekiFromDateString } from '@/lib/wareki'
+import OccupationSelect from '@/components/OccupationSelect'
+import { useDealRecorderTarget } from '@/components/deal/DealRecorder'
 
 /* ─── PINロック解除モーダル ─── */
 function PinUnlockModal({
@@ -144,6 +147,7 @@ type VisitUser = {
   occupation?: string | null
   idAddress?: string | null
   idName?: string | null
+  furigana?: string | null
   idDocumentType?: string | null
   idDocumentPath?: string | null
   idDocumentBackPath?: string | null
@@ -165,6 +169,8 @@ type VisitDetail = {
   revisitEnd?: string | null
   revisitNote?: string | null
   supplementaryDocs?: string | null
+  dealId?: string | null
+  deal?: { id: string } | null
 }
 
 /* ─── 身分証アップロードモーダル ─── */
@@ -178,6 +184,7 @@ type IdEditState = {
   address: string
   birthDate: string
   licenseNumber: string
+  furigana: string
 }
 
 function IdDocumentUploadModal({
@@ -185,6 +192,7 @@ function IdDocumentUploadModal({
   userId,
   initialDocType,
   registeredAddress,
+  registeredFurigana,
   onClose,
   onSuccess,
 }: {
@@ -192,6 +200,8 @@ function IdDocumentUploadModal({
   userId: string
   initialDocType?: string | null
   registeredAddress?: string | null
+  /** 顧客に登録済みのふりがな（確認画面の初期値。身分証にはふりがなが無いため人が入力する） */
+  registeredFurigana?: string | null
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -204,10 +214,10 @@ function IdDocumentUploadModal({
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [edit, setEdit] = useState<IdEditState>({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
+  const [edit, setEdit] = useState<IdEditState>({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '', furigana: '' })
   const [ocrWarning, setOcrWarning] = useState('')
   // 顧客情報へ反映する項目（氏名/生年月日/住所）を個別に選択
-  const [apply, setApply] = useState({ name: true, birthDate: true, address: true })
+  const [apply, setApply] = useState({ name: true, birthDate: true, address: true, furigana: true })
   // 読み取れた住所の候補（運転免許証の住所変更欄など、旧住所と新住所が両方載る書類がある）。
   // 2件以上あるときだけ確認ステップで選択させる
   const [addressChoices, setAddressChoices] = useState<{ value: string; note: string | null }[]>([])
@@ -221,8 +231,8 @@ function IdDocumentUploadModal({
       setFrontFile(null); setFrontPreview('')
       setBackFile(null); setBackPreview('')
       setError(''); setOcrWarning('')
-      setEdit({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '' })
-      setApply({ name: true, birthDate: true, address: true })
+      setEdit({ documentType: '', name: '', address: '', birthDate: '', licenseNumber: '', furigana: '' })
+      setApply({ name: true, birthDate: true, address: true, furigana: true })
       setAddressChoices([])
     }
   }, [open, initialDocType])
@@ -262,6 +272,8 @@ function IdDocumentUploadModal({
       const fd = new FormData()
       fd.append('file', frontFile)
       fd.append('documentType', docType)
+      // 顧客情報への反映は確認画面のチェックで決める（アップロード時に勝手に書き込ませない）
+      fd.append('deferProfile', '1')
       const res = await fetch(`/api/users/${userId}/id-document`, { method: 'POST', body: fd })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -303,6 +315,8 @@ function IdDocumentUploadModal({
         address:      backAddress ?? data?.ocr?.idAddress ?? '',
         birthDate:    data?.ocr?.idBirthDate ?? '',
         licenseNumber: data?.ocr?.idLicenseNumber ?? '',
+        // 身分証にふりがなは載っていない。顧客に登録済みの値を初期表示し、必要なら直してもらう
+        furigana:     registeredFurigana ?? '',
       })
 
       if (data?.ocrError) {
@@ -336,6 +350,8 @@ function IdDocumentUploadModal({
           idBirthDate:    edit.birthDate.trim() || null,
           idDocumentType: edit.documentType || null,
           idLicenseNumber: edit.documentType === '運転免許証' ? (edit.licenseNumber.trim() || null) : null,
+          idFurigana:     edit.furigana.trim() || null,
+          applyFurigana:  apply.furigana,
           applyName:      apply.name,
           applyAddress:   apply.address,
           applyBirthDate: apply.birthDate,
@@ -462,6 +478,10 @@ function IdDocumentUploadModal({
                 placeholder="例: 1990-01-23"
                 className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
               />
+              {/* 身分証は和暦表記なので、入力中の西暦に対応する和暦を並べて見せる（読み間違いの確認用） */}
+              {warekiFromDateString(edit.birthDate) && (
+                <p className="mt-1 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">和暦: {warekiFromDateString(edit.birthDate)}</p>
+              )}
               <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
                 <input type="checkbox" checked={apply.birthDate} onChange={(e) => setApply(a => ({ ...a, birthDate: e.target.checked }))} className="w-3.5 h-3.5 accent-[var(--portal-primary)]" />
                 生年月日を顧客情報に反映
@@ -497,6 +517,22 @@ function IdDocumentUploadModal({
             <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
               <input type="checkbox" checked={apply.name} onChange={(e) => setApply(a => ({ ...a, name: e.target.checked }))} className="w-3.5 h-3.5 accent-[var(--portal-primary)]" />
               氏名を顧客情報に反映
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">ふりがな</label>
+            <input
+              type="text"
+              value={edit.furigana}
+              onChange={(e) => setEdit({ ...edit, furigana: e.target.value })}
+              placeholder="例: かくう なまえ"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+            />
+            <p className="mt-1 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">身分証にはふりがなが載っていないため、ここで入力できます（姓と名の間は空けてください）。</p>
+            <label className="mt-1.5 flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              <input type="checkbox" checked={apply.furigana} onChange={(e) => setApply(a => ({ ...a, furigana: e.target.checked }))} className="w-3.5 h-3.5 accent-[var(--portal-primary)]" />
+              ふりがなを顧客情報に反映
             </label>
           </div>
 
@@ -560,7 +596,7 @@ function IdDocumentUploadModal({
             </Button>
           </div>
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] text-right">
-            チェックした項目のみ、お客様の顧客情報（氏名・生年月日・住所）に反映（上書き）されます。本人確認情報は常に保存されます。
+            チェックした項目のみ、お客様の顧客情報（氏名・ふりがな・生年月日・住所）に反映（上書き）されます。本人確認情報は常に保存されます。
           </p>
         </div>
       )}
@@ -584,6 +620,8 @@ export default function AgreementPage() {
   const backLabel = fromDealId ? '案件詳細' : '訪問詳細'
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
+  // 契約書の署名まで会話を録音できるように、この訪問の案件を録音ボタンへ知らせる
+  useDealRecorderTarget(scheduleId, visit?.deal?.id ?? visit?.dealId ?? fromDealId)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [idModalOpen, setIdModalOpen] = useState(false)
@@ -818,7 +856,7 @@ export default function AgreementPage() {
   const today = format(new Date(), 'yyyy年M月d日', { locale: ja })
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
+    <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-28 space-y-5">
       <PinUnlockModal
         open={showPinModal}
         onUnlock={handlePinUnlock}
@@ -833,6 +871,7 @@ export default function AgreementPage() {
         userId={visit.user.id}
         initialDocType={visit.user.idDocumentType}
         registeredAddress={visit.user.address}
+        registeredFurigana={visit.user.furigana}
         onClose={() => setIdModalOpen(false)}
         onSuccess={() => { fetchVisit() }}
       />
@@ -1092,13 +1131,7 @@ export default function AgreementPage() {
         {/* 職業 */}
         <div className="mb-4">
           <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">ご職業</label>
-          <input
-            type="text"
-            value={occupationInput}
-            onChange={(e) => setOccupationInput(e.target.value)}
-            placeholder="例: 会社員"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
-          />
+          <OccupationSelect value={occupationInput} onChange={setOccupationInput} />
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-1">提出後、お客様の顧客情報に反映されます。</p>
         </div>
 

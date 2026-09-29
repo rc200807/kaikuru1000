@@ -102,7 +102,7 @@ export async function buildStoreCustomerOverview(storeId: string, userId: string
       internalNote: true,
       idDocumentPath: true, createdAt: true, lastVisitedAt: true,
       customerType: true,
-      birthDate: true, occupation: true, leadSource: true, visitFrequencyMonths: true,
+      birthDate: true, occupation: true, leadSource: true, lineName: true, visitFrequencyMonths: true,
       idDocumentType: true, idName: true, idBirthDate: true,
       idAddress: true, idLicenseNumber: true, idExpiryDate: true,
       idOcrIssueReport: true,

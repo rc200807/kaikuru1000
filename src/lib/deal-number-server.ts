@@ -46,12 +46,22 @@ export async function createDealWithNumber<A extends Prisma.DealCreateArgs>(
   const baseDate = occurredAt ? new Date(occurredAt) : new Date()
   const base = isNaN(baseDate.getTime()) ? new Date() : baseDate
 
+  // 流入経路は、指定が無ければ顧客の流入経路をそのまま案件に記録する（案件詳細で後から変更できる）
+  let createArgs: A = args
+  const data = args.data as { userId?: string; leadSource?: string | null }
+  if (data.leadSource === undefined && typeof data.userId === 'string') {
+    const owner = await prisma.user.findUnique({ where: { id: data.userId }, select: { leadSource: true } })
+    if (owner?.leadSource) {
+      createArgs = { ...args, data: { ...args.data, leadSource: owner.leadSource } }
+    }
+  }
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const dealNumber = await generateDealNumber(prisma, base)
     try {
       return (await prisma.deal.create({
-        ...args,
-        data: { ...args.data, dealNumber },
+        ...createArgs,
+        data: { ...createArgs.data, dealNumber },
       })) as Prisma.DealGetPayload<A>
     } catch (e) {
       if (isDealNumberConflict(e)) continue // 同時作成で衝突 → 採番し直す
@@ -60,7 +70,7 @@ export async function createDealWithNumber<A extends Prisma.DealCreateArgs>(
   }
   // 稀な連続衝突時は番号なしで作成し、後続の ensureDealNumber に任せる（作成自体は失敗させない）
   console.error('[dealNumber] 採番が連続で衝突したため番号なしで作成しました')
-  return (await prisma.deal.create(args)) as Prisma.DealGetPayload<A>
+  return (await prisma.deal.create(createArgs)) as Prisma.DealGetPayload<A>
 }
 
 /**

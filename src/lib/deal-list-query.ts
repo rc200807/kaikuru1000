@@ -67,13 +67,13 @@ export function buildDealFilterConditions(searchParams: URLSearchParams, opts: D
   const customerTypes = csv(searchParams.get('customerTypes'))
   if (customerTypes.length > 0) and.push({ user: { customerType: { in: customerTypes } } })
 
-  // 流入経路（user.leadSource・複数可。"none"=未設定）
+  // 流入経路（案件の leadSource・複数可。"none"=未設定）
   const leadSources = csv(searchParams.get('leadSources'))
   if (leadSources.length > 0) {
     const or: any[] = []
     for (const ls of leadSources) {
-      if (ls === 'none') or.push({ user: { leadSource: null } }, { user: { leadSource: '' } })
-      else or.push({ user: { leadSource: ls } })
+      if (ls === 'none') or.push({ leadSource: null }, { leadSource: '' })
+      else or.push({ leadSource: ls })
     }
     and.push({ OR: or })
   }

@@ -29,8 +29,9 @@ import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE } from '@/lib
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { formatYen } from '@/lib/currency'
 import { uploadImagesCompressed } from '@/lib/image-upload'
-import { upload } from '@vercel/blob/client'
+import { useDealRecorder } from '@/components/deal/DealRecorder'
 import { useStoreMasters } from '@/components/store/StoreMastersContext'
+import { toWareki } from '@/lib/wareki'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
@@ -102,6 +103,8 @@ type Deal = {
   detail: string | null
   status: string
   category: string | null
+  /** 流入経路（作成時に顧客の流入経路を自動記録。案件ごとに変更できる） */
+  leadSource?: string | null
   occurredAt: string | null
   createdByType: string | null
   createdByName: string | null
@@ -130,6 +133,7 @@ type Deal = {
     idDocumentType?: string | null
     /** 職業（売買契約書作成時に取得） */
     occupation?: string | null
+    lineName?: string | null
   }
   store: { id: string; name: string; code: string; phone: string | null; address: string | null; prefecture: string | null; email: string | null; invoiceNumber: string | null; antiquePermitNumber: string | null; supportedServices?: string | null } | null
   inquiry: { id: string; inquiryType: string; details: string | null; createdAt: string } | null
@@ -168,7 +172,7 @@ function toDateInput(d?: string | null) {
   return `${y}-${m}-${day}`
 }
 
-// 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD（満xx歳）"、和暦などのテキストはそのまま返す
+// 生年月日の表示用整形。"YYYY-MM-DD" は "YYYY/MM/DD（和暦）（満xx歳）"、和暦などのテキストはそのまま返す
 function fmtBirthDate(v?: string | null) {
   if (!v) return null
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim())
@@ -180,7 +184,8 @@ function fmtBirthDate(v?: string | null) {
   let age = now.getFullYear() - birth.getFullYear()
   const before = now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())
   if (before) age -= 1
-  return `${y}/${mo}/${d}${age >= 0 && age < 130 ? `（満${age}歳）` : ''}`
+  const wareki = toWareki(Number(y), Number(mo), Number(d))
+  return `${y}/${mo}/${d}${wareki ? `（${wareki}）` : ''}${age >= 0 && age < 130 ? `（満${age}歳）` : ''}`
 }
 
 export default function DealDetailView({
@@ -203,6 +208,8 @@ export default function DealDetailView({
   const [isEditingDetail, setIsEditingDetail] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
   const [savingCategory, setSavingCategory] = useState(false)
+  const [savingLead, setSavingLead] = useState(false)
+  const [leadSourceOptions, setLeadSourceOptions] = useState<{ id: string; name: string }[]>([])
   const [deleting, setDeleting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -264,9 +271,11 @@ export default function DealDetailView({
 
   // 会話録音（AI文字起こし・要約）
   const [recordings, setRecordings] = useState<DealRecording[]>([])
-  const [recUploading, setRecUploading] = useState(false)
-  const [recProgress, setRecProgress] = useState(0)
-  const [recError, setRecError] = useState<string | null>(null)
+  // 録音・アップロードの状態は、画面遷移しても録音を続けるためシェル側（DealRecorderProvider）が持つ
+  const recorder = useDealRecorder()
+  const recUploading = recorder.uploadingCount > 0
+  const recProgress = recorder.uploadProgress
+  const recError = recorder.error
   const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null)
   // 文字起こし本文は開いたときだけ取得してキャッシュする（一覧レスポンスには含まれない）
   const [transcripts, setTranscripts] = useState<Record<string, string | null>>({})
@@ -372,10 +381,15 @@ export default function DealDetailView({
     if (masters) {
       setCategories(masters.purchaseCategories)
       setVisitPurposes(masters.visitPurposes)
+      setLeadSourceOptions(masters.leadSources)
       // 担当者候補は Context の時点で自店舗のみ（他店舗メンバーを担当に設定できない）
       if (!isAdmin) setMembers(masters.assignees.map(m => ({ id: m.id, name: m.name })))
       return
     }
+    fetch('/api/lead-sources')
+      .then(r => (r.ok ? r.json() : []))
+      .then(d => setLeadSourceOptions(Array.isArray(d) ? d : []))
+      .catch(() => {})
     fetch('/api/form-masters')
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
@@ -445,157 +459,20 @@ export default function DealDetailView({
     return () => clearInterval(t)
   }, [recordings, loadRecordings])
 
-  // ファイル選択・マイク録音の両方から呼ばれる共通アップロード処理。
-  // DealRecording は案件に対してhasMany（複数件登録可能）なので、呼ぶたびに新しい1件として追加される
-  async function uploadRecordingFile(file: File) {
-    if (file.size > 200 * 1024 * 1024) { setRecError('音声ファイルは200MB以下にしてください'); return }
-    setRecError(null)
-    setRecUploading(true)
-    setRecProgress(0)
-    try {
-      const extMatch = (file.name.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? '').toLowerCase()
-      const pathname = `deal-recordings/${dealId}/${Date.now()}${extMatch || '.m4a'}`
-      const blob = await upload(pathname, file, {
-        access: 'public',
-        handleUploadUrl: `/api/deals/${dealId}/recordings/upload`,
-        contentType: file.type || undefined,
-        onUploadProgress: (p) => setRecProgress(Math.round(p.percentage)),
-      })
-      const res = await fetch(`/api/deals/${dealId}/recordings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioUrl: blob.url, fileName: file.name, mimeType: file.type, fileSize: file.size }),
-      })
-      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || '登録に失敗しました') }
-      await loadRecordings()
-    } catch (err) {
-      setRecError(err instanceof Error ? err.message : 'アップロードに失敗しました')
-    } finally {
-      setRecUploading(false)
-      setRecProgress(0)
-    }
-  }
-
+  // 音声ファイルの手動アップロード。DealRecording は案件に対してhasMany（複数件登録可能）なので、
+  // 呼ぶたびに新しい1件として追加される。マイク録音はシェル側のフローティングボタンが担当する。
   async function handleUploadRecording(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    await uploadRecordingFile(file)
+    await recorder.uploadFile(file, dealId)
   }
 
-  // ── マイク録音（MediaRecorder） ──
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingSeconds, setRecordingSeconds] = useState(0)
-  const [micUnsupportedMsg, setMicUnsupportedMsg] = useState<string | null>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordedChunksRef = useRef<Blob[]>([])
-  const recordingStreamRef = useRef<MediaStream | null>(null)
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // フローティング録音ボタン（許可ブロック時の案内パネルを含む）の実際の高さ。
-  // fixed配置なのでコンテンツの流れには影響しないが、逆に言うとページ末尾のコンテンツが
-  // このボタン群の真裏に来て隠れてしまう。実測した高さぶんコンテンツ末尾に空きを作って回避する
-  // 通常のref+マウント時useEffectだと、このページはローディング中に一度描画してから
-  // データ取得後に本描画へ差し替わるため、空配列依存のeffectがローディング中（要素まだ無し）に
-  // 一度だけ走って終わってしまう。コールバックrefにして、要素が実際にアタッチされた時点で
-  // 確実に測るようにする
-  const [floatingRecEl, setFloatingRecEl] = useState<HTMLDivElement | null>(null)
-  const [floatingRecHeight, setFloatingRecHeight] = useState(0)
-
+  // 録音（マイク録音・ファイル）の登録が終わったら、この案件の一覧を取り直す
+  const { uploadedTick, lastUploadedDealId } = recorder
   useEffect(() => {
-    if (!floatingRecEl || typeof ResizeObserver === 'undefined') return
-    const update = () => setFloatingRecHeight(floatingRecEl.offsetHeight)
-    update()
-    const ro = new ResizeObserver(update)
-    ro.observe(floatingRecEl)
-    return () => ro.disconnect()
-  }, [floatingRecEl])
-
-  /** 「許可状況を再確認」。設定を変えたあとに押すと、その場で判定し直す */
-  const recheckMicPermission = useCallback(async () => {
-    if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
-      // Permissions APIが無い環境（Safari等）は、もう一度録音を試すしか確かめる手段がない
-      setMicUnsupportedMsg(null)
-      return
-    }
-    try {
-      const status = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-      setMicUnsupportedMsg(status.state === 'denied'
-        ? 'まだマイクがブロックされています。ブラウザのサイト設定で「マイク」を許可にしてから、もう一度お試しください。'
-        : null)
-    } catch {
-      setMicUnsupportedMsg(null)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.permissions?.query) return
-    let status: PermissionStatus | null = null
-    navigator.permissions.query({ name: 'microphone' as PermissionName }).then(s => {
-      status = s
-      // ブラウザ設定で許可に変えたら、出していた警告は自動で引っ込める
-      s.onchange = () => { if (s.state !== 'denied') setMicUnsupportedMsg(null) }
-    }).catch(() => { /* 非対応ブラウザは 'unknown' のまま録音時のエラーで検知する */ })
-    return () => { if (status) status.onchange = null }
-  }, [])
-
-  function stopMicStream() {
-    recordingStreamRef.current?.getTracks().forEach(t => t.stop())
-    recordingStreamRef.current = null
-    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
-  }
-
-  async function startMicRecording() {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setMicUnsupportedMsg('この端末・ブラウザではマイク録音に対応していません（HTTPS接続が必要な場合があります）')
-      return
-    }
-    setMicUnsupportedMsg(null)
-    setRecError(null)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      recordingStreamRef.current = stream
-      // ブラウザが対応する形式を優先順に試す（Safari は webm 非対応で mp4 のみ扱えることが多い）
-      const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) ?? ''
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      recordedChunksRef.current = []
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
-      recorder.onstop = async () => {
-        stopMicStream()
-        const blobType = recorder.mimeType || 'audio/webm'
-        const audioBlob = new Blob(recordedChunksRef.current, { type: blobType })
-        recordedChunksRef.current = []
-        if (audioBlob.size === 0) { setRecError('録音データが空でした。もう一度お試しください'); return }
-        const ext = blobType.includes('mp4') ? '.m4a' : blobType.includes('ogg') ? '.ogg' : '.webm'
-        const fileName = `録音_${new Date().toISOString().replace(/[:.]/g, '-')}${ext}`
-        await uploadRecordingFile(new File([audioBlob], fileName, { type: blobType }))
-      }
-      mediaRecorderRef.current = recorder
-      recorder.start()
-      setIsRecording(true)
-      setRecordingSeconds(0)
-      recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
-    } catch (err: any) {
-      stopMicStream()
-      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || err?.name === 'SecurityError') {
-        setMicUnsupportedMsg('マイクの使用がブロックされています。ブラウザのアドレスバー付近のサイト設定（鍵マーク等）で「マイク」を許可に変更し、再読み込みしてください。')
-      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
-        setMicUnsupportedMsg('マイクが見つかりませんでした。端末にマイクが接続・有効になっているか確認してください')
-      } else {
-        setMicUnsupportedMsg('マイクへのアクセスに失敗しました。ブラウザの設定を確認してください')
-      }
-    }
-  }
-
-  function stopMicRecording() {
-    mediaRecorderRef.current?.stop()
-    setIsRecording(false)
-  }
-
-  // ページを離れるときに録音中なら止める（マイクを掴んだままにしない）
-  useEffect(() => () => {
-    mediaRecorderRef.current?.stop()
-    stopMicStream()
-  }, [])
+    if (uploadedTick > 0 && lastUploadedDealId === dealId) void loadRecordings()
+  }, [uploadedTick, lastUploadedDealId, dealId, loadRecordings])
 
   async function handleDeleteRecording(recId: string) {
     if (!confirm('この録音を削除しますか？（文字起こし・要約も削除されます）')) return
@@ -966,6 +843,20 @@ export default function DealDetailView({
     else setMsg({ type: 'error', text: 'カテゴリーの変更に失敗しました' })
   }
 
+  async function changeLeadSource(leadSource: string) {
+    if (!deal || leadSource === (deal.leadSource ?? '')) return
+    setSavingLead(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leadSource: leadSource || null }),
+    })
+    setSavingLead(false)
+    if (res.ok) setDeal(prev => prev ? { ...prev, leadSource: leadSource || null } : prev)
+    else setMsg({ type: 'error', text: '流入経路の変更に失敗しました' })
+  }
+
   async function saveDetail() {
     if (!deal) return
     setSavingDetail(true)
@@ -1259,6 +1150,7 @@ export default function DealDetailView({
                 ) : null}
               />
               <PropRow label="住所" alert={ledger?.missing.includes('address')} value={deal.user.address} />
+              <PropRow label="LINEアカウント名" value={deal.user.lineName} />
             </Section>
 
             {/* L2 案件情報（カテゴリー・案件内容・発生日・担当者・作成者） */}
@@ -1288,6 +1180,23 @@ export default function DealDetailView({
                 )
               })}
             </div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">流入経路</label>
+            <select
+              value={deal.leadSource ?? ''}
+              disabled={savingLead}
+              onChange={e => changeLeadSource(e.target.value)}
+              className="w-full sm:w-64 h-9 px-2.5 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] disabled:opacity-50"
+            >
+              <option value="">未設定</option>
+              {leadSourceOptions.map(ls => (
+                <option key={ls.id} value={ls.name}>{ls.name}</option>
+              ))}
+              {/* マスタから消された名称でも、案件に記録済みの値は選択肢に残す */}
+              {deal.leadSource && !leadSourceOptions.some(ls => ls.name === deal.leadSource) && (
+                <option value={deal.leadSource}>{deal.leadSource}</option>
+              )}
+            </select>
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1 mb-4">案件の作成時に、顧客の流入経路が自動で記録されます。この案件だけ変更することもできます。</p>
                 </div>
                 <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -2042,7 +1951,7 @@ export default function DealDetailView({
             >
               <input ref={recInputRef} type="file" accept="audio/*" className="hidden" onChange={handleUploadRecording} disabled={recUploading} />
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
-              顧客との会話は、画面右下の録音ボタンからその場でマイク録音するか、既存の音声ファイルをアップロードして登録できます（複数件登録可）。
+              顧客との会話は、画面右下の録音ボタンからその場でマイク録音するか、既存の音声ファイルをアップロードして登録できます（何回でも録音でき、複数件登録可）。見積書・契約書の作成画面でも録音ボタンは残るので、契約書の署名まで続けて録音できます。
               AIが自動で文字起こしと要約（顧客の要望・重要事項・次アクション）を作成します。解析には数分かかる場合があります。
             </p>
             {recError && <p className="text-sm text-[var(--md-sys-color-error)] mb-2">{recError}</p>}
@@ -2148,7 +2057,7 @@ export default function DealDetailView({
         {/* フローティング録音ボタン（許可ブロック時の案内パネル込み）の実高さ＋余白ぶんの空きを
              コンテンツ末尾に確保する。fixed要素はドキュメントの流れに影響しないため、これが無いと
              ページ最後のセクション（会話の録音・AI解析など）がボタン群の真裏に隠れてしまう */}
-        {floatingRecHeight > 0 && <div aria-hidden style={{ height: floatingRecHeight + 24 }} />}
+        {recorder.floatingHeight > 0 && <div aria-hidden style={{ height: recorder.floatingHeight + 24 }} />}
 
         {/* ── 下部追従バー（店舗ポータルのみ） ───────────────────
              fixed ではなくコンテナ最終子の sticky。mt-auto と root の flex flex-col min-h-dvh で
@@ -2564,56 +2473,6 @@ export default function DealDetailView({
         </div>
       </Modal>
 
-      {/* マイク録音のフローティングボタン。案件詳細のどこにスクロールしていても押せるようにする。
-          下部追従の書類作成バー（sticky, z-30。モバイルはさらにBottomNav分のpb-16を内包）の
-          実高さぶん浮かせて重ならないようにする（モバイル: バー約117px+セーフエリア、
-          デスクトップ: バー約53px）。録音中は赤く点滅させ、経過時間を表示する */}
-      <div ref={setFloatingRecEl} className="fixed bottom-[calc(9rem+env(safe-area-inset-bottom,0px))] md:bottom-20 right-4 md:right-8 z-40 flex flex-col items-end gap-2">
-        {/* 録音ボタンを押して実際に使えなかったときだけ出す（初期表示では出さない） */}
-        {micUnsupportedMsg && (
-          <div className="max-w-[240px] text-xs px-3 py-2 rounded-lg shadow-lg space-y-1.5" style={{ background: 'var(--status-pending-bg)', color: 'var(--status-pending-text)' }}>
-            <p>{micUnsupportedMsg}</p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={recheckMicPermission}
-                className="text-[11px] font-semibold underline underline-offset-2"
-              >
-                許可状況を再確認
-              </button>
-              <button
-                type="button"
-                onClick={() => setMicUnsupportedMsg(null)}
-                className="text-[11px] underline underline-offset-2 opacity-80"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        )}
-        {isRecording && (
-          <div className="text-xs font-medium px-3 py-1.5 rounded-full shadow-lg bg-[var(--md-sys-color-error,#B3261E)] text-white tabular-nums">
-            録音中 {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={isRecording ? stopMicRecording : startMicRecording}
-          disabled={recUploading}
-          title={isRecording ? '録音を停止してアップロード' : '会話の録音を開始'}
-          className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-colors disabled:opacity-50 ${
-            isRecording ? 'bg-[var(--md-sys-color-error,#B3261E)] animate-pulse' : 'bg-[var(--portal-primary)]'
-          }`}
-        >
-          {isRecording ? (
-            <span className="w-4 h-4 rounded-sm bg-white" />
-          ) : (
-            <svg className="w-6 h-6" style={{ color: 'var(--portal-on-primary,#fff)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-            </svg>
-          )}
-        </button>
-      </div>
     </div>
   )
 }

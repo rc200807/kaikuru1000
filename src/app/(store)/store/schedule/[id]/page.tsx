@@ -1,5 +1,6 @@
 'use client'
 
+import { useDealRecorderTarget } from '@/components/deal/DealRecorder'
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
@@ -80,6 +81,8 @@ export default function VisitDetailPage() {
   const scheduleId = params.id as string
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
+  // 見積書・契約書へ進む前の画面でも録音できるように、この訪問の案件を録音ボタンへ知らせる
+  useDealRecorderTarget(scheduleId, visit?.deal?.id)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 

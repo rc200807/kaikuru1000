@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     DEAL_STATUS_LABEL[d.status] ?? d.status,
     DEAL_CATEGORY_LABEL[d.category] ?? d.category,
     d.purchaseAmount ?? '',
-    d.user?.leadSource ?? '',
+    d.leadSource ?? '',
     d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '',
     d.assigneeName ?? '',
     d.inquiryId ? '問い合わせ由来' : '手動作成',

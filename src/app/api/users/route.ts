@@ -30,6 +30,7 @@ const registerSchema = z.object({
   customerType: z.enum(CUSTOMER_TYPES).optional(),
   customerTypes: z.array(z.enum(CUSTOMER_TYPES)).optional(),
   leadSource:   z.string().max(100).optional(), // 流入経路
+  lineName:     z.string().max(100).optional().or(z.literal('')), // LINEアカウント名（任意）
   skipLicenseKey: z.boolean().optional(), // 管理者/店舗からの追加時にライセンスキーをスキップ
 })
   // 「名」は任意。問い合わせの時点で姓しか聞けていないことが多いため、姓（せい）だけで登録できる
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     const address = parsed.data.address ?? ''
     const postalCode = normalizePostalCode(parsed.data.postalCode)
     const leadSourceValue = leadSource && leadSource.trim() ? leadSource.trim() : null
+    const lineNameValue = parsed.data.lineName && parsed.data.lineName.trim() ? parsed.data.lineName.trim() : null
 
     // 店舗ユーザーが登録した場合は、その店舗に自動割り当てする
     const session = await getServerSession(authOptions)
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
           customerTypes: customerTypesJson,
           visitFrequencyMonths,
           leadSource: leadSourceValue,
+          lineName: lineNameValue,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },
         include: { store: true },
@@ -154,6 +157,7 @@ export async function POST(request: NextRequest) {
           customerTypes: customerTypesJson,
           visitFrequencyMonths,
           leadSource: leadSourceValue,
+          lineName: lineNameValue,
           licenseKeyId: licenseKeyRecord.id,
           ...(autoStoreId ? { storeId: autoStoreId } : {}),
         },

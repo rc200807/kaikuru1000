@@ -49,6 +49,7 @@ model User {
   // 身分証OCR抽出フィールド（Gemini Vision）
   idDocumentType  String?             // 書類種別（運転免許証/パスポート/マイナンバーカードなど）
   idName          String?             // 身分証記載氏名
+  idFurigana      String?             // 身分証確認時に入力したふりがな（身分証には載っていないため人が入力）
   idBirthDate     String?             // 生年月日（YYYY-MM-DD または 和暦テキスト）
   idAddress       String?   @db.Text  // 身分証記載住所
   idLicenseNumber String?             // 免許番号・旅券番号など
@@ -74,6 +75,7 @@ model User {
   customerTypes         String    @default("[]")      // JSON配列: 顧客に適用する全種別（複数可）
   visitFrequencyMonths  Int       @default(1)         // 訪問・宅配の頻度（何ヶ月に1回）
   occupation            String?                       // 職業（売買契約書作成時に取得）
+  lineName              String?                       // LINEアカウント名（顧客登録時に手入力。LINE連携済みなら LineUser.displayName が別にある）
   leadSource            String?                       // 流入経路（LeadSourceマスタの名称を格納）
   // 振込先口座情報
   bankName       String?
@@ -662,6 +664,7 @@ model Estimate {
   billingAmount   Int                         // 請求金額（円）
   validUntil      DateTime                    // 見積有効期限
   staffName       String                      // 見積担当者
+  remarks         String?       @db.Text       // 備考（見積書に記載される。買取見積・請求見積の両方に印字）
   memberId        String?                     // 見積を作成した店舗メンバー（帰属）
   member          StoreMember?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   customerEmail   String?                     // 送信先メールアドレス（記録用）
@@ -687,6 +690,7 @@ model SalesContract {
   pdfBase64             String?       @db.Text  // 売買契約書PDF（base64）
   invoicePdfBase64      String?       @db.Text  // 請求書PDF（base64）
   customerEmail         String?       // 送信先メールアドレス（記録用）
+  remarks               String?       @db.Text  // 備考（売買契約書・請求書に記載される）
   emailSentAt           DateTime?     // メール送信日時
   lineSentAt            DateTime?     // LINE送付日時（閲覧リンクをトークへ送信）
   agreedAt              DateTime      @default(now())
@@ -838,6 +842,7 @@ model Deal {
   detail      String?   @db.Text           // 買取内容などの自由記述メモ（タイトルなし）
   status      String    @default("inquiry") // inquiry/visit_decided/estimate_only/contract/completed/lost
   category    String    @default("purchase") // 案件カテゴリー: purchase(買取)/akikuru(アキクル)/ecotoku(エコトク)
+  leadSource  String?                       // 流入経路（LeadSourceマスタの名称）。作成時に顧客の流入経路を自動で写し、案件詳細で編集できる
   occurredAt  DateTime  @default(now())     // 案件発生日（手動設定可・既定は作成日時）
   createdByType String?                     // 作成者種別（store/admin/superadmin/hr/customer/partner）
   createdById   String?                     // 作成者ID（Store.id / Admin.id など・スナップショット）

@@ -14,6 +14,7 @@ import CompletionModal from '@/components/store/CompletionModal'
 import LineSendCard from '@/components/store/LineSendCard'
 import { formalName, storeContractName } from '@/lib/operator-utils'
 import { formatBirthDate } from '@/lib/kobutsu-ledger'
+import { useDealRecorderTarget } from '@/components/deal/DealRecorder'
 
 // base64 PDF を新規タブで開く（ブラウザのPDFビューアで確認・ダウンロードできる）
 function openPdfBase64(base64: string) {
@@ -202,6 +203,8 @@ type ExistingContract = {
   agreedAt: string
   emailSentAt: string | null
   customerEmail: string | null
+  /** 備考（契約書・請求書に記載される） */
+  remarks?: string | null
   /** サーバーに保存済みのPDFがあるか（完了パネルのダウンロードボタン表示判定） */
   hasPdf?: boolean
   hasInvoicePdf?: boolean
@@ -343,6 +346,18 @@ function SignaturePad({
 }
 
 /* ─── メイン ─── */
+/** 書類に印字する備考欄（入力が無ければ何も出さない） */
+function RemarksBox({ text }: { text: string }) {
+  const t = text.trim()
+  if (!t) return null
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)] text-xs">
+      <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1">備考</div>
+      <div className="whitespace-pre-wrap text-[var(--md-sys-color-on-surface)] leading-relaxed">{t}</div>
+    </div>
+  )
+}
+
 export default function FinalAgreementPage() {
   const { data: session } = useSession()
   const sessionUserId = (session?.user as any)?.id as string | undefined
@@ -356,6 +371,8 @@ export default function FinalAgreementPage() {
   const fromDealId = searchParams.get('dealId') || ''
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
+  // 契約書の署名まで会話を録音できるように、この訪問の案件を録音ボタンへ知らせる
+  useDealRecorderTarget(scheduleId, visit?.deal?.id ?? fromDealId)
   const [loading, setLoading] = useState(true)
   const [saleSignature, setSaleSignature] = useState<string | null>(
     () => (typeof window !== 'undefined' ? sessionStorage.getItem(`sig_sale_${scheduleId}`) : null)
@@ -384,6 +401,8 @@ export default function FinalAgreementPage() {
   } | null>(null)
   const [customerEmailInput, setCustomerEmailInput] = useState('')
   const [occupationInput, setOccupationInput] = useState('')
+  // 備考（売買契約書・請求書の両方に記載される）
+  const [remarksInput, setRemarksInput] = useState('')
   const [phoneInput, setPhoneInput] = useState('')
   // アキクル案件のStripe請求情報（発行済みならPDFの請求書に振込先＋QRを印字する）
   const [stripeBilling, setStripeBilling] = useState<StripeBillingInfo | null>(null)
@@ -493,6 +512,8 @@ export default function FinalAgreementPage() {
     if (contractRes.ok) {
       const contract = await contractRes.json()
       setExistingContract(contract)
+      // 発行済みの契約書があれば、その備考を初期値にする（再発行しても消えないように）
+      if (contract?.remarks) setRemarksInput(prev => prev || contract.remarks)
     }
     setLoading(false)
   }, [scheduleId])
@@ -597,6 +618,7 @@ export default function FinalAgreementPage() {
           email: emailTrimmed,
           occupation: occupationInput.trim() || null,
           phone: phoneInput.trim() || null,
+          remarks: remarksInput.trim() || null,
         }),
       })
 
@@ -700,7 +722,7 @@ export default function FinalAgreementPage() {
   const antiquePermitNumber = visit.store.antiquePermitNumber || visit.store.operator?.antiquePermitNumber || ''
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
+    <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-28 space-y-5">
       <PinUnlockModal
         open={showPinModal}
         onUnlock={handlePinUnlock}
@@ -820,6 +842,22 @@ export default function FinalAgreementPage() {
         <LineSendCard visitScheduleId={scheduleId} docType="contract" />
       )}
 
+      {/* ──── 備考の入力（PDFには含めない。入力内容は下の売買契約書・請求書にそのまま記載される） ──── */}
+      <Card variant="elevated" padding="md">
+        <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">備考</h2>
+        <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mb-2">
+          入力した内容は、売買契約書と請求書の備考欄にそのまま記載されます。署名前にご確認ください。
+        </p>
+        <textarea
+          value={remarksInput}
+          onChange={(e) => setRemarksInput(e.target.value)}
+          rows={3}
+          maxLength={2000}
+          placeholder="例: 冷蔵庫は次回訪問時に引き取り"
+          className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40 resize-y"
+        />
+      </Card>
+
       {/* ──── PDF出力対象エリア①：売買契約書（買取・店舗情報） ──── */}
       <div ref={saleRef} className="space-y-5 bg-white p-1 rounded-xl">
 
@@ -915,6 +953,7 @@ export default function FinalAgreementPage() {
           ) : (
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">買取品目は登録されていません</p>
           )}
+          <RemarksBox text={remarksInput} />
         </Card>
 
         {/* ──── 特商法書面・クーリングオフ全文 ──── */}
@@ -1099,6 +1138,7 @@ export default function FinalAgreementPage() {
           ) : (
             <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">作業項目は登録されていません</p>
           )}
+          <RemarksBox text={remarksInput} />
 
           {/* 注意書き */}
           <div className="mt-4 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">

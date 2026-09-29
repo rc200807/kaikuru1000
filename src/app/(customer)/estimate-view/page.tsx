@@ -9,7 +9,7 @@ interface EstimateData {
   id: string
   user: { id: string; name: string; phone: string; address: string; idAddress: string | null; idName: string | null }
   store: { id: string; name: string; address: string; phone: string }
-  estimate: { id: string; validUntil: string; staffName: string | null; purchaseAmount: number; billingAmount: number; createdAt: string }
+  estimate: { id: string; validUntil: string; staffName: string | null; remarks?: string | null; purchaseAmount: number; billingAmount: number; createdAt: string }
   hasPdf?: boolean
   hasInvoicePdf?: boolean
   purchaseUpliftPercent?: number
@@ -209,6 +209,13 @@ function EstimateViewContent() {
               </tr>
             </tbody>
           </table>
+
+          {data.estimate.remarks?.trim() && (
+            <div className="mt-4 bg-gray-50 rounded-lg px-4 py-3">
+              <p className="text-xs font-bold text-gray-700 mb-1">備考</p>
+              <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">{data.estimate.remarks.trim()}</p>
+            </div>
+          )}
 
           <p className="text-[10px] text-gray-400 mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
 

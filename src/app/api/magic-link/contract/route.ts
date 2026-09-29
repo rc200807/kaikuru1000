@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       where: itemWhere, orderBy: { createdAt: 'asc' },
       select: { id: true, workName: true, unitPrice: true, quantity: true },
     }),
-    prisma.salesContract.findUnique({ where: docWhere, select: { id: true, agreedAt: true, signatureData: true } }),
+    prisma.salesContract.findUnique({ where: docWhere, select: { id: true, agreedAt: true, signatureData: true, remarks: true } }),
     // PDFは数MBの base64。「入っているか」だけが必要なので本文は引かず count で判定する
     prisma.salesContract.count({ where: { ...docWhere, NOT: { pdfBase64: null } } }),
     prisma.salesContract.count({ where: { ...docWhere, NOT: { invoicePdfBase64: null } } }),
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
       quantity: item.quantity,
     })),
     salesContract: salesContract
-      ? { id: salesContract.id, agreedAt: salesContract.agreedAt, signatureData: salesContract.signatureData }
+      ? { id: salesContract.id, agreedAt: salesContract.agreedAt, signatureData: salesContract.signatureData, remarks: salesContract.remarks }
       : null,
     hasPdf: pdfCount > 0,
     hasInvoicePdf: invoicePdfCount > 0,

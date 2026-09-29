@@ -36,7 +36,7 @@ export async function GET(
       internalNote: true,
       idDocumentPath: true, createdAt: true, lastVisitedAt: true,
       customerType: true,
-      birthDate: true, occupation: true, leadSource: true, visitFrequencyMonths: true,
+      birthDate: true, occupation: true, leadSource: true, lineName: true, visitFrequencyMonths: true,
       // 身分証OCR抽出フィールド
       idDocumentType: true, idName: true, idBirthDate: true,
       idAddress: true, idLicenseNumber: true, idExpiryDate: true,

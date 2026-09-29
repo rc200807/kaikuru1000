@@ -45,6 +45,7 @@ type Deal = {
   purchaseAmount: number | null
   preConsentAt: string | null
   inquiryId?: string | null
+  leadSource?: string | null  // 案件の流入経路（作成時に顧客の流入経路を自動記録）
   user: { id: string; name: string; phone: string | null; customerType: string; leadSource: string | null } | null
   store: { id: string; name: string; code: string } | null
   inquiry: { id: string; inquiryType: string } | null
@@ -384,7 +385,7 @@ function StoreDealsContent() {
         ? <span className="text-xs" style={{ color: 'var(--status-completed-text)' }}>取得済み</span>
         : <span className="text-xs" style={{ color: 'var(--status-pending-text)' }}>未取得</span>
     ) },
-    { key: 'leadSource', header: '流入経路', render: (d: Deal) => <span className="text-sm">{d.user?.leadSource || '—'}</span> },
+    { key: 'leadSource', header: '流入経路', render: (d: Deal) => <span className="text-sm">{d.leadSource || '—'}</span> },
     { key: 'customerType', header: '顧客種別', render: (d: Deal) => <span className="text-sm">{d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '—'}</span> },
     { key: 'store', header: '店舗', render: (d: Deal) => <StoreChip storeId={d.store?.id} storeName={d.store?.name ?? '未割当'} size="sm" /> },
   ]), [])

@@ -5,6 +5,7 @@ import { SessionProvider } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import NavigationDrawer from '@/components/NavigationDrawer'
 import LoginRequestNotifier from '@/components/admin/LoginRequests'
+import { DealRecorderProvider } from '@/components/deal/DealRecorder'
 
 /**
  * 管理ポータルの外枠。
@@ -29,14 +30,16 @@ export default function AdminShell({
 
   return (
     <SessionProvider session={session} refetchOnWindowFocus={false} refetchInterval={0}>
-      <div data-portal="admin" className="flex min-h-screen" style={{ background: '#0a0a0a', color: 'var(--md-sys-color-on-surface)' }}>
-        <NavigationDrawer />
-        <main className="flex-1 min-w-0 lg:pl-0 pb-4">
-          {children}
-        </main>
-        {/* ID+パスワード方式のログインリクエスト通知（承認者＝admin/superadmin のみ表示） */}
-        <LoginRequestNotifier />
-      </div>
+      <DealRecorderProvider>
+        <div data-portal="admin" className="flex min-h-screen" style={{ background: '#0a0a0a', color: 'var(--md-sys-color-on-surface)' }}>
+          <NavigationDrawer />
+          <main className="flex-1 min-w-0 lg:pl-0 pb-4">
+            {children}
+          </main>
+          {/* ID+パスワード方式のログインリクエスト通知（承認者＝admin/superadmin のみ表示） */}
+          <LoginRequestNotifier />
+        </div>
+      </DealRecorderProvider>
     </SessionProvider>
   )
 }

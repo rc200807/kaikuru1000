@@ -39,6 +39,8 @@ const updateUserSchema = z.object({
   // 職業・流入経路（store / admin のみ）
   occupation:       z.string().max(100).nullable().optional(),
   leadSource:       z.string().max(100).nullable().optional(),
+  // LINEアカウント名（store / admin のみ）
+  lineName:         z.string().max(100).nullable().optional(),
   // 振込先口座情報
   bankName:      z.string().max(50).nullable().optional(),
   branchName:    z.string().max(50).nullable().optional(),
@@ -109,7 +111,7 @@ export async function PATCH(
 
   const { name, furigana, lastName, firstName, lastNameKana, firstNameKana,
           email, phone, phone2, phone3, postalCode, address, currentPassword, newPassword, idOcrIssueReport,
-          internalNote, customerType, customerTypes, visitFrequencyMonths, occupation, leadSource,
+          internalNote, customerType, customerTypes, visitFrequencyMonths, occupation, leadSource, lineName,
           bankName, branchName, accountType, accountNumber, accountHolder } = parsed.data
 
   const user = await prisma.user.findUnique({ where: { id } })
@@ -145,6 +147,7 @@ export async function PATCH(
     if (visitFrequencyMonths !== undefined) updateData.visitFrequencyMonths = visitFrequencyMonths
     if (occupation !== undefined) updateData.occupation = occupation ? occupation.trim() : null
     if (leadSource !== undefined) updateData.leadSource = leadSource ? leadSource.trim() : null
+    if (lineName !== undefined) updateData.lineName = lineName && lineName.trim() ? lineName.trim() : null
   }
   // 振込先口座情報。
   // 実在確認（口座名義照会）は金融機関のAPI契約が必要でここではできないため、

@@ -25,7 +25,7 @@ export async function GET(
   const schedule = await prisma.visitSchedule.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, address: true, phone: true, email: true, customerType: true, occupation: true, birthDate: true, leadSource: true, idAddress: true, idName: true, idDocumentType: true, idDocumentPath: true, idDocumentBackPath: true, idBirthDate: true, idLicenseNumber: true } },
+      user: { select: { id: true, name: true, furigana: true, address: true, phone: true, email: true, customerType: true, occupation: true, birthDate: true, leadSource: true, idAddress: true, idName: true, idDocumentType: true, idDocumentPath: true, idDocumentBackPath: true, idBirthDate: true, idLicenseNumber: true } },
       store: {
         select: {
           id: true, name: true, address: true, phone: true,

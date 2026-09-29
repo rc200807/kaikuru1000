@@ -1,5 +1,6 @@
 'use client'
 
+import { withWareki } from '@/lib/wareki'
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
@@ -61,6 +62,7 @@ type Customer = {
   visitSchedules: Array<{ visitDate: string; status: string }>
   customerType: string
   leadSource: string | null
+  lineName?: string | null
   birthDate: string | null
   occupation: string | null
   visitFrequencyMonths: number | null
@@ -311,10 +313,11 @@ export default function StoreCustomerDetailPage() {
     customerType: CustomerType
     visitFrequencyMonths: number
     leadSource: string
+    lineName: string
   }
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [showMerge, setShowMerge] = useState(false)
-  const [editDraft, setEditDraft] = useState<EditDraft>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', postalCode: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '' })
+  const [editDraft, setEditDraft] = useState<EditDraft>({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', phone2: '', phone3: '', postalCode: '', address: '', customerType: 'visit', visitFrequencyMonths: 1, leadSource: '', lineName: '' })
   const [savingEdit, setSavingEdit] = useState(false)
   // マスタと担当者候補はサーバー（layout.tsx）が解決済みのものを Context から読む（クライアント往復ゼロ）
   const masters = useStoreMasters()
@@ -333,6 +336,7 @@ export default function StoreCustomerDetailPage() {
       customerType: (CUSTOMER_TYPES.includes(customer.customerType as CustomerType) ? customer.customerType : 'visit') as CustomerType,
       visitFrequencyMonths: (customer as any).visitFrequencyMonths ?? 1,
       leadSource: customer.leadSource || '',
+      lineName: customer.lineName || '',
     })
     setEditModalOpen(true)
   }
@@ -364,6 +368,7 @@ export default function StoreCustomerDetailPage() {
           customerTypes: [editDraft.customerType],
           visitFrequencyMonths: editDraft.visitFrequencyMonths,
           leadSource: editDraft.leadSource || null,
+          lineName: editDraft.lineName.trim() || null,
         }),
       })
       if (res.ok) {
@@ -383,6 +388,7 @@ export default function StoreCustomerDetailPage() {
           address: editDraft.address.trim(),
           customerType: editDraft.customerType,
           leadSource: editDraft.leadSource || null,
+          lineName: editDraft.lineName.trim() || null,
         } : prev)
         setEditModalOpen(false)
         setMsg({ type: 'success', text: '顧客情報を更新しました' })
@@ -1094,7 +1100,10 @@ export default function StoreCustomerDetailPage() {
                 <PropRow label={isDelivery ? '宅配の頻度' : '訪問の頻度'} value={freqMonths ? `${freqMonths}ヶ月に1回` : null} />
               )}
               <PropRow label="流入経路" value={customer.leadSource} />
-              <PropRow label="生年月日" value={customer.birthDate || customer.idBirthDate} />
+              <PropRow label="LINEアカウント名" value={customer.lineName} />
+              {/* 顧客情報の生年月日は顧客プロフィールの値だけを表示する。身分証の読み取り値は下の「本人確認」欄に出す
+                  （反映にチェックを入れなかった値がここに出て、反映されたように見えていた） */}
+              <PropRow label="生年月日" value={withWareki(customer.birthDate)} />
               <PropRow label="職業" value={customer.occupation} hint={customer.occupation ? '売買契約書から取得' : undefined} />
               <PropRow
                 label="最終接触"
@@ -1121,7 +1130,7 @@ export default function StoreCustomerDetailPage() {
               <dl className="space-y-2">
                 {[
                   { label: '氏名（証明書）', value: customer.idName },
-                  { label: '生年月日', value: customer.idBirthDate },
+                  { label: '生年月日', value: withWareki(customer.idBirthDate) },
                   { label: '住所（証明書）', value: customer.idAddress },
                   { label: '証明書番号', value: customer.idLicenseNumber },
                   { label: '有効期限', value: customer.idExpiryDate },
@@ -2406,6 +2415,17 @@ export default function StoreCustomerDetailPage() {
                 <option value={editDraft.leadSource}>{editDraft.leadSource}</option>
               )}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">LINEアカウント名</label>
+            <input
+              type="text"
+              value={editDraft.lineName}
+              onChange={e => setEditDraft(d => ({ ...d, lineName: e.target.value }))}
+              placeholder="LINEに表示されている名前"
+              maxLength={100}
+              className="w-full h-12 px-3 text-sm rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
+            />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="text" onClick={() => setEditModalOpen(false)} disabled={savingEdit}>キャンセル</Button>

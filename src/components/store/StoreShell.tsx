@@ -9,6 +9,7 @@ import { ToastProvider } from '@/components/Toast'
 import { StoreScopeProvider } from '@/components/store/StoreScopeContext'
 import { StoreBadgesProvider } from '@/components/store/StoreBadgesContext'
 import { StoreMastersProvider } from '@/components/store/StoreMastersContext'
+import { DealRecorderProvider } from '@/components/deal/DealRecorder'
 import type { StoreScopeBootstrap, StoreMasters } from '@/lib/store-bootstrap'
 
 /**
@@ -76,7 +77,11 @@ export default function StoreShell({
 
   return (
     <SessionProvider session={session} refetchOnWindowFocus={false} refetchInterval={0}>
-      {shell}
+      {/* 録音は見積書・契約書の画面遷移（レイアウトの分岐が変わる）をまたいで続けるため、
+          分岐の外側に置く。ここが外れると録音が途中で止まる */}
+      <DealRecorderProvider>
+        {shell}
+      </DealRecorderProvider>
     </SessionProvider>
   )
 }

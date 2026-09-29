@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAddressMatch } from '@/lib/address-utils'
 import { z } from 'zod'
+import { buildUserNameUpdateData } from '@/lib/name-utils'
 
 /**
  * 身分証OCR結果の確認・編集
@@ -16,11 +17,14 @@ const schema = z.object({
   idBirthDate:      z.string().max(50).nullable().optional(),
   idDocumentType:   z.string().max(50).nullable().optional(),
   idLicenseNumber:  z.string().max(50).nullable().optional(),
+  // 身分証には載っていないため、確認画面で人が入力する（任意）
+  idFurigana:       z.string().max(100).nullable().optional(),
   applyToProfile:   z.boolean().default(false), // 後方互換（全項目を顧客情報へ反映）
   // 項目別に顧客情報へ反映するか（未指定時は applyToProfile にフォールバック）
   applyName:        z.boolean().optional(),
   applyAddress:     z.boolean().optional(),
   applyBirthDate:   z.boolean().optional(),
+  applyFurigana:    z.boolean().optional(),
 })
 
 export async function PATCH(
@@ -44,11 +48,12 @@ export async function PATCH(
     return NextResponse.json({ error }, { status: 400 })
   }
 
-  const { idName, idAddress, idBirthDate, idDocumentType, idLicenseNumber, applyToProfile } = parsed.data
+  const { idName, idAddress, idBirthDate, idDocumentType, idLicenseNumber, idFurigana, applyToProfile } = parsed.data
   // 項目別フラグ（未指定は applyToProfile にフォールバック＝後方互換）
   const applyName = parsed.data.applyName ?? applyToProfile
   const applyAddress = parsed.data.applyAddress ?? applyToProfile
   const applyBirthDate = parsed.data.applyBirthDate ?? applyToProfile
+  const applyFurigana = parsed.data.applyFurigana ?? applyToProfile
 
   const user = await prisma.user.findUnique({ where: { id }, select: { address: true } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -62,9 +67,13 @@ export async function PATCH(
   if (idDocumentType !== undefined) updateData.idDocumentType = idDocumentType
   // 運転免許証など、免許番号が確認・修正された場合は内部の売買記録用に保存
   if (idLicenseNumber !== undefined) updateData.idLicenseNumber = idLicenseNumber
+  const furigana = (idFurigana ?? '').trim()
+  if (idFurigana !== undefined) updateData.idFurigana = furigana || null
 
   // 選択された項目のみ顧客プロフィールへ反映
-  if (applyName) updateData.name = idName
+  // 氏名・ふりがなは姓名分割の6フィールド整合を保つため name-utils 経由で書く（name を直接書かない）
+  if (applyName) Object.assign(updateData, buildUserNameUpdateData({ name: idName }))
+  if (applyFurigana && furigana) Object.assign(updateData, buildUserNameUpdateData({ furigana }))
   if (applyBirthDate && idBirthDate) updateData.birthDate = idBirthDate
   if (applyAddress) {
     updateData.address = idAddress
@@ -82,5 +91,11 @@ export async function PATCH(
 
   await prisma.user.update({ where: { id }, data: updateData })
 
-  return NextResponse.json({ success: true, appliedName: applyName, appliedAddress: applyAddress, appliedBirthDate: applyBirthDate })
+  return NextResponse.json({
+    success: true,
+    appliedName: applyName,
+    appliedAddress: applyAddress,
+    appliedBirthDate: applyBirthDate,
+    appliedFurigana: applyFurigana && !!furigana,
+  })
 }

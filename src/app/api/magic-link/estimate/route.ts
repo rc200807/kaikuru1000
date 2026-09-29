@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       where: docWhere, orderBy: { createdAt: 'asc' },
       select: { id: true, workName: true, unitPrice: true, quantity: true },
     }),
-    prisma.estimate.findUnique({ where: docWhere, select: { id: true, validUntil: true, staffName: true, purchaseAmount: true, billingAmount: true, createdAt: true } }),
+    prisma.estimate.findUnique({ where: docWhere, select: { id: true, validUntil: true, staffName: true, remarks: true, purchaseAmount: true, billingAmount: true, createdAt: true } }),
     // PDFは数MBの base64。「入っているか」だけが必要なので本文は引かず count で判定する
     prisma.estimate.count({ where: { ...docWhere, NOT: { pdfBase64: null } } }),
     prisma.estimate.count({ where: { ...docWhere, NOT: { invoicePdfBase64: null } } }),
@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       id: estimate.id,
       validUntil: estimate.validUntil,
       staffName: estimate.staffName,
+      remarks: estimate.remarks,
       purchaseAmount: estimate.purchaseAmount,
       billingAmount: estimate.billingAmount,
       createdAt: estimate.createdAt,

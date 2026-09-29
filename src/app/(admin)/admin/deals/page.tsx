@@ -31,6 +31,7 @@ type Deal = {
   occurredAt: string
   purchaseAmount: number | null
   inquiryId?: string | null
+  leadSource?: string | null  // 案件の流入経路（作成時に顧客の流入経路を自動記録）
   user: { id: string; name: string; phone: string | null; customerType: string; leadSource: string | null } | null
   store: { id: string; name: string; code: string } | null
   inquiry: { id: string; inquiryType: string } | null
@@ -284,7 +285,7 @@ export default function AdminDealsPage() {
       { key: 'category', header: 'カテゴリー', render: (d: Deal) => { const c = DEAL_CATEGORY_BADGE[d.category ?? 'purchase'] ?? DEAL_CATEGORY_BADGE.purchase; return <Badge label={DEAL_CATEGORY_LABEL[d.category ?? 'purchase'] ?? d.category ?? ''} bg={c.bg} fg={c.fg} /> } },
       { key: 'amount', header: '買取金額', sortable: true, render: (d: Deal) => <span className="tabular-nums">{yen(d.purchaseAmount)}</span> },
       { key: 'createdAt', header: '作成日', sortable: true, render: (d: Deal) => <span className="text-sm tabular-nums">{fmtDate(d.createdAt)}</span> },
-      { key: 'leadSource', header: '流入経路', render: (d: Deal) => <span className="text-sm">{d.user?.leadSource || '—'}</span> },
+      { key: 'leadSource', header: '流入経路', render: (d: Deal) => <span className="text-sm">{d.leadSource || '—'}</span> },
       { key: 'customerType', header: '顧客種別', render: (d: Deal) => <span className="text-sm">{d.user?.customerType ? ((CUSTOMER_TYPE_LABEL as Record<string, string>)[d.user.customerType] ?? d.user.customerType) : '—'}</span> },
       { key: 'member', header: '担当', render: (d: Deal) => <span className="text-sm">{d.assigneeName ?? d.member?.name ?? '—'}</span> },
       { key: 'source', header: '由来', render: (d: Deal) => <span className="text-sm">{d.inquiryId ? '問い合わせ' : '手動'}</span> },

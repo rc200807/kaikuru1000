@@ -13,6 +13,7 @@ import LineSendCard from '@/components/store/LineSendCard'
 import { QRCodeSVG } from 'qrcode.react'
 import { formalName, storeContractName } from '@/lib/operator-utils'
 import { buildInvoiceNotesHtml, buildTokushohoHtml } from '@/lib/legal-texts'
+import { useDealRecorderTarget } from '@/components/deal/DealRecorder'
 
 /* ─── 型定義 ─── */
 type PurchaseItem = { id: string; itemName?: string | null; category?: string | null; quantity: number; purchasePrice: number }
@@ -29,6 +30,8 @@ type VisitDetail = {
   purchaseItems: PurchaseItem[]
   workItems: WorkItem[]
   purchaseUpliftPercent?: number
+  dealId?: string | null
+  deal?: { id: string } | null
 }
 
 type ExistingEstimate = {
@@ -36,6 +39,7 @@ type ExistingEstimate = {
   validUntil: string
   emailSentAt: string | null
   customerEmail: string | null
+  remarks?: string | null
 }
 
 function defaultValidUntil(): string {
@@ -74,12 +78,16 @@ export default function EstimatePage() {
   const backLabel = fromDealId ? '案件詳細' : '訪問詳細'
 
   const [visit, setVisit] = useState<VisitDetail | null>(null)
+  // 契約書の署名まで会話を録音できるように、この訪問の案件を録音ボタンへ知らせる
+  useDealRecorderTarget(scheduleId, visit?.deal?.id ?? visit?.dealId ?? fromDealId)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [existing, setExisting] = useState<ExistingEstimate | null>(null)
   const [validUntil, setValidUntil] = useState(defaultValidUntil())
   const [emailInput, setEmailInput] = useState('')
+  // 備考（買取見積・請求見積の両方に記載される）
+  const [remarks, setRemarks] = useState('')
   const saleEstimateRef = useRef<HTMLDivElement>(null)
   const invoiceEstimateRef = useRef<HTMLDivElement>(null)
   const [magicUrl, setMagicUrl] = useState<string | null>(null)
@@ -129,6 +137,8 @@ export default function EstimatePage() {
         setExisting(est)
         if (est.validUntil) setValidUntil(new Date(est.validUntil).toISOString().slice(0, 10))
         if (est.customerEmail) setEmailInput((prev) => prev || est.customerEmail)
+        // 発行済みの見積書があれば、その備考を初期値にする（再送信しても消えないように）
+        if (est.remarks) setRemarks((prev) => prev || est.remarks)
       }
     }
     setLoading(false)
@@ -164,7 +174,7 @@ export default function EstimatePage() {
     const res = await fetch(`/api/visit-schedules/${scheduleId}/estimate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ validUntil, staffName, pdfBase64, invoicePdfBase64, email, skipEmail }),
+      body: JSON.stringify({ validUntil, staffName, pdfBase64, invoicePdfBase64, email, skipEmail, remarks: remarks.trim() || null }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -178,7 +188,9 @@ export default function EstimatePage() {
   // QR・リンク発行。見積が未保存なら先に保存する（未保存のままだとお客様側で「見積書が見つかりません」になる）
   const handleIssueLink = async () => {
     if (!visit) return
-    if (!existing) {
+    // 未保存、または備考を書き換えた場合は先に保存する（お客様が開く見積書は保存済みの内容なので、
+    // 保存しないと備考が反映されない）
+    if (!existing || (existing.remarks ?? '') !== remarks.trim()) {
       if (!validUntil) {
         setMessage({ type: 'error', text: '見積有効期限を入力してください' })
         return
@@ -262,7 +274,7 @@ export default function EstimatePage() {
   const validUntilLabel = validUntil ? format(new Date(validUntil), 'yyyy年M月d日（E）', { locale: ja }) : '—'
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
+    <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-28 space-y-5">
       {/* ヘッダー */}
       <div className="flex items-center gap-3">
         <button
@@ -309,6 +321,18 @@ export default function EstimatePage() {
               className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40"
             />
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">提出するとPDFをこのメールアドレス宛にお送りします。未登録の場合は顧客情報に登録されます。</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">備考（見積書に記載されます）</label>
+            <textarea
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder="例: 現品確認後に金額が変わる場合があります"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)]/40 resize-y"
+            />
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">入力した内容は、下の買取見積・請求見積の備考欄にそのまま記載されます。</p>
           </div>
         </div>
       </Card>
@@ -363,6 +387,12 @@ export default function EstimatePage() {
               <tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">買取金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--portal-primary)]">{fmtYen(purchaseTotal)}</td></tr>
             </tbody>
           </table>
+          {remarks.trim() && (
+            <div className="mt-4 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)] text-xs">
+              <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1">備考</div>
+              <div className="whitespace-pre-wrap text-[var(--md-sys-color-on-surface)] leading-relaxed">{remarks.trim()}</div>
+            </div>
+          )}
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
           <div className="mt-4" dangerouslySetInnerHTML={{ __html: buildTokushohoHtml() }} />
         </Card>
@@ -411,6 +441,12 @@ export default function EstimatePage() {
           <table className="w-full text-sm border-t-2 border-[var(--md-sys-color-outline-variant)]">
             <tbody><tr><td className="py-3 text-[var(--md-sys-color-on-surface-variant)]">請求金額 合計</td><td className="py-3 text-right font-bold text-lg text-[var(--md-sys-color-on-surface)]">{fmtYen(workTotal)}</td></tr></tbody>
           </table>
+          {remarks.trim() && (
+            <div className="mt-4 p-3 rounded-lg bg-[var(--md-sys-color-surface-container-low)] text-xs">
+              <div className="text-[11px] font-bold text-[var(--md-sys-color-on-surface)] mb-1">備考</div>
+              <div className="whitespace-pre-wrap text-[var(--md-sys-color-on-surface)] leading-relaxed">{remarks.trim()}</div>
+            </div>
+          )}
           <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] mt-4">※ 本見積書は概算であり、現品確認後に金額が変動する場合がございます。</p>
           <div className="mt-4" dangerouslySetInnerHTML={{ __html: buildInvoiceNotesHtml() }} />
         </Card>

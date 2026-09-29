@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       where: dealWhere(range, filters),
       select: {
         occurredAt: true, status: true, category: true, createdByType: true, storeId: true,
-        purchaseAmount: true, user: { select: { leadSource: true } },
+        purchaseAmount: true, leadSource: true,
       },
     }),
     prisma.salesContract.findMany({
@@ -74,8 +74,8 @@ export async function GET(request: NextRequest) {
       orderBy: { occurredAt: 'desc' },
       take: 20,
       select: {
-        id: true, status: true, category: true, occurredAt: true, detail: true,
-        user: { select: { name: true, leadSource: true } }, store: { select: { name: true } },
+        id: true, status: true, category: true, occurredAt: true, detail: true, leadSource: true,
+        user: { select: { name: true } }, store: { select: { name: true } },
       },
     }),
     compare
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
   // 流入経路別（件数 + 成約金額）
   const leadAgg = new Map<string, { count: number; won: number; amount: number }>()
   for (const d of deals) {
-    const name = d.user.leadSource ?? '未設定'
+    const name = d.leadSource ?? '未設定'
     const cur = leadAgg.get(name) ?? { count: 0, won: 0, amount: 0 }
     cur.count++
     if (isWon(d.status)) { cur.won++; cur.amount += d.purchaseAmount ?? 0 }
@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
         store: d.store?.name ?? '—',
         category: DEAL_CATEGORY_LABEL[d.category] ?? d.category,
         status: DEAL_STATUS_LABEL[d.status] ?? d.status,
-        leadSource: d.user.leadSource ?? '未設定',
+        leadSource: d.leadSource ?? '未設定',
         occurredAt: d.occurredAt.toISOString(),
         dealId: d.id,
       })),

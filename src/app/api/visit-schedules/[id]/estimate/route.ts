@@ -53,6 +53,8 @@ export async function POST(
   const { validUntil, staffName, pdfBase64, invoicePdfBase64, email: inputEmail } = body
   // QR・リンク発行のための保存だけ行う（メール送信・送信状態のリセット・顧客メールの更新はしない）
   const skipEmail = body.skipEmail === true
+  // 備考（見積書に印字される）。空なら null にして消せるようにする
+  const remarks: string | null = typeof body.remarks === 'string' && body.remarks.trim() ? body.remarks.trim().slice(0, 2000) : null
 
   if (!validUntil) {
     return NextResponse.json({ error: '見積有効期限を指定してください' }, { status: 400 })
@@ -105,6 +107,7 @@ export async function POST(
       staffName: typeof staffName === 'string' ? staffName : '',
       memberId: sessionUser.memberId ?? null,
       customerEmail,
+      remarks,
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
     },
@@ -115,6 +118,7 @@ export async function POST(
       staffName: typeof staffName === 'string' ? staffName : '',
       memberId: sessionUser.memberId ?? null,
       customerEmail,
+      remarks,
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
       // 再送信可能にリセット（QR発行のための保存では送信済み記録を残す）
@@ -171,6 +175,7 @@ export async function POST(
         pdfBase64: effectivePdfBase64 ?? '',
         invoicePdfBase64: effectiveInvoicePdfBase64 ?? '',
         viewUrl,
+        remarks,
         purchaseItems: purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
         workItems: workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
       })
@@ -221,6 +226,7 @@ export async function GET(
       validUntil: true,
       emailSentAt: true,
       customerEmail: true,
+      remarks: true,
       purchaseAmount: true,
       billingAmount: true,
       createdAt: true,

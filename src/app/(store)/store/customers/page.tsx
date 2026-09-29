@@ -113,7 +113,7 @@ export default function StoreCustomersPage() {
   // 新規顧客追加（顧客作成 → 案件作成 → 訪問予定追加 の一連ウィザード）
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1) // 1:顧客 2:案件 3:予定 4:完了
-  const [addCustomerForm, setAddCustomerForm] = useState({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
+  const [addCustomerForm, setAddCustomerForm] = useState({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '', lineName: '' })
   const [createdCustomer, setCreatedCustomer] = useState<{ id: string; name: string } | null>(null)
   const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
   const [dealForm, setDealForm] = useState({ detail: '', occurredAt: todayStr() })
@@ -326,7 +326,7 @@ export default function StoreCustomersPage() {
     setShowAddCustomer(true)
     setWizardStep(1)
     setAddCustomerMsg(null)
-    setAddCustomerForm({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '' })
+    setAddCustomerForm({ lastName: '', firstName: '', lastNameKana: '', firstNameKana: '', email: '', phone: '', postalCode: '', address: '', leadSource: '', lineName: '' })
     setCreatedCustomer(null)
     setDealForm({ detail: '', occurredAt: todayStr() })
     setCreatedDealId(null)
@@ -351,6 +351,7 @@ export default function StoreCustomersPage() {
           phone: addCustomerForm.phone,
           address: addCustomerForm.address,
           leadSource: addCustomerForm.leadSource || undefined,
+          lineName: addCustomerForm.lineName.trim() || undefined,
           // パスワードはAPIで自動生成
           customerType: 'regular',
           skipLicenseKey: true,
@@ -795,6 +796,7 @@ export default function StoreCustomersPage() {
               </select>
               <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1">※ お問い合わせフォーム経由のお客様は自動的に「Webフォーム」が設定されます。</p>
             </div>
+            <TextField label="LINEアカウント名（任意）" value={addCustomerForm.lineName} onChange={v => setAddCustomerForm(f => ({ ...f, lineName: v }))} placeholder="LINEに表示されている名前" autoComplete="off" name="kk-cust-line-name" />
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
               ※ パスワードは自動生成されます。お客様には後でマイページからパスワード設定をご案内ください。
             </p>

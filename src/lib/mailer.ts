@@ -536,6 +536,8 @@ export async function sendEstimateEmail(params: {
   viewUrl?: string
   purchaseItems?: { name: string; quantity: number; price: number }[]
   workItems?: { name: string; quantity: number; price: number }[]
+  /** 備考（見積書に記載される内容。メール本文にも載せる） */
+  remarks?: string | null
 }): Promise<boolean> {
   const result = await createTransporter()
   if (!result) return false
@@ -590,7 +592,11 @@ export async function sendEstimateEmail(params: {
   }
   const itemsHtml =
     sectionHtml('買取品目', params.purchaseItems ?? [], '買取金額 合計', params.purchaseAmount, '#991b1b', false) +
-    sectionHtml('請求項目（作業・サービス）', params.workItems ?? [], '請求金額 合計', params.billingAmount, '#111827', true)
+    sectionHtml('請求項目（作業・サービス）', params.workItems ?? [], '請求金額 合計', params.billingAmount, '#111827', true) +
+    (params.remarks && params.remarks.trim()
+      ? `<p style="margin:0 0 6px;color:#111827;font-size:13px;font-weight:700;">備考</p>
+      <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#111827;line-height:1.7;white-space:pre-wrap;">${escapeHtml(params.remarks.trim())}</div>`
+      : '')
 
   const html = `
 <!DOCTYPE html>

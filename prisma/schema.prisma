@@ -493,9 +493,10 @@ model Admin {
   password      String
   role          String         @default("admin") // admin, superadmin, hr, sysadmin
   authMethod    String         @default("email")  // "email"（従来のメール招待）| "idpass"（ID+パスワード方式）
-  status        String         @default("active")  // "active" | "pending_passkey" | "pending_approval"（idpassのみpending_*を使う）
-  approvedById  String?                            // 承認したsuperadminのAdmin.id
-  approvedAt    DateTime?                          // 承認日時
+  status        String         @default("active")  // "active"（旧: idpassの "pending_passkey" | "pending_approval" は廃止しactiveへ移行済み）
+  approvedById  String?                            // 旧フロー（superadminのアカウント承認）の記録。新規では使わない
+  approvedAt    DateTime?                          // 同上
+  loginRequests AdminLoginRequest[]                // ID+パスワード方式のログインリクエスト（ログインのたびに承認が必要）
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
   announcements  Announcement[]
   releaseNotes   ReleaseNote[]  @relation("ReleaseNoteAuthor")
@@ -512,6 +513,29 @@ model Admin {
   knowledgeDocumentsUploaded KnowledgeDocument[]
   createdAt      DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+// ID+パスワード方式（メールなし）管理者のログインリクエスト。
+// ID/パスワードが正しくてもそれだけではログインさせず、管理者以上（admin/superadmin）の誰かが
+// 管理画面で承認して初めて、申請した端末（token を持つブラウザ）だけがログインを確定できる。
+model AdminLoginRequest {
+  id            String    @id @default(cuid())
+  adminId       String
+  admin         Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tokenHash     String    @unique              // 申請端末だけが持つ秘密（状態確認・ログイン確定用）の SHA-256
+  code          String                         // 承認者と申請者が照合する確認コード（4桁）
+  status        String    @default("pending")  // pending | approved | rejected | used | cancelled（期限切れは expiresAt で判定）
+  ip            String?
+  userAgent     String?   @db.Text
+  decidedById   String?                        // 承認/却下した管理者の Admin.id
+  decidedByName String?                        // 同・氏名スナップショット
+  decidedAt     DateTime?
+  usedAt        DateTime?                      // ログイン確定日時
+  expiresAt     DateTime                       // pending: 承認待ちの期限 / approved: ログイン確定の期限
+  createdAt     DateTime  @default(now())
+
+  @@index([status, expiresAt])
+  @@index([adminId])
 }
 
 // Googleスプレッドシート同期ログ

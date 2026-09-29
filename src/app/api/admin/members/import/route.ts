@@ -57,7 +57,7 @@ export async function GET() {
   const rows = [
     // メール招待（招待メールでログイン情報を通知）
     ['山田 太郎', 't.yamada@example.com', '', '管理者'],
-    // ID+パスワード方式（メールを持たない人。パスキー登録＋superadmin承認が必要）
+    // ID+パスワード方式（メールを持たない人。ログインのたびに管理者以上の承認が必要）
     ['佐藤 花子', '', 's.sato', 'HR（人事）'],
   ]
   const csv = buildCsv([headers, ...rows])
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // ── ID+パスワード方式（メールなし・パスキー必須・superadmin承認必須）──
+    // ── ID+パスワード方式（メールなし・ログインのたびに管理者以上の承認が必要）──
     if (role === 'superadmin') {
       errors.push({ row: lineNo, message: 'ID+パスワード方式では Super Admin を指定できません' })
       continue
@@ -247,7 +247,7 @@ export async function POST(req: NextRequest) {
         data: p.authMethod === 'idpass'
           ? {
               name: p.name, email: null, loginId: p.loginId, password: hashed,
-              role: p.role, authMethod: 'idpass', status: 'pending_passkey',
+              role: p.role, authMethod: 'idpass', status: 'active',
             }
           : {
               name: p.name, email: p.email, password: hashed,

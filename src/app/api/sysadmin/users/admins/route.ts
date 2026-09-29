@@ -9,7 +9,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // password 等の機微フィールドは select で明示的に除外する
-  const [admins, partners] = await Promise.all([
+  const [admins, partners, pendingLoginRequests] = await Promise.all([
     prisma.admin.findMany({
       select: {
         id: true, name: true, email: true, loginId: true, role: true,
@@ -24,14 +24,15 @@ export async function GET() {
       },
       orderBy: { createdAt: 'asc' },
     }),
+    // ID+パスワード方式のログインリクエスト（承認待ち・期限内）
+    prisma.adminLoginRequest.count({ where: { status: 'pending', expiresAt: { gt: new Date() } } }),
   ])
 
-  const pendingApproval = admins.filter(a => a.status === 'pending_approval').length
-  const pendingPasskey = admins.filter(a => a.status === 'pending_passkey').length
+  const idpassAdmins = admins.filter(a => a.authMethod === 'idpass').length
   const partnersUnaccepted = partners.filter(p => !p.acceptedAt).length
 
   return NextResponse.json({
-    summary: { pendingApproval, pendingPasskey, partnersUnaccepted },
+    summary: { pendingLoginRequests, idpassAdmins, partnersUnaccepted },
     admins,
     partners: partners.map(p => ({
       id: p.id,

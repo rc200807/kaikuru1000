@@ -85,6 +85,11 @@ export async function POST(request: NextRequest) {
     },
   })
 
+  // ID+パスワード方式のログインリクエスト（監査のため30日は保持）
+  const adminLoginRequestsDeleted = await prisma.adminLoginRequest.deleteMany({
+    where: { createdAt: { lt: thirtyDaysAgo } },
+  })
+
   const result = {
     passwordResetTokens: tokensDeleted.count,
     magicLinks: magicLinksDeleted.count,
@@ -95,6 +100,7 @@ export async function POST(request: NextRequest) {
     passkeyLoginTokens: passkeyTokensDeleted.count,
     lineLinkTokens: lineLinkTokensDeleted.count,
     deviceSessions: deviceSessionsDeleted.count,
+    adminLoginRequests: adminLoginRequestsDeleted.count,
   }
 
   console.log('[cleanup-tokens] Deleted:', result)

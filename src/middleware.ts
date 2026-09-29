@@ -86,21 +86,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // 管理ポータル: ID+パスワード方式アカウントのオンボーディング状態で誘導
-  // （email方式の既存管理者は adminStatus 未定義 or 'active' なので素通し）
+  // 管理ポータル: 廃止した旧フロー（ID+パスワード方式のパスキー登録待ち/承認待ち）のトークンは
+  // 承認を経ていないためログインし直させる（auth.ts の session callback でも無効化している）
   if (portal.prefix === '/admin') {
     const adminStatus = token.adminStatus as string | undefined
-    const PASSKEY_PATH = '/admin/onboarding/passkey'
-    const APPROVAL_PATH = '/admin/pending-approval'
-    if (adminStatus === 'pending_passkey') {
-      if (pathname !== PASSKEY_PATH) return NextResponse.redirect(new URL(PASSKEY_PATH, request.url))
-    } else if (adminStatus === 'pending_approval') {
-      if (pathname !== APPROVAL_PATH) return NextResponse.redirect(new URL(APPROVAL_PATH, request.url))
-    } else {
-      // active（通常）: オンボーディング用ページには入れない
-      if (pathname === PASSKEY_PATH || pathname === APPROVAL_PATH) {
-        return NextResponse.redirect(new URL('/admin/dashboard', request.url))
-      }
+    if (adminStatus === 'pending_passkey' || adminStatus === 'pending_approval') {
+      return NextResponse.redirect(new URL(portal.loginPath, request.url))
     }
   }
 

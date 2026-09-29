@@ -35,7 +35,7 @@ export type DashboardOverview = {
   alerts: {
     inquiriesNew: number
     bugsOpen: number
-    membersPendingApproval: number
+    loginRequestsPending: number
     deliveriesShipped: number
     unassignedCustomers: number
     idMissing: number
@@ -66,7 +66,7 @@ export async function GET() {
     contracts,
     inquiriesNew,
     bugsOpen,
-    membersPendingApproval,
+    loginRequestsPending,
     deliveriesShipped,
     unassignedCustomers,
     idMissing,
@@ -97,7 +97,7 @@ export async function GET() {
     }),
     prisma.inquiry.count({ where: { status: 'new' } }),
     prisma.bugReport.count({ where: { status: { in: ['open', 'in_progress'] } } }),
-    prisma.admin.count({ where: { status: 'pending_approval', role: { not: 'sysadmin' } } }),
+    prisma.adminLoginRequest.count({ where: { status: 'pending', expiresAt: { gt: new Date() } } }),
     prisma.deliveryShipment.count({ where: { status: 'shipped' } }),
     prisma.user.count({ where: { storeId: null } }),
     prisma.user.count({ where: { idDocumentPath: null } }),
@@ -151,7 +151,7 @@ export async function GET() {
     alerts: {
       inquiriesNew,
       bugsOpen,
-      membersPendingApproval,
+      loginRequestsPending,
       deliveriesShipped,
       unassignedCustomers,
       idMissing,

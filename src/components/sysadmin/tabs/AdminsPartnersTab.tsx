@@ -6,7 +6,7 @@ import { Kpi, Panel, Empty, StatusChip, TableCard, tableStyle, theadRowStyle, th
 import { formatJstDateTime } from '@/lib/datetime'
 
 type Resp = {
-  summary: { pendingApproval: number; pendingPasskey: number; partnersUnaccepted: number }
+  summary: { pendingLoginRequests: number; idpassAdmins: number; partnersUnaccepted: number }
   admins: { id: string; name: string; email: string | null; loginId: string | null; role: string; authMethod: string; status: string; approvedAt: string | null; createdAt: string }[]
   partners: { id: string; name: string; email: string; isActive: boolean; acceptedAt: string | null; createdAt: string; invitedByName: string | null }[]
 }
@@ -19,8 +19,6 @@ const ROLE_DEFS: Record<string, { label: string; bg: string; fg: string }> = {
 }
 const STATUS_DEFS: Record<string, { label: string; bg: string; fg: string }> = {
   active: { label: '有効', bg: 'rgba(46,125,50,0.15)', fg: '#66bb6a' },
-  pending_passkey: { label: 'パスキー登録待ち', bg: 'rgba(234,179,8,0.15)', fg: '#eab308' },
-  pending_approval: { label: '承認待ち', bg: 'rgba(211,47,47,0.15)', fg: '#ef5350' },
 }
 
 export default function AdminsPartnersTab() {
@@ -45,8 +43,8 @@ export default function AdminsPartnersTab() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
         <Kpi label="管理者数" value={`${data.admins.length} 人`} />
-        <Kpi label="承認待ち" value={`${data.summary.pendingApproval} 人`} accent={data.summary.pendingApproval > 0} />
-        <Kpi label="パスキー登録待ち" value={`${data.summary.pendingPasskey} 人`} accent={data.summary.pendingPasskey > 0} />
+        <Kpi label="ID・PW方式（ログイン承認制）" value={`${data.summary.idpassAdmins} 人`} />
+        <Kpi label="承認待ちのログインリクエスト" value={`${data.summary.pendingLoginRequests} 件`} accent={data.summary.pendingLoginRequests > 0} />
         <Kpi label="パートナー数" value={`${data.partners.length} 人`} />
         <Kpi label="招待未受諾パートナー" value={`${data.summary.partnersUnaccepted} 人`} accent={data.summary.partnersUnaccepted > 0} />
       </div>

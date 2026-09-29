@@ -7,6 +7,8 @@ import { recordAccessLog } from './access-log'
 import { recordLinkPartnerActivity } from './link-partner-activity'
 import { hashLoginToken } from './webauthn'
 import { checkMagicLink } from './magic-link'
+import { findLoginRequestByToken } from './admin-login-request'
+import { ADMIN_LOGIN_REQUEST_REQUIRED } from './login-error'
 import {
   createDeviceSession,
   IDLE_SESSION_MS,
@@ -242,12 +244,12 @@ export const authOptions: NextAuthOptions = {
         for (const admin of candidates) {
           const isValid = await bcrypt.compare(credentials.password, admin.password)
           if (isValid) {
-            // ID+パスワード方式のパスキー必須制御:
-            // パスキー登録前（pending_passkey）のみパスワードログインを許可し、
-            // 登録後（pending_approval / active）はパスワードでのログインを拒否する。
-            if (admin.authMethod === 'idpass' && admin.status !== 'pending_passkey') {
+            // ID+パスワード方式（メールなし）はパスワードだけではログインさせない。
+            // ログイン画面がこのコードを受けてログインリクエストを出し、
+            // 管理者以上の承認後に 'admin-login-request' プロバイダでログインを確定する。
+            if (admin.authMethod === 'idpass') {
               await resetLoginFailures(key)
-              throw new Error('このアカウントはパスキーでログインしてください')
+              throw new Error(ADMIN_LOGIN_REQUEST_REQUIRED)
             }
             await resetLoginFailures(key)
             const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
@@ -266,6 +268,45 @@ export const authOptions: NextAuthOptions = {
 
         await recordLoginFailure(key)
         return null
+      },
+    }),
+    // ID+パスワード方式の管理者: 承認済みログインリクエストでログインを確定する
+    // （申請端末だけが持つ token と照合し、ワンタイムで消費する）
+    CredentialsProvider({
+      id: 'admin-login-request',
+      name: 'ログインリクエスト',
+      credentials: {
+        requestId: { label: 'Request', type: 'text' },
+        token: { label: 'Token', type: 'text' },
+      },
+      async authorize(credentials, req) {
+        if (!credentials?.requestId || !credentials?.token) return null
+        const request = await findLoginRequestByToken(credentials.requestId, credentials.token)
+        if (!request) return null
+
+        // ワンタイム消費（アトミック）: 承認済み・期限内のものだけ
+        const consumed = await prisma.adminLoginRequest.updateMany({
+          where: { id: request.id, status: 'approved', expiresAt: { gt: new Date() } },
+          data: { status: 'used', usedAt: new Date() },
+        })
+        if (consumed.count === 0) return null
+
+        const admin = await prisma.admin.findUnique({ where: { id: request.adminId } })
+        if (!admin || admin.role === 'sysadmin' || admin.authMethod !== 'idpass') return null
+        const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
+        await recordAccessLog({
+          userType: adminRole, userId: admin.id, userName: admin.name,
+          action: `login-approved（承認: ${request.decidedByName ?? '不明'}）`, req,
+        })
+        return {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          avatar: admin.avatar || null,
+          role: adminRole,
+          adminStatus: 'active',
+          authMethod: admin.authMethod,
+        }
       },
     }),
     // システム管理者ログイン（運営者専用 / role==='sysadmin' のみ）
@@ -499,13 +540,6 @@ export const authOptions: NextAuthOptions = {
           const role = admin.role === 'sysadmin'
             ? 'sysadmin'
             : (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
-          // idpass方式でパスキー登録直後（pending_passkey）にパスキーログインしてきた場合は
-          // 承認待ちへ前進（DBも更新して superadmin が承認できる状態にする。passkey-complete 未通過の保険）
-          let adminStatus = admin.status
-          if (admin.authMethod === 'idpass' && admin.status === 'pending_passkey') {
-            adminStatus = 'pending_approval'
-            await prisma.admin.update({ where: { id: admin.id }, data: { status: 'pending_approval' } })
-          }
           const deviceSessionId = await createDeviceSession({
             userType: 'admin', userId: admin.id,
             credentialId: loginToken.credentialId, loginMethod: 'passkey', ip, userAgent,
@@ -517,7 +551,7 @@ export const authOptions: NextAuthOptions = {
             name: admin.name,
             avatar: admin.avatar || null,
             role,
-            adminStatus,
+            adminStatus: 'active',
             authMethod: admin.authMethod,
             loginMethod: 'passkey',
             deviceSessionId,
@@ -583,7 +617,7 @@ export const authOptions: NextAuthOptions = {
         // 店舗メンバーとしてのログイン時のみ設定される（店舗アカウント直ログインでは null）
         token.memberId = (user as any).memberId ?? null
         token.memberName = (user as any).memberName ?? null
-        // 管理者アカウントの状態（idpass方式のパスキー必須・承認フロー用）
+        // 管理者アカウントの状態（旧フローの pending_* を持つトークンは session callback で無効化する）
         token.adminStatus = (user as any).adminStatus ?? 'active'
         token.authMethod = (user as any).authMethod ?? 'email'
         // 連携パートナー用（linkpartner ロールのみ設定される）
@@ -672,6 +706,11 @@ export const authOptions: NextAuthOptions = {
       // 空オブジェクトなら useSession は 'unauthenticated'、getServerSession は null になり、
       // middleware と同じくポータルごとのログイン画面へ誘導される。
       if ((token as any).expired || !token.role || !token.id) {
+        return {} as any
+      }
+      // 廃止した旧フロー（ID+パスワード方式のパスキー登録待ち/承認待ち）で発行されたトークンは無効化する。
+      // 旧フローでは初期パスワードだけでログインできたため、承認を経ていない。再ログイン（ログインリクエスト）させる。
+      if (token.adminStatus === 'pending_passkey' || token.adminStatus === 'pending_approval') {
         return {} as any
       }
       // デバイス失効をDB照合（失効済みなら即無効化）。パスワードログインも対象。

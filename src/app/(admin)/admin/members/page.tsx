@@ -13,9 +13,15 @@ import Modal from '@/components/Modal'
 import MessageBanner from '@/components/MessageBanner'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
+import {
+  LoginRequestRow,
+  usePendingLoginRequests,
+  isLoginRequestApprover,
+  describeUserAgent,
+} from '@/components/admin/LoginRequests'
+import type { AdminLoginRequestItem } from '@/app/api/admin/login-requests/route'
 
 type AdminRole = 'admin' | 'superadmin' | 'hr'
-type AdminStatus = 'active' | 'pending_passkey' | 'pending_approval'
 
 type AdminMember = {
   id: string
@@ -24,15 +30,16 @@ type AdminMember = {
   loginId?: string | null
   role: AdminRole
   authMethod?: 'email' | 'idpass'
-  status?: AdminStatus
-  approvedAt?: string | null
   createdAt: string
 }
 
-const STATUS_META: Record<AdminStatus, { label: string; cls: string }> = {
-  active: { label: '有効', cls: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' },
-  pending_passkey: { label: 'パスキー登録待ち', cls: 'bg-sky-500/15 text-sky-300 border border-sky-500/30' },
-  pending_approval: { label: '承認待ち', cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
+/** 処理済みログインリクエストの表示 */
+const LOGIN_REQUEST_STATUS_META: Record<string, { label: string; cls: string }> = {
+  approved: { label: '承認済み', cls: 'text-emerald-300' },
+  used: { label: 'ログイン済み', cls: 'text-emerald-300' },
+  rejected: { label: '却下', cls: 'text-red-400' },
+  cancelled: { label: '取り下げ', cls: 'text-[var(--md-sys-color-on-surface-variant)]' },
+  expired: { label: '期限切れ', cls: 'text-[var(--md-sys-color-on-surface-variant)]' },
 }
 
 type ImportCreatedRow = {
@@ -73,7 +80,7 @@ export default function AdminMembersPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', email: '' })
-  // 招待方式: 'email'（メール招待） | 'idpass'（ID+パスワード発行・パスキー必須・承認必須）
+  // 招待方式: 'email'（メール招待） | 'idpass'（ID+パスワード発行・ログインのたびに管理者の承認が必要）
   const [inviteMethod, setInviteMethod] = useState<'email' | 'idpass'>('email')
   const [loginId, setLoginId] = useState('')
   const [idpassRole, setIdpassRole] = useState<'admin' | 'hr'>('admin')
@@ -85,8 +92,6 @@ export default function AdminMembersPage() {
   const [idpassResult, setIdpassResult] = useState<{ name: string; loginId: string; password: string } | null>(null)
   const [idCopied, setIdCopied] = useState(false)
   const [idPwCopied, setIdPwCopied] = useState(false)
-  // 承認処理中のID
-  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   // 削除確認モーダル
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
@@ -103,6 +108,7 @@ export default function AdminMembersPage() {
   const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null)
 
   // パスワード再発行
+  // email が空 = ID+パスワード方式（メールなし）。新パスワードは画面表示のみで本人へ手渡す
   const [resetTarget, setResetTarget] = useState<{ id: string; name: string; email: string } | null>(null)
   const [resettingId, setResettingId] = useState<string | null>(null)
   const [resetResult, setResetResult] = useState<{ name: string; email: string; password: string; emailSent: boolean } | null>(null)
@@ -173,19 +179,35 @@ export default function AdminMembersPage() {
     }
   }
 
-  async function handleApprove(id: string, name: string) {
-    setApprovingId(id)
-    setMessage(null)
-    const res = await fetch(`/api/admin/members/${id}/approve`, { method: 'POST' })
-    setApprovingId(null)
-    if (res.ok) {
-      const updated = await res.json()
-      setMembers(prev => prev.map(m => (m.id === id ? { ...m, ...updated } : m)))
-      setMessage({ type: 'success', text: `${name} さんのアカウントを承認しました` })
+  // ── ログインリクエスト（ID+パスワード方式。承認者＝admin/superadmin のみ）──
+  const isApprover = isLoginRequestApprover((session?.user as any)?.role)
+  const loginRequests = usePendingLoginRequests(status === 'authenticated' && isApprover)
+  const [loginRequestHistory, setLoginRequestHistory] = useState<AdminLoginRequestItem[]>([])
+
+  function refreshLoginRequestHistory() {
+    fetch('/api/admin/login-requests?history=1')
+      .then(r => (r.ok ? r.json() : { history: [] }))
+      .then(d => setLoginRequestHistory(d.history ?? []))
+      .catch(() => { /* 履歴の取得失敗は致命ではない */ })
+  }
+
+  useEffect(() => {
+    if (status === 'authenticated' && isApprover) refreshLoginRequestHistory()
+  }, [status, isApprover])
+
+  function handleLoginRequestDecided(id: string, result: { status?: 'approved' | 'rejected'; error?: string }) {
+    const item = loginRequests.pending.find(p => p.id === id)
+    if (result.error) {
+      setMessage({ type: 'error', text: result.error })
+      loginRequests.refresh()
     } else {
-      const d = await res.json().catch(() => ({}))
-      setMessage({ type: 'error', text: d.error || '承認に失敗しました' })
+      loginRequests.remove(id)
+      setMessage({
+        type: 'success',
+        text: `${item?.admin.name ?? ''} さんのログインを${result.status === 'approved' ? '承認' : '却下'}しました`,
+      })
     }
+    refreshLoginRequestHistory()
   }
 
   async function handleResetPassword(id: string, name: string) {
@@ -372,7 +394,11 @@ export default function AdminMembersPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">{sessionUser?.name}</p>
-              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{sessionUser?.email}</p>
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                {myMember?.authMethod === 'idpass'
+                  ? <>ID: <span className="font-mono">{myMember.loginId}</span></>
+                  : sessionUser?.email}
+              </p>
             </div>
             {myMember && (
               <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${ROLE_BADGE_STYLE[myMember.role]}`}>
@@ -384,6 +410,72 @@ export default function AdminMembersPage() {
             </span>
           </div>
         </Card>
+
+        {/* ログインリクエスト（ID+パスワード方式の承認。承認者のみ） */}
+        {isApprover && (
+          <Card variant="elevated" padding="none">
+            <div className="px-4 sm:px-6 py-3 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] flex items-center gap-2">
+              <p className="text-xs font-semibold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wide">
+                ログインリクエスト
+              </p>
+              {loginRequests.pending.length > 0 && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  承認待ち {loginRequests.pending.length}件
+                </span>
+              )}
+            </div>
+            {loginRequests.pending.length > 0 ? (
+              <>
+                {loginRequests.pending.map(item => (
+                  <div key={item.id} className="px-4 sm:px-6 py-4 border-b border-[var(--md-sys-color-surface-container-high)]">
+                    <LoginRequestRow item={item} onDecided={handleLoginRequestDecided} />
+                  </div>
+                ))}
+                <p className="px-4 sm:px-6 py-3 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  本人に連絡し、ログイン画面に表示されている確認コードが一致することを確かめてから承認してください。
+                </p>
+              </>
+            ) : (
+              <p className="px-4 sm:px-6 py-4 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                承認待ちのログインリクエストはありません。ID・パスワード方式のメンバーがログインすると、ここ（と全画面の右下）に表示されます。
+              </p>
+            )}
+            {loginRequestHistory.length > 0 && (
+              <details className="border-t border-[var(--md-sys-color-outline-variant)]">
+                <summary className="px-4 sm:px-6 py-3 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] cursor-pointer select-none hover:text-[var(--md-sys-color-on-surface)]">
+                  最近の履歴（{loginRequestHistory.length}件）
+                </summary>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-[var(--md-sys-color-on-surface-variant)]">
+                        <th className="px-4 sm:px-6 py-2 font-medium">日時</th>
+                        <th className="px-2 py-2 font-medium">メンバー</th>
+                        <th className="px-2 py-2 font-medium">端末</th>
+                        <th className="px-2 py-2 font-medium">結果</th>
+                        <th className="px-2 py-2 font-medium">処理者</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loginRequestHistory.map(h => {
+                        const meta = LOGIN_REQUEST_STATUS_META[h.status] ?? { label: h.status, cls: '' }
+                        return (
+                          <tr key={h.id} className="border-t border-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]">
+                            <td className="px-4 sm:px-6 py-2 whitespace-nowrap">{format(new Date(h.createdAt), 'M/d HH:mm', { locale: ja })}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">{h.admin.name}</td>
+                            <td className="px-2 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">{describeUserAgent(h.userAgent)}{h.ip ? ` ・ ${h.ip}` : ''}</td>
+                            <td className={`px-2 py-2 whitespace-nowrap font-medium ${meta.cls}`}>{meta.label}</td>
+                            <td className="px-2 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">{h.decidedByName ?? '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
+          </Card>
+        )}
 
         {/* 他の管理者メンバー一覧 */}
         <Card variant="elevated" padding="none">
@@ -415,10 +507,13 @@ export default function AdminMembersPage() {
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 hidden sm:block">
                   {format(new Date(member.createdAt), 'yyyy/M/d 追加', { locale: ja })}
                 </p>
-                {/* ID+パスワード方式のステータスバッジ */}
-                {member.authMethod === 'idpass' && member.status && (
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_META[member.status].cls}`}>
-                    {STATUS_META[member.status].label}
+                {/* ID+パスワード方式はログインのたびに承認が必要 */}
+                {member.authMethod === 'idpass' && (
+                  <span
+                    className="text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                    title="ログインのたびに管理者の承認（ログインリクエスト）が必要です"
+                  >
+                    ログイン承認制
                   </span>
                 )}
                 {canManageRoles && member.authMethod !== 'idpass' ? (
@@ -437,29 +532,15 @@ export default function AdminMembersPage() {
                     {ROLE_LABEL[member.role]}
                   </span>
                 )}
-                {/* 承認ボタン（superadminのみ・承認待ちのみ） */}
-                {sessionRole === 'superadmin' && member.authMethod === 'idpass' && member.status === 'pending_approval' && (
-                  <Button
-                    variant="filled"
-                    size="sm"
-                    disabled={approvingId === member.id}
-                    loading={approvingId === member.id}
-                    onClick={() => handleApprove(member.id, member.name)}
-                  >
-                    承認
-                  </Button>
-                )}
-                {member.authMethod !== 'idpass' && (
-                  <Button
-                    variant="text"
-                    size="sm"
-                    disabled={resettingId === member.id || deletingId === member.id}
-                    loading={resettingId === member.id}
-                    onClick={() => setResetTarget({ id: member.id, name: member.name, email: member.email || '' })}
-                  >
-                    PW再発行
-                  </Button>
-                )}
+                <Button
+                  variant="text"
+                  size="sm"
+                  disabled={resettingId === member.id || deletingId === member.id}
+                  loading={resettingId === member.id}
+                  onClick={() => setResetTarget({ id: member.id, name: member.name, email: member.email || '' })}
+                >
+                  PW再発行
+                </Button>
                 {canManageRoles && (
                   <Button
                     variant="text"
@@ -525,7 +606,7 @@ export default function AdminMembersPage() {
             <p>・<strong>氏名</strong>（必須）</p>
             <p>・<strong>メールアドレス</strong> または <strong>ログインID</strong>（どちらか一方を入力。両方入れた行はエラー）</p>
             <p>・<strong>ロール</strong>（空欄は「管理者」。管理者 / Super Admin / HR（人事））</p>
-            <p className="pt-1">ログインID方式は 4〜50文字の半角英数字と <code>. _ -</code>。Super Admin は指定できません（本人のパスキー登録＋superadminの承認が必要）。</p>
+            <p className="pt-1">ログインID方式は 4〜50文字の半角英数字と <code>. _ -</code>。Super Admin は指定できません（ログインのたびに管理者の承認が必要な方式のため）。</p>
             <p>初期パスワードは行ごとに自動生成し、この画面で一度だけ表示します。すでに登録済みのメール・ログインIDの行はスキップします。</p>
           </div>
 
@@ -743,7 +824,7 @@ export default function AdminMembersPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-                  メール不要。初期パスワードを発行して本人へ手渡します。本人は初回ログイン後に<strong>パスキー登録が必須</strong>で、その後<strong>superadminの承認</strong>を経て利用開始できます。
+                  メール不要。初期パスワードを発行して本人へ手渡します。パスキーは不要で、本人がID・パスワードでログインするたびに<strong>ログインリクエスト</strong>が届き、<strong>管理者以上の誰かが承認</strong>するとログインできます。
                 </p>
               </div>
             </>
@@ -787,7 +868,7 @@ export default function AdminMembersPage() {
               </div>
             </div>
             <p className="text-xs text-[var(--md-sys-color-error)]">
-              ⚠ この初期パスワードは一度しか表示されません。初回ログイン後のパスキー登録用です（登録後はパスキー必須）。
+              ⚠ この初期パスワードは一度しか表示されません。ログイン時は毎回、管理者の承認（ログインリクエスト）が必要です。
             </p>
           </div>
         )}
@@ -852,7 +933,10 @@ export default function AdminMembersPage() {
           <span className="font-semibold">{resetTarget?.name}</span> さんのパスワードを再発行しますか？
         </p>
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
-          現在のパスワードは無効になります。新しいパスワードは <span className="font-mono">{resetTarget?.email}</span> 宛にメール送信されます。
+          現在のパスワードは無効になります。
+          {resetTarget?.email
+            ? <>新しいパスワードは <span className="font-mono">{resetTarget.email}</span> 宛にメール送信されます。</>
+            : <>メールアドレスが無いアカウントのため、新しいパスワードはこの画面にのみ表示されます。本人へ直接お伝えください。</>}
         </p>
       </Modal>
 
@@ -889,9 +973,11 @@ export default function AdminMembersPage() {
                 ? 'bg-[var(--status-completed-bg)] text-[var(--status-completed-text)]'
                 : 'bg-[var(--status-pending-bg)] text-[var(--status-pending-text)]'
             }`}>
-              {resetResult.emailSent
-                ? `✓ ${resetResult.email} 宛にメールを送信しました`
-                : `⚠ メール送信に失敗しました。上記パスワードを ${resetResult.email} に直接お伝えください`}
+              {!resetResult.email
+                ? '⚠ メールアドレスが無いアカウントです。上記パスワードを本人に直接お伝えください'
+                : resetResult.emailSent
+                  ? `✓ ${resetResult.email} 宛にメールを送信しました`
+                  : `⚠ メール送信に失敗しました。上記パスワードを ${resetResult.email} に直接お伝えください`}
             </div>
             <p className="text-xs text-[var(--md-sys-color-error)]">
               ⚠ このパスワードは一度しか表示されません。必ず控えてから閉じてください。

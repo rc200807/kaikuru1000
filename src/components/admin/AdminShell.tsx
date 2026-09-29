@@ -4,6 +4,7 @@ import type { Session } from 'next-auth'
 import { SessionProvider } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import NavigationDrawer from '@/components/NavigationDrawer'
+import LoginRequestNotifier from '@/components/admin/LoginRequests'
 
 /**
  * 管理ポータルの外枠。
@@ -18,8 +19,8 @@ export default function AdminShell({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
-  // ログイン・オンボーディング（パスキー登録/承認待ち）はナビ無しの単独レイアウト
-  const barePaths = ['/admin/login', '/admin/onboarding/passkey', '/admin/pending-approval']
+  // ログイン画面はナビ無しの単独レイアウト（ログインリクエストの承認待ちもログイン画面内で表示）
+  const barePaths = ['/admin/login']
   const isBare = barePaths.includes(pathname)
 
   if (isBare) {
@@ -33,6 +34,8 @@ export default function AdminShell({
         <main className="flex-1 min-w-0 lg:pl-0 pb-4">
           {children}
         </main>
+        {/* ID+パスワード方式のログインリクエスト通知（承認者＝admin/superadmin のみ表示） */}
+        <LoginRequestNotifier />
       </div>
     </SessionProvider>
   )

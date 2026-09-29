@@ -14,7 +14,7 @@ const createMemberSchema = z.object({
   role:  z.enum(['admin', 'superadmin', 'hr']).optional(),
 })
 
-// ID+パスワード方式（メールなし・パスキー必須・superadmin承認必須）
+// ID+パスワード方式（メールなし・ログインのたびに管理者以上の承認＝ログインリクエストが必要）
 const createIdpassMemberSchema = z.object({
   authMethod: z.literal('idpass'),
   name:    z.string().min(1, '氏名は必須です').max(100),
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
 
-  // ── ID+パスワード方式（メールなし・パスキー必須・superadmin承認必須）──
+  // ── ID+パスワード方式（メールなし・ログインのたびに管理者以上の承認が必要）──
   if (body?.authMethod === 'idpass') {
     const p = createIdpassMemberSchema.safeParse(body)
     if (!p.success) {
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         password: hashed,
         role: role ?? 'admin',
         authMethod: 'idpass',
-        status: 'pending_passkey',
+        status: 'active',
       },
       select: {
         id: true, name: true, email: true, loginId: true, role: true,

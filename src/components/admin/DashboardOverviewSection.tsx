@@ -107,7 +107,7 @@ export default function DashboardOverviewSection({ dashboard }: { dashboard: Das
   const alertTiles: { label: string; count: number; href: string }[] = a ? [
     { label: '未対応の問い合わせ', count: a.inquiriesNew, href: '/admin/inquiries' },
     { label: '未解決のバグ報告', count: a.bugsOpen, href: '/admin/bug-reports' },
-    { label: '承認待ちの管理者', count: a.membersPendingApproval, href: '/admin/members' },
+    { label: '承認待ちのログインリクエスト', count: a.loginRequestsPending, href: '/admin/members' },
     { label: '受取待ちの宅配', count: a.deliveriesShipped, href: '/admin/deliveries?status=shipped' },
     { label: '未割り当ての顧客', count: a.unassignedCustomers, href: '/admin/customers' },
     { label: '身分証未提出', count: a.idMissing, href: '/admin/customers' },

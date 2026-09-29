@@ -51,6 +51,8 @@ export async function POST(
 
   const body = await request.json()
   const { validUntil, staffName, pdfBase64, invoicePdfBase64, email: inputEmail } = body
+  // QR・リンク発行のための保存だけ行う（メール送信・送信状態のリセット・顧客メールの更新はしない）
+  const skipEmail = body.skipEmail === true
 
   if (!validUntil) {
     return NextResponse.json({ error: '見積有効期限を指定してください' }, { status: 400 })
@@ -70,7 +72,7 @@ export async function POST(
   let customerEmail: string = (typeof inputEmail === 'string' ? inputEmail.trim() : '') || schedule.user.email || ''
 
   // 入力されたメアドが既存と異なる場合は User.email を更新（売買契約書と同じ挙動）
-  if (inputEmail && typeof inputEmail === 'string' && inputEmail.trim() && inputEmail.trim() !== schedule.user.email) {
+  if (!skipEmail && inputEmail && typeof inputEmail === 'string' && inputEmail.trim() && inputEmail.trim() !== schedule.user.email) {
     try {
       await prisma.user.update({
         where: { id: schedule.user.id },
@@ -115,7 +117,8 @@ export async function POST(
       customerEmail,
       pdfBase64: effectivePdfBase64,
       invoicePdfBase64: effectiveInvoicePdfBase64,
-      emailSentAt: null, // 再送信可能にリセット
+      // 再送信可能にリセット（QR発行のための保存では送信済み記録を残す）
+      ...(skipEmail ? {} : { emailSentAt: null }),
     },
   })
 
@@ -134,7 +137,7 @@ export async function POST(
   // 見積書をオンライン閲覧・PDFダウンロードできるマジックリンクを生成
   // （メールにPDFが添付できなかった場合でも、お客様がリンクからPDFを取得できるようにする）
   let viewUrl: string | undefined
-  if (customerEmail) {
+  if (customerEmail && !skipEmail) {
     try {
       const crypto = await import('crypto')
       const token = crypto.randomBytes(32).toString('hex')
@@ -152,7 +155,9 @@ export async function POST(
   // メール送信
   let emailSent = false
   let emailErrorReason: string | null = null
-  if (!customerEmail) {
+  if (skipEmail) {
+    emailErrorReason = 'skipped'
+  } else if (!customerEmail) {
     emailErrorReason = 'no-email'
   } else {
     try {

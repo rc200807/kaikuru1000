@@ -145,6 +145,58 @@ export default function EstimatePage() {
   const purchaseTotal = purchaseBase + upliftAmount
   const workTotal = visit?.workItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0) ?? 0
 
+  /**
+   * 表示中の見積書をPDF化してサーバーへ保存する。
+   * skipEmail=true はQR・リンク発行のための保存（メールは送らない）。
+   */
+  const saveEstimate = async ({ email, skipEmail = false }: { email?: string; skipEmail?: boolean }) => {
+    let pdfBase64: string | null = null
+    let invoicePdfBase64: string | null = null
+    try {
+      const { elementToPdf } = await import('@/lib/pdf-export')
+      // 要素のブロック境界で改ページするため文字が途中で切れない
+      if (saleEstimateRef.current) pdfBase64 = await elementToPdf(saleEstimateRef.current, { mode: 'base64' })
+      if (invoiceEstimateRef.current) invoicePdfBase64 = await elementToPdf(invoiceEstimateRef.current, { mode: 'base64' })
+    } catch (pdfErr) {
+      console.error('PDF生成エラー:', pdfErr)
+    }
+
+    const res = await fetch(`/api/visit-schedules/${scheduleId}/estimate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ validUntil, staffName, pdfBase64, invoicePdfBase64, email, skipEmail }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error ?? '保存に失敗しました')
+    }
+    const result = await res.json()
+    await fetchData()
+    return { result, pdfBase64, invoicePdfBase64 }
+  }
+
+  // QR・リンク発行。見積が未保存なら先に保存する（未保存のままだとお客様側で「見積書が見つかりません」になる）
+  const handleIssueLink = async () => {
+    if (!visit) return
+    if (!existing) {
+      if (!validUntil) {
+        setMessage({ type: 'error', text: '見積有効期限を入力してください' })
+        return
+      }
+      setMagicLoading(true)
+      setMessage(null)
+      try {
+        const { pdfBase64, invoicePdfBase64 } = await saveEstimate({ email: emailInput.trim() || undefined, skipEmail: true })
+        setGeneratedPdfs({ sale: pdfBase64, invoice: invoicePdfBase64 })
+      } catch (e: any) {
+        setMessage({ type: 'error', text: e.message ?? '見積書の保存に失敗しました' })
+        setMagicLoading(false)
+        return
+      }
+    }
+    await generateEstimateLink()
+  }
+
   const handleSubmit = async () => {
     if (!visit) return
     const emailTrimmed = emailInput.trim()
@@ -160,28 +212,7 @@ export default function EstimatePage() {
     setMessage(null)
 
     try {
-      let pdfBase64: string | null = null
-      let invoicePdfBase64: string | null = null
-      try {
-        const { elementToPdf } = await import('@/lib/pdf-export')
-        // 要素のブロック境界で改ページするため文字が途中で切れない
-        if (saleEstimateRef.current) pdfBase64 = await elementToPdf(saleEstimateRef.current, { mode: 'base64' })
-        if (invoiceEstimateRef.current) invoicePdfBase64 = await elementToPdf(invoiceEstimateRef.current, { mode: 'base64' })
-      } catch (pdfErr) {
-        console.error('PDF生成エラー:', pdfErr)
-      }
-
-      const res = await fetch(`/api/visit-schedules/${scheduleId}/estimate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ validUntil, staffName, pdfBase64, invoicePdfBase64, email: emailTrimmed }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error ?? '送信に失敗しました')
-      }
-      const result = await res.json()
-      await fetchData()
+      const { result, pdfBase64, invoicePdfBase64 } = await saveEstimate({ email: emailTrimmed })
 
       if (result.emailSent) {
         if (result.pdfIncluded) {
@@ -389,10 +420,11 @@ export default function EstimatePage() {
       <Card variant="elevated" padding="md">
         <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様用 見積書リンク（QRコード）</h2>
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
-          {existing ? 'QRコードを発行すると、お客様がスマホで見積書を閲覧・PDFダウンロードできます。' : '※ 見積書を出力・送信すると発行できます（保存前のQRはお客様側で「見積書が見つかりません」になるため）。'}
+          QRコードを発行すると、お客様がスマホで見積書を閲覧・PDFダウンロードできます。
+          {!existing && '（未保存の場合は、発行時に見積書を保存します。メールは送信されません）'}
         </p>
         {!magicUrl ? (
-          <Button variant="tonal" onClick={generateEstimateLink} loading={magicLoading} disabled={magicLoading || !existing}>
+          <Button variant="tonal" onClick={handleIssueLink} loading={magicLoading} disabled={magicLoading || submitting}>
             {magicLoading ? '発行中...' : 'QRコード・リンクを発行'}
           </Button>
         ) : (

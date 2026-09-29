@@ -175,8 +175,8 @@ export default function LineSendCard({
             <br />
             連携が完了すると{DOC_LABELS[docType]}の閲覧リンクが自動でLINEに届きます
           </p>
-          <div className="p-3 bg-white rounded-xl border border-[var(--md-sys-color-outline-variant)]">
-            <QRCodeSVG value={authUrl} size={200} />
+          <div className="p-1 bg-white rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+            <QRCodeSVG value={authUrl} size={224} level="M" marginSize={4} />
           </div>
           <div className="flex items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
             <span className="w-3.5 h-3.5 border-2 border-[var(--portal-primary)] border-t-transparent rounded-full animate-spin" />

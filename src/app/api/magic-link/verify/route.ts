@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { checkMagicLink } from '@/lib/magic-link'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,16 +29,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '無効なリンクです' }, { status: 400 })
     }
 
-    if (magicLink.usedAt) {
-      return NextResponse.json({ error: 'このリンクは既に使用済みです' }, { status: 400 })
+    const check = checkMagicLink(magicLink)
+    if (!check.ok) {
+      return NextResponse.json(
+        { error: check.reason === 'expired' ? 'リンクの有効期限が切れています' : 'このリンクは既に使用済みです' },
+        { status: 400 },
+      )
     }
 
-    if (new Date() > magicLink.expiresAt) {
-      return NextResponse.json({ error: 'リンクの有効期限が切れています' }, { status: 400 })
-    }
-
-    // peek=true の場合はトークンを消費せず情報だけ返す
-    if (!peek) {
+    // peek=true の場合はトークンを消費せず情報だけ返す（初回利用日時のみ記録）
+    if (!peek && !magicLink.usedAt) {
       await prisma.magicLink.update({
         where: { id: magicLink.id },
         data: { usedAt: new Date() },

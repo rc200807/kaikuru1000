@@ -94,7 +94,7 @@ export default function CompletionModal({
           </p>
           <div className="flex flex-col items-center">
             {urlLoading || !url ? (
-              <div className="w-[200px] h-[200px] flex items-center justify-center rounded-xl bg-[var(--md-sys-color-surface-container)]">
+              <div className="w-[232px] h-[232px] flex items-center justify-center rounded-xl bg-[var(--md-sys-color-surface-container)]">
                 {urlLoading ? (
                   <span className="flex flex-col items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     <span className="w-6 h-6 border-2 border-[var(--portal-primary,#b91c1c)] border-t-transparent rounded-full animate-spin" />
@@ -106,8 +106,8 @@ export default function CompletionModal({
               </div>
             ) : (
               <>
-                <div className="bg-white p-3 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
-                  <QRCodeSVG value={url} size={200} />
+                <div className="bg-white p-1 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+                  <QRCodeSVG value={url} size={224} level="M" marginSize={4} />
                 </div>
                 <div className="w-full flex items-center gap-2 mt-3">
                   <input readOnly value={url} className="flex-1 min-w-0 px-2 py-1.5 text-xs rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]" />

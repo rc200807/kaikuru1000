@@ -781,8 +781,8 @@ export default function FinalAgreementPage() {
 
           {magicLinkUrl ? (
             <div className="flex flex-col items-center gap-3">
-              <div className="p-3 bg-white rounded-xl border border-[var(--md-sys-color-outline-variant)]">
-                <QRCodeSVG value={magicLinkUrl} size={200} />
+              <div className="p-1 bg-white rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+                <QRCodeSVG value={magicLinkUrl} size={224} level="M" marginSize={4} />
               </div>
               <p className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] max-w-full break-all text-center select-all px-2">
                 {magicLinkUrl}

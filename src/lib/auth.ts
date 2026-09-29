@@ -6,6 +6,7 @@ import { isLoginBlocked, recordLoginFailure, resetLoginFailures } from './rate-l
 import { recordAccessLog } from './access-log'
 import { recordLinkPartnerActivity } from './link-partner-activity'
 import { hashLoginToken } from './webauthn'
+import { checkMagicLink } from './magic-link'
 import {
   createDeviceSession,
   IDLE_SESSION_MS,
@@ -435,15 +436,18 @@ export const authOptions: NextAuthOptions = {
           include: { user: true },
         })
 
-        if (!magicLink || magicLink.usedAt || magicLink.expiresAt < new Date()) {
+        // 書類に紐づくリンクは期限内なら再利用可（QRの読み直し対策）。判定は magic-link.ts に集約
+        if (!magicLink || !checkMagicLink(magicLink).ok) {
           return null
         }
 
-        // トークンを使用済みにマーク
-        await prisma.magicLink.update({
-          where: { id: magicLink.id },
-          data: { usedAt: new Date() },
-        })
+        // 初回利用日時を記録（書類リンク以外はこれで使用済みになる）
+        if (!magicLink.usedAt) {
+          await prisma.magicLink.update({
+            where: { id: magicLink.id },
+            data: { usedAt: new Date() },
+          })
+        }
 
         return {
           id: magicLink.user.id,

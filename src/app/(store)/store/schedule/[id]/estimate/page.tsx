@@ -389,16 +389,16 @@ export default function EstimatePage() {
       <Card variant="elevated" padding="md">
         <h2 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-1">お客様用 見積書リンク（QRコード）</h2>
         <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-3">
-          {existing ? 'QRコードを発行すると、お客様がスマホで見積書を閲覧・PDFダウンロードできます。' : '※ 先に見積書を保存・送信するとPDFダウンロードも可能になります。'}
+          {existing ? 'QRコードを発行すると、お客様がスマホで見積書を閲覧・PDFダウンロードできます。' : '※ 見積書を出力・送信すると発行できます（保存前のQRはお客様側で「見積書が見つかりません」になるため）。'}
         </p>
         {!magicUrl ? (
-          <Button variant="tonal" onClick={generateEstimateLink} loading={magicLoading} disabled={magicLoading}>
+          <Button variant="tonal" onClick={generateEstimateLink} loading={magicLoading} disabled={magicLoading || !existing}>
             {magicLoading ? '発行中...' : 'QRコード・リンクを発行'}
           </Button>
         ) : (
           <div className="flex flex-col items-center gap-3">
-            <div className="bg-white p-3 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
-              <QRCodeSVG value={magicUrl} size={180} />
+            <div className="bg-white p-1 rounded-xl border border-[var(--md-sys-color-outline-variant)]">
+              <QRCodeSVG value={magicUrl} size={204} level="M" marginSize={4} />
             </div>
             <div className="w-full flex items-center gap-2">
               <input readOnly value={magicUrl} className="flex-1 px-2 py-1.5 text-xs rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface-variant)]" />

@@ -180,8 +180,8 @@ export default function StoreLinePage() {
             </div>
             {showQr && (
               <div className="w-full flex justify-center py-3">
-                <div className="bg-white p-3 rounded-xl">
-                  <QRCodeSVG value={registerUrl} size={160} />
+                <div className="bg-white p-1 rounded-xl">
+                  <QRCodeSVG value={registerUrl} size={184} level="M" marginSize={4} />
                 </div>
               </div>
             )}

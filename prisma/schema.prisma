@@ -499,6 +499,10 @@ model Admin {
   approvedById  String?                            // 旧フロー（superadminのアカウント承認）の記録。新規では使わない
   approvedAt    DateTime?                          // 同上
   loginRequests AdminLoginRequest[]                // ID+パスワード方式のログインリクエスト（ログインのたびに承認が必要）
+  // ID+パスワード方式の「ログイン承認不要期間」。この期間内はログインリクエストなしで ID/パスワードだけでログインできる
+  loginApprovalExemptFrom   DateTime?
+  loginApprovalExemptUntil  DateTime?
+  loginApprovalExemptByName String?                // 設定した管理者の氏名スナップショット
   avatar        String?        @db.Text  // プロフィール画像URL（Vercel Blob）
   announcements  Announcement[]
   releaseNotes   ReleaseNote[]  @relation("ReleaseNoteAuthor")

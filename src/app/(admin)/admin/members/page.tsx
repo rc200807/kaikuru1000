@@ -32,7 +32,34 @@ type AdminMember = {
   role: AdminRole
   authMethod?: 'email' | 'idpass'
   createdAt: string
+  // ID+パスワード方式の「ログイン承認不要期間」
+  loginApprovalExemptFrom?: string | null
+  loginApprovalExemptUntil?: string | null
+  loginApprovalExemptByName?: string | null
 }
+
+/** ログイン承認不要期間の状態（active: 期間中 / scheduled: 開始前 / none: 未設定・終了済み） */
+function exemptionState(m: AdminMember, now = Date.now()): 'active' | 'scheduled' | 'none' {
+  if (!m.loginApprovalExemptUntil) return 'none'
+  const until = new Date(m.loginApprovalExemptUntil).getTime()
+  if (until <= now) return 'none'
+  const from = m.loginApprovalExemptFrom ? new Date(m.loginApprovalExemptFrom).getTime() : 0
+  return from > now ? 'scheduled' : 'active'
+}
+
+/** <input type="datetime-local"> 用のローカル日時文字列 */
+function toLocalInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 承認不要期間のプリセット（開始＝今。終了はその日の 23:59） */
+const EXEMPT_PRESETS: { label: string; days: number }[] = [
+  { label: '今日中', days: 0 },
+  { label: '3日間', days: 2 },
+  { label: '1週間', days: 6 },
+  { label: '1ヶ月', days: 29 },
+]
 
 /** 処理済みログインリクエストの表示 */
 const LOGIN_REQUEST_STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -202,6 +229,87 @@ export default function AdminMembersPage() {
 
   // ── ログインリクエスト（ID+パスワード方式。承認者＝admin/superadmin のみ）──
   const isApprover = isLoginRequestApprover((session?.user as any)?.role)
+
+  // ── ログイン承認不要期間（承認者のみ設定可）──
+  const [exemptTarget, setExemptTarget] = useState<AdminMember | null>(null)
+  const [exemptFrom, setExemptFrom] = useState('')
+  const [exemptUntil, setExemptUntil] = useState('')
+  const [exemptSaving, setExemptSaving] = useState(false)
+  const [exemptError, setExemptError] = useState('')
+
+  function openExempt(member: AdminMember) {
+    const now = new Date()
+    const active = exemptionState(member) !== 'none'
+    setExemptFrom(toLocalInput(active && member.loginApprovalExemptFrom ? new Date(member.loginApprovalExemptFrom) : now))
+    if (active && member.loginApprovalExemptUntil) {
+      setExemptUntil(toLocalInput(new Date(member.loginApprovalExemptUntil)))
+    } else {
+      const end = new Date(now)
+      end.setDate(end.getDate() + 6)
+      end.setHours(23, 59, 0, 0)
+      setExemptUntil(toLocalInput(end))
+    }
+    setExemptError('')
+    setExemptTarget(member)
+  }
+
+  function applyExemptPreset(days: number) {
+    const now = new Date()
+    const end = new Date(now)
+    end.setDate(end.getDate() + days)
+    end.setHours(23, 59, 0, 0)
+    setExemptFrom(toLocalInput(now))
+    setExemptUntil(toLocalInput(end))
+    setExemptError('')
+  }
+
+  function applyExemptResult(updated: Partial<AdminMember> & { id: string }) {
+    setMembers(prev => prev.map(m => (m.id === updated.id ? {
+      ...m,
+      loginApprovalExemptFrom: updated.loginApprovalExemptFrom ?? null,
+      loginApprovalExemptUntil: updated.loginApprovalExemptUntil ?? null,
+      loginApprovalExemptByName: updated.loginApprovalExemptByName ?? null,
+    } : m)))
+  }
+
+  async function handleSaveExempt() {
+    if (!exemptTarget) return
+    if (!exemptFrom || !exemptUntil) { setExemptError('開始日時と終了日時を入力してください'); return }
+    const from = new Date(exemptFrom)
+    const until = new Date(exemptUntil)
+    if (Number.isNaN(from.getTime()) || Number.isNaN(until.getTime())) { setExemptError('日時の形式が正しくありません'); return }
+    if (until <= from) { setExemptError('終了日時は開始日時より後にしてください'); return }
+    if (until.getTime() <= Date.now()) { setExemptError('終了日時が過去になっています'); return }
+    setExemptSaving(true)
+    setExemptError('')
+    const res = await fetch(`/api/admin/members/${exemptTarget.id}/login-approval-exemption`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: from.toISOString(), until: until.toISOString() }),
+    })
+    setExemptSaving(false)
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) { setExemptError(d.error || '設定に失敗しました'); return }
+    applyExemptResult(d)
+    setMessage({
+      type: 'success',
+      text: `${exemptTarget.name} さんは ${format(from, 'M/d HH:mm')} 〜 ${format(until, 'M/d HH:mm')} の間、承認なしでログインできます`,
+    })
+    setExemptTarget(null)
+  }
+
+  async function handleClearExempt() {
+    if (!exemptTarget) return
+    setExemptSaving(true)
+    setExemptError('')
+    const res = await fetch(`/api/admin/members/${exemptTarget.id}/login-approval-exemption`, { method: 'DELETE' })
+    setExemptSaving(false)
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) { setExemptError(d.error || '解除に失敗しました'); return }
+    applyExemptResult(d)
+    setMessage({ type: 'success', text: `${exemptTarget.name} さんの承認不要期間を解除しました。次回からログインのたびに承認が必要です` })
+    setExemptTarget(null)
+  }
   const loginRequests = usePendingLoginRequests(status === 'authenticated' && isApprover)
   const [loginRequestHistory, setLoginRequestHistory] = useState<AdminLoginRequestItem[]>([])
 
@@ -528,15 +636,41 @@ export default function AdminMembersPage() {
                 <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] flex-shrink-0 hidden sm:block">
                   {format(new Date(member.createdAt), 'yyyy/M/d 追加', { locale: ja })}
                 </p>
-                {/* ID+パスワード方式はログインのたびに承認が必要 */}
-                {member.authMethod === 'idpass' && (
-                  <span
-                    className="text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 bg-sky-500/15 text-sky-300 border border-sky-500/30"
-                    title="ログインのたびに管理者の承認（ログインリクエスト）が必要です"
-                  >
-                    ログイン承認制
-                  </span>
-                )}
+                {/* ID+パスワード方式はログインのたびに承認が必要（承認不要期間中を除く）。承認者はクリックで期間を設定 */}
+                {member.authMethod === 'idpass' && (() => {
+                  const st = exemptionState(member)
+                  const until = member.loginApprovalExemptUntil ? new Date(member.loginApprovalExemptUntil) : null
+                  const from = member.loginApprovalExemptFrom ? new Date(member.loginApprovalExemptFrom) : null
+                  const label = st === 'active' && until
+                    ? `承認不要 〜${format(until, 'M/d HH:mm')}`
+                    : st === 'scheduled' && from
+                      ? `承認不要 ${format(from, 'M/d HH:mm')}〜`
+                      : 'ログイン承認制'
+                  const cls = st === 'active'
+                    ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                    : st === 'scheduled'
+                      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                      : 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+                  const title = st === 'none'
+                    ? 'ログインのたびに管理者の承認（ログインリクエスト）が必要です'
+                    : `${from ? format(from, 'yyyy/M/d HH:mm') : ''} 〜 ${until ? format(until, 'yyyy/M/d HH:mm') : ''} は承認なしでログインできます${member.loginApprovalExemptByName ? `（設定: ${member.loginApprovalExemptByName}）` : ''}`
+                  const base = `text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 whitespace-nowrap ${cls}`
+                  return isApprover ? (
+                    <button
+                      type="button"
+                      onClick={() => openExempt(member)}
+                      className={`${base} inline-flex items-center gap-1 hover:brightness-125 transition`}
+                      title={`${title}\nクリックで承認不要期間を設定`}
+                    >
+                      {label}
+                      <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.232-6.232a2.5 2.5 0 113.536 3.536L12.536 16.536 9 17l.464-3.536z" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <span className={base} title={title}>{label}</span>
+                  )
+                })()}
                 {canManageRoles && member.authMethod !== 'idpass' ? (
                   <select
                     value={member.role}
@@ -972,6 +1106,67 @@ export default function AdminMembersPage() {
         <p className="text-sm text-[var(--md-sys-color-on-surface-variant)] mt-2">
           この操作は取り消せません。
         </p>
+      </Modal>
+
+      {/* ログイン承認不要期間 設定モーダル */}
+      <Modal
+        open={!!exemptTarget}
+        onClose={() => { if (!exemptSaving) setExemptTarget(null) }}
+        title="ログイン承認不要期間の設定"
+        size="sm"
+        footer={
+          <>
+            {exemptTarget && exemptionState(exemptTarget) !== 'none' && (
+              <Button variant="text" danger disabled={exemptSaving} onClick={handleClearExempt}>
+                期間を解除
+              </Button>
+            )}
+            <Button variant="text" disabled={exemptSaving} onClick={() => setExemptTarget(null)}>
+              キャンセル
+            </Button>
+            <Button variant="filled" loading={exemptSaving} onClick={handleSaveExempt}>
+              保存
+            </Button>
+          </>
+        }
+      >
+        {exemptTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+              <span className="font-semibold">{exemptTarget.name}</span> さん（ID: <span className="font-mono">{exemptTarget.loginId}</span>）が、
+              指定した期間中はログインリクエストの承認なしで ID・パスワードだけでログインできるようにします。
+            </p>
+            {exemptionState(exemptTarget) !== 'none' && exemptTarget.loginApprovalExemptUntil && (
+              <div className="rounded-lg p-3 text-xs bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]">
+                現在の設定: {exemptTarget.loginApprovalExemptFrom ? format(new Date(exemptTarget.loginApprovalExemptFrom), 'yyyy/M/d HH:mm') : ''} 〜 {format(new Date(exemptTarget.loginApprovalExemptUntil), 'yyyy/M/d HH:mm')}
+                {exemptTarget.loginApprovalExemptByName && <>（設定: {exemptTarget.loginApprovalExemptByName}）</>}
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] mb-1.5">クイック設定（今から）</p>
+              <div className="flex flex-wrap gap-2">
+                {EXEMPT_PRESETS.map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => applyExemptPreset(p.days)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-full border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <TextField label="開始日時" type="datetime-local" value={exemptFrom} onChange={v => { setExemptFrom(v); setExemptError('') }} />
+              <TextField label="終了日時" type="datetime-local" value={exemptUntil} onChange={v => { setExemptUntil(v); setExemptError('') }} />
+            </div>
+            {exemptError && <p className="text-xs text-[var(--md-sys-color-error)]">{exemptError}</p>}
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              期間が終わると自動的にログイン承認制に戻ります（最長366日）。期間中のログインはアクセスログに「承認不要期間」として記録されます。
+            </p>
+          </div>
+        )}
       </Modal>
 
       {/* PW再発行 確認モーダル */}

@@ -45,6 +45,7 @@ export async function GET() {
     select: {
       id: true, name: true, email: true, loginId: true, role: true,
       authMethod: true, status: true, approvedAt: true, createdAt: true,
+      loginApprovalExemptFrom: true, loginApprovalExemptUntil: true, loginApprovalExemptByName: true,
     },
     orderBy: { createdAt: 'asc' },
   })

@@ -86,3 +86,19 @@ export async function findLoginRequestByToken(requestId: string, token: string) 
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
   return r
 }
+
+/** ログイン承認不要期間の上限（長期の承認省略を防ぐ） */
+export const LOGIN_APPROVAL_EXEMPT_MAX_DAYS = 366
+
+/**
+ * ログイン承認不要期間の内側か。期間内は ID/パスワードだけでログインできる。
+ * from 未設定は「すぐに開始」、until 未設定は期間なし扱い（無期限の省略は作らない）。
+ */
+export function isLoginApprovalExempt(
+  a: { loginApprovalExemptFrom: Date | null; loginApprovalExemptUntil: Date | null },
+  now: Date = new Date(),
+): boolean {
+  if (!a.loginApprovalExemptUntil) return false
+  if (a.loginApprovalExemptFrom && a.loginApprovalExemptFrom.getTime() > now.getTime()) return false
+  return a.loginApprovalExemptUntil.getTime() > now.getTime()
+}

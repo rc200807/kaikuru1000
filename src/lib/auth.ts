@@ -7,7 +7,7 @@ import { recordAccessLog } from './access-log'
 import { recordLinkPartnerActivity } from './link-partner-activity'
 import { hashLoginToken } from './webauthn'
 import { checkMagicLink } from './magic-link'
-import { findLoginRequestByToken } from './admin-login-request'
+import { findLoginRequestByToken, isLoginApprovalExempt } from './admin-login-request'
 import { ADMIN_LOGIN_REQUEST_REQUIRED } from './login-error'
 import {
   createDeviceSession,
@@ -247,13 +247,18 @@ export const authOptions: NextAuthOptions = {
             // ID+パスワード方式（メールなし）はパスワードだけではログインさせない。
             // ログイン画面がこのコードを受けてログインリクエストを出し、
             // 管理者以上の承認後に 'admin-login-request' プロバイダでログインを確定する。
-            if (admin.authMethod === 'idpass') {
+            // ただし管理者が設定した「ログイン承認不要期間」内はそのままログインさせる。
+            const exempt = admin.authMethod === 'idpass' && isLoginApprovalExempt(admin)
+            if (admin.authMethod === 'idpass' && !exempt) {
               await resetLoginFailures(key)
               throw new Error(ADMIN_LOGIN_REQUEST_REQUIRED)
             }
             await resetLoginFailures(key)
             const adminRole = (admin.role === 'superadmin' || admin.role === 'hr') ? admin.role : 'admin'
-            await recordAccessLog({ userType: adminRole, userId: admin.id, userName: admin.name, action: 'login', req })
+            await recordAccessLog({
+              userType: adminRole, userId: admin.id, userName: admin.name,
+              action: exempt ? 'login（承認不要期間）' : 'login', req,
+            })
             return {
               id: admin.id,
               email: admin.email,

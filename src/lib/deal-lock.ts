@@ -36,8 +36,14 @@ export async function isDealContracted(dealId: string | null | undefined): Promi
 export async function isItemParentContracted(item: {
   dealId: string | null
   visitScheduleId: string | null
+  /** 宅配買取の品目（買取品目のみ）。送付の売買契約書が発行済みなら凍結 */
+  deliveryShipmentId?: string | null
 }): Promise<boolean> {
   if (item.dealId) return isDealContracted(item.dealId)
+  if (item.deliveryShipmentId) {
+    const c = await prisma.deliveryContract.findUnique({ where: { shipmentId: item.deliveryShipmentId }, select: { id: true } })
+    return !!c
+  }
   if (!item.visitScheduleId) return false
   const contract = await prisma.salesContract.findFirst({
     where: { visitScheduleId: item.visitScheduleId },

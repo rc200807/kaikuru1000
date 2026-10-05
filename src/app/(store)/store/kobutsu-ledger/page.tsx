@@ -254,7 +254,9 @@ export default function KobutsuLedgerPage() {
                   {visible.map(g => (
                     <tr key={g.entryKey} className="border-t border-[var(--md-sys-color-outline-variant)] align-top hover:bg-[var(--md-sys-color-surface-container-low)]">
                       <td className="px-2.5 py-2 whitespace-nowrap text-[var(--md-sys-color-on-surface)]">{fmtDate(g.tradedAt)}</td>
-                      <td className="px-2.5 py-2 whitespace-nowrap tabular-nums text-[var(--md-sys-color-on-surface-variant)]">{formatDealNumber(g.dealNumber)}</td>
+                      <td className="px-2.5 py-2 whitespace-nowrap tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
+                        {g.shipmentNumber ? <><span className="mr-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">宅配</span>{g.shipmentNumber}</> : formatDealNumber(g.dealNumber)}
+                      </td>
                       <td className="px-2.5 py-2 min-w-[130px]">
                         {g.categories.length > 0 && (
                           <span className="text-[var(--md-sys-color-on-surface)]">
@@ -302,6 +304,9 @@ export default function KobutsuLedgerPage() {
                           {g.dealId && (
                             <Link href={`/store/deals/${g.dealId}`} className="text-[var(--md-sys-color-on-surface-variant)] hover:underline">案件</Link>
                           )}
+                          {g.shipmentId && (
+                            <Link href={`/store/deliveries/${g.shipmentId}`} className="text-[var(--md-sys-color-on-surface-variant)] hover:underline">宅配</Link>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -319,7 +324,7 @@ export default function KobutsuLedgerPage() {
                   className="block rounded-xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-3 active:bg-[var(--md-sys-color-surface-container)]"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtDate(g.tradedAt)} ・ No.{formatDealNumber(g.dealNumber)}</span>
+                    <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">{fmtDate(g.tradedAt)} ・ {g.shipmentNumber ? `宅配 ${g.shipmentNumber}` : `No.${formatDealNumber(g.dealNumber)}`}</span>
                     <span className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">{fmtYen(g.total)}</span>
                   </div>
                   <div className="mt-1 text-sm font-semibold text-[var(--md-sys-color-on-surface)]">

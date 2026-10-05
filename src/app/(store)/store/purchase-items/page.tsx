@@ -29,6 +29,8 @@ type Item = {
   } | null
   /** 案件直下に登録された品目（visitSchedule が無い）はこちらから顧客・案件を辿る */
   deal: { id: string; user: { id: string; name: string } | null } | null
+  /** 宅配買取の品目 */
+  deliveryShipment?: { id: string; shipmentNumber: string; user: { id: string; name: string } } | null
   storeId: string | null
   store: { id: string; name: string; code: string } | null
   convertedInventoryId: string | null
@@ -86,7 +88,7 @@ export default function StorePurchaseItemsPage() {
     return items.filter(i => {
       if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
       if (q) {
-        const customerName = i.deal?.user?.name ?? i.visitSchedule?.user?.name ?? ''
+        const customerName = i.deal?.user?.name ?? i.visitSchedule?.user?.name ?? i.deliveryShipment?.user.name ?? ''
         const hay = [i.itemName, i.category, i.janCode ?? '', customerName, i.store?.name ?? ''].join(' ').toLowerCase()
         if (!hay.includes(q)) return false
       }
@@ -211,7 +213,7 @@ export default function StorePurchaseItemsPage() {
                   {/* メタ情報 */}
                   <div className="flex items-center gap-3 mt-2 text-[11px] text-[var(--md-sys-color-on-surface-variant)] flex-wrap">
                     {(() => {
-                      const customer = item.deal?.user ?? item.visitSchedule?.user
+                      const customer = item.deal?.user ?? item.visitSchedule?.user ?? item.deliveryShipment?.user
                       if (!customer) return null
                       return (
                         <button
@@ -235,6 +237,13 @@ export default function StorePurchaseItemsPage() {
                         className="hover:underline"
                       >
                         案件を開く
+                      </button>
+                    ) : item.deliveryShipment ? (
+                      <button
+                        onClick={() => item.deliveryShipment && router.push(`/store/deliveries/${item.deliveryShipment.id}`)}
+                        className="hover:underline"
+                      >
+                        宅配: {item.deliveryShipment.shipmentNumber}
                       </button>
                     ) : null}
                   </div>

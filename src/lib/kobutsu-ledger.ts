@@ -157,7 +157,14 @@ export function verificationMethod(user: {
  * 紙で契約した取引も古物台帳には記載義務があるため、契約書の有無にかかわらず
  * 同じ形で台帳を引けるようにしている。
  */
-export type LedgerSource = 'digital' | 'paper'
+export type LedgerSource = 'digital' | 'paper' | 'delivery'
+
+/** 契約書の種別の表示名（CSV・画面共通） */
+export function ledgerSourceLabel(source: LedgerSource): string {
+  if (source === 'paper') return '紙（写真）'
+  if (source === 'delivery') return '宅配（電子・署名なし）'
+  return '電子'
+}
 
 export function contractEntryKey(contractId: string): string {
   return `c:${contractId}`
@@ -165,10 +172,15 @@ export function contractEntryKey(contractId: string): string {
 export function dealEntryKey(dealId: string): string {
   return `d:${dealId}`
 }
+/** 宅配買取の売買契約書（DeliveryContract）。"s:<deliveryContractId>" */
+export function shipmentEntryKey(deliveryContractId: string): string {
+  return `s:${deliveryContractId}`
+}
 /** エントリキーを解析する。旧形式（プレフィックスなし＝契約ID）も受け付ける */
-export function parseEntryKey(key: string): { kind: 'contract' | 'deal'; id: string } {
+export function parseEntryKey(key: string): { kind: 'contract' | 'deal' | 'shipment'; id: string } {
   if (key.startsWith('c:')) return { kind: 'contract', id: key.slice(2) }
   if (key.startsWith('d:')) return { kind: 'deal', id: key.slice(2) }
+  if (key.startsWith('s:')) return { kind: 'shipment', id: key.slice(2) }
   return { kind: 'contract', id: key }
 }
 
@@ -186,6 +198,9 @@ export type KobutsuLedgerRow = {
   /** 案件番号（例: 20260824001）。案件に紐づかない旧データは null */
   dealNumber: string | null
   visitScheduleId: string | null
+  /** 宅配買取の送付ID・送付番号（宅配のときのみ） */
+  shipmentId: string | null
+  shipmentNumber: string | null
   /** 取引年月日（売買契約の締結日時。ISO文字列） */
   tradedAt: string
   /** 区別（このシステムの取引は買受けのみ） */
@@ -260,7 +275,7 @@ export const KOBUTSU_CSV_HEADER = [
   '備考',
   '社内カテゴリ',
   '契約書',
-  '案件番号',
+  '案件番号（宅配は送付番号）',
   '案件ID',
 ] as const
 
@@ -282,8 +297,8 @@ export function toCsvRow(row: KobutsuLedgerRow, formatDate: (iso: string) => str
     row.customer.verification ?? '',
     row.note ?? '',
     row.internalCategory ?? '',
-    row.source === 'paper' ? '紙（写真）' : '電子',
-    row.dealNumber ?? '',
+    ledgerSourceLabel(row.source),
+    row.dealNumber ?? row.shipmentNumber ?? '',
     row.dealId ?? '',
   ]
 }
@@ -307,6 +322,8 @@ export type KobutsuLedgerGroup = {
   dealId: string | null
   dealNumber: string | null
   visitScheduleId: string | null
+  shipmentId: string | null
+  shipmentNumber: string | null
   tradedAt: string
   tradeType: '買受け'
   customer: KobutsuLedgerRow['customer']
@@ -355,6 +372,8 @@ export function groupLedgerRows(rows: KobutsuLedgerRow[], opts: { includeRows?: 
       dealId: head.dealId,
       dealNumber: head.dealNumber,
       visitScheduleId: head.visitScheduleId,
+      shipmentId: head.shipmentId,
+      shipmentNumber: head.shipmentNumber,
       tradedAt: head.tradedAt,
       tradeType: head.tradeType,
       customer: head.customer,
@@ -388,7 +407,7 @@ export const KOBUTSU_DEAL_CSV_HEADER = [
   '相手方の年齢',
   '確認方法',
   '契約書',
-  '案件番号',
+  '案件番号（宅配は送付番号）',
   '案件ID',
 ] as const
 
@@ -408,8 +427,8 @@ export function toDealCsvRow(group: KobutsuLedgerGroup, formatDate: (iso: string
     formatBirthDate(group.customer.birthDate) ?? '',
     group.customer.age ?? '',
     group.customer.verification ?? '',
-    group.source === 'paper' ? '紙（写真）' : '電子',
-    group.dealNumber ?? '',
+    ledgerSourceLabel(group.source),
+    group.dealNumber ?? group.shipmentNumber ?? '',
     group.dealId ?? '',
   ]
 }

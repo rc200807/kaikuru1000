@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
       OR: [
         { deal: { storeId: storeFilter } },
         { visitSchedule: { storeId: storeFilter } },
+        // 宅配買取の品目（送付の顧客の担当店舗）
+        { deliveryShipment: { user: { storeId: storeFilter } } },
       ],
     },
     // include ではなく select。include だと rakutenData（楽天商品検索APIの生JSON）・
@@ -60,6 +62,12 @@ export async function GET(request: NextRequest) {
           user: { select: { id: true, name: true } },
         },
       },
+      deliveryShipment: {
+        select: {
+          id: true, shipmentNumber: true,
+          user: { select: { id: true, name: true, store: storeSelect } },
+        },
+      },
       inventoryItem: { select: { id: true } }, // 在庫化済みか判定用
     },
     orderBy: { createdAt: 'desc' },
@@ -75,7 +83,7 @@ export async function GET(request: NextRequest) {
       /* ignore */
     }
     // 帰属店舗は案件側が正。旧データ（案件未紐付け）は訪問側で補う
-    const store = it.deal?.store ?? it.visitSchedule?.store ?? null
+    const store = it.deal?.store ?? it.visitSchedule?.store ?? it.deliveryShipment?.user.store ?? null
     return {
       id: it.id,
       itemName: it.itemName,
@@ -89,6 +97,10 @@ export async function GET(request: NextRequest) {
       visitSchedule: it.visitSchedule,
       // 案件直下の品目は visitSchedule が無いので、顧客名・案件導線はこちらから取る
       deal: it.deal ? { id: it.deal.id, user: it.deal.user } : null,
+      // 宅配買取の品目は送付から顧客・詳細画面を辿る
+      deliveryShipment: it.deliveryShipment
+        ? { id: it.deliveryShipment.id, shipmentNumber: it.deliveryShipment.shipmentNumber, user: { id: it.deliveryShipment.user.id, name: it.deliveryShipment.user.name } }
+        : null,
       storeId: store?.id ?? null,
       store,
       convertedInventoryId: it.inventoryItem?.id ?? null, // 在庫化済みなら在庫ID

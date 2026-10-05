@@ -5,11 +5,13 @@
  * 取引年月日は電子契約なら締結日時（SalesContract.agreedAt）、
  * 紙で契約した案件（写真のみ）なら Deal.paperContractAgreedAt（未入力なら訪問日・案件発生日）を使う。
  * 紙で契約しても古物営業法の記載義務は同じなので、台帳には必ず載せる。
+ * 宅配買取は、店舗が発行した売買契約書（DeliveryContract・署名なし）の発行日時を取引年月日として載せる。
  */
 import { prisma } from '@/lib/prisma'
 import {
   contractEntryKey,
   dealEntryKey,
+  shipmentEntryKey,
   groupLedgerRows,
   parseEntryKey,
   type KobutsuLedgerGroup,
@@ -113,6 +115,7 @@ function buildLedgerRow(args: {
   source: LedgerSource
   dealNumber: string | null
   tradedAt: Date
+  shipment?: { id: string; shipmentNumber: string } | null
 }): KobutsuLedgerRow {
   const { item, user, tradedAt } = args
   const entry = item.kobutsuEntry
@@ -129,6 +132,8 @@ function buildLedgerRow(args: {
     dealId: item.dealId,
     dealNumber: args.dealNumber,
     visitScheduleId: item.visitScheduleId,
+    shipmentId: args.shipment?.id ?? null,
+    shipmentNumber: args.shipment?.shipmentNumber ?? null,
     tradedAt: tradedAt.toISOString(),
     tradeType: '買受け' as const,
     categoryKey,
@@ -235,6 +240,66 @@ async function fetchPaperContractRows(args: {
   return rows
 }
 
+/**
+ * 宅配買取の売買契約書（DeliveryContract）の台帳行。
+ * 営業所は発行時点の店舗（DeliveryContract.storeId）。取引年月日は発行日時（agreedAt）。
+ */
+async function fetchDeliveryContractRows(args: {
+  storeId: string
+  from?: Date | null
+  to?: Date | null
+  q: string
+  limit: number
+}): Promise<KobutsuLedgerRow[]> {
+  const { storeId, from, to, q } = args
+  const agreedAt: { gte?: Date; lte?: Date } = {}
+  if (from) agreedAt.gte = from
+  if (to) agreedAt.lte = to
+
+  const contracts = await prisma.deliveryContract.findMany({
+    where: { storeId, ...(from || to ? { agreedAt } : {}) },
+    orderBy: { agreedAt: 'desc' },
+    take: args.limit,
+    // PDF本文は引かない
+    select: {
+      id: true, agreedAt: true,
+      shipment: {
+        select: {
+          id: true, shipmentNumber: true,
+          user: { select: LEDGER_USER_SELECT },
+          purchaseItems: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true, dealId: true, visitScheduleId: true,
+              itemName: true, category: true, quantity: true, purchasePrice: true,
+              janCode: true, notes: true,
+              kobutsuEntry: { select: { kobutsuCategory: true, features: true, note: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  const rows: KobutsuLedgerRow[] = []
+  for (const c of contracts) {
+    for (const item of c.shipment.purchaseItems) {
+      const row = buildLedgerRow({
+        item: item as LedgerItem,
+        user: c.shipment.user as LedgerUser,
+        entryKey: shipmentEntryKey(c.id),
+        contractId: null,
+        source: 'delivery',
+        dealNumber: null,
+        tradedAt: c.agreedAt,
+        shipment: { id: c.shipment.id, shipmentNumber: c.shipment.shipmentNumber },
+      })
+      if (matchesQuery(row, q)) rows.push(row)
+    }
+  }
+  return rows
+}
+
 export async function fetchKobutsuLedgerRows(
   query: KobutsuLedgerQuery,
 ): Promise<{ rows: KobutsuLedgerRow[]; truncated: boolean }> {
@@ -326,6 +391,9 @@ export async function fetchKobutsuLedgerRows(
   // それも無ければ案件発生日で暫定表示し、案件詳細から入力できるようにする。
   const paperRows = await fetchPaperContractRows({ storeId, from, to, q })
   rows.push(...paperRows)
+  // ── 宅配買取の売買契約書（署名なし・店舗発行）も台帳に載せる ──
+  const deliveryRows = await fetchDeliveryContractRows({ storeId, from, to, q, limit })
+  rows.push(...deliveryRows)
   // 取引年月日の降順に整える（契約側は取得時点で降順だが、紙契約を混ぜると崩れる）
   rows.sort((a, b) => new Date(b.tradedAt).getTime() - new Date(a.tradedAt).getTime())
 
@@ -345,7 +413,10 @@ export async function fetchKobutsuLedgerGroup(
 
   // 取引年月日を先に求め、期間を「その日時ちょうど」に絞って共通処理を使い回す
   let tradedAt: Date | null = null
-  if (parsed.kind === 'contract') {
+  if (parsed.kind === 'shipment') {
+    const dc = await prisma.deliveryContract.findFirst({ where: { id: parsed.id, storeId }, select: { agreedAt: true } })
+    tradedAt = dc?.agreedAt ?? null
+  } else if (parsed.kind === 'contract') {
     const contract = await prisma.salesContract.findFirst({
       where: { id: parsed.id, OR: [{ deal: { storeId } }, { visitSchedule: { storeId } }] },
       select: { agreedAt: true },
@@ -371,7 +442,9 @@ export async function fetchKobutsuLedgerGroup(
     to: tradedAt,
     limit: 1000,
   })
-  const normalizedKey = parsed.kind === 'contract' ? contractEntryKey(parsed.id) : dealEntryKey(parsed.id)
+  const normalizedKey = parsed.kind === 'contract'
+    ? contractEntryKey(parsed.id)
+    : parsed.kind === 'shipment' ? shipmentEntryKey(parsed.id) : dealEntryKey(parsed.id)
   const groups = groupLedgerRows(rows.filter(r => r.entryKey === normalizedKey), { includeRows: true })
   return groups[0] ?? null
 }
@@ -437,8 +510,13 @@ export async function purchaseItemBelongsToStore(purchaseItemId: string, storeId
     select: {
       deal: { select: { storeId: true } },
       visitSchedule: { select: { storeId: true } },
+      // 宅配の品目は契約書の発行店舗（無ければ顧客の担当店舗）
+      deliveryShipment: { select: { user: { select: { storeId: true } }, contract: { select: { storeId: true } } } },
     },
   })
   if (!item) return false
-  return item.deal?.storeId === storeId || item.visitSchedule?.storeId === storeId
+  const shipmentStoreId = item.deliveryShipment
+    ? (item.deliveryShipment.contract?.storeId ?? item.deliveryShipment.user.storeId)
+    : null
+  return item.deal?.storeId === storeId || item.visitSchedule?.storeId === storeId || shipmentStoreId === storeId
 }

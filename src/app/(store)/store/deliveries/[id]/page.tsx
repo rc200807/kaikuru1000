@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import AppBar from '@/components/AppBar'
@@ -9,6 +10,10 @@ import Button from '@/components/Button'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import EmptyState from '@/components/EmptyState'
 import MessageBanner from '@/components/MessageBanner'
+import PurchaseItemManager, { type ManagedPurchaseItem, type PurchaseItemChange } from '@/components/store/PurchaseItemManager'
+import DeliveryContractDocument from '@/components/delivery/DeliveryContractDocument'
+import { useStoreMasters } from '@/components/store/StoreMastersContext'
+import { formatYen } from '@/lib/currency'
 
 /* ── 6-step timeline definition ── */
 const STEPS = [
@@ -91,9 +96,35 @@ type ShipmentDetail = {
     phone: string
     email: string | null
     address: string | null
-    store: { id: string; name: string; address: string; phone: string } | null
+    idName: string | null
+    idAddress: string | null
+    idBackAddress: string | null
+    birthDate: string | null
+    idBirthDate: string | null
+    occupation: string | null
+    idDocumentType: string | null
+    store: {
+      id: string; name: string; address: string; phone: string
+      antiquePermitNumber: string | null
+      operator: { antiquePermitNumber: string | null } | null
+    } | null
   }
+  purchaseItems: ManagedPurchaseItem[]
+  contract: {
+    id: string
+    contractNo: string
+    agreedAt: string
+    purchaseAmount: number
+    remarks: string | null
+    emailSentAt: string | null
+    customerEmail: string | null
+    issuedByName: string | null
+    hasPdf: boolean
+  } | null
 }
+
+/** 売買契約書を発行できる状態（荷物の受取後） */
+const CONTRACT_ISSUABLE = ['received', 'appraised', 'transferred']
 
 export default function StoreDeliveryDetailPage() {
   const { data: session, status: authStatus } = useSession()
@@ -110,6 +141,22 @@ export default function StoreDeliveryDetailPage() {
   const [appraisalOpen, setAppraisalOpen] = useState(false)
   const [appraisalAmount, setAppraisalAmount] = useState('')
   const [appraisalNote, setAppraisalNote] = useState('')
+
+  // 宅配の買取品目・売買契約書
+  const masters = useStoreMasters()
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [remarks, setRemarks] = useState('')
+  const [issuing, setIssuing] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const contractRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (masters) { setCategories(masters.purchaseCategories); return }
+    fetch('/api/form-masters')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setCategories(Array.isArray(d.purchaseCategories) ? d.purchaseCategories : []) })
+      .catch(() => {})
+  }, [masters])
 
   const fetchShipment = useCallback(async () => {
     setLoading(true)
@@ -176,8 +223,74 @@ export default function StoreDeliveryDetailPage() {
   }
 
   function handleAppraisalSubmit() {
+    // 品目を登録している場合、金額は品目合計が正（サーバー側も手入力値では上書きしない）
+    const hasItems = (shipment?.purchaseItems.length ?? 0) > 0
     const amount = appraisalAmount !== '' ? Number(appraisalAmount) : null
-    updateStatus('appraised', { purchaseAmount: amount, storeNote: appraisalNote || null })
+    updateStatus('appraised', hasItems ? { storeNote: appraisalNote || null } : { purchaseAmount: amount, storeNote: appraisalNote || null })
+  }
+
+  /** 品目の追加・更新・削除を画面に反映（送付の査定金額も品目合計に揃える） */
+  function applyPurchaseItemChange(change: PurchaseItemChange) {
+    if (change.kind === 'reload') { fetchShipment(); return }
+    setShipment(prev => {
+      if (!prev) return prev
+      const items = change.kind === 'upsert'
+        ? (prev.purchaseItems.some(i => i.id === change.item.id)
+            ? prev.purchaseItems.map(i => (i.id === change.item.id ? change.item : i))
+            : [...prev.purchaseItems, change.item])
+        : prev.purchaseItems.filter(i => i.id !== change.id)
+      return {
+        ...prev,
+        purchaseItems: items,
+        purchaseAmount: change.purchaseAmount !== undefined ? change.purchaseAmount ?? null : prev.purchaseAmount,
+      }
+    })
+  }
+
+  /** 売買契約書を発行する（画面の契約書をPDF化して保存し、お客様へメール送付） */
+  async function issueContract() {
+    if (!shipment) return
+    if (!confirm('売買契約書を発行します。発行後は買取品目を変更できません。よろしいですか？')) return
+    // 契約書（PDF化する要素）はプレビューを閉じていると描画されていないので、同期で描画してから1フレーム待つ
+    flushSync(() => { setIssuing(true); setMsg(null) })
+    await new Promise<void>(r => requestAnimationFrame(() => r()))
+    try {
+      let pdfBase64: string | null = null
+      try {
+        const { elementToPdf } = await import('@/lib/pdf-export')
+        if (contractRef.current) pdfBase64 = await elementToPdf(contractRef.current, { mode: 'base64' })
+      } catch (e) {
+        console.error('PDF生成エラー:', e)
+      }
+      if (!pdfBase64) {
+        setMsg({ type: 'error', text: 'PDFの作成に失敗しました。もう一度お試しください' })
+        return
+      }
+      const res = await fetch(`/api/delivery-shipments/${shipment.id}/contract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64, remarks }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ type: 'error', text: data.error || '発行に失敗しました' })
+        return
+      }
+      await fetchShipment()
+      setShowPreview(false)
+      setMsg({
+        type: 'success',
+        text: data.emailQueued
+          ? '売買契約書を発行しました。PDFを添付してお客様へ順次メールで送信します'
+          : data.emailErrorReason === 'no-email'
+            ? '売買契約書を発行しました（お客様のメールアドレスが未登録のため、メールは送信していません）'
+            : '売買契約書を発行しました（メールの送信予約に失敗しました）',
+      })
+    } catch {
+      setMsg({ type: 'error', text: '通信エラーが発生しました' })
+    } finally {
+      setIssuing(false)
+    }
   }
 
   /* ── Loading / Not found ── */
@@ -502,6 +615,12 @@ export default function StoreDeliveryDetailPage() {
               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">
                 査定金額（円）
               </label>
+              {shipment.purchaseItems.length > 0 ? (
+                <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+                  <span className="font-bold">{formatYen(shipment.purchaseAmount ?? 0)}</span>
+                  <span className="ml-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">買取品目の合計で自動計算されます</span>
+                </p>
+              ) : (
               <input
                 type="number"
                 value={appraisalAmount}
@@ -510,6 +629,7 @@ export default function StoreDeliveryDetailPage() {
                 min="0"
                 className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
               />
+              )}
             </div>
 
             <div>
@@ -543,6 +663,118 @@ export default function StoreDeliveryDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* ── 買取品目（宅配）── */}
+      <Card variant="outlined" padding="md">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider">買取品目</h3>
+          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+            {shipment.purchaseItems.length}件 ・ 合計 <strong className="text-[var(--md-sys-color-on-surface)]">{formatYen(shipment.purchaseItems.reduce((s, i) => s + i.purchasePrice, 0))}</strong>
+          </span>
+        </div>
+        {CONTRACT_ISSUABLE.includes(shipment.status) || shipment.purchaseItems.length > 0 ? (
+          <>
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+              査定した品目を登録すると、査定金額は品目の合計で自動計算され、売買契約書と古物台帳に1品目ずつ記載されます。
+            </p>
+            <PurchaseItemManager
+              parentId={shipment.id}
+              parentKind="shipment"
+              items={shipment.purchaseItems}
+              categories={categories}
+              editable={CONTRACT_ISSUABLE.includes(shipment.status)}
+              frozen={!!shipment.contract}
+              onChanged={applyPurchaseItemChange}
+              onMessage={setMsg}
+            />
+          </>
+        ) : (
+          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">荷物の受取後に、査定した品目を登録できます。</p>
+        )}
+      </Card>
+
+      {/* ── 売買契約書（宅配・署名なし）── */}
+      <Card variant="outlined" padding="md">
+        <h3 className="text-xs font-bold text-[var(--md-sys-color-on-surface-variant)] uppercase tracking-wider mb-3">売買契約書</h3>
+        {shipment.contract ? (
+          <div className="space-y-3">
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-900 space-y-1">
+              <p className="font-bold">発行済み（契約番号 {shipment.contract.contractNo}）</p>
+              <p className="text-xs">発行日時: {new Date(shipment.contract.agreedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}{shipment.contract.issuedByName ? ` ・ 発行者: ${shipment.contract.issuedByName}` : ''}</p>
+              <p className="text-xs">買取金額: {formatYen(shipment.contract.purchaseAmount)}</p>
+              <p className="text-xs">
+                メール: {shipment.contract.emailSentAt
+                  ? `送信済み（${new Date(shipment.contract.emailSentAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}・${shipment.contract.customerEmail ?? ''}）`
+                  : shipment.contract.customerEmail ? `送信待ち（${shipment.contract.customerEmail}）` : 'メールアドレス未登録のため未送信'}
+              </p>
+            </div>
+            {shipment.contract.hasPdf && (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="tonal" onClick={() => window.open(`/api/delivery-shipments/${shipment.id}/contract`, '_blank')}>売買契約書PDFを開く</Button>
+                <Button variant="outlined" onClick={() => { window.location.href = `/api/delivery-shipments/${shipment.id}/contract?download=1` }}>ダウンロード</Button>
+              </div>
+            )}
+          </div>
+        ) : !CONTRACT_ISSUABLE.includes(shipment.status) ? (
+          <p className="text-sm text-[var(--md-sys-color-on-surface-variant)]">荷物の受取後、買取品目を登録すると発行できます。</p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+              宅配買取はお客様が非対面のため、署名なしで店舗が発行します。発行するとPDFを保存してお客様へメールで送付し、古物台帳に記載されます。
+              発行後は買取品目を変更できません。
+            </p>
+            <div>
+              <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">備考（契約書に記載されます）</label>
+              <textarea
+                value={remarks}
+                onChange={e => setRemarks(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="お客様へのご連絡事項など（任意）"
+                className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-lg px-3 py-2.5 bg-[var(--md-sys-color-surface-container-lowest,#fff)] focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)] resize-y text-[var(--md-sys-color-on-surface)]"
+              />
+            </div>
+            {shipment.purchaseItems.length === 0 && (
+              <MessageBanner severity="warning">買取品目を1件以上登録すると発行できます。</MessageBanner>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outlined" onClick={() => setShowPreview(v => !v)}>{showPreview ? 'プレビューを閉じる' : '契約書をプレビュー'}</Button>
+              <Button onClick={issueContract} disabled={issuing || shipment.purchaseItems.length === 0}>
+                {issuing ? '発行中...' : '売買契約書を発行'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* 契約書の本体。発行時はこの要素をそのままPDF化するので、発行操作中は必ず描画しておく */}
+      {!shipment.contract && CONTRACT_ISSUABLE.includes(shipment.status) && (showPreview || issuing) && (
+        <div className="rounded-xl border border-[var(--md-sys-color-outline-variant)] overflow-hidden">
+          <DeliveryContractDocument
+            ref={contractRef}
+            contractNo={`HK-${shipment.shipmentNumber.replace(/^HD-/, '')}`}
+            contractDate={new Date()}
+            shipmentNumber={shipment.shipmentNumber}
+            customer={{
+              name: user.idName || user.name,
+              address: user.idBackAddress || user.idAddress || user.address,
+              phone: user.phone,
+              birthDate: user.birthDate || user.idBirthDate,
+              occupation: user.occupation,
+              idDocumentType: user.idDocumentType,
+            }}
+            store={{
+              name: user.store?.name ?? '',
+              address: user.store?.address ?? null,
+              phone: user.store?.phone ?? null,
+              antiquePermitNumber: user.store?.antiquePermitNumber || user.store?.operator?.antiquePermitNumber || null,
+            }}
+            staffName={(session?.user as { memberName?: string | null } | undefined)?.memberName ?? null}
+            items={shipment.purchaseItems}
+            remarks={remarks}
+          />
+        </div>
+      )}
     </div>
   )
 }

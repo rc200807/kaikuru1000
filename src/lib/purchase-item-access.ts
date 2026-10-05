@@ -7,21 +7,24 @@ import { prisma } from '@/lib/prisma'
  * VisitSchedule 経由（visitScheduleId）は後方互換で残っているだけなので、
  * 認可チェックで visitSchedule しか見ないと、案件直下の品目（visitScheduleId=null）が
  * 常に Forbidden になる。必ず両方から所有者を集めること。
+ * 宅配買取の品目（deliveryShipmentId）は送付の顧客と、その担当店舗（User.storeId）が所有者。
  */
 export const PURCHASE_ITEM_OWNER_SELECT = {
   deal: { select: { storeId: true, userId: true } },
   visitSchedule: { select: { storeId: true, userId: true } },
+  deliveryShipment: { select: { userId: true, user: { select: { storeId: true } } } },
 } as const
 
 type OwnerShape = {
   deal: { storeId: string | null; userId: string } | null
   visitSchedule: { storeId: string; userId: string } | null
+  deliveryShipment?: { userId: string; user: { storeId: string | null } } | null
 }
 
 /** 品目に紐づく店舗ID・顧客IDを（案件・訪問の両方から）列挙する */
 export function purchaseItemOwners(item: OwnerShape) {
-  const storeIds = [item.deal?.storeId, item.visitSchedule?.storeId].filter((v): v is string => !!v)
-  const userIds = [item.deal?.userId, item.visitSchedule?.userId].filter((v): v is string => !!v)
+  const storeIds = [item.deal?.storeId, item.visitSchedule?.storeId, item.deliveryShipment?.user.storeId].filter((v): v is string => !!v)
+  const userIds = [item.deal?.userId, item.visitSchedule?.userId, item.deliveryShipment?.userId].filter((v): v is string => !!v)
   return { storeIds, userIds }
 }
 

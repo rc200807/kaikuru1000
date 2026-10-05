@@ -390,6 +390,8 @@ model PurchaseItem {
   visitSchedule   VisitSchedule? @relation(fields: [visitScheduleId], references: [id], onDelete: SetNull)
   dealId          String?                     // 案件への紐づけ（再ペアレント。これが正）
   deal            Deal?         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  deliveryShipmentId String?                  // 宅配買取の送付への紐づけ（宅配の品目。案件とは排他）
+  deliveryShipment   DeliveryShipment? @relation(fields: [deliveryShipmentId], references: [id], onDelete: Cascade)
   itemName        String                      // 品名
   category        String                      // カテゴリー名（表示用）
   categoryId      String?                     // PurchaseCategoryへの参照
@@ -412,6 +414,7 @@ model PurchaseItem {
   // 単独列インデックスは下の複合が先頭列として完全に含むので張らない（書き込みコストのみ）
   @@index([dealId, createdAt])
   @@index([visitScheduleId, createdAt])
+  @@index([deliveryShipmentId, createdAt])
 }
 
 // 作業品目（案件ごとの請求作業）
@@ -650,11 +653,35 @@ model DeliveryShipment {
   status         String   @default("draft")     // draft|registered|shipped|received|appraised|transferred
   storeNote      String?
   transferredAt  DateTime? // 振込済み日時（店舗が更新）
+  purchaseItems  PurchaseItem[]          // 宅配の買取品目（登録があれば purchaseAmount は品目合計で自動計算）
+  contract       DeliveryContract?       // 宅配買取の売買契約書（1:1・署名なしで店舗が発行）
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@index([userId, shipmentMonth]) // 宅配一覧（user経由で絞り shipmentMonth 降順）
   @@index([shipmentMonth])
+}
+
+// 宅配買取の売買契約書（お客様は非対面のため署名なし。店舗が査定後に発行してお客様へ送付する）
+// 訪問の SalesContract とは別モデル: 契約件数の集計や署名前提の処理に混ざらないようにするため。
+// 古物台帳には "s:<id>" のキーで載る（src/lib/kobutsu-ledger-server.ts）。
+model DeliveryContract {
+  id             String           @id @default(cuid())
+  shipmentId     String           @unique
+  shipment       DeliveryShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  storeId        String?                    // 発行した店舗（古物台帳の営業所。発行時点のスナップショット）
+  contractNo     String           @unique   // 契約番号（"HK-" + 送付番号）
+  purchaseAmount Int              @default(0) // 発行時点の買取金額合計（スナップショット）
+  remarks        String?          @db.Text  // 備考（契約書に記載）
+  pdfBase64      String?          @db.Text  // 売買契約書PDF（base64）
+  customerEmail  String?                    // 送信先メールアドレス（記録用）
+  emailSentAt    DateTime?                  // メール送信日時
+  issuedByName   String?                    // 発行者名（スナップショット）
+  agreedAt       DateTime         @default(now()) // 契約日（＝発行日時。古物台帳の取引年月日）
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([storeId, agreedAt])
 }
 
 // 見積書（買取金額・請求金額・有効期限を記録。署名・顧客情報は不要）

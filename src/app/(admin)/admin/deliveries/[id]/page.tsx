@@ -87,6 +87,8 @@ type ShipmentDetail = {
     address: string | null
     store: { id: string; name: string; address: string | null; phone: string | null } | null
   }
+  purchaseItems?: { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }[]
+  contract?: { contractNo: string; agreedAt: string; purchaseAmount: number; emailSentAt: string | null; hasPdf: boolean } | null
 }
 
 export default function AdminDeliveryDetailPage() {
@@ -226,6 +228,35 @@ export default function AdminDeliveryDetailPage() {
             )}
           </div>
         </Card>
+
+        {/* 宅配の買取品目・売買契約書（店舗が登録・発行。管理は閲覧のみ） */}
+        {((shipment.purchaseItems?.length ?? 0) > 0 || shipment.contract) && (
+          <Card variant="elevated" padding="md">
+            <h3 className="text-sm font-bold text-[var(--md-sys-color-on-surface)] mb-3">買取品目・売買契約書</h3>
+            {(shipment.purchaseItems?.length ?? 0) > 0 && (
+              <ul className="text-sm divide-y divide-[var(--md-sys-color-outline-variant)] mb-3">
+                {shipment.purchaseItems!.map(i => (
+                  <li key={i.id} className="flex items-center justify-between gap-2 py-1.5">
+                    <span className="text-[var(--md-sys-color-on-surface)]">{i.itemName}<span className="ml-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">{i.category} ×{i.quantity}</span></span>
+                    <span className="font-medium text-[var(--md-sys-color-on-surface)]">¥{i.purchasePrice.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {shipment.contract ? (
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <span className="text-[var(--md-sys-color-on-surface)]">
+                  契約番号 {shipment.contract.contractNo}（{new Date(shipment.contract.agreedAt).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })} 発行・{shipment.contract.emailSentAt ? 'メール送信済み' : 'メール未送信'}）
+                </span>
+                {shipment.contract.hasPdf && (
+                  <Button size="sm" variant="outlined" onClick={() => window.open(`/api/delivery-shipments/${shipment.id}/contract`, '_blank')}>PDFを開く</Button>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">売買契約書は未発行です（店舗が発行します）</p>
+            )}
+          </Card>
+        )}
 
         {/* Store info card (admin only) */}
         {shipment.user.store && (

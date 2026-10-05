@@ -60,6 +60,8 @@ export async function GET(request: NextRequest) {
   const shipments = await prisma.deliveryShipment.findMany({
     where: { userId: targetUserId },
     orderBy: { shipmentMonth: 'desc' },
+    // 宅配の売買契約書（発行済みならマイページからPDFを開ける。PDF本文は引かない）
+    include: { contract: { select: { contractNo: true, agreedAt: true } } },
   })
 
   return NextResponse.json(shipments.map(toClientShipment))

@@ -32,7 +32,7 @@ export default function KobutsuLedgerDetailPage() {
   const { status: authStatus } = useSession()
   const router = useRouter()
   const params = useParams<{ entryKey: string }>()
-  // 台帳の1項目のキー。電子契約は "c:<contractId>"、紙契約（写真のみ）は "d:<dealId>"
+  // 台帳の1項目のキー。電子契約は "c:<contractId>"、紙契約（写真のみ）は "d:<dealId>"、宅配は "s:<deliveryContractId>"
   const entryKey = params.entryKey
   const { success, error: toastError } = useToast()
 
@@ -147,7 +147,9 @@ export default function KobutsuLedgerDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
             <Row label="取引年月日" value={fmtDate(group.tradedAt)} sub={formatJstDateTime(group.tradedAt)} />
             <Row label="区別" value={group.tradeType} />
-            <Row label="案件番号" value={formatDealNumber(group.dealNumber)} />
+            {group.shipmentNumber
+              ? <Row label="送付番号（宅配買取）" value={group.shipmentNumber} />
+              : <Row label="案件番号" value={formatDealNumber(group.dealNumber)} />}
             <Row label="営業所" value={store ? `${store.name}（${store.code}）` : '—'} />
             <Row label="古物商許可番号" value={store?.antiquePermitNumber || '（未登録）'} warn={!store?.antiquePermitNumber} />
             <Row label="相手方の氏名" value={group.customer.name} />
@@ -171,6 +173,11 @@ export default function KobutsuLedgerDetailPage() {
             {group.dealId && (
               <Link href={`/store/deals/${group.dealId}`} className="text-xs text-[var(--store-primary)] hover:underline">
                 案件詳細を開く →
+              </Link>
+            )}
+            {group.shipmentId && (
+              <Link href={`/store/deliveries/${group.shipmentId}`} className="text-xs text-[var(--store-primary)] hover:underline">
+                宅配買取の詳細を開く →
               </Link>
             )}
             <Link href={`/store/customers?focus=${group.customer.id}`} className="text-xs text-[var(--store-primary)] hover:underline">

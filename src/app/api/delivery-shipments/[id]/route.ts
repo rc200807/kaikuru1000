@@ -4,6 +4,10 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { toClientShipment } from '@/lib/delivery-shipment'
 
+async function shipmentHasItems(shipmentId: string): Promise<boolean> {
+  return (await prisma.purchaseItem.count({ where: { deliveryShipmentId: shipmentId } })) > 0
+}
+
 
 /**
  * PATCH /api/delivery-shipments/[id]
@@ -67,7 +71,8 @@ export async function PATCH(
         updateData.transferredAt = new Date()
       }
     }
-    if (body.purchaseAmount !== undefined) {
+    // 宅配に買取品目を登録している場合、査定金額は品目合計が正（手入力では上書きしない）
+    if (body.purchaseAmount !== undefined && !(await shipmentHasItems(id))) {
       updateData.purchaseAmount = body.purchaseAmount === null ? null : Number(body.purchaseAmount)
     }
     if (body.storeNote !== undefined) {
@@ -89,7 +94,8 @@ export async function PATCH(
         updateData.transferredAt = new Date()
       }
     }
-    if (body.purchaseAmount !== undefined) {
+    // 宅配に買取品目を登録している場合、査定金額は品目合計が正（手入力では上書きしない）
+    if (body.purchaseAmount !== undefined && !(await shipmentHasItems(id))) {
       updateData.purchaseAmount = body.purchaseAmount === null ? null : Number(body.purchaseAmount)
     }
     if (body.storeNote !== undefined) {

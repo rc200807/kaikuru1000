@@ -441,6 +441,106 @@ export async function sendContractEmail(params: {
   return true
 }
 
+/**
+ * 宅配買取の売買契約書PDFを顧客にメール送信する（署名なし・店舗が発行）。
+ * 訪問買取と違いクーリング・オフの案内は載せない（宅配買取は訪問購入に当たらないため）。
+ */
+export async function sendDeliveryContractEmail(params: {
+  customerEmail: string
+  customerName: string
+  storeName: string
+  shipmentNumber: string
+  contractNo: string
+  purchaseAmount: number
+  items: { name: string; quantity: number; price: number }[]
+  remarks?: string | null
+  pdfBase64: string
+}): Promise<boolean> {
+  const result = await createTransporter()
+  if (!result) return false
+  const { transporter, from } = result
+
+  const yen = (n: number) => `¥${n.toLocaleString()}`
+  const pdfBuffer = params.pdfBase64 ? Buffer.from(params.pdfBase64, 'base64') : null
+  const rows = params.items.map(i => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;">${escapeHtml(i.name)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${i.quantity}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;text-align:right;font-weight:600;">${yen(i.price)}</td>
+    </tr>`).join('')
+  const remarks = (params.remarks ?? '').trim()
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>売買契約書のご送付</title></head>
+<body style="margin:0;padding:0;background-color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+        <tr><td style="background-color:#991b1b;border-radius:12px 12px 0 0;padding:28px 32px;">
+          <p style="margin:0;color:rgba(255,255,255,0.7);font-size:11px;letter-spacing:0.1em;">買いクル 宅配買取</p>
+          <h1 style="margin:6px 0 0;color:#ffffff;font-size:20px;font-weight:600;">売買契約書のご送付</h1>
+        </td></tr>
+        <tr><td style="background-color:#ffffff;padding:32px;">
+          <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.7;">
+            ${escapeHtml(params.customerName)} 様<br><br>
+            このたびは${escapeHtml(params.storeName)}の宅配買取をご利用いただき、誠にありがとうございます。<br>
+            お送りいただいたお品物（送付番号 ${escapeHtml(params.shipmentNumber)}）の査定が完了しましたので、売買契約書を添付ファイルにてお送りいたします。
+          </p>
+          <p style="margin:0 0 6px;color:#111827;font-size:13px;font-weight:700;">買取品目（契約番号 ${escapeHtml(params.contractNo)}）</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:8px;">
+            <tr style="background-color:#f9fafb;">
+              <td style="padding:8px 12px;font-size:11px;color:#9ca3af;">品名</td>
+              <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">数量</td>
+              <td style="padding:8px 12px;font-size:11px;color:#9ca3af;text-align:right;">買取金額</td>
+            </tr>
+            ${rows}
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:20px;">
+            <tr><td style="padding:14px 18px;font-size:13px;color:#6b7280;">買取金額 合計</td><td style="padding:14px 18px;font-size:16px;font-weight:700;color:#991b1b;text-align:right;">${yen(params.purchaseAmount)}</td></tr>
+          </table>
+          ${remarks ? `<p style="margin:0 0 6px;color:#111827;font-size:13px;font-weight:700;">備考</p>
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#111827;line-height:1.7;white-space:pre-wrap;">${escapeHtml(remarks)}</div>` : ''}
+          <p style="margin:0;color:#6b7280;font-size:13px;line-height:1.7;">
+            契約書は大切に保管してください。内容にご不明な点がございましたら、${escapeHtml(params.storeName)}までお問い合わせください。
+          </p>
+        </td></tr>
+        <tr><td style="background-color:#f3f4f6;border-radius:0 0 12px 12px;padding:20px 32px;">
+          <p style="margin:0;color:#9ca3af;font-size:12px;text-align:center;">このメールは買いクル管理システムから自動送信されています</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+`
+
+  await transporter.sendMail({
+    from,
+    to: params.customerEmail,
+    subject: `【買いクル】宅配買取 売買契約書（${params.shipmentNumber}）`,
+    html,
+    text: [
+      `${params.customerName} 様`,
+      '',
+      `${params.storeName}の宅配買取をご利用いただき、ありがとうございます。`,
+      `お送りいただいたお品物（送付番号 ${params.shipmentNumber}）の査定が完了しましたので、売買契約書をお送りいたします。`,
+      '',
+      `【買取品目】契約番号 ${params.contractNo}`,
+      ...params.items.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price)}`),
+      `買取金額 合計: ${yen(params.purchaseAmount)}`,
+      ...(remarks ? ['', '【備考】', remarks] : []),
+      '',
+      '契約書は大切に保管してください。',
+    ].join('\n'),
+    attachments: pdfBuffer
+      ? [{ filename: `売買契約書_${params.contractNo}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+      : [],
+  })
+  return true
+}
+
 /** 売買契約書の作成を店舗（指定の通知先）に通知する。送信成功なら true、設定未構成なら false。
  *  契約書・請求書のPDFがあれば添付する（店舗が控えをそのまま保管できるようにする）。 */
 export async function sendContractCreatedNotification(params: {

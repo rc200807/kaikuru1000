@@ -59,6 +59,7 @@ export type PurchaseItemChange =
  */
 export default function PurchaseItemManager({
   parentId,
+  parentKind = 'deal',
   items,
   categories,
   editable,
@@ -67,6 +68,8 @@ export default function PurchaseItemManager({
   onMessage,
 }: {
   parentId: string
+  /** 品目の親。'shipment' は宅配買取の送付（品目の登録先APIが変わるだけで、編集・削除・AI調査は共通） */
+  parentKind?: 'deal' | 'shipment'
   items: ManagedPurchaseItem[]
   categories: { id: string; name: string }[]
   editable: boolean
@@ -79,7 +82,9 @@ export default function PurchaseItemManager({
   onMessage?: (m: { type: 'success' | 'error'; text: string }) => void
 }) {
   const router = useRouter()
-  const createUrl = `/api/deals/${parentId}/purchase-items`
+  const createUrl = parentKind === 'shipment'
+    ? `/api/delivery-shipments/${parentId}/purchase-items`
+    : `/api/deals/${parentId}/purchase-items`
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -257,7 +262,7 @@ export default function PurchaseItemManager({
     if (!d?.item?.id) return { kind: 'reload' }
     // 旧データ（訪問直下の品目）は訪問行の金額にも効くので再取得にフォールバック
     if (d.item.visitScheduleId) return { kind: 'reload' }
-    return { kind: 'upsert', item: d.item as ManagedPurchaseItem, purchaseAmount: d.dealAmounts?.purchaseAmount ?? null }
+    return { kind: 'upsert', item: d.item as ManagedPurchaseItem, purchaseAmount: (d.dealAmounts ?? d.shipmentAmounts)?.purchaseAmount ?? null }
   }
 
   /** 削除したら true。確認をキャンセルしたら false（呼び出し側でフォームを閉じない） */
@@ -269,7 +274,7 @@ export default function PurchaseItemManager({
     // 旧データ（訪問直下の品目）は訪問行の金額表示にも効くので再取得にフォールバックする
     onChanged(d?.visitScheduleId
       ? { kind: 'reload' }
-      : { kind: 'removed', id, purchaseAmount: d?.dealAmounts?.purchaseAmount ?? null })
+      : { kind: 'removed', id, purchaseAmount: (d?.dealAmounts ?? d?.shipmentAmounts)?.purchaseAmount ?? null })
     msg({ type: 'success', text: '品目を削除しました' })
     return true
   }

@@ -8,11 +8,12 @@ import { PURCHASE_ITEM_OWNER_SELECT, storeOwnsPurchaseItem } from '@/lib/purchas
 import { resolveEditedImageUrls, StaleImageReferenceError } from '@/lib/image-url'
 import { isItemParentContracted, DEAL_LOCKED_MESSAGE } from '@/lib/deal-lock'
 import { sumPurchaseItems } from '@/lib/purchase-item-amount'
+import { recomputeShipmentAmount } from '@/lib/delivery-contract'
 
 async function verifyAccess(itemId: string, sessionUser: any) {
   const item = await prisma.purchaseItem.findUnique({
     where: { id: itemId },
-    select: { id: true, dealId: true, visitScheduleId: true, imageUrls: true, ...PURCHASE_ITEM_OWNER_SELECT },
+    select: { id: true, dealId: true, visitScheduleId: true, deliveryShipmentId: true, imageUrls: true, ...PURCHASE_ITEM_OWNER_SELECT },
   })
   if (!item) return { error: '品目が見つかりません', status: 404 }
   if (sessionUser.role === 'store' && !storeOwnsPurchaseItem(item, sessionUser.id)) {
@@ -71,11 +72,11 @@ export async function PATCH(
   if (body.isAdditionalRequest !== undefined) updateData.isAdditionalRequest = !!body.isAdditionalRequest
   if (body.notes !== undefined) updateData.notes = body.notes || null
 
-  const { updated, dealAmounts } = await prisma.$transaction(async (tx) => {
+  const { updated, dealAmounts, shipmentAmounts } = await prisma.$transaction(async (tx) => {
     const result = await tx.purchaseItem.update({
       where: { id: itemId },
       data: updateData,
-      select: { ...PURCHASE_ITEM_SHAPE_SELECT, dealId: true },
+      select: { ...PURCHASE_ITEM_SHAPE_SELECT, dealId: true, deliveryShipmentId: true },
     })
 
     // 案件合計を再計算（正）。訪問合計も後方互換で維持。
@@ -89,13 +90,17 @@ export async function PATCH(
       const total = sumPurchaseItems(allItems)
       await tx.visitSchedule.update({ where: { id: result.visitScheduleId }, data: { purchaseAmount: total } })
     }
+    // 宅配の品目なら送付の査定金額（品目合計）を更新
+    const shipmentAmounts = result.deliveryShipmentId
+      ? { purchaseAmount: await recomputeShipmentAmount(tx, result.deliveryShipmentId) }
+      : null
 
-    return { updated: result, dealAmounts: amounts }
+    return { updated: result, dealAmounts: amounts, shipmentAmounts }
   })
 
   // 画面は案件まるごとの再取得をせず、このレスポンスだけで一覧と合計を更新する。
   // 整形は案件詳細GETと同じ shapePurchaseItem を通すこと（画像URLの形が食い違うと壊れる）
-  return NextResponse.json({ item: shapePurchaseItem(updated), dealAmounts })
+  return NextResponse.json({ item: shapePurchaseItem(updated), dealAmounts, shipmentAmounts })
 }
 
 /** 買取品目を削除 */
@@ -120,6 +125,8 @@ export async function DELETE(
 
   const visitScheduleId = access.item!.visitScheduleId
   const dealId = access.item!.dealId
+  const deliveryShipmentId = access.item!.deliveryShipmentId
+  let shipmentAmounts: { purchaseAmount: number | null } | null = null
 
   const dealAmounts = await prisma.$transaction(async (tx) => {
     await tx.purchaseItem.delete({ where: { id: itemId } })
@@ -135,10 +142,11 @@ export async function DELETE(
       const total = sumPurchaseItems(allItems)
       await tx.visitSchedule.update({ where: { id: visitScheduleId }, data: { purchaseAmount: total } })
     }
+    if (deliveryShipmentId) shipmentAmounts = { purchaseAmount: await recomputeShipmentAmount(tx, deliveryShipmentId) }
     return amounts
   })
 
   // visitScheduleId を返すのは、旧データ（訪問直下の品目）のとき
   // 画面が差分更新ではなく案件まるごとの再取得にフォールバックするため
-  return NextResponse.json({ deleted: true, id: itemId, dealAmounts, visitScheduleId })
+  return NextResponse.json({ deleted: true, id: itemId, dealAmounts, shipmentAmounts, visitScheduleId })
 }

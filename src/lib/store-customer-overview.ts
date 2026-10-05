@@ -179,6 +179,8 @@ export async function buildStoreCustomerOverview(storeId: string, userId: string
       where: { userId },
       orderBy: { shipmentMonth: 'desc' },
       take: 100,
+      // 宅配の買取品目の件数と売買契約書の有無（カードの表示用。PDF本文は引かない）
+      include: { _count: { select: { purchaseItems: true } }, contract: { select: { contractNo: true } } },
     }),
     prisma.visitRequest.findMany({
       where: { userId, storeId, requestedBy: 'store' },

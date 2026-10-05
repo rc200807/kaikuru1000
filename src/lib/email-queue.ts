@@ -12,6 +12,7 @@ import {
   sendBugReportNotification,
   sendContractEmail,
   sendContractCreatedNotification,
+  sendDeliveryContractEmail,
   sendVisitRequestReceivedToCustomer,
   sendVisitRequestReceivedToStore,
   sendVisitConfirmedToCustomer,
@@ -35,12 +36,17 @@ type ContractEmailParams =
 type ContractCreatedNotificationParams =
   Omit<Parameters<typeof sendContractCreatedNotification>[0], 'pdfBase64' | 'invoicePdfBase64'> & { contractId?: string }
 
+/** 宅配買取の売買契約書メール。PDFは送信時に DeliveryContract から読み直す */
+type DeliveryContractEmailParams =
+  Omit<Parameters<typeof sendDeliveryContractEmail>[0], 'pdfBase64'> & { deliveryContractId: string }
+
 type QueueablePayload =
   | { type: 'inquiryAutoReply'; params: Parameters<typeof sendInquiryAutoReply>[0] }
   | { type: 'storeInquiryNotification'; params: Parameters<typeof sendStoreInquiryNotification>[0] }
   | { type: 'bugReportNotification'; params: Parameters<typeof sendBugReportNotification>[0] }
   | { type: 'contractEmail'; params: ContractEmailParams }
   | { type: 'contractCreatedNotification'; params: ContractCreatedNotificationParams }
+  | { type: 'deliveryContractEmail'; params: DeliveryContractEmailParams }
   | { type: 'visitRequestReceivedCustomer'; params: Parameters<typeof sendVisitRequestReceivedToCustomer>[0] }
   | { type: 'visitRequestReceivedStore'; params: Parameters<typeof sendVisitRequestReceivedToStore>[0] }
   | { type: 'visitConfirmedCustomer'; params: Parameters<typeof sendVisitConfirmedToCustomer>[0] }
@@ -107,6 +113,21 @@ async function sendImmediately(type: string, params: any): Promise<boolean> {
           where: { id: contractId },
           data: { emailSentAt: new Date() },
         }).catch(e => console.error('[email-queue] emailSentAt の記録に失敗:', e))
+      }
+      return ok
+    }
+    case 'deliveryContractEmail': {
+      const { deliveryContractId, ...rest } = params
+      const saved = await prisma.deliveryContract.findUnique({
+        where: { id: deliveryContractId },
+        select: { pdfBase64: true },
+      })
+      const ok = await sendDeliveryContractEmail({ ...rest, pdfBase64: saved?.pdfBase64 ?? '' })
+      if (ok) {
+        await prisma.deliveryContract.update({
+          where: { id: deliveryContractId },
+          data: { emailSentAt: new Date() },
+        }).catch(e => console.error('[email-queue] 宅配契約書の emailSentAt の記録に失敗:', e))
       }
       return ok
     }

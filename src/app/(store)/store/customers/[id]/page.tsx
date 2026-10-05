@@ -3,6 +3,7 @@
 import { withWareki } from '@/lib/wareki'
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
+import Link from 'next/link'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -117,6 +118,10 @@ type DeliveryShipment = {
   status: string
   storeNote: string | null
   createdAt: string
+  /** 宅配の買取品目の件数（1件以上なら査定金額は品目合計で自動計算） */
+  _count?: { purchaseItems: number }
+  /** 宅配の売買契約書（発行済みのとき） */
+  contract?: { contractNo: string } | null
 }
 
 const MEMO_STATUS_OPTIONS = [
@@ -1789,6 +1794,12 @@ export default function StoreCustomerDetailPage() {
                             <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
                               {s.shipmentMonth.replace('-', '年')}月
                             </span>
+                            {s.contract && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">契約書発行済</span>
+                            )}
+                            <Link href={`/store/deliveries/${s.id}`} className="text-xs text-[var(--portal-primary)] hover:underline">
+                              買取品目・売買契約書 →
+                            </Link>
                           </div>
                           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                             isTransferred ? 'bg-emerald-100 text-emerald-700' :
@@ -1955,6 +1966,12 @@ export default function StoreCustomerDetailPage() {
                             <h4 className="text-sm font-bold text-[var(--md-sys-color-on-surface)]">査定入力</h4>
                             <div>
                               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">査定金額（円）</label>
+                              {(s._count?.purchaseItems ?? 0) > 0 ? (
+                                <p className="text-sm text-[var(--md-sys-color-on-surface)]">
+                                  <span className="font-bold">{fmtYen(s.purchaseAmount ?? 0)}</span>
+                                  <span className="ml-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">買取品目の合計（品目は詳細画面で編集）</span>
+                                </p>
+                              ) : (
                               <input
                                 type="number"
                                 value={edit.purchaseAmount}
@@ -1963,6 +1980,7 @@ export default function StoreCustomerDetailPage() {
                                 min="0"
                                 className="w-full text-sm border border-[var(--md-sys-color-outline-variant)] rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--portal-primary)] text-[var(--md-sys-color-on-surface)]"
                               />
+                              )}
                             </div>
                             <div>
                               <label className="text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1 block">メモ（顧客に表示されます）</label>

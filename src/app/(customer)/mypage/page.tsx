@@ -93,6 +93,8 @@ type DeliveryShipment = {
   storeNote: string | null
   createdAt: string
   updatedAt: string
+  /** 宅配買取の売買契約書（店舗が発行済みのとき） */
+  contract?: { contractNo: string; agreedAt: string } | null
 }
 
 export default function MyPage() {
@@ -4362,6 +4364,16 @@ function ShipmentCard({
                     <p className="text-xl font-bold text-emerald-700">¥{shipment.purchaseAmount.toLocaleString()}</p>
                     {shipment.storeNote && (
                       <p className="text-xs text-emerald-600 mt-1">{shipment.storeNote}</p>
+                    )}
+                    {shipment.contract && (
+                      <a
+                        href={`/api/delivery-shipments/${shipment.id}/contract`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-emerald-800 underline"
+                      >
+                        売買契約書（PDF）を見る
+                      </a>
                     )}
                   </div>
                 )}

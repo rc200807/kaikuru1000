@@ -147,6 +147,7 @@ type WorkItem = {
   workName: string
   unitPrice: number
   quantity: number
+  notes?: string | null
 }
 
 type VisitUser = {
@@ -1121,7 +1122,10 @@ export default function FinalAgreementPage() {
               <tbody>
                 {visit.workItems.map((item) => (
                   <tr key={item.id} className="border-b border-[var(--md-sys-color-outline-variant)]/50">
-                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{item.workName}</td>
+                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">
+                      <div>{item.workName}</div>
+                      {item.notes && <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words mt-0.5">備考: {item.notes}</div>}
+                    </td>
                     <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{item.quantity}</td>
                     <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface)]">{fmtYen(item.unitPrice)}</td>
                     <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(item.unitPrice * item.quantity)}</td>

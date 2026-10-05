@@ -45,6 +45,7 @@ interface ContractData {
     workName: string
     unitPrice: number
     quantity: number
+    notes?: string | null
   }[]
   salesContract: {
     id: string
@@ -566,7 +567,10 @@ function ContractViewContent() {
                 <tbody>
                   {contract.workItems.map((item) => (
                     <tr key={item.id} className="border-b border-white/40">
-                      <td className="px-3 py-2 text-gray-900">{item.workName}</td>
+                      <td className="px-3 py-2 text-gray-900">
+                        <div>{item.workName}</div>
+                        {item.notes && <div className="text-[11px] text-gray-500 whitespace-pre-wrap break-words mt-0.5">備考: {item.notes}</div>}
+                      </td>
                       <td className="px-3 py-2 text-gray-900 text-right">{item.quantity}</td>
                       <td className="px-3 py-2 text-gray-900 text-right">{formatCurrency(item.unitPrice)}円</td>
                       <td className="px-3 py-2 text-gray-900 text-right font-medium">{formatCurrency(item.unitPrice * item.quantity)}円</td>

@@ -18,6 +18,8 @@ export type ContractEmailWork = {
   workName: string
   quantity: number
   unitPrice: number
+  /** 明細の備考（書類と同じく作業名の下に記載） */
+  notes?: string | null
 }
 
 export type ContractEmailOperator = {
@@ -221,7 +223,7 @@ export function buildContractBodyHtml(p: ContractEmailParams): string {
       <tbody>
         ${p.workItems.map(w => `
           <tr>
-            <td style="${cellTd}">${escape(w.workName)}</td>
+            <td style="${cellTd}">${escape(w.workName)}${w.notes ? `<div style="margin-top:2px;font-size:11px;color:#6b7280;white-space:pre-wrap;">備考: ${escape(w.notes)}</div>` : ''}</td>
             <td style="${cellTdR}">${w.quantity}</td>
             <td style="${cellTdR}">${fmtYen(w.unitPrice)}</td>
             <td style="${cellTdR}font-weight:600;">${fmtYen(w.unitPrice * w.quantity)}</td>
@@ -425,6 +427,7 @@ export function buildContractBodyText(p: ContractEmailParams): string {
   else {
     p.workItems.forEach(w => {
       lines.push(`・${w.workName}  ${w.quantity} × ${fmtYen(w.unitPrice)} = ${fmtYen(w.unitPrice * w.quantity)}`)
+      if (w.notes) w.notes.split('\n').forEach((l, idx) => lines.push(`　${idx === 0 ? '備考: ' : '　　　'}${l}`))
     })
     lines.push(`請求金額合計: ${fmtYen(workTotal)}`)
   }

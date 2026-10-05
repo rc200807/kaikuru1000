@@ -235,6 +235,7 @@ export async function POST(
       workName: w.workName,
       quantity: w.quantity,
       unitPrice: w.unitPrice,
+      notes: w.notes,
     })),
     agreedAt: new Date(contract.agreedAt),
   }

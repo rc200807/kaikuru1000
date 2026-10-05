@@ -26,7 +26,7 @@ export async function POST(
       user: { select: { id: true, name: true, email: true } },
       store: { select: { id: true, name: true, address: true, phone: true } },
       purchaseItems: { select: { itemName: true, category: true, purchasePrice: true, quantity: true }, orderBy: { createdAt: 'asc' } },
-      workItems: { select: { workName: true, unitPrice: true, quantity: true }, orderBy: { createdAt: 'asc' } },
+      workItems: { select: { workName: true, unitPrice: true, quantity: true, notes: true }, orderBy: { createdAt: 'asc' } },
     },
   })
 
@@ -45,7 +45,7 @@ export async function POST(
     ? await prisma.purchaseItem.findMany({ where: { dealId }, select: { itemName: true, category: true, purchasePrice: true, quantity: true }, orderBy: { createdAt: 'asc' } })
     : schedule.purchaseItems
   const workItems = dealId
-    ? await prisma.workItem.findMany({ where: { dealId }, select: { workName: true, unitPrice: true, quantity: true }, orderBy: { createdAt: 'asc' } })
+    ? await prisma.workItem.findMany({ where: { dealId }, select: { workName: true, unitPrice: true, quantity: true, notes: true }, orderBy: { createdAt: 'asc' } })
     : schedule.workItems
   const docWhere = dealId ? { dealId } : { visitScheduleId: id }
 
@@ -177,7 +177,7 @@ export async function POST(
         viewUrl,
         remarks,
         purchaseItems: purchaseItems.map(i => ({ name: i.itemName || '（品名未設定）', quantity: i.quantity, price: i.purchasePrice })),
-        workItems: workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice })),
+        workItems: workItems.map(i => ({ name: i.workName || '（項目未設定）', quantity: i.quantity, price: i.unitPrice, notes: i.notes })),
       })
       if (emailSent) {
         await prisma.estimate.update({

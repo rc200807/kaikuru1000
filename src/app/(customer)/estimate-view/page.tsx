@@ -14,7 +14,7 @@ interface EstimateData {
   hasInvoicePdf?: boolean
   purchaseUpliftPercent?: number
   purchaseItems: { id: string; itemName: string | null; category: string | null; quantity: number; purchasePrice: number }[]
-  workItems: { id: string; workName: string | null; unitPrice: number; quantity: number }[]
+  workItems: { id: string; workName: string | null; unitPrice: number; quantity: number; notes?: string | null }[]
 }
 
 const yen = (n: number) => `¥${n.toLocaleString()}`
@@ -179,7 +179,10 @@ function EstimateViewContent() {
                 <tbody>
                   {data.workItems.map(i => (
                     <tr key={i.id} className="border-b border-gray-100">
-                      <td className="py-1.5 text-gray-900">{i.workName || '（項目未設定）'}</td>
+                      <td className="py-1.5 text-gray-900">
+                        <div>{i.workName || '（項目未設定）'}</div>
+                        {i.notes && <div className="text-[11px] text-gray-500 whitespace-pre-wrap break-words mt-0.5">備考: {i.notes}</div>}
+                      </td>
                       <td className="py-1.5 text-right text-gray-600">{i.quantity}</td>
                       <td className="py-1.5 text-right text-gray-600">{yen(i.unitPrice)}</td>
                       <td className="py-1.5 text-right font-medium text-gray-900">{yen(i.unitPrice * i.quantity)}</td>

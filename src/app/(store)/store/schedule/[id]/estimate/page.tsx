@@ -17,7 +17,7 @@ import { useDealRecorderTarget } from '@/components/deal/DealRecorder'
 
 /* ─── 型定義 ─── */
 type PurchaseItem = { id: string; itemName?: string | null; category?: string | null; quantity: number; purchasePrice: number }
-type WorkItem = { id: string; workName?: string | null; quantity: number; unitPrice: number }
+type WorkItem = { id: string; workName?: string | null; quantity: number; unitPrice: number; notes?: string | null }
 
 type VisitDetail = {
   id: string
@@ -429,7 +429,10 @@ export default function EstimatePage() {
               <tbody>
                 {visit.workItems.map(i => (
                   <tr key={i.id} className="border-b border-[var(--md-sys-color-outline-variant)]/60">
-                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">{i.workName || '（項目未設定）'}</td>
+                    <td className="py-1.5 text-[var(--md-sys-color-on-surface)]">
+                      <div>{i.workName || '（項目未設定）'}</div>
+                      {i.notes && <div className="text-[10px] text-[var(--md-sys-color-on-surface-variant)] whitespace-pre-wrap break-words mt-0.5">備考: {i.notes}</div>}
+                    </td>
                     <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{i.quantity}</td>
                     <td className="py-1.5 text-right text-[var(--md-sys-color-on-surface-variant)]">{fmtYen(i.unitPrice)}</td>
                     <td className="py-1.5 text-right font-medium text-[var(--md-sys-color-on-surface)]">{fmtYen(i.unitPrice * i.quantity)}</td>

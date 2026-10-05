@@ -535,7 +535,7 @@ export async function sendEstimateEmail(params: {
   /** オンラインで見積書を閲覧・PDFダウンロードできるリンク（マジックリンク） */
   viewUrl?: string
   purchaseItems?: { name: string; quantity: number; price: number }[]
-  workItems?: { name: string; quantity: number; price: number }[]
+  workItems?: { name: string; quantity: number; price: number; notes?: string | null }[]
   /** 備考（見積書に記載される内容。メール本文にも載せる） */
   remarks?: string | null
 }): Promise<boolean> {
@@ -558,7 +558,7 @@ export async function sendEstimateEmail(params: {
   // 同じテーブル部品を使い回すので、行の金額の出し方だけ切り替える
   const sectionHtml = (
     title: string,
-    items: { name: string; quantity: number; price: number }[],
+    items: { name: string; quantity: number; price: number; notes?: string | null }[],
     totalLabel: string,
     totalAmount: number,
     totalColor: string,
@@ -568,7 +568,7 @@ export async function sendEstimateEmail(params: {
     if (!hasItems && !totalAmount) return ''
     const rows = (items ?? []).map(i => `
       <tr>
-        <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;">${escapeHtml(i.name)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;">${escapeHtml(i.name)}${i.notes ? `<div style="margin-top:2px;font-size:11px;color:#6b7280;white-space:pre-wrap;">備考: ${escapeHtml(i.notes)}</div>` : ''}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${i.quantity}</td>
         ${multiplyByQuantity ? `<td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280;text-align:right;">${yen(i.price)}</td>` : ''}
         <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#111827;text-align:right;font-weight:600;">${yen(multiplyByQuantity ? i.price * i.quantity : i.price)}</td>
@@ -668,7 +668,10 @@ export async function sendEstimateEmail(params: {
       '',
       '【請求項目（作業・サービス）】',
       ...((params.workItems && params.workItems.length > 0)
-        ? params.workItems.map(i => `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`)
+        ? params.workItems.flatMap(i => [
+            `・${i.name} ×${i.quantity}  ${yen(i.price * i.quantity)}`,
+            ...(i.notes ? i.notes.split('\n').map((l, idx) => `　${idx === 0 ? '備考: ' : '　　　'}${l}`) : []),
+          ])
         : []),
       `請求金額 合計: ${yen(params.billingAmount)}`,
       '',

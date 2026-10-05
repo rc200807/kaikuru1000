@@ -16,6 +16,7 @@ import { shapePurchaseItem, PURCHASE_ITEM_SHAPE_SELECT } from '@/lib/purchase-it
 import { buildDealLedgerSection } from '@/lib/kobutsu-ledger-server'
 import { loadDealRecordings } from '@/lib/deal-recordings'
 import { loadDealProgressNotes } from '@/lib/deal-progress-notes'
+import { normalizeHqApprovalNumber } from '@/lib/hq-approval-number'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
 
@@ -58,7 +59,7 @@ export async function GET(
       // Deal のスカラーは明示列挙する。include にすると preConsentSignature（署名画像の base64）
       // まで毎回引いてしまい、用途は hasPreConsent の真偽値だけなので丸ごと無駄になる
       id: true, dealNumber: true, userId: true, storeId: true, inquiryId: true,
-      detail: true, status: true, category: true, leadSource: true, occurredAt: true,
+      detail: true, status: true, category: true, leadSource: true, hqApprovalNumber: true, occurredAt: true,
       createdByType: true, createdById: true, createdByName: true, memberId: true,
       purchaseAmount: true, billingAmount: true, purchaseUpliftPercent: true,
       preConsentAt: true, paperContractImages: true, paperContractAgreedAt: true,
@@ -230,7 +231,16 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category, paperContractAgreedAt, leadSource } = body
+  const { detail, status, storeId, occurredAt, preConsentSignature, purchaseUpliftPercent, category, paperContractAgreedAt, leadSource, hqApprovalNumber } = body
+
+  // 本部承認番号は管理ポータルからのみ登録・編集できる（店舗は閲覧のみ）
+  if (hqApprovalNumber !== undefined && !isAdmin) {
+    return NextResponse.json({ error: '本部承認番号は管理ポータルからのみ登録できます' }, { status: 403 })
+  }
+  const hqApproval = hqApprovalNumber !== undefined ? normalizeHqApprovalNumber(hqApprovalNumber) : null
+  if (hqApproval && !hqApproval.ok) {
+    return NextResponse.json({ error: hqApproval.error }, { status: 400 })
+  }
 
   if (status !== undefined && !isDealStatus(status)) {
     return NextResponse.json({ error: '無効なステータスです' }, { status: 400 })
@@ -262,6 +272,7 @@ export async function PATCH(
   if (leadSource !== undefined) {
     updateData.leadSource = typeof leadSource === 'string' && leadSource.trim() ? leadSource.trim().slice(0, 100) : null
   }
+  if (hqApproval?.ok) updateData.hqApprovalNumber = hqApproval.value
   // 担当店舗の変更は管理者のみ
   if (storeId !== undefined && isAdmin) updateData.storeId = storeId || null
   // 案件発生日（管理・店舗とも編集可）。不正値は無視。

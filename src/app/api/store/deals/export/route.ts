@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     take: EXPORT_LIMIT,
     select: {
       id: true, memberId: true,
-      dealNumber: true, createdAt: true, occurredAt: true, status: true, category: true, leadSource: true,
+      dealNumber: true, hqApprovalNumber: true, createdAt: true, occurredAt: true, status: true, category: true, leadSource: true,
       purchaseAmount: true, billingAmount: true, preConsentAt: true, inquiryId: true,
       user: { select: { name: true, phone: true, customerType: true, leadSource: true } },
       store: { select: { name: true } },
@@ -67,13 +67,14 @@ export async function GET(request: NextRequest) {
 
   const withStore = scope.isMulti
   const header = [
-    '案件番号', '作成日', '案件発生日', '顧客名', '電話',
+    '案件番号', '本部承認番号', '作成日', '案件発生日', '顧客名', '電話',
     ...(withStore ? ['店舗'] : []),
     'ステータス', 'カテゴリー', '買取金額', '請求金額', '次回訪問日',
     '事前同意', '契約書', '訪問数', '流入経路', '顧客種別', '担当', '由来',
   ]
   const rows = deals.map(d => [
     formatDealNumber(d.dealNumber),
+    d.hqApprovalNumber ?? '',
     jstDate(d.createdAt),
     jstDate(d.occurredAt),
     d.user?.name ?? '',

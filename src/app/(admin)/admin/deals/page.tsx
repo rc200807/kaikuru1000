@@ -329,7 +329,7 @@ export default function AdminDealsPage() {
               type="text"
               value={params.search || ''}
               onChange={e => setParams({ search: e.target.value })}
-              placeholder="顧客名・電話・メモで検索..."
+              placeholder="顧客名・電話・メモ・承認番号で検索..."
               className="w-full h-10 pl-9 pr-3 text-sm bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--portal-primary,#374151)] focus:border-2"
             />
           </div>

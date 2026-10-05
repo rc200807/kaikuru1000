@@ -32,6 +32,7 @@ import { uploadImagesCompressed } from '@/lib/image-upload'
 import { useDealRecorder } from '@/components/deal/DealRecorder'
 import { useStoreMasters } from '@/components/store/StoreMastersContext'
 import { toWareki } from '@/lib/wareki'
+import { HQ_APPROVAL_NUMBER_MAX } from '@/lib/hq-approval-number'
 
 type PurchaseItem = { id: string; itemName: string; category: string; quantity: number; purchasePrice: number }
 type WorkItem = { id: string; workName: string; unitPrice: number; quantity: number; notes: string | null }
@@ -105,6 +106,8 @@ type Deal = {
   category: string | null
   /** 流入経路（作成時に顧客の流入経路を自動記録。案件ごとに変更できる） */
   leadSource?: string | null
+  /** 本部承認番号（管理ポータルのみ登録・編集。店舗は閲覧のみ） */
+  hqApprovalNumber?: string | null
   occurredAt: string | null
   createdByType: string | null
   createdByName: string | null
@@ -209,6 +212,8 @@ export default function DealDetailView({
   const [savingStatus, setSavingStatus] = useState(false)
   const [savingCategory, setSavingCategory] = useState(false)
   const [savingLead, setSavingLead] = useState(false)
+  const [hqApprovalDraft, setHqApprovalDraft] = useState<string | null>(null) // null = 編集していない
+  const [savingHqApproval, setSavingHqApproval] = useState(false)
   const [leadSourceOptions, setLeadSourceOptions] = useState<{ id: string; name: string }[]>([])
   const [deleting, setDeleting] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -857,6 +862,29 @@ export default function DealDetailView({
     else setMsg({ type: 'error', text: '流入経路の変更に失敗しました' })
   }
 
+  async function saveHqApprovalNumber() {
+    if (!deal || hqApprovalDraft === null) return
+    const next = hqApprovalDraft.trim()
+    if (next === (deal.hqApprovalNumber ?? '')) { setHqApprovalDraft(null); return }
+    setSavingHqApproval(true)
+    setMsg(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hqApprovalNumber: next || null }),
+    })
+    setSavingHqApproval(false)
+    const data = await res.json().catch(() => null)
+    if (res.ok) {
+      // サーバー側で全角→半角などに正規化した値で揃える
+      setDeal(prev => prev ? { ...prev, hqApprovalNumber: data?.hqApprovalNumber ?? null } : prev)
+      setHqApprovalDraft(null)
+      setMsg({ type: 'success', text: next ? '本部承認番号を保存しました' : '本部承認番号を削除しました' })
+    } else {
+      setMsg({ type: 'error', text: data?.error || '本部承認番号の保存に失敗しました' })
+    }
+  }
+
   async function saveDetail() {
     if (!deal) return
     setSavingDetail(true)
@@ -1197,6 +1225,49 @@ export default function DealDetailView({
               )}
             </select>
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mt-1 mb-4">案件の作成時に、顧客の流入経路が自動で記録されます。この案件だけ変更することもできます。</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="deal-hq-approval-number" className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">本部承認番号</label>
+              {isAdmin && hqApprovalDraft === null && (
+                <button
+                  type="button"
+                  onClick={() => setHqApprovalDraft(deal.hqApprovalNumber ?? '')}
+                  className="text-xs text-[var(--portal-primary,#374151)] hover:underline"
+                >
+                  {deal.hqApprovalNumber ? '編集' : '登録'}
+                </button>
+              )}
+            </div>
+            {isAdmin && hqApprovalDraft !== null ? (
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <input
+                  id="deal-hq-approval-number"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  autoFocus
+                  maxLength={HQ_APPROVAL_NUMBER_MAX}
+                  value={hqApprovalDraft}
+                  disabled={savingHqApproval}
+                  placeholder="例: 2026-0815/03"
+                  onChange={e => setHqApprovalDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.nativeEvent.isComposing) return
+                    if (e.key === 'Enter') { e.preventDefault(); saveHqApprovalNumber() }
+                    if (e.key === 'Escape') setHqApprovalDraft(null)
+                  }}
+                  className="w-full sm:w-64 h-9 px-2.5 text-sm font-mono bg-[var(--md-sys-color-surface-container-lowest,#fff)] border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--portal-primary,#374151)] disabled:opacity-50"
+                />
+                <Button size="sm" onClick={saveHqApprovalNumber} disabled={savingHqApproval}>{savingHqApproval ? '保存中...' : '保存'}</Button>
+                <Button size="sm" variant="outlined" onClick={() => setHqApprovalDraft(null)} disabled={savingHqApproval}>キャンセル</Button>
+              </div>
+            ) : (
+              <p className={`text-sm mb-1 ${deal.hqApprovalNumber ? 'font-mono text-[var(--md-sys-color-on-surface)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                {deal.hqApprovalNumber || '未登録'}
+              </p>
+            )}
+            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] mb-4">
+              {isAdmin ? '数字と記号で入力します（例: 2026-0815/03）。空にして保存すると削除されます。' : '本部承認番号は管理ポータルで登録されます。'}
+            </p>
                 </div>
                 <div>
             <div className="flex items-center justify-between mb-1.5">

@@ -35,7 +35,7 @@ export type DealFilterOptions = {
 export function buildDealFilterConditions(searchParams: URLSearchParams, opts: DealFilterOptions): any[] {
   const and: any[] = []
 
-  // フリー検索（顧客名・電話・案件メモ）
+  // フリー検索（顧客名・電話・案件メモ・案件番号・本部承認番号）
   const search = (searchParams.get('search') || '').trim()
   if (search) {
     const digits = search.replace(/[-ー\s]/g, '')
@@ -46,6 +46,8 @@ export function buildDealFilterConditions(searchParams: URLSearchParams, opts: D
       { detail: { contains: search, mode: 'insensitive' } },
       // 案件番号（例: 20260824001）。前方一致で「20260824」でもその日の案件を拾える
       ...(digits ? [{ dealNumber: { startsWith: digits } }] : []),
+      // 本部承認番号（数字と記号。部分一致）
+      { hqApprovalNumber: { contains: search } },
     ] })
   }
 

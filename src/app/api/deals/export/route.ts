@@ -46,9 +46,10 @@ export async function GET(request: NextRequest) {
   // 担当は Deal.memberId が正だが、案件詳細で設定した担当者は訪問側にしか入らないため補完する
   const deals = await withAssigneeNames(dealRows)
 
-  const header = ['案件番号', '作成日', '顧客名', '電話', '店舗', 'ステータス', 'カテゴリー', '買取金額', '流入経路', '顧客種別', '担当', '由来', '契約書']
+  const header = ['案件番号', '本部承認番号', '作成日', '顧客名', '電話', '店舗', 'ステータス', 'カテゴリー', '買取金額', '流入経路', '顧客種別', '担当', '由来', '契約書']
   const rows = deals.map(d => [
     d.dealNumber ?? '',
+    d.hqApprovalNumber ?? '',
     jstDate(d.createdAt),
     d.user?.name ?? '',
     d.user?.phone ?? '',

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { createDealWithNumber } from '@/lib/deal-number-server'
 import { recordAccessLog } from '@/lib/access-log'
 import { isDealStatus } from '@/lib/deal-status'
-import { isDealCategory, dealCategoryFromCustomerType } from '@/lib/deal-categories'
+import { isDealCategory, dealCategoryForCustomer } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { resolveStoreScope } from '@/lib/store-scope'
 import { buildDealFilterConditions, buildStoreDealsWhere, jstTodayStart, parseDealSort, parseNextVisitSort } from '@/lib/deal-list-query'
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
   // 対象顧客の存在と（店舗の場合は）所有権を確認
   const targetUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, storeId: true, customerType: true },
+    select: { id: true, storeId: true, customerType: true, customerTypes: true },
   })
   if (!targetUser) {
     return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
   // カテゴリー: 指定があればそれを、なければ顧客種別から既定値を導出
   const finalCategory = isDealCategory(category)
     ? category
-    : dealCategoryFromCustomerType(targetUser.customerType)
+    : dealCategoryForCustomer(targetUser)
 
   // アキクル案件は対応サービスに「アキクル」を含む店舗のみ扱える（storeId 未割当は許容）
   if (finalCategory === 'akikuru' && finalStoreId) {

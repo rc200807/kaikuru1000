@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
+import { dealCategoryForCustomer } from '@/lib/deal-categories'
 
 type Client = Prisma.TransactionClient | typeof prisma
 
@@ -26,13 +27,17 @@ export async function ensureDealForVisit(
   // 案件番号は付けずに作成する。ここはトランザクション内から呼ばれるため、
   // 番号の一意制約で衝突するとトランザクション全体が壊れる。番号は案件を開いた時に
   // ensureDealNumber（deal-number.ts）が採番する。
-  // 流入経路は顧客の流入経路を写す（案件詳細で後から変更できる）
-  const owner = await client.user.findUnique({ where: { id: userId }, select: { leadSource: true } })
+  // 流入経路は顧客の流入経路を写す（案件詳細で後から変更できる）。カテゴリーは顧客の種別から決める
+  const owner = await client.user.findUnique({
+    where: { id: userId },
+    select: { leadSource: true, customerType: true, customerTypes: true },
+  })
   const deal = await client.deal.create({
     data: {
       userId,
       storeId,
       leadSource: owner?.leadSource || null,
+      category: dealCategoryForCustomer(owner),
       status: 'inquiry',
       detail: null,
       createdByType: createdBy?.type ?? null,

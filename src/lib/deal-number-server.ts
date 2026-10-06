@@ -5,6 +5,7 @@
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { buildDealNumber, dealNumberPrefix } from '@/lib/deal-number'
+import { dealCategoryForCustomer } from '@/lib/deal-categories'
 
 type Client = Prisma.TransactionClient | typeof prisma
 
@@ -47,12 +48,22 @@ export async function createDealWithNumber<A extends Prisma.DealCreateArgs>(
   const base = isNaN(baseDate.getTime()) ? new Date() : baseDate
 
   // 流入経路は、指定が無ければ顧客の流入経路をそのまま案件に記録する（案件詳細で後から変更できる）
+  // カテゴリーも、指定が無ければ顧客の種別から決める（訪問型・宅配型 → エコトク案件 など）。
+  // Webフォームの問い合わせ由来など category を渡さない経路が DB 既定の「買取案件」になっていたため
   let createArgs: A = args
-  const data = args.data as { userId?: string; leadSource?: string | null }
-  if (data.leadSource === undefined && typeof data.userId === 'string') {
-    const owner = await prisma.user.findUnique({ where: { id: data.userId }, select: { leadSource: true } })
-    if (owner?.leadSource) {
-      createArgs = { ...args, data: { ...args.data, leadSource: owner.leadSource } }
+  const data = args.data as { userId?: string; leadSource?: string | null; category?: string }
+  if ((data.leadSource === undefined || data.category === undefined) && typeof data.userId === 'string') {
+    const owner = await prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { leadSource: true, customerType: true, customerTypes: true },
+    })
+    createArgs = {
+      ...args,
+      data: {
+        ...args.data,
+        ...(data.leadSource === undefined && owner?.leadSource ? { leadSource: owner.leadSource } : {}),
+        ...(data.category === undefined ? { category: dealCategoryForCustomer(owner) } : {}),
+      },
     }
   }
 

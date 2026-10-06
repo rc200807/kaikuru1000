@@ -35,7 +35,7 @@ import { PropRow } from '@/components/detail/PropRow'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, customerTypePill, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE } from '@/lib/deal-status'
-import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
+import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryForCustomer } from '@/lib/deal-categories'
 import { isSelectableVisitStatus } from '@/lib/visit-status'
 import { formatDealNumber } from '@/lib/deal-number'
 import { useStoreScope } from '@/components/store/StoreScopeContext'
@@ -1204,7 +1204,7 @@ export default function StoreCustomerDetailPage() {
             <Section id="cust-deals" className="scroll-mt-20" title="案件" meta={`${dealsTotal || dealsList.length}件`}>
               <>
               <div className="flex items-center justify-end mb-3">
-                <Button size="sm" onClick={() => { setNewDealDetail(''); const def = dealCategoryFromCustomerType(customer?.customerType); setNewDealCategory(def === 'akikuru' && akikuruBlocked ? 'purchase' : def); setNewDealOpen(true) }}>
+                <Button size="sm" onClick={() => { setNewDealDetail(''); const def = dealCategoryForCustomer(customer); setNewDealCategory(def === 'akikuru' && akikuruBlocked ? 'purchase' : def); setNewDealOpen(true) }}>
                   ＋ 案件を追加
                 </Button>
               </div>

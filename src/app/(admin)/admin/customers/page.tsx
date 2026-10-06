@@ -33,7 +33,7 @@ import StoreFilterSelect from '@/components/admin/StoreFilterSelect'
 import { CUSTOMER_TYPES, CUSTOMER_TYPE_LABEL, CUSTOMER_TYPE_BADGE, isCustomerType, parseCustomerTypes, type CustomerType } from '@/lib/customer-types'
 import { getSplitName, combineName } from '@/lib/name-utils'
 import { DEAL_STATUS_ORDER, DEAL_STATUS_LABEL, DEAL_STATUS_BADGE, type DealStatus } from '@/lib/deal-status'
-import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryFromCustomerType } from '@/lib/deal-categories'
+import { DEAL_CATEGORIES, DEAL_CATEGORY_LABEL, DEAL_CATEGORY_BADGE, dealCategoryForCustomer } from '@/lib/deal-categories'
 import { storeSupportsAkikuru } from '@/lib/store-services'
 import { filterSelectableStatusOptions } from '@/lib/visit-status'
 import CustomerJourneyCard from '@/components/admin/CustomerJourneyCard'
@@ -2496,7 +2496,7 @@ export default function AdminCustomersPage() {
             {detailTab === 'deals' && (
               <div className="space-y-3">
                 <div className="flex justify-end">
-                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); const def = dealCategoryFromCustomerType(detailUser?.customerType); setNewDealCategory(def === 'akikuru' && detailAkikuruBlocked ? 'purchase' : def); setShowNewDeal(v => !v) }}>
+                  <Button size="sm" variant="tonal" onClick={() => { setNewDealDetail(''); const def = dealCategoryForCustomer(detailUser); setNewDealCategory(def === 'akikuru' && detailAkikuruBlocked ? 'purchase' : def); setShowNewDeal(v => !v) }}>
                     {showNewDeal ? 'キャンセル' : '+ 案件を追加'}
                   </Button>
                 </div>

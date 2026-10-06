@@ -26,7 +26,8 @@ export default function StoreLoginPage() {
   const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
-  const [highlight, setHighlight] = useState(0)
+  // 矢印キーで選んだ候補の位置。-1 = まだ何も選んでいない（この状態の Enter では進まない）
+  const [highlight, setHighlight] = useState(-1)
   const [lastCode, setLastCode] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -61,10 +62,11 @@ export default function StoreLoginPage() {
     return stores.filter(s => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q))
   }, [stores, query])
 
-  useEffect(() => { setHighlight(0) }, [query])
+  useEffect(() => { setHighlight(-1) }, [query])
 
   // キーボード操作で選択中の項目が隠れないよう追従させる
   useEffect(() => {
+    if (highlight < 0) return
     const el = listRef.current?.children[highlight] as HTMLElement | undefined
     el?.scrollIntoView({ block: 'nearest' })
   }, [highlight])
@@ -75,6 +77,9 @@ export default function StoreLoginPage() {
   )
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // 日本語入力の変換確定（Enter）は「決定」として扱わない。
+    // isComposing は Safari で確定時の keydown が false になることがあるため keyCode 229 も見る
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setOpen(true)
@@ -84,7 +89,8 @@ export default function StoreLoginPage() {
       setHighlight(h => Math.max(h - 1, 0))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      const target = filtered[highlight]
+      // 矢印キーで候補を選んだときだけ進む。文字を入力しただけの Enter では勝手に店舗を決めない
+      const target = highlight >= 0 ? filtered[highlight] : undefined
       if (target) goToStore(target.code)
     } else if (e.key === 'Escape') {
       setOpen(false)
@@ -164,7 +170,6 @@ export default function StoreLoginPage() {
                     <li key={s.code} role="option" aria-selected={i === highlight}>
                       <button
                         type="button"
-                        onMouseEnter={() => setHighlight(i)}
                         onClick={() => goToStore(s.code)}
                         className={`w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 transition-colors ${
                           i === highlight ? 'bg-[var(--md-sys-color-surface-container-high)]' : 'hover:bg-[var(--md-sys-color-surface-container-high)]'

@@ -11,6 +11,7 @@ import GlassBackground from '@/components/customer/GlassBackground'
 import GlassInput from '@/components/customer/GlassInput'
 import GlassButton from '@/components/customer/GlassButton'
 import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
+import { uploadIdDocument } from '@/lib/id-document-upload'
 
 const DOC_TYPES = ID_DOCUMENT_TYPES
 const DOC_TYPES_REQUIRING_BACK = ID_DOC_TYPES_REQUIRING_BACK
@@ -163,31 +164,17 @@ export default function RegisterPage() {
     setError('')
     setUploadingDoc(true)
 
-    const formDataUpload = new FormData()
-    formDataUpload.append('file', frontFile)
-    formDataUpload.append('documentType', selectedDocType)
-
-    const res = await fetch(`/api/users/${registeredUserId}/id-document`, {
-      method: 'POST',
-      body: formDataUpload,
-    })
-
-    if (!res.ok) {
+    // 送信前に圧縮する（原本写真は上限超過の413で弾かれることがある）
+    const front = await uploadIdDocument(`/api/users/${registeredUserId}/id-document`, frontFile, { documentType: selectedDocType })
+    if (!front.ok) {
       setUploadingDoc(false)
-      const d = await res.json().catch(() => ({}))
-      setError(d.error || 'アップロードに失敗しました')
+      setError(front.error)
       return
     }
 
     // 裏面（必要な場合）
     if (backFile && needsBackImage) {
-      const backFormData = new FormData()
-      backFormData.append('file', backFile)
-      backFormData.append('documentType', selectedDocType)
-      await fetch(`/api/users/${registeredUserId}/id-document/back`, {
-        method: 'POST',
-        body: backFormData,
-      })
+      await uploadIdDocument(`/api/users/${registeredUserId}/id-document/back`, backFile, { documentType: selectedDocType })
     }
 
     setUploadingDoc(false)

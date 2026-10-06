@@ -20,6 +20,7 @@ import { calcAge, needsFamilyConsent, isMinorBlockedFromDelivery } from '@/lib/a
 import { validatePassword, PASSWORD_RULE } from '@/lib/passwordValidation'
 import { getSplitName } from '@/lib/name-utils'
 import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
+import { uploadIdDocument } from '@/lib/id-document-upload'
 import { validateBankAccount, normalizeAccountHolder, normalizeAccountNumber, isYuchoBank, YUCHO_HINT, type BankAccountErrors } from '@/lib/bank-account'
 
 type UserData = {
@@ -507,34 +508,19 @@ function MyPageContent() {
     setMessage(null)
     setUploadingDoc(true)
 
-    // Upload front image
-    const formData = new FormData()
-    formData.append('file', frontFile)
-    formData.append('documentType', selectedDocType)
-    const res = await fetch(`/api/users/${userId}/id-document`, {
-      method: 'POST',
-      body: formData,
-    })
-
-    if (!res.ok) {
+    // 表面（送信前に圧縮。失敗時も必ず { ok:false } で返るので「アップロード中」のまま止まらない）
+    const front = await uploadIdDocument(`/api/users/${userId}/id-document`, frontFile, { documentType: selectedDocType })
+    if (!front.ok) {
       setUploadingDoc(false)
-      const d = await res.json()
-      setMessage({ type: 'error', text: d.error || 'アップロードに失敗しました' })
+      setMessage({ type: 'error', text: front.error })
       return
     }
 
-    const data = await res.json()
+    const data = front.data
 
-    // Upload back image if exists
+    // 裏面（失敗しても表面の登録は有効なので先へ進める）
     if (backFile && needsBackImage) {
-      const backFormData = new FormData()
-      backFormData.append('file', backFile)
-      backFormData.append('documentType', selectedDocType)
-      await fetch(`/api/users/${userId}/id-document/back`, {
-        method: 'POST',
-        body: backFormData,
-      })
-      // back upload failure is non-critical
+      await uploadIdDocument(`/api/users/${userId}/id-document/back`, backFile, { documentType: selectedDocType })
     }
 
     setUploadingDoc(false)

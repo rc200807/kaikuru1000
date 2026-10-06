@@ -16,6 +16,7 @@ import { useBusinessHours } from '@/hooks/useBusinessHours'
 import { convertToJpegIfNeeded } from '@/lib/image-utils'
 import { PROOF_DOCUMENT_TYPES } from '@/lib/document-types'
 import { ID_DOCUMENT_TYPES, ID_DOC_TYPES_REQUIRING_BACK } from '@/lib/id-document-types'
+import { uploadIdDocument } from '@/lib/id-document-upload'
 import { warekiFromDateString } from '@/lib/wareki'
 import OccupationSelect from '@/components/OccupationSelect'
 import { useDealRecorderTarget } from '@/components/deal/DealRecorder'
@@ -270,30 +271,19 @@ function IdDocumentUploadModal({
     setUploading(true)
 
     try {
-      const fd = new FormData()
-      fd.append('file', frontFile)
-      fd.append('documentType', docType)
+      // 送信前に圧縮する（スマホの原本写真は上限超過の413で弾かれ、画面が止まっていた）。
       // 顧客情報への反映は確認画面のチェックで決める（アップロード時に勝手に書き込ませない）
-      fd.append('deferProfile', '1')
-      const res = await fetch(`/api/users/${userId}/id-document`, { method: 'POST', body: fd })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'アップロードに失敗しました')
-      }
-      const data = await res.json()
+      const front = await uploadIdDocument(`/api/users/${userId}/id-document`, frontFile, { documentType: docType, deferProfile: '1' })
+      if (!front.ok) throw new Error(front.error)
+      const data = front.data
 
       // 裏面（住所変更欄）は新住所が載ることがあるので、読み取り結果を候補に加える
       let backAddress: string | null = null
       if (backFile && needsBack) {
-        const backFd = new FormData()
-        backFd.append('file', backFile)
-        backFd.append('documentType', docType)
-        const backRes = await fetch(`/api/users/${userId}/id-document/back`, { method: 'POST', body: backFd })
-        if (backRes.ok) {
-          const backData = await backRes.json().catch(() => null)
-          const v = typeof backData?.backAddress === 'string' ? backData.backAddress.trim() : ''
-          backAddress = v || null
-        }
+        const back = await uploadIdDocument(`/api/users/${userId}/id-document/back`, backFile, { documentType: docType })
+        if (!back.ok) throw new Error(`裏面: ${back.error}`)
+        const v = typeof back.data?.backAddress === 'string' ? back.data.backAddress.trim() : ''
+        backAddress = v || null
       }
 
       // 候補リスト: 表面の読み取り候補 → 裏面の新住所。重複は落とす

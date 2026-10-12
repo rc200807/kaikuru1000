@@ -111,6 +111,7 @@ export async function DELETE(
     data: {
       idDocumentPath:     null,
       idDocumentUploadedAt: null,
+      idManualVerifiedAt: null,
       idDocumentType:     null,
       idName:             null,
       idBirthDate:        null,
@@ -213,6 +214,7 @@ export async function POST(
       data: {
         idDocumentPath:   fileUrl,
         idDocumentUploadedAt: new Date(), // 4日後の自動削除用タイムスタンプ
+        idManualVerifiedAt: null, // 画像で確認し直したので、手入力の確認記録は外す
         idOcrIssueReport: null, // 再アップロード時は誤り報告をリセット
         // クライアントから documentType が指定された場合はそれを優先
         ...(documentType ? { idDocumentType: documentType } : {}),

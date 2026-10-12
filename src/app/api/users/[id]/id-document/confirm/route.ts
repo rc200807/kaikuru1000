@@ -5,11 +5,16 @@ import { prisma } from '@/lib/prisma'
 import { isAddressMatch } from '@/lib/address-utils'
 import { z } from 'zod'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
+import { ID_DOCUMENT_TYPES } from '@/lib/id-document-types'
 
 /**
  * 身分証OCR結果の確認・編集
  * 店舗スタッフが目視でOCR結果を確認し、必要なら修正した上で保存する。
  * applyToProfile=true なら User.name / User.address も上書きする。
+ *
+ * manual=true は売買契約の作成時に限った「画像なし・手入力」の本人確認。
+ * 身分証の画像は受け取らず、確認した書類の種別だけを記録し、氏名・住所などは担当者が手で入力する。
+ * 免許番号・有効期限など書類固有の情報は残さない（以前のOCR値も消す）。
  */
 const schema = z.object({
   idName:           z.string().min(1).max(100),
@@ -25,6 +30,7 @@ const schema = z.object({
   applyAddress:     z.boolean().optional(),
   applyBirthDate:   z.boolean().optional(),
   applyFurigana:    z.boolean().optional(),
+  manual:           z.boolean().optional(),
 })
 
 export async function PATCH(
@@ -49,6 +55,25 @@ export async function PATCH(
   }
 
   const { idName, idAddress, idBirthDate, idDocumentType, idLicenseNumber, idFurigana, applyToProfile } = parsed.data
+  const manual = parsed.data.manual === true
+
+  if (manual) {
+    // 手入力の本人確認は店舗の契約作成で行うもの。顧客本人の自己申告にはしない
+    const allowed = sessionUser.role === 'store' || sessionUser.role === 'admin' || sessionUser.role === 'superadmin'
+    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (sessionUser.role === 'store') {
+      const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
+      if (target?.storeId !== sessionUser.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+    if (!idDocumentType || !ID_DOCUMENT_TYPES.some((t) => t.value === idDocumentType)) {
+      return NextResponse.json({ error: '確認した身分証明証の種類を選択してください' }, { status: 400 })
+    }
+    if (!idBirthDate || !idBirthDate.trim()) {
+      return NextResponse.json({ error: '生年月日を入力してください' }, { status: 400 })
+    }
+  }
   // 項目別フラグ（未指定は applyToProfile にフォールバック＝後方互換）
   const applyName = parsed.data.applyName ?? applyToProfile
   const applyAddress = parsed.data.applyAddress ?? applyToProfile
@@ -67,6 +92,13 @@ export async function PATCH(
   if (idDocumentType !== undefined) updateData.idDocumentType = idDocumentType
   // 運転免許証など、免許番号が確認・修正された場合は内部の売買記録用に保存
   if (idLicenseNumber !== undefined) updateData.idLicenseNumber = idLicenseNumber
+  if (manual) {
+    // 記録するのは「どの書類を確認したか」だけ。書類固有の番号や、以前のOCRで残った値は消す
+    updateData.idManualVerifiedAt = new Date()
+    updateData.idLicenseNumber = null
+    updateData.idExpiryDate = null
+    updateData.idBackAddress = null
+  }
   const furigana = (idFurigana ?? '').trim()
   if (idFurigana !== undefined) updateData.idFurigana = furigana || null
 

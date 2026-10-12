@@ -46,6 +46,7 @@ model User {
   licenseKey     LicenseKey? @relation(fields: [licenseKeyId], references: [id])
   idDocumentPath  String?   @db.Text  // 身分証明書ファイルURL（Vercel Blob）
   idDocumentUploadedAt DateTime?    // 身分証アップロード日時（4日後に画像自動削除）
+  idManualVerifiedAt DateTime?      // 売買契約時に画像なし・手入力で本人確認した日時（書類種別だけ記録。4日後に失効）
   // 身分証OCR抽出フィールド（Gemini Vision）
   idDocumentType  String?             // 書類種別（運転免許証/パスポート/マイナンバーカードなど）
   idName          String?             // 身分証記載氏名

@@ -162,6 +162,7 @@ type VisitUser = {
   idDocumentType?: string | null
   idDocumentPath?: string | null
   idDocumentBackPath?: string | null
+  idManualVerifiedAt?: string | null
   idBirthDate?: string | null
   birthDate?: string | null
 }
@@ -527,7 +528,8 @@ export default function FinalAgreementPage() {
   // ガード: 身分証未提出なら前のページへ（staff未指定は許容）
   useEffect(() => {
     if (loading || !visit) return
-    if (!visit.user.idDocumentPath) {
+    // 画像なし・手入力で本人確認した場合も通す
+    if (!visit.user.idDocumentPath && !visit.user.idManualVerifiedAt) {
       const qs = staffName ? `?staff=${encodeURIComponent(staffName)}` : ''
       router.replace(`/store/schedule/${scheduleId}/agreement${qs}`)
     }

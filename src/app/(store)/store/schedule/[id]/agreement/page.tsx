@@ -153,7 +153,10 @@ type VisitUser = {
   idDocumentType?: string | null
   idDocumentPath?: string | null
   idDocumentBackPath?: string | null
+  /** 画像なし・手入力で本人確認した日時（書類種別だけ記録） */
+  idManualVerifiedAt?: string | null
   idBirthDate?: string | null
+  birthDate?: string | null
 }
 
 type VisitDetail = {
@@ -193,7 +196,9 @@ function IdDocumentUploadModal({
   open,
   userId,
   initialDocType,
+  registeredName,
   registeredAddress,
+  registeredBirthDate,
   registeredFurigana,
   onClose,
   onSuccess,
@@ -201,13 +206,18 @@ function IdDocumentUploadModal({
   open: boolean
   userId: string
   initialDocType?: string | null
+  /** 手入力モードの初期値（担当者が身分証と照らし合わせて直す） */
+  registeredName?: string | null
   registeredAddress?: string | null
+  registeredBirthDate?: string | null
   /** 顧客に登録済みのふりがな（確認画面の初期値。身分証にはふりがなが無いため人が入力する） */
   registeredFurigana?: string | null
   onClose: () => void
   onSuccess: () => void
 }) {
   const [step, setStep] = useState<'upload' | 'confirm'>('upload')
+  // image: 撮影してOCRで読み取る / manual: 画像は送らず、確認した書類の種類だけ記録して手で入力する
+  const [mode, setMode] = useState<'image' | 'manual'>('image')
   const [docType, setDocType] = useState('')
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [frontPreview, setFrontPreview] = useState('')
@@ -229,6 +239,7 @@ function IdDocumentUploadModal({
   useEffect(() => {
     if (open) {
       setStep('upload')
+      setMode('image')
       setDocType(initialDocType || '')
       setFrontFile(null); setFrontPreview('')
       setBackFile(null); setBackPreview('')
@@ -324,9 +335,36 @@ function IdDocumentUploadModal({
     }
   }
 
+  function startManualEntry() {
+    if (!docType) {
+      setError('確認した身分証明証の種類を選択してください')
+      return
+    }
+    setError('')
+    setOcrWarning('')
+    setAddressChoices([])
+    setEdit({
+      documentType: docType,
+      name:          registeredName ?? '',
+      address:       registeredAddress ?? '',
+      birthDate:     registeredBirthDate ?? '',
+      licenseNumber: '',
+      furigana:      registeredFurigana ?? '',
+    })
+    setStep('confirm')
+  }
+
   async function handleConfirm() {
     if (!edit.name.trim() || !edit.address.trim()) {
       setError('氏名と住所は必須です')
+      return
+    }
+    if (mode === 'manual' && !edit.documentType) {
+      setError('確認した身分証明証の種類を選択してください')
+      return
+    }
+    if (mode === 'manual' && !edit.birthDate.trim()) {
+      setError('生年月日を入力してください')
       return
     }
     setError('')
@@ -340,12 +378,14 @@ function IdDocumentUploadModal({
           idAddress:      edit.address.trim(),
           idBirthDate:    edit.birthDate.trim() || null,
           idDocumentType: edit.documentType || null,
-          idLicenseNumber: edit.documentType === '運転免許証' ? (edit.licenseNumber.trim() || null) : null,
+          // 手入力では書類固有の番号は記録しない（確認した書類の種類だけ残す）
+          idLicenseNumber: mode === 'image' && edit.documentType === '運転免許証' ? (edit.licenseNumber.trim() || null) : null,
           idFurigana:     edit.furigana.trim() || null,
           applyFurigana:  apply.furigana,
           applyName:      apply.name,
           applyAddress:   apply.address,
           applyBirthDate: apply.birthDate,
+          manual:         mode === 'manual',
         }),
       })
       if (!res.ok) {
@@ -365,14 +405,43 @@ function IdDocumentUploadModal({
   const addrMismatch = !!(registeredAddress && registeredAddress.trim() && edit.address.trim() && !isAddressMatch(registeredAddress, edit.address.trim()))
 
   return (
-    <Modal open={open} onClose={onClose} title="お客様の身分証明証アップロード" size="lg">
+    <Modal open={open} onClose={onClose} title="お客様の身分証明証の確認" size="lg">
       {step === 'upload' ? (
         <div className="space-y-4">
           {error && <MessageBanner severity="error">{error}</MessageBanner>}
 
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="確認方法">
+            {([
+              { value: 'image', title: '撮影して自動読み取り', sub: '画像からOCRで入力' },
+              { value: 'manual', title: '画像なしで手入力', sub: '書類の種類だけ記録' },
+            ] as const).map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                role="radio"
+                aria-checked={mode === m.value}
+                onClick={() => { setMode(m.value); setError('') }}
+                className={`px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                  mode === m.value
+                    ? 'border-[var(--portal-primary)] bg-[var(--portal-primary)]/10 ring-1 ring-[var(--portal-primary)]'
+                    : 'border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)]'
+                }`}
+              >
+                <span className="block text-sm font-medium text-[var(--md-sys-color-on-surface)]">{m.title}</span>
+                <span className="block text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{m.sub}</span>
+              </button>
+            ))}
+          </div>
+
+          {mode === 'manual' && (
+            <p className="text-[11px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
+              身分証の画像は撮影・保存しません。お客様の身分証明証を目で確認し、どの書類を確認したかだけを記録します。氏名・住所・生年月日は次の画面で、身分証を見ながら入力してください。
+            </p>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
-              書類の種類
+              {mode === 'manual' ? '確認した書類の種類' : '書類の種類'}
             </label>
             <select
               value={docType}
@@ -386,6 +455,7 @@ function IdDocumentUploadModal({
             </select>
           </div>
 
+          {mode === 'image' && (<>
           <div>
             <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
               前面画像 <span className="text-[var(--md-sys-color-error)]">*</span>
@@ -419,12 +489,19 @@ function IdDocumentUploadModal({
               )}
             </div>
           )}
+          </>)}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="text" onClick={onClose} disabled={uploading}>キャンセル</Button>
-            <Button onClick={handleUpload} disabled={uploading || !frontFile || !docType || (needsBack && !backFile)}>
-              {uploading ? 'アップロード中...' : 'アップロードしてOCR実行'}
-            </Button>
+            {mode === 'image' ? (
+              <Button onClick={handleUpload} disabled={uploading || !frontFile || !docType || (needsBack && !backFile)}>
+                {uploading ? 'アップロード中...' : 'アップロードしてOCR実行'}
+              </Button>
+            ) : (
+              <Button onClick={startManualEntry} disabled={!docType}>
+                入力へ進む
+              </Button>
+            )}
           </div>
         </div>
       ) : (
@@ -432,9 +509,13 @@ function IdDocumentUploadModal({
           <div className="p-3 rounded-lg bg-blue-50 border border-blue-300">
             <p className="text-sm font-bold text-blue-800 mb-1 flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              読み取り結果の確認
+              {mode === 'manual' ? '本人確認情報の手入力' : '読み取り結果の確認'}
             </p>
-            <p className="text-xs text-blue-700">身分証から読み取った情報です。誤りがあれば下記の欄を修正してください。</p>
+            <p className="text-xs text-blue-700">
+              {mode === 'manual'
+                ? '登録済みの顧客情報を初期表示しています。お客様の身分証明証と照らし合わせ、違う箇所は修正してください（画像は保存されません）。'
+                : '身分証から読み取った情報です。誤りがあれば下記の欄を修正してください。'}
+            </p>
           </div>
 
           {ocrWarning && <MessageBanner severity="warning">{ocrWarning}</MessageBanner>}
@@ -461,7 +542,9 @@ function IdDocumentUploadModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">生年月日</label>
+              <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">
+                生年月日{mode === 'manual' && <span className="text-[var(--md-sys-color-error)]"> *</span>}
+              </label>
               <input
                 type="text"
                 value={edit.birthDate}
@@ -481,7 +564,7 @@ function IdDocumentUploadModal({
           </div>
 
           {/* 運転免許証の場合は免許番号を記録（内部の売買記録用） */}
-          {edit.documentType === '運転免許証' && (
+          {mode === 'image' && edit.documentType === '運転免許証' && (
             <div>
               <label className="block text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] mb-1.5">免許番号（内部記録用）</label>
               <input
@@ -567,7 +650,7 @@ function IdDocumentUploadModal({
             />
             {addrMismatch && (
               <div className="mt-1.5 p-2 rounded-lg bg-amber-50 border border-amber-300 text-[11px] text-amber-800">
-                ⚠️ 読み取った住所が、事前に登録された住所と一致しません。<br />
+                ⚠️ {mode === 'manual' ? '入力した住所' : '読み取った住所'}が、事前に登録された住所と一致しません。<br />
                 <span className="opacity-80">登録住所: {registeredAddress}</span>
               </div>
             )}
@@ -579,7 +662,7 @@ function IdDocumentUploadModal({
 
           <div className="flex flex-col sm:flex-row gap-2 pt-2 items-center">
             <Button variant="text" onClick={() => setStep('upload')} disabled={saving}>
-              ← 画像を選び直す
+              {mode === 'manual' ? '← 書類の種類を選び直す' : '← 画像を選び直す'}
             </Button>
             <div className="flex-1" />
             <Button onClick={() => handleConfirm()} disabled={saving}>
@@ -732,7 +815,9 @@ export default function AgreementPage() {
 
   const purchaseTotal = visit?.purchaseItems.reduce((sum, i) => sum + i.purchasePrice, 0) ?? 0 // 買取金額は数量を掛けない
   const workTotal = visit?.workItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) ?? 0
-  const hasIdDocument = !!visit?.user.idDocumentPath
+  // 画像で提出済み、または画像なしの手入力で本人確認済み
+  const idManuallyVerified = !visit?.user.idDocumentPath && !!visit?.user.idManualVerifiedAt
+  const hasIdDocument = !!visit?.user.idDocumentPath || !!visit?.user.idManualVerifiedAt
 
   function openRevisitForm() {
     if (!visit) return
@@ -796,7 +881,7 @@ export default function AgreementPage() {
 
   const goToFinal = async () => {
     if (!hasIdDocument) {
-      setMessage({ type: 'error', text: '身分証明証をアップロードしてください' })
+      setMessage({ type: 'error', text: '身分証明証を確認してください（撮影、または画像なしで手入力）' })
       return
     }
     // 職業・電話・メールを顧客情報へ保存（最終契約書に反映させる）
@@ -861,7 +946,9 @@ export default function AgreementPage() {
         open={idModalOpen}
         userId={visit.user.id}
         initialDocType={visit.user.idDocumentType}
+        registeredName={visit.user.idName || visit.user.name}
         registeredAddress={visit.user.address}
+        registeredBirthDate={visit.user.birthDate || visit.user.idBirthDate}
         registeredFurigana={visit.user.furigana}
         onClose={() => setIdModalOpen(false)}
         onSuccess={() => { fetchVisit() }}
@@ -1078,17 +1165,19 @@ export default function AgreementPage() {
           <div className="p-3 rounded-lg bg-green-50 border border-green-300 flex items-start gap-3">
             <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <div className="flex-1 text-xs text-green-800">
-              <p className="font-bold mb-0.5">提出済み</p>
+              <p className="font-bold mb-0.5">{idManuallyVerified ? '確認済み（手入力・画像なし）' : '提出済み'}</p>
               <p>種別: {visit.user.idDocumentType || '—'}</p>
               {visit.user.idName && <p>氏名: {visit.user.idName}</p>}
-              <button onClick={() => setIdModalOpen(true)} className="mt-1 text-green-700 hover:underline">再アップロード</button>
+              <button onClick={() => setIdModalOpen(true)} className="mt-1 text-green-700 hover:underline">
+                {idManuallyVerified ? '入力し直す' : '再アップロード'}
+              </button>
             </div>
           </div>
         ) : (
           <div className="p-3 rounded-lg bg-amber-50 border border-amber-300">
             <p className="text-xs font-bold text-amber-800 mb-1">未提出</p>
-            <p className="text-xs text-amber-700 mb-3">最終契約書に進むには、お客様の身分証明証のアップロードが必要です。OCRで氏名・住所を自動取得します。</p>
-            <Button onClick={() => setIdModalOpen(true)}>身分証をアップロード</Button>
+            <p className="text-xs text-amber-700 mb-3">最終契約書に進むには、お客様の身分証明証の確認が必要です。撮影してOCRで自動取得するか、画像を残さずに手入力することもできます。</p>
+            <Button onClick={() => setIdModalOpen(true)}>身分証を確認する</Button>
           </div>
         )}
       </Card>

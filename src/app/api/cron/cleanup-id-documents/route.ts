@@ -89,6 +89,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // 手入力の本人確認（画像なし）も画像と同じく4日で失効させる。
+  // 残し続けると、後日の別の取引で身分証を確認しないまま契約へ進めてしまう
+  const expiredManual = await prisma.user.updateMany({
+    where: { idManualVerifiedAt: { lt: fourDaysAgo } },
+    data: { idManualVerifiedAt: null },
+  })
+
+  console.log(`[cleanup-id-documents] manual verifications expired: ${expiredManual.count}`)
   console.log(`[cleanup-id-documents] Processed ${targets.length} users, deleted ${deletedCount}, errors: ${errors.length}`)
 
   return NextResponse.json({

@@ -4,22 +4,18 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sumPurchaseItems } from '@/lib/purchase-item-amount'
 
-/** 契約データを取得する（NextAuthセッション or userIdパラメータ） */
+/** 契約データを取得する（顧客本人のセッション。QRリンクもトークンでログインしてから開く） */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const visitId = searchParams.get('visitId')
-  let userId = searchParams.get('userId')
+  // 本人はログインセッションからだけ決める。以前は ?userId= も受け付けていたため、
+  // 顧客IDと訪問IDが分かればログインなしで契約内容（氏名・住所・生年月日など）を読めた
+  const session = await getServerSession(authOptions)
+  const sessionUser = session?.user as any
+  const userId: string | null = sessionUser?.role === 'customer' ? sessionUser.id : null
+  if (!userId) return NextResponse.json({ error: 'ログインしてください' }, { status: 401 })
 
-  // NextAuthセッションがあればそこからuserIdを取得
-  if (!userId) {
-    const session = await getServerSession(authOptions)
-    const sessionUser = session?.user as any
-    if (sessionUser?.role === 'customer') {
-      userId = sessionUser.id
-    }
-  }
-
-  if (!visitId || !userId) {
+  if (!visitId) {
     return NextResponse.json({ error: 'パラメータが不足しています' }, { status: 400 })
   }
 

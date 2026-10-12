@@ -5,8 +5,9 @@ import { prisma } from '@/lib/prisma'
 
 /**
  * 見積書 / 売買契約書 のPDFを配信する。
- * GET /api/magic-link/document-pdf?type=contract|estimate&visitId=...&userId=...&disposition=inline
- * - userId が無ければ NextAuth セッションから解決（顧客）。店舗/管理者は全件可。
+ * GET /api/magic-link/document-pdf?type=contract|estimate&visitId=...&disposition=inline
+ * - 顧客は本人の書類のみ、店舗は自店の書類のみ、管理者は全件（いずれもログインセッションで判定）。
+ *   以前は ?userId= を受け付けていたため、顧客IDと訪問IDが分かればログインなしでPDFを取得できた
  * - 保存済みの pdfBase64 を application/pdf として返す。
  * - disposition=inline を付けるとブラウザ内プレビュー（既定は従来どおりダウンロード）。
  */
@@ -16,23 +17,22 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') === 'estimate' ? 'estimate' : 'contract'
   const kind = searchParams.get('kind') === 'invoice' ? 'invoice' : 'sale'
   const disposition = searchParams.get('disposition') === 'inline' ? 'inline' : 'attachment'
-  let userId = searchParams.get('userId')
+  let userId: string | null = null
   let isStaff = false
   let staffRole: string | null = null
   let staffStoreId: string | null = null
 
-  if (!userId) {
-    const session = await getServerSession(authOptions)
-    const su = session?.user as any
-    if (su?.role === 'customer') userId = su.id
-    else if (su && ['store', 'admin', 'superadmin', 'hr'].includes(su.role)) {
-      isStaff = true
-      staffRole = su.role
-      if (su.role === 'store') staffStoreId = su.id
-    }
+  const session = await getServerSession(authOptions)
+  const su = session?.user as any
+  if (su?.role === 'customer') userId = su.id
+  else if (su && ['store', 'admin', 'superadmin', 'hr'].includes(su.role)) {
+    isStaff = true
+    staffRole = su.role
+    if (su.role === 'store') staffStoreId = su.id
   }
 
-  if (!visitId || (!userId && !isStaff)) {
+  if (!userId && !isStaff) return NextResponse.json({ error: 'ログインしてください' }, { status: 401 })
+  if (!visitId) {
     return NextResponse.json({ error: 'パラメータが不足しています' }, { status: 400 })
   }
 

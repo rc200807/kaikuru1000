@@ -326,7 +326,11 @@ export async function GET(
   const { id } = await params
 
   // 契約は案件に1通。該当訪問の案件IDで照会し、無ければ従来の訪問基準。
-  const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true } })
+  const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true, storeId: true } })
+  // 店舗は自店の訪問のみ（以前は他店の書類の送信先・備考まで読めた）
+  if (sessionUser.role === 'store' && sched?.storeId !== sessionUser.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const where = sched?.dealId ? { dealId: sched.dealId } : { visitScheduleId: id }
   // PDFは数MBあるため本文は取得しない。「保存されているか」だけが必要なので
   // count で存在判定する（以前は base64 を丸ごとDBから引いて捨てていた）。

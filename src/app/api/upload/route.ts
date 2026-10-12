@@ -3,11 +3,17 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { saveImage } from '@/lib/image-server'
 import { v4 as uuidv4 } from 'uuid'
+import { ADMIN_ROLES } from '@/lib/admin-auth'
 
 // 画像アップロード（管理者・店舗から利用）
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const role = (session.user as any)?.role
+  // 管理・店舗・sysadmin の画面だけが使う（お知らせ本文・不具合報告・備品画像）
+  if (role !== 'store' && role !== 'sysadmin' && !(ADMIN_ROLES as string[]).includes(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     const formData = await request.formData()

@@ -3,19 +3,17 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-/** 見積データを取得する（NextAuthセッション or userIdパラメータ）。顧客向け閲覧用。 */
+/** 見積データを取得する（顧客本人のセッション）。顧客向け閲覧用。 */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const visitId = searchParams.get('visitId')
-  let userId = searchParams.get('userId')
+  // 本人はログインセッションからだけ決める（?userId= はログインなしで読めてしまうため受け付けない）
+  const session = await getServerSession(authOptions)
+  const sessionUser = session?.user as any
+  const userId: string | null = sessionUser?.role === 'customer' ? sessionUser.id : null
+  if (!userId) return NextResponse.json({ error: 'ログインしてください' }, { status: 401 })
 
-  if (!userId) {
-    const session = await getServerSession(authOptions)
-    const sessionUser = session?.user as any
-    if (sessionUser?.role === 'customer') userId = sessionUser.id
-  }
-
-  if (!visitId || !userId) {
+  if (!visitId) {
     return NextResponse.json({ error: 'パラメータが不足しています' }, { status: 400 })
   }
 

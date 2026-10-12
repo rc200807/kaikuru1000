@@ -218,7 +218,11 @@ export async function GET(
   const { id } = await params
 
   // 見積は案件に1通。該当訪問の案件IDで照会し、無ければ従来の訪問基準。
-  const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true } })
+  const sched = await prisma.visitSchedule.findUnique({ where: { id }, select: { dealId: true, storeId: true } })
+  // 店舗は自店の訪問のみ（以前は他店の書類の送信先・備考まで読めた）
+  if (sessionUser.role === 'store' && sched?.storeId !== sessionUser.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const estimate = await prisma.estimate.findUnique({
     where: sched?.dealId ? { dealId: sched.dealId } : { visitScheduleId: id },
     select: {

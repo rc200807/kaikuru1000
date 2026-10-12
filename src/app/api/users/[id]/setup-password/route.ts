@@ -19,8 +19,9 @@ export async function POST(
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // 顧客は自分のパスワードのみ更新可
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
+  // 顧客本人の初期パスワード設定（account-setup）専用。
+  // 以前は顧客以外なら誰でも通り、店舗が他店の顧客のパスワードまで書き換えられた
+  if (sessionUser.role !== 'customer' || sessionUser.id !== id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

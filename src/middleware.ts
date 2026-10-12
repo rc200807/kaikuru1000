@@ -3,6 +3,8 @@
  *
  * 各ポータル配下のページを NextAuth JWT で保護する（多層防御の1層目）。
  * API ルートは従来どおり各ルートの getServerSession が防御線（2層目）。
+ * ただし営業パートナー・連携パートナー・sysadmin のセッションは、/api の入口で
+ * 自分専用の API と共通・公開 API だけに絞る（下の API_ROLE_SCOPES）。
  * Edge Runtime で動作するため Prisma には依存しない（getToken は cookie 検証のみ）。
  */
 
@@ -44,8 +46,43 @@ const PORTALS: { prefix: string; roles: string[]; loginPath: string; publicPaths
   },
 ]
 
+// 社外向けロールと sysadmin が呼んでよい API。これ以外の /api はここで 403 にする。
+// 店舗・管理向け API の多くは「顧客なら拒否、それ以外は許可」という書き方で、
+// これらのロールが他人の顧客情報・身分証・契約書を読み書きできていたため、入口でまとめて止める。
+const API_ROLE_SCOPES: Record<string, string[]> = {
+  partner: ['/api/partner/'],
+  linkpartner: ['/api/linkpartner/'],
+  sysadmin: ['/api/sysadmin/', '/api/upload'],
+}
+// どのロールでも通す API（ログイン・パスキー、公開フォーム・計測など、公開サイトを見たときに呼ばれるもの）
+const SHARED_API_PREFIXES = [
+  '/api/auth/',
+  '/api/forms/public/', '/api/inquiry', '/api/track/', '/api/tel/register',
+  '/api/geo/', '/api/postal-lookup', '/api/zengin/',
+  '/api/stores/public/', '/api/stores/search', '/api/store-login/',
+  '/api/line/', '/api/license-keys/validate', '/api/magic-link/verify',
+  '/api/webhooks/', '/api/cron/',
+]
+
+function matchesApiPrefix(pathname: string, prefix: string) {
+  if (prefix.endsWith('/')) return pathname.startsWith(prefix)
+  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+}
+
+async function guardApi(request: NextRequest, pathname: string) {
+  if (SHARED_API_PREFIXES.some((p) => matchesApiPrefix(pathname, p))) return NextResponse.next()
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+  const scopes = token?.role ? API_ROLE_SCOPES[token.role as string] : undefined
+  // 顧客・店舗・管理者・未ログインは各ルートの認可に任せる
+  if (!scopes) return NextResponse.next()
+  if (scopes.some((p) => matchesApiPrefix(pathname, p))) return NextResponse.next()
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  if (pathname === '/api' || pathname.startsWith('/api/')) return guardApi(request, pathname)
 
   const portal = PORTALS.find(
     (p) => pathname === p.prefix || pathname.startsWith(`${p.prefix}/`)
@@ -110,5 +147,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/sysadmin/:path*', '/store/:path*', '/partner/:path*', '/linkpartner/:path*'],
+  matcher: ['/admin/:path*', '/sysadmin/:path*', '/store/:path*', '/partner/:path*', '/linkpartner/:path*', '/api/:path*'],
 }

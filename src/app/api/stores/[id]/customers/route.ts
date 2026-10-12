@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ADMIN_ROLES } from '@/lib/admin-auth'
 import { buildStoreCustomersWhere, parseCustomerSort } from '@/lib/customer-list-query'
 import { createTimer } from '@/lib/api-timing'
 import { resolveStoreScope } from '@/lib/store-scope'
@@ -26,8 +27,10 @@ export async function GET(
 
   const sessionUser = session.user as any
 
-  // 店舗アカウントは自分の担当顧客のみ
-  if (sessionUser.role === 'store' && sessionUser.id !== id) {
+  // 店舗アカウントは自分の担当顧客のみ。それ以外は管理ポータルだけ
+  // （以前は顧客アカウントでも任意の店舗の顧客一覧を取得できた）
+  const isAdmin = (ADMIN_ROLES as string[]).includes(sessionUser.role)
+  if (!(sessionUser.role === 'store' && sessionUser.id === id) && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

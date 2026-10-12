@@ -147,13 +147,16 @@ function ContractViewContent() {
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!magicAuth || !emailInput.trim()) return
+    // 本人のログインセッションで開いているので、契約データの顧客IDで登録する
+    // （以前は保存されない magicAuth を見ていたため、送信しても何も起きなかった）
+    const userId = contract?.user.id
+    if (!userId || !emailInput.trim()) return
 
     setEmailSubmitting(true)
     setEmailError('')
 
     try {
-      const res = await fetch(`/api/users/${magicAuth.userId}/set-email`, {
+      const res = await fetch(`/api/users/${userId}/set-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: emailInput.trim() }),

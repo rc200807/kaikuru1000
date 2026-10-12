@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { customerFileProxyUrls } from '@/lib/customer-access'
 import { buildAdminUsersWhere, parseCustomerSort } from '@/lib/customer-list-query'
 import { getTrackedChannels } from '@/lib/customer-tracking'
 import { getCustomerTags } from '@/lib/customer-tags-server'
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     users: users.map(({ password: _, ...u }) => ({
       ...u,
+      // 身分証・セルフィー・住所証明の保存先URLは返さず、中継URLに置き換える
+      ...customerFileProxyUrls(u.id, u),
       trackedChannel: trackedChannels[u.id] ?? null,
       tags: tagMap[u.id] ?? [],
     })),

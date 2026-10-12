@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { authorizeCustomerAccess } from '@/lib/customer-access'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
 import { extractBackAddress, GeminiError } from '@/lib/gemini'
@@ -14,23 +13,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-
-  // 顧客は自分の身分証のみ
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  // 店舗は担当顧客の身分証のみ
-  if (sessionUser.role === 'store') {
-    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-    if (target?.storeId !== sessionUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-  // admin はすべて閲覧可
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentBackPath: true } })
   if (!user?.idDocumentBackPath) {
@@ -69,23 +53,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-
-  // 顧客は自分の身分証のみ
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  // 店舗は担当顧客の身分証のみ
-  if (sessionUser.role === 'store') {
-    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-    if (target?.storeId !== sessionUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-  // admin はすべて操作可
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({ where: { id }, select: { idDocumentBackPath: true } })
   if (!user?.idDocumentBackPath) {
@@ -118,13 +87,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   try {
     const formData = await request.formData()
@@ -148,6 +112,7 @@ export async function POST(
       buffer,
       `id-documents/${id}_back_${Date.now()}.${validation.ext}`,
       file.type,
+      { randomSuffix: true },
     )
 
     // 古い裏面ファイルの削除
@@ -177,7 +142,8 @@ export async function POST(
     })
 
     return NextResponse.json({
-      path: fileUrl,
+      // 保存先URLは返さない（中継URLだけ）
+      path: `/api/users/${id}/id-document/back`,
       backAddress: newAddress,
     })
   } catch (error) {

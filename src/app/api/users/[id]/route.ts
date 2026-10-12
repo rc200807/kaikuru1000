@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { autoSyncCustomerRows } from '@/lib/sheet-sync'
 import bcrypt from 'bcryptjs'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { authorizeCustomerAccess, customerFileProxyUrls } from '@/lib/customer-access'
 import { z } from 'zod'
 import { PASSWORD_REGEX, PASSWORD_ERROR } from '@/lib/passwordValidation'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
@@ -54,20 +53,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  // 顧客は自分の情報のみ、管理者・店舗はすべて取得可
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  // 顧客本人・担当店舗（同じ運営者の店舗は閲覧のみ可）・管理者だけ。パートナー等は不可
+  const auth = await authorizeCustomerAccess(id, { allowOperatorStores: true })
+  if ('error' in auth) return auth.error
+  const sessionUser = auth.actor
 
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
       licenseKey: true,
-      store: true,
+      // 店舗はパスワード等を含むため、表示に使う項目だけ返す
+      store: { select: { id: true, name: true, code: true, phone: true, address: true, postalCode: true } },
       visitSchedules: {
         orderBy: { visitDate: 'asc' },
         // キャンセル済みを「次回訪問予定」として出さない
@@ -85,7 +81,8 @@ export async function GET(
     ...userWithoutPassword,
     // 内部メモは顧客には返さない（店舗・管理者のみ）
     ...(sessionUser.role !== 'customer' ? { internalNote } : {}),
-    idDocumentPath: user.idDocumentPath ? `/api/users/${id}/id-document` : null,
+    // 身分証・セルフィー・住所証明の保存先URLは返さず、認可付きの中継URLに置き換える
+    ...customerFileProxyUrls(id, user),
   })
 }
 
@@ -94,13 +91,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  // 書き込みは顧客本人・担当店舗・管理者だけ（他店舗やパートナーからの変更を弾く）
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
+  const sessionUser = auth.actor
 
   const body = await request.json()
   const parsed = updateUserSchema.safeParse(body)

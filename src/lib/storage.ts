@@ -17,16 +17,21 @@ const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
  * @param buffer     ファイルのバイナリ
  * @param filename   保存ファイル名（例: avatars/admin-123.jpg）
  * @param contentType  MIME タイプ
+ * @param opts.randomSuffix  URL にランダム文字列を付けて推測できなくする（身分証など個人情報の画像向け）
  */
 export async function uploadFile(
   buffer: Buffer,
   filename: string,
-  contentType: string
+  contentType: string,
+  opts: { randomSuffix?: boolean } = {},
 ): Promise<string> {
   if (USE_BLOB) {
     const blob = await put(filename, buffer, {
       access: 'public',
       contentType,
+      // @vercel/blob v2 は既定でランダム文字列を付けない。保存名が「顧客ID_ミリ秒」なので、
+      // 個人情報の画像はURLを推測されないように付ける
+      addRandomSuffix: opts.randomSuffix ?? false,
       // 同じパス名への再アップロードは既定でエラーになる。
       // 既存画像のWebP化バッチは「変換 → DB更新」の途中で止まると同じ名前を作り直すため、
       // 上書きを許可しておかないと再実行時にそのレコードだけ永久に失敗する

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { customerFileProxyUrls } from '@/lib/customer-access'
 import { createTimer } from '@/lib/api-timing'
 import { recordAccessLog } from '@/lib/access-log'
 import { deleteCustomerCascade } from '@/lib/delete-customer'
@@ -54,7 +55,8 @@ export async function GET(
   }))
 
   if (!customer) return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
-  return t.json({ customer })
+  // 身分証の保存先URLは返さず、認可付きの中継URLに置き換える
+  return t.json({ customer: { ...customer, ...customerFileProxyUrls(customer.id, customer) } })
 }
 
 /**

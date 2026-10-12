@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { authorizeCustomerAccess } from '@/lib/customer-access'
 import { isAddressMatch } from '@/lib/address-utils'
 import { z } from 'zod'
 import { buildUserNameUpdateData } from '@/lib/name-utils'
@@ -39,13 +38,9 @@ export async function PATCH(
 ) {
   const { id } = await params
 
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
+  const sessionUser = auth.actor
 
   const body = await request.json()
   const parsed = schema.safeParse(body)
@@ -59,14 +54,9 @@ export async function PATCH(
 
   if (manual) {
     // 手入力の本人確認は店舗の契約作成で行うもの。顧客本人の自己申告にはしない
+    // （担当店舗かどうかは authorizeCustomerAccess で確認済み）
     const allowed = sessionUser.role === 'store' || sessionUser.role === 'admin' || sessionUser.role === 'superadmin'
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    if (sessionUser.role === 'store') {
-      const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-      if (target?.storeId !== sessionUser.id) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-    }
     if (!idDocumentType || !ID_DOCUMENT_TYPES.some((t) => t.value === idDocumentType)) {
       return NextResponse.json({ error: '確認した身分証明証の種類を選択してください' }, { status: 400 })
     }

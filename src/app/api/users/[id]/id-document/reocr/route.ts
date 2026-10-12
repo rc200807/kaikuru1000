@@ -3,9 +3,8 @@
  * POST /api/users/[id]/id-document/reocr
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { authorizeCustomerAccess } from '@/lib/customer-access'
 import { extractIdDocumentInfo, GeminiError } from '@/lib/gemini'
 import { isAddressMatch } from '@/lib/address-utils'
 import path from 'path'
@@ -15,20 +14,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  // 顧客は自分のみ、店舗・管理者は担当/全顧客
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  if (sessionUser.role === 'store') {
-    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-    if (target?.storeId !== sessionUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({
     where: { id },

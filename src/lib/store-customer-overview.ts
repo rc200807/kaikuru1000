@@ -1,3 +1,4 @@
+import { customerFileProxyUrls } from '@/lib/customer-access'
 import { prisma } from '@/lib/prisma'
 import { jstTodayStart } from '@/lib/deal-list-query'
 import { monthlyPurchaseAmount, recentMonthKeys, sumPurchaseAmount } from '@/lib/purchase-aggregation'
@@ -198,7 +199,8 @@ export async function buildStoreCustomerOverview(storeId: string, userId: string
   ])
 
   return {
-    customer,
+    // 身分証の保存先URLは返さず、認可付きの中継URLに置き換える
+    customer: { ...customer, ...customerFileProxyUrls(customer.id, customer) },
     deals: dealRows,
     dealsTotal,
     schedules,

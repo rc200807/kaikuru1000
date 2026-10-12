@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { authorizeCustomerAccess } from '@/lib/customer-access'
 import { compareFaces, GeminiError } from '@/lib/gemini'
 import { uploadFile, deleteFile } from '@/lib/storage'
 
@@ -13,23 +12,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-
-  // 顧客は自分のセルフィーのみ
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  // 店舗は担当顧客のセルフィーのみ
-  if (sessionUser.role === 'store') {
-    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-    if (target?.storeId !== sessionUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-  // admin はすべて閲覧可
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({ where: { id }, select: { selfieImagePath: true } })
   if (!user?.selfieImagePath) {
@@ -68,13 +52,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   try {
     const formData = await request.formData()
@@ -97,6 +76,7 @@ export async function POST(
       buffer,
       `selfies/${id}_${Date.now()}.jpg`,
       selfie.type,
+      { randomSuffix: true },
     )
 
     // 古いセルフィーがあれば削除
@@ -107,6 +87,9 @@ export async function POST(
     if (existingUser?.selfieImagePath) {
       try { await deleteFile(existingUser.selfieImagePath) } catch { /* ignore */ }
     }
+
+    // 応答には保存先URLを出さず、中継URLを返す
+    const selfieProxyUrl = `/api/users/${id}/selfie-verify`
 
     // セルフィーURLを保存
     await prisma.user.update({
@@ -122,7 +105,7 @@ export async function POST(
 
     if (!user?.idDocumentPath) {
       return NextResponse.json({
-        selfieUrl,
+        selfieUrl: selfieProxyUrl,
         verification: null,
         message: '身分証明書が未提出のため顔照合をスキップしました',
       })
@@ -150,7 +133,7 @@ export async function POST(
     })
 
     return NextResponse.json({
-      selfieUrl,
+      selfieUrl: selfieProxyUrl,
       verification: verificationResult,
     })
   } catch (error) {
@@ -167,23 +150,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-
-  // 顧客は自分のセルフィーのみ
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  // 店舗は担当顧客のセルフィーのみ
-  if (sessionUser.role === 'store') {
-    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-    if (target?.storeId !== sessionUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-  // admin はすべて操作可
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({
     where: { id },

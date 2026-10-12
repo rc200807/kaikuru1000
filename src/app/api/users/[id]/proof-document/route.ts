@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { authorizeCustomerAccess } from '@/lib/customer-access'
 import { validateIdDocumentFile } from '@/lib/file-validation'
 import { uploadFile, deleteFile } from '@/lib/storage'
 
@@ -13,22 +12,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-
-  // 顧客は自分の書類のみ
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-  // 店舗は担当顧客の書類のみ
-  if (sessionUser.role === 'store') {
-    const target = await prisma.user.findUnique({ where: { id }, select: { storeId: true } })
-    if (target?.storeId !== sessionUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({ where: { id }, select: { proofDocumentPath: true } })
   if (!user?.proofDocumentPath) {
@@ -65,13 +50,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   try {
     const formData = await request.formData()
@@ -100,6 +80,7 @@ export async function POST(
       buffer,
       `proof-documents/${id}_${Date.now()}.${validation.ext}`,
       file.type,
+      { randomSuffix: true },
     )
 
     // 古いファイルの削除
@@ -136,13 +117,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const sessionUser = session.user as any
-  if (sessionUser.role === 'customer' && sessionUser.id !== id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const auth = await authorizeCustomerAccess(id)
+  if ('error' in auth) return auth.error
 
   const user = await prisma.user.findUnique({ where: { id }, select: { proofDocumentPath: true } })
   if (!user?.proofDocumentPath) {

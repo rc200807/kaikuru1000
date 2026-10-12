@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ADMIN_ROLES } from '@/lib/admin-auth'
+import { customerFileProxyUrls } from '@/lib/customer-access'
 import { updateCalendarEvent, deleteCalendarEvent } from '@/lib/google-calendar'
 import { recordAccessLog } from '@/lib/access-log'
 import { syncDealAssigneeFromVisit } from '@/lib/deal-assignee'
@@ -16,8 +18,10 @@ export async function GET(
 ) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role === 'customer') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 店舗と管理ポータルだけ（以前は顧客以外の全ロール＝パートナー等も通っていた）
+  if (sessionUser.role !== 'store' && !(ADMIN_ROLES as string[]).includes(sessionUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { id } = await params
@@ -100,6 +104,8 @@ export async function GET(
 
   return NextResponse.json({
     ...schedule,
+    // 身分証の保存先URLは返さず、認可付きの中継URLに置き換える
+    user: schedule.user ? { ...schedule.user, ...customerFileProxyUrls(schedule.user.id, schedule.user) } : schedule.user,
     purchaseItems: items,
     workItems: workItemsRaw,
     purchaseUpliftPercent: schedule.deal?.purchaseUpliftPercent ?? 0,
@@ -113,8 +119,10 @@ export async function PATCH(
 ) {
   const session = await getServerSession(authOptions)
   const sessionUser = session?.user as any
-  if (!session || sessionUser.role === 'customer') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 店舗と管理ポータルだけ（以前は顧客以外の全ロール＝パートナー等も通っていた）
+  if (sessionUser.role !== 'store' && !(ADMIN_ROLES as string[]).includes(sessionUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { id } = await params

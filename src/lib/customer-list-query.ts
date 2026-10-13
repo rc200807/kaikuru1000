@@ -30,7 +30,7 @@ export function buildCustomerFilterConditions(
   const and: any[] = []
   const now = new Date()
 
-  // フリー検索（氏名・ふりがな・メール・電話）
+  // フリー検索（氏名・ふりがな・メール・電話。管理はライセンスキーも対象）
   const search = (searchParams.get('search') || '').trim()
   if (search) {
     const digits = search.replace(/[-ー\s]/g, '')
@@ -40,6 +40,8 @@ export function buildCustomerFilterConditions(
       { email: { contains: search, mode: 'insensitive' } },
       { phone: { contains: search } },
       ...(digits && digits !== search ? [{ phone: { contains: digits } }] : []),
+      // ライセンスキーは本部管理の情報。店舗側の検索には含めない（キーの有無を探れてしまうため）
+      ...(opts.admin ? [{ licenseKey: { is: { key: { contains: search, mode: 'insensitive' } } } }] : []),
     ] })
   }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { transcribeAndSummarizeAudio } from '@/lib/gemini'
+import { normalizeAudioContentType } from '@/lib/audio-content-type'
 
 // 会話録音のAI文字起こし＋要約を処理（1分ごとに実行、1回1件）。
 // 音声解析は時間がかかるため maxDuration いっぱいまで使い、1件ずつ確実に処理する。
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     const res = await fetch(rec.audioUrl)
     if (!res.ok) throw new Error(`音声取得に失敗 (HTTP ${res.status})`)
     const buffer = Buffer.from(await res.arrayBuffer())
-    const analysis = await transcribeAndSummarizeAudio(buffer, rec.mimeType || 'audio/mpeg', rec.fileName || 'recording')
+    const analysis = await transcribeAndSummarizeAudio(buffer, normalizeAudioContentType(rec.mimeType, rec.fileName), rec.fileName || 'recording')
 
     await prisma.dealRecording.update({
       where: { id: rec.id },

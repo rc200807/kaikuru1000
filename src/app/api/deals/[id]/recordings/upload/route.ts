@@ -3,12 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { ALLOWED_AUDIO_TYPES } from '@/lib/audio-content-type'
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'hr']
-const ALLOWED_AUDIO_TYPES = [
-  'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/m4a',
-  'audio/aac', 'audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg',
-]
 const MAX_AUDIO_BYTES = 200 * 1024 * 1024 // 200MB
 
 // 会話録音（音声）のクライアント直アップロード用トークン発行。
@@ -36,9 +33,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         maximumSizeInBytes: MAX_AUDIO_BYTES,
         tokenPayload: JSON.stringify({ dealId: id, uploadedBy: sessionUser.id }),
       }),
-      onUploadCompleted: async ({ blob }) => {
-        console.log('[deal-recording] client upload completed:', blob.pathname)
-      },
+      // 完了通知（onUploadCompleted）は使わない。Vercel からの通知はログインなしで届き、
+      // 上のセッション確認で必ず弾かれるため。登録はクライアントが完了後に POST する。
     })
     return NextResponse.json(jsonResponse)
   } catch (error) {

@@ -18,8 +18,11 @@ import {
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { upload } from '@vercel/blob/client'
+import { normalizeAudioContentType } from '@/lib/audio-content-type'
 
 const MAX_AUDIO_BYTES = 200 * 1024 * 1024
+// これより大きい録音は分割アップロードにする（Vercel Blob の multipart は 5MB 以上が対象）
+const MULTIPART_THRESHOLD_BYTES = 10 * 1024 * 1024
 
 type Route =
   | { kind: 'deal'; dealId: string; portal: 'store' | 'admin' }
@@ -134,17 +137,21 @@ export function DealRecorderProvider({ children }: { children: React.ReactNode }
     try {
       const extMatch = (file.name.match(/\.[a-zA-Z0-9]+$/)?.[0] ?? '').toLowerCase()
       const pathname = `deal-recordings/${dealId}/${Date.now()}${extMatch || '.m4a'}`
+      // "audio/webm;codecs=opus" のままだと保存先の許可リストに一致せず拒否されるので本体の型だけにする
+      const contentType = normalizeAudioContentType(file.type, file.name)
       const blob = await upload(pathname, file, {
         access: 'public',
         handleUploadUrl: `/api/deals/${dealId}/recordings/upload`,
-        contentType: file.type || undefined,
+        contentType,
+        // 長時間の録音は分割して送り、途中で回線が揺れても失敗した部分だけ送り直す
+        multipart: file.size > MULTIPART_THRESHOLD_BYTES,
         onUploadProgress: (p) => setUploadProgress(Math.round(p.percentage)),
       })
       const res = await fetch(`/api/deals/${dealId}/recordings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          audioUrl: blob.url, fileName: file.name, mimeType: file.type, fileSize: file.size,
+          audioUrl: blob.url, fileName: file.name, mimeType: contentType, fileSize: file.size,
           ...(durationSec != null ? { durationSec } : {}),
         }),
       })
